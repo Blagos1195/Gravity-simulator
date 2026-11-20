@@ -2,6 +2,7 @@ extends Control
 
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const FlightComputer = preload("res://scripts/flight_computer.gd")
 const G := PlanetarySystem.G
 const EARTH_MASS := PlanetarySystem.EARTH_MASS
 const EARTH_RADIUS := PlanetarySystem.EARTH_RADIUS
@@ -27,6 +28,9 @@ var discarded_stage_mass := 0.0
 var throttle := 0.0
 var gimbal_angle := 0.0
 var guidance_enabled := false
+var autopilot_enabled := false
+var autopilot_target_altitude := 200000.0
+var autopilot_complete := false
 var heat_flux_mw := 0.0
 var heat_shield_temperature := 290.0
 var peak_heat_flux_mw := 0.0
@@ -235,13 +239,28 @@ func _separate_stage() -> void:
 func _update_guidance(dt: float) -> void:
 	var radial := rocket_position.normalized()
 	var altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
-	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / 100000.0, 0.0, 1.0))
-	if velocity.length() > 1500.0:
-		pitch_above_horizon = minf(pitch_above_horizon, 12.0)
 	var tangent := Vector2(-radial.y, radial.x)
+	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / 100000.0, 0.0, 1.0))
+	if autopilot_enabled:
+		var orbit := FlightComputer.orbital_state(rocket_position, velocity)
+		var target_radius := EARTH_RADIUS + autopilot_target_altitude
+		if bool(orbit.get("bound", false)) and float(orbit.get("apoapsis", 0.0)) >= target_radius * 0.998 and altitude > 70000.0:
+			thrust_key_down = false
+			autopilot_complete = true
+			var prograde := velocity.normalized()
+			var target_rotation := prograde.angle() - Vector2.UP.angle()
+			rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
+			return
+		var apoapsis := float(orbit.get("apoapsis", 0.0))
+		var apoapsis_fraction := clampf((apoapsis - EARTH_RADIUS) / maxf(1.0, autopilot_target_altitude), 0.0, 1.0) if is_finite(apoapsis) else 0.0
+		var speed_fraction := clampf(velocity.length() / 7800.0, 0.0, 1.0)
+		pitch_above_horizon = lerpf(90.0, 2.0, clampf(maxf(altitude / maxf(1.0, autopilot_target_altitude), apoapsis_fraction * 0.92, speed_fraction * 0.9), 0.0, 1.0))
+		thrust_key_down = fuel > 0.0 and not autopilot_complete
+	elif velocity.length() > 1500.0:
+		pitch_above_horizon = minf(pitch_above_horizon, 12.0)
 	var target_direction := radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
 	var target_rotation := target_direction.angle() - Vector2.UP.angle()
-	rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.08, 0.0, 1.0))
+	rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * (0.08 if not autopilot_enabled else 0.35), 0.0, 1.0))
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
@@ -587,6 +606,9 @@ func get_save_data() -> Dictionary:
 		"discarded_stage_mass": discarded_stage_mass,
 		"gimbal_angle": gimbal_angle,
 		"guidance_enabled": guidance_enabled,
+		"autopilot_enabled": autopilot_enabled,
+		"autopilot_target_altitude": autopilot_target_altitude,
+		"autopilot_complete": autopilot_complete,
 		"heat_shield_temperature": heat_shield_temperature,
 		"peak_heat_flux_mw": peak_heat_flux_mw,
 		"throttle": throttle,
@@ -610,6 +632,9 @@ func load_save_data(data: Dictionary) -> void:
 	discarded_stage_mass = float(data.get("discarded_stage_mass", 0.0))
 	gimbal_angle = float(data.get("gimbal_angle", 0.0))
 	guidance_enabled = bool(data.get("guidance_enabled", false))
+	autopilot_enabled = bool(data.get("autopilot_enabled", false))
+	autopilot_target_altitude = float(data.get("autopilot_target_altitude", 200000.0))
+	autopilot_complete = bool(data.get("autopilot_complete", false))
 	heat_shield_temperature = float(data.get("heat_shield_temperature", 290.0))
 	peak_heat_flux_mw = float(data.get("peak_heat_flux_mw", 0.0))
 	throttle = float(data.get("throttle", 0.0))
