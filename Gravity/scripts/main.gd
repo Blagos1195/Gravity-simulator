@@ -776,7 +776,7 @@ func _show_flight_computer() -> void:
 		var selected_id: int = target.get_selected_id()
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
 		landing.disabled = selected_id > 0 or sim.crashed
-		autopilot.disabled = str(current_body.name) != "Earth" or sim.crashed
+		autopilot.disabled = sim.crashed
 		var current_position: Vector2 = sim.rocket_position - current_body.position
 		var current_velocity: Vector2 = sim.velocity - current_body.velocity
 		var state := FlightComputer.orbital_state(current_position, current_velocity, FlightComputer.G * float(current_body.mass))
@@ -869,10 +869,17 @@ func _show_flight_computer() -> void:
 		sim.autopilot_planet_index = -1 if selected_id == -1 else -selected_id - 2
 		sim.autopilot_burn_remaining = 0.0
 		sim.autopilot_burn_direction = Vector2.ZERO
-		sim.autopilot_phase = "ASCENT"
+		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
+		var relative_position: Vector2 = sim.rocket_position - current_body.position
+		var relative_velocity: Vector2 = sim.velocity - current_body.velocity
+		var current_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(current_body.mass))
+		var target_state: Dictionary = sim._autopilot_target_state()
+		var target_distance := sim.rocket_position.distance_to(Vector2(target_state.get("position", Vector2.ZERO)))
+		var target_is_near := not target_state.is_empty() and target_distance <= float(target_state.get("soi", 0.0))
+		sim.autopilot_phase = "ASCENT" if sim.landed else "ARRIVAL_APPROACH" if target_is_near else "CIRCULARISE" if str(current_body.name) == "Earth" and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0 else "ASCENT"
 		sim.guidance_enabled = true
-		sim.thrust_key_down = true
-		report.text += "\n\nAUTOPILOT ENGAGED. " + ("Target orbit: %.0f km." % (sim.autopilot_target_altitude / 1000.0) if selected_id > 0 else "Target: " + str(target.get_item_text(target.selected)) + ". Parking orbit: 200 km, followed by the calculated departure burn.")
+		sim.thrust_key_down = sim.landed or sim.autopilot_phase == "ASCENT"
+		report.text += "\n\nAUTOPILOT ENGAGED. " + ("Target orbit: %.0f km." % (sim.autopilot_target_altitude / 1000.0) if selected_id > 0 else "Target: " + str(target.get_item_text(target.selected)) + ". Current flight state will be assessed before manoeuvres begin.")
 	)
 	update_report.call()
 	window.popup_centered()
