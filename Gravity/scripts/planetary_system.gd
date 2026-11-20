@@ -121,11 +121,6 @@ static func _earth_heliocentric_state(time_seconds: float) -> Dictionary:
 		"velocity": barycentre.velocity - moon_velocity(time_seconds) * earth_moon_ratio
 	}
 
-static func _planet_heliocentric_state(planet: Dictionary, time_seconds: float) -> Dictionary:
-	var period := float(planet.orbital_period) * 86400.0
-	var mean_anomaly := TAU * time_seconds / period
-	return _kepler_state(float(planet.semi_major_axis), float(planet.eccentricity), float(planet.perihelion), mean_anomaly, period)
-
 static func planet_position_relative_to_earth(planet_name: String, time_seconds: float) -> Vector2:
 	var planet := _find_planet(planet_name)
 	if planet.is_empty() or planet_name == "Earth":
