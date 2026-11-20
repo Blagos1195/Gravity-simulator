@@ -18,7 +18,7 @@ const DEFAULT_DESIGN := {
 			"fuel_capacity": 300000.0,
 			"thrust": 7500000.0,
 			"vacuum_thrust": 9000000.0,
-			"flow": 2058.0,
+			"flow": 2200.0,
 			"engine_count": 1
 		},
 		{
@@ -27,7 +27,7 @@ const DEFAULT_DESIGN := {
 			"fuel_capacity": 80000.0,
 			"thrust": 1200000.0,
 			"vacuum_thrust": 1500000.0,
-			"flow": 300.0,
+			"flow": 380.0,
 			"engine_count": 1
 		}
 	]
