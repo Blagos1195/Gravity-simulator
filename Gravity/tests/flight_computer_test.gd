@@ -30,6 +30,15 @@ func _initialize() -> void:
 	assert(departure_wait < 900.0 * 86400.0)
 	var mars_departure_direction := FlightComputer.departure_periapsis_direction(2, 0.0, radius)
 	assert(absf(mars_departure_direction.length() - 1.0) < 0.000001)
+	for target_index in range(7):
+		var destination := FlightComputer.interplanetary_transfer(target_index, 200000.0)
+		assert(bool(destination.get("valid", false)))
+		assert(float(destination.get("departure_delta_v", 0.0)) > 0.0)
+		assert(float(destination.get("arrival_delta_v", 0.0)) > 0.0)
+		var target_wait := FlightComputer.departure_wait_time(target_index, 0.0)
+		assert(target_wait >= 0.0 and target_wait < 900.0 * 86400.0)
+		var target_direction := FlightComputer.departure_periapsis_direction(target_index, 0.0, radius)
+		assert(absf(target_direction.length() - 1.0) < 0.000001)
 
 	var moon_transfer := FlightComputer.interplanetary_transfer(-1, 200000.0)
 	assert(bool(moon_transfer.get("valid", false)))
