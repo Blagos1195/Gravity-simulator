@@ -28,6 +28,8 @@ func _initialize() -> void:
 	var departure_wait := FlightComputer.departure_wait_time(2, 0.0)
 	assert(departure_wait >= 0.0)
 	assert(departure_wait < 900.0 * 86400.0)
+	var mars_departure_direction := FlightComputer.departure_periapsis_direction(2, 0.0, radius)
+	assert(absf(mars_departure_direction.length() - 1.0) < 0.000001)
 
 	var moon_transfer := FlightComputer.interplanetary_transfer(-1, 200000.0)
 	assert(bool(moon_transfer.get("valid", false)))
@@ -35,6 +37,8 @@ func _initialize() -> void:
 	var moon_wait := FlightComputer.departure_wait_time(-1, 0.0, Vector2(radius, 0.0))
 	assert(moon_wait >= 0.0)
 	assert(moon_wait < 86400.0)
+	var moon_departure_direction := FlightComputer.departure_periapsis_direction(-1, 0.0, radius)
+	assert(absf(moon_departure_direction.length() - 1.0) < 0.000001)
 
 	print("Flight computer orbital calculation tests passed.")
 	quit()
