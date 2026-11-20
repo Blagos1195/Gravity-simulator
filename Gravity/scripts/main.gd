@@ -671,6 +671,7 @@ func _build_flight_hud() -> void:
 	)
 	_add_button(right, "SAVE  [F5]", func(): _save_game(false))
 	_add_button(right, "LOAD  [F9]", _load_game)
+	_add_button(right, "AUTOSAVE HISTORY", _show_autosave_history)
 	_add_button(right, "PAUSE  [ESC]", _pause_simulation)
 	_add_button(right, "RETURN TO MENU", _confirm_menu)
 
@@ -685,6 +686,43 @@ func _build_flight_hud() -> void:
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
+
+func _show_autosave_history() -> void:
+	var history_paths: Array[String] = _autosave_history_paths(save_slot)
+	var window := Window.new()
+	window.title = "AUTOSAVE HISTORY  •  SLOT %02d" % save_slot
+	window.size = Vector2i(520, 520)
+	window.min_size = Vector2i(420, 320)
+	window.transient = true
+	window.exclusive = true
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	window.add_child(layout)
+	var heading := Label.new()
+	heading.text = "RESTORE A PREVIOUS AUTOSAVE"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	layout.add_child(heading)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(scroll)
+	var entries := VBoxContainer.new()
+	entries.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(entries)
+	if history_paths.is_empty():
+		var empty := Label.new()
+		empty.text = "No autosave history is available for this slot yet."
+		entries.add_child(empty)
+	for history_path in history_paths:
+		var history_time: int = FileAccess.get_modified_time(history_path)
+		var history_label := "LOAD  •  %s" % Time.get_datetime_string_from_unix_time(history_time, true)
+		_add_button(entries, history_label, func():
+			_load_game_from_path(history_path)
+			window.queue_free()
+		)
+	_add_button(layout, "CLOSE", func(): window.queue_free())
+	window.popup_centered()
 
 func _show_flight_computer() -> void:
 	var window := Window.new()
