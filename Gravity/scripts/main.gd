@@ -180,6 +180,12 @@ func _build_flight_hud() -> void:
 	slot_picker.item_selected.connect(func(index: int): save_slot = index + 1)
 	right.add_child(slot_picker)
 
+	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
+	_add_button(right, "PREDICTED PATH  [P]", func():
+		sim.show_predicted_trajectory = not sim.show_predicted_trajectory
+		if sim.show_predicted_trajectory:
+			sim._calculate_predicted_trajectory()
+	)
 	_add_button(right, "SAVE  [F5]", func(): _save_game(false))
 	_add_button(right, "LOAD  [F9]", _load_game)
 	_add_button(right, "PAUSE  [ESC]", _pause_simulation)
@@ -187,8 +193,11 @@ func _build_flight_hud() -> void:
 
 	var bottom := Label.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.position = Vector2(20, -54)
-	bottom.size = Vector2(1300, 46)
+	bottom.offset_left = 20
+	bottom.offset_right = -20
+	bottom.offset_top = -58
+	bottom.offset_bottom = -8
+	bottom.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bottom.text = "W / ↑ ENGINE ON/OFF     S / ↓ CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     F5 SAVE     F9 LOAD"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
