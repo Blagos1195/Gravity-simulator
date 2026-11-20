@@ -212,9 +212,8 @@ static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: 
 	var angular_momentum := position.cross(velocity)
 	var tangent := Vector2(-position.y, position.x).normalized()
 	var direction := 1.0 if angular_momentum >= 0.0 else -1.0
-	var desired_apoapsis := maxf(radius * 2.0, safe_periapsis + 200000.0)
-	var semi_major_axis := (radius + desired_apoapsis) * 0.5
-	var desired_speed := sqrt(body_mu * (2.0 / radius - 1.0 / semi_major_axis))
+	var desired_apoapsis := radius
+	var desired_speed := sqrt(body_mu / radius)
 	var desired_velocity := tangent * direction * desired_speed
 	var burn_vector := desired_velocity - velocity
 	return {
