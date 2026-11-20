@@ -123,6 +123,8 @@ func _physics_step(dt: float) -> void:
 			velocity -= normal * inward_speed
 	if guidance_enabled:
 		_update_guidance(dt)
+	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "COMPLETE", "FAILED"]:
+		thrust_key_down = false
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 	throttle = 1.0 if thrust_key_down and fuel > 0.0 else 0.0
