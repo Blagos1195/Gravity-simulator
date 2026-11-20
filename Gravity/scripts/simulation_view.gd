@@ -62,7 +62,6 @@ func _physics_step(dt: float) -> void:
         status_message = "SURFACE CONTACT"
         return
 
-    var gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time)
     var thrust_accel := Vector2.ZERO
     if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
         throttle = 1.0
@@ -83,7 +82,7 @@ func _physics_step(dt: float) -> void:
     velocity += (final_gravity + thrust_accel) * (0.5 * dt)
 
     if realism in ["Realistic", "Hardcore"]:
-        var altitude := r - EARTH_RADIUS
+        var altitude := rocket_position.length() - EARTH_RADIUS
         if altitude < 120000.0:
             var density := PlanetarySystem.atmospheric_density(altitude)
             var speed := velocity.length()
