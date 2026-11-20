@@ -6,7 +6,7 @@ const EARTH_MASS := PlanetarySystem.EARTH_MASS
 const EARTH_RADIUS := PlanetarySystem.EARTH_RADIUS
 const ROCKET_DRY_MASS := 12000.0
 const FUEL_CAPACITY := 80000.0
-const ENGINE_THRUST := 1.8e6
+const ENGINE_THRUST := 2.4e6
 const FUEL_FLOW := 550.0
 
 var realism := "Realistic"
@@ -30,6 +30,7 @@ var orbit_path: Array[Vector2] = []
 var show_orbit := true
 var show_grid := true
 var show_vectors := true
+var thrust_key_down := false
 
 func _ready() -> void:
     var rng := RandomNumberGenerator.new()
@@ -54,19 +55,21 @@ func _process(delta: float) -> void:
 
 func _physics_step(dt: float) -> void:
     sim_time += dt
-    var r := rocket_position.length()
-    if r < EARTH_RADIUS:
-        rocket_position = rocket_position.normalized() * (EARTH_RADIUS + 1.0)
-        velocity = Vector2.ZERO
-        throttle = 0.0
-        status_message = "SURFACE CONTACT"
-        return
+    var radial := rocket_position.normalized()
+    var altitude := rocket_position.length() - EARTH_RADIUS
+    if altitude < 0.5:
+        rocket_position = radial * (EARTH_RADIUS + 0.5)
+        var inward_speed := velocity.dot(radial)
+        if inward_speed < 0.0:
+            velocity -= radial * inward_speed
 
-    var thrust_accel := Vector2.ZERO
+    throttle = 1.0 if thrust_key_down else 0.0
     if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
         throttle = 1.0
-    elif Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+    if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
         throttle = 0.0
+
+    var thrust_accel := Vector2.ZERO
     if fuel <= 0.0:
         throttle = 0.0
     if throttle > 0.0 and fuel > 0.0:
@@ -89,9 +92,23 @@ func _physics_step(dt: float) -> void:
             var drag_factor := 0.5 * density * speed * speed * 0.45 / maxf(1.0, ROCKET_DRY_MASS + fuel)
             velocity -= velocity.normalized() * drag_factor * dt
 
-    if rocket_position.length() < EARTH_RADIUS:
-        rocket_position = rocket_position.normalized() * EARTH_RADIUS
-        status_message = "SURFACE CONTACT"
+    var final_radius := rocket_position.length()
+    if final_radius < EARTH_RADIUS + 0.5:
+        var surface_normal := rocket_position.normalized()
+        rocket_position = surface_normal * (EARTH_RADIUS + 0.5)
+        var surface_velocity := velocity.dot(surface_normal)
+        if surface_velocity < 0.0:
+            velocity -= surface_normal * surface_velocity
+
+    status_message = "ENGINE FIRING  •  T+%s" % _format_time(sim_time) if throttle > 0.0 and fuel > 0.0 else "PAD READY  •  HOLD W / ↑ TO LAUNCH" if altitude < 100.0 else "FLIGHT ACTIVE"
+
+func _input(event: InputEvent) -> void:
+    if event is InputEventKey:
+        if event.keycode in [KEY_W, KEY_UP] or event.physical_keycode in [KEY_W, KEY_UP]:
+            thrust_key_down = event.pressed
+        if event.keycode in [KEY_S, KEY_DOWN] or event.physical_keycode in [KEY_S, KEY_DOWN]:
+            if event.pressed:
+                thrust_key_down = false
 
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
@@ -135,6 +152,12 @@ func _draw() -> void:
 
     if show_grid:
         _draw_grid(view_center)
+
+    var pad_width := 34.0
+    var pad_y := earth_screen.y - radius_px - 2.0
+    draw_line(Vector2(earth_screen.x - pad_width, pad_y), Vector2(earth_screen.x + pad_width, pad_y), Color(0.65, 0.72, 0.82), 3.0)
+    draw_line(Vector2(earth_screen.x - 20.0, pad_y), Vector2(earth_screen.x - 20.0, pad_y + 7.0), Color(0.65, 0.72, 0.82), 2.0)
+    draw_line(Vector2(earth_screen.x + 20.0, pad_y), Vector2(earth_screen.x + 20.0, pad_y + 7.0), Color(0.65, 0.72, 0.82), 2.0)
 
     draw_circle(earth_screen, radius_px + 7, Color(0.15, 0.35, 0.58, 0.12))
     draw_circle(earth_screen, radius_px, Color(0.10, 0.28, 0.53))
