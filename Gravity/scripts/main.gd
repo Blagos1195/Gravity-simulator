@@ -504,6 +504,7 @@ func _show_flight_computer() -> void:
 		sim.autopilot_target_altitude = selected_altitude
 		sim.autopilot_enabled = true
 		sim.autopilot_complete = false
+		sim.autopilot_phase = "ASCENT"
 		sim.guidance_enabled = true
 		sim.thrust_key_down = true
 		report.text += "\n\nORBIT AUTOPILOT ENGAGED. Target altitude: %.0f km." % (selected_altitude / 1000.0)
