@@ -36,9 +36,6 @@ static func total_initial_mass(design: Dictionary) -> float:
 
 static func total_delta_v(design: Dictionary) -> float:
 	var stages: Array = design.get("stages", [])
-	var mass_above := float(design.get("payload_mass", 0.0))
-	for i in range(stages.size() - 1, -1, -1):
-		mass_above += float(stages[i].get("dry_mass", 0.0))
 	var delta_v := 0.0
 	for i in range(stages.size()):
 		var stage: Dictionary = stages[i]
