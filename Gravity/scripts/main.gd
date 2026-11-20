@@ -528,6 +528,7 @@ func _show_flight_computer() -> void:
 		sim.autopilot_target_mode = "ORBIT" if selected_id > 0 else "PLANET"
 		sim.autopilot_planet_index = -1 if selected_id == -1 else -selected_id - 2
 		sim.autopilot_burn_remaining = 0.0
+		sim.autopilot_burn_direction = Vector2.ZERO
 		sim.autopilot_phase = "ASCENT"
 		sim.guidance_enabled = true
 		sim.thrust_key_down = true
