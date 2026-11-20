@@ -383,29 +383,40 @@ func _calculate_predicted_trajectory() -> void:
 	var predicted_stage := stage_index
 	var dt := 5.0
 	for i in range(360):
-		if predicted_stage >= rocket_stages.size():
-			break
-		var active: Dictionary = rocket_stages[predicted_stage]
-		var altitude := maxf(0.0, position.length() - EARTH_RADIUS)
-		var flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-		var stack_mass := payload_mass
-		for j in range(predicted_stage + 1, rocket_stages.size()):
-			stack_mass += float(rocket_stages[j].get("dry_mass", 0.0)) + float(rocket_stages[j].get("fuel_capacity", 0.0))
-		var burn := minf(predicted_fuel, flow * throttle * dt)
-		var mass := maxf(1.0, float(active.get("dry_mass", 0.0)) + stack_mass + predicted_fuel - burn * 0.5)
-		var fraction := clampf(altitude / 100000.0, 0.0, 1.0)
-		var thrust := lerpf(float(active.get("thrust", 0.0)), float(active.get("vacuum_thrust", 0.0)), fraction) * float(active.get("engine_count", 1)) * throttle
-		var acceleration := PlanetarySystem.gravity_acceleration(position, sim_time + i * dt)
-		if predicted_fuel > 0.0:
-			acceleration += Vector2.UP.rotated(rotation_angle + gimbal_angle) * thrust / mass
-		acceleration += _aerodynamic_acceleration(position, predicted_velocity, mass)
-		predicted_velocity += acceleration * dt
-		position += predicted_velocity * dt
+		var mass := payload_mass
+		var active: Dictionary = {}
+		var total_flow := 0.0
+		var thrust_force := 0.0
+		var burn := 0.0
+		if predicted_stage < rocket_stages.size():
+			active = rocket_stages[predicted_stage]
+			mass += float(active.get("dry_mass", 0.0)) + predicted_fuel
+			for j in range(predicted_stage + 1, rocket_stages.size()):
+				var upper: Dictionary = rocket_stages[j]
+				mass += float(upper.get("dry_mass", 0.0)) + float(upper.get("fuel_capacity", 0.0))
+			total_flow = float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
+			burn = minf(predicted_fuel, total_flow * throttle * dt)
+			var pressure_ratio := PlanetarySystem.atmospheric_pressure(position.length() - EARTH_RADIUS) / 101325.0
+			thrust_force = lerpf(float(active.get("vacuum_thrust", 0.0)), float(active.get("thrust", 0.0)), clampf(pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1)) * throttle
+		var mass_after := maxf(1.0, mass - burn)
+		var mass_mid := (mass + mass_after) * 0.5
+		var thrust_delta_v := 0.0
+		if burn > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
+			thrust_delta_v = thrust_force / total_flow * log(mass / mass_after)
+		var thrust_impulse := Vector2.UP.rotated(rotation_angle + gimbal_angle) * thrust_delta_v
+		var step_time := sim_time + float(i) * dt
+		var initial_gravity := PlanetarySystem.gravity_acceleration(position, step_time)
+		var initial_aero := _aerodynamic_acceleration(position, predicted_velocity, mass_mid)
+		var half_velocity := predicted_velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
+		var next_position := position + half_velocity * dt
+		var final_gravity := PlanetarySystem.gravity_acceleration(next_position, step_time + dt)
+		var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid)
+		predicted_velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
+		position = next_position
 		predicted_fuel = maxf(0.0, predicted_fuel - burn)
-		if predicted_fuel <= 0.0:
+		if predicted_fuel <= 0.0001 and predicted_stage < rocket_stages.size() - 1:
 			predicted_stage += 1
-			if predicted_stage < rocket_stages.size():
-				predicted_fuel = float(rocket_stages[predicted_stage].get("fuel_capacity", 0.0))
+			predicted_fuel = float(rocket_stages[predicted_stage].get("fuel_capacity", 0.0))
 		predicted_path.append(position)
 		if position.length() < EARTH_RADIUS:
 			break
