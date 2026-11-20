@@ -759,7 +759,7 @@ func _draw() -> void:
 			draw_arc(destination_screen, soi_pixels, 0.0, TAU, 100, Color(0.35, 0.72, 1.0, 0.22), 1.0)
 
 	if show_orbit:
-		_draw_orbit(rocket_screen, earth_screen, radius_px, world_scale_factor)
+		_draw_orbit(rocket_screen, world_scale_factor)
 
 	if trail.size() > 1:
 		var trail_points := PackedVector2Array()
@@ -812,6 +812,7 @@ func _calculate_predicted_trajectory() -> void:
 	var predicted_stage := stage_index
 	var dt := 5.0
 	for i in range(360):
+		var step_time := sim_time + float(i) * dt
 		var mass := payload_mass
 		var active: Dictionary = {}
 		var total_flow := 0.0
@@ -825,7 +826,8 @@ func _calculate_predicted_trajectory() -> void:
 				mass += float(upper.get("dry_mass", 0.0)) + float(upper.get("fuel_capacity", 0.0))
 			total_flow = float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 			burn = minf(predicted_fuel, total_flow * throttle * dt)
-			var pressure_ratio := PlanetarySystem.atmospheric_pressure(position.length() - EARTH_RADIUS) / 101325.0
+			var atmosphere := _atmosphere_at(position, predicted_velocity, step_time)
+			var pressure_ratio := float(atmosphere.density) * float(atmosphere.gas_constant) * float(atmosphere.temperature) / 101325.0
 			thrust_force = lerpf(float(active.get("vacuum_thrust", 0.0)), float(active.get("thrust", 0.0)), clampf(pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1)) * throttle
 		var mass_after := maxf(1.0, mass - burn)
 		var mass_mid := (mass + mass_after) * 0.5
@@ -833,7 +835,6 @@ func _calculate_predicted_trajectory() -> void:
 		if burn > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
 			thrust_delta_v = thrust_force / total_flow * log(mass / mass_after)
 		var thrust_impulse := Vector2.UP.rotated(rotation_angle + gimbal_angle) * thrust_delta_v
-		var step_time := sim_time + float(i) * dt
 		var initial_gravity := PlanetarySystem.gravity_acceleration(position, step_time)
 		var initial_aero := _aerodynamic_acceleration(position, predicted_velocity, mass_mid, step_time)
 		var half_velocity := predicted_velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
@@ -859,7 +860,7 @@ func _draw_grid(center: Vector2) -> void:
 		var py := y * spacing
 		draw_line(Vector2(0, py), Vector2(size.x, py), Color(0.18, 0.28, 0.4, 0.12), 1.0)
 
-func _draw_orbit(rocket_screen: Vector2, earth_screen: Vector2, radius_px: float, factor: float) -> void:
+func _draw_orbit(rocket_screen: Vector2, factor: float) -> void:
 	var body := _nearest_body_state(rocket_position)
 	var relative_position: Vector2 = rocket_position - body.position
 	var relative_velocity: Vector2 = velocity - body.velocity
