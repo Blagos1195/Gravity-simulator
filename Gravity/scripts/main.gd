@@ -142,7 +142,8 @@ func _show_vehicle_editor() -> void:
 		_add_design_field(fields, stage_index, "fuel_capacity", "Propellant capacity (kg)", 100.0, 1000000.0, 1000.0)
 		_add_design_field(fields, stage_index, "thrust", "Sea-level thrust (N)", 10000.0, 50000000.0, 100000.0)
 		_add_design_field(fields, stage_index, "vacuum_thrust", "Vacuum thrust (N)", 10000.0, 60000000.0, 100000.0)
-		_add_design_field(fields, stage_index, "flow", "Fuel flow (kg/s)", 1.0, 20000.0, 10.0)
+		_add_design_field(fields, stage_index, "flow", "Fuel flow per engine (kg/s)", 1.0, 20000.0, 10.0)
+		_add_design_field(fields, stage_index, "engine_count", "Engine count", 1.0, 8.0, 1.0)
 	var payload_panel := PanelContainer.new()
 	payload_panel.custom_minimum_size.x = 230
 	columns.add_child(payload_panel)
@@ -215,7 +216,7 @@ func _update_design_stats() -> void:
 	var total_mass := RocketDesign.total_initial_mass(rocket_design)
 	var delta_v := RocketDesign.total_delta_v(rocket_design)
 	var first: Dictionary = rocket_design["stages"][0]
-	var initial_twr := float(first["thrust"]) / maxf(1.0, total_mass * 9.81)
+	var initial_twr := float(first["thrust"]) * float(first.get("engine_count", 1)) / maxf(1.0, total_mass * 9.81)
 	design_stats_label.text = "INITIAL MASS\n%.1f tonnes\n\nIDEAL ΔV\n%.2f km/s\n\nPAD TWR\n%.2f" % [total_mass / 1000.0, delta_v / 1000.0, initial_twr]
 	design_error_label.text = "\n".join(errors) if not errors.is_empty() else "DESIGN VALID"
 	if is_instance_valid(design_preview):
