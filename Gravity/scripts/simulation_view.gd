@@ -619,7 +619,7 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = false
 				autopilot_complete = true
 			"FAILED":
-				status_message = "AUTOPILOT  •  BURN INCOMPLETE"
+				status_message = "LANDING ABORTED  •  INSUFFICIENT FUEL OR THRUST" if autopilot_target_mode == "LAND" else "AUTOPILOT  •  BURN INCOMPLETE"
 				thrust_key_down = false
 		var autopilot_direction := prograde
 		if autopilot_phase == "ASCENT":
@@ -976,7 +976,7 @@ func _draw_hud() -> void:
 		"MISSION TIME   %s" % _format_time(sim_time),
 		"TIME WARP      x%s" % str(snappedf(time_warp, 0.01))
 	]
-	if autopilot_target_mode == "PLANET" and autopilot_enabled:
+	if autopilot_target_mode in ["PLANET", "LAND"] and autopilot_enabled:
 		var target_state: Dictionary = _autopilot_target_state()
 		var target_range: float = rocket_position.distance_to(target_state["position"])
 		var target_relative_speed: float = (velocity - target_state["velocity"]).length()
