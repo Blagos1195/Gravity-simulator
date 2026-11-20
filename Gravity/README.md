@@ -29,9 +29,11 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Atmospheric heat-flux and radiative heat-shield temperature telemetry
 - Differential gravity from the Moon, Sun and other planets
 - Optional gravity-turn guidance assist
-- Orbital flight computer with osculating orbit elements, circularisation burns and Hohmann transfer estimates
-- Target-orbit autopilot with ascent, coast-to-apoapsis and circularisation phases
-- Manual override and saved autopilot target/phase
+- Orbital flight computer with osculating orbit elements, circularisation burns, lunar transfers and heliocentric Hohmann estimates
+- Destination planner for the Moon and all seven other planets, including ideal departure phase and transfer-window estimates
+- Orbit autopilot with ascent, coast-to-apoapsis and prograde/retrograde circularisation
+- Destination autopilot with parking-orbit insertion, transfer-window waiting and calculated departure injection burn
+- Manual override and saved autopilot target, transfer burn and phase
 - Remaining ideal vehicle delta-v and thrust-to-weight telemetry
 - Orbital trajectory, periapsis, apoapsis and thrust-to-weight readouts
 - Adjustable time warp
@@ -95,4 +97,4 @@ Flight saves are stored in the user's Godot application data directory under `sa
 
 The vehicle assembly system supports 2–8 configurable stages. It checks engine specific impulse (220–380 s sea-level and 250–465 s vacuum), stage mass fractions, ignition and burnout thrust-to-weight, total mass (maximum 5,000 tonnes) and total ideal delta-v (8.5–16.5 km/s). Invalid designs cannot be launched or saved. Stage-level values remain an abstraction rather than a detailed component-by-component engineering model.
 
-This remains an early Earth-centred prototype. The multi-stage vehicle, adaptive substepping, gimbal, lift, heating and gravity-turn guidance are simplified gameplay models, not validated launch-vehicle engineering. Planetary gravity uses circular coplanar orbits and differential perturbations rather than accurate ephemerides or a full n-body solar-system integration. Atmospheric heating is an estimate and does not yet damage or destroy the vehicle. Detailed tank and engine structural modelling, detailed aerodynamic coefficients, career progression, missions, docking, replay tooling and multiplayer remain planned follow-on systems.
+This remains an early Earth-centred prototype. The multi-stage vehicle, adaptive substepping, gimbal, lift, heating and gravity-turn guidance are simplified gameplay models, not validated launch-vehicle engineering. Planetary gravity uses circular coplanar orbits and differential perturbations rather than accurate ephemerides or a full n-body solar-system integration. Interplanetary transfer estimates assume circular coplanar Hohmann transfers; the autopilot currently performs departure injection but does not yet perform arrival targeting, capture or landing. Lunar departure timing is a two-body phase estimate. Atmospheric heating is an estimate and does not yet damage or destroy the vehicle. Detailed tank and engine structural modelling, detailed aerodynamic coefficients, career progression, missions, docking, replay tooling and multiplayer remain planned follow-on systems.
