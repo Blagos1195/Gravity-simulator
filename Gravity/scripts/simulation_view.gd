@@ -66,9 +66,6 @@ func _physics_step(dt: float) -> void:
     throttle = 1.0 if thrust_key_down else 0.0
     if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
         throttle = 1.0
-    if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
-        throttle = 0.0
-
     var thrust_accel := Vector2.ZERO
     if fuel <= 0.0:
         throttle = 0.0
@@ -106,9 +103,9 @@ func _input(event: InputEvent) -> void:
     if event is InputEventKey:
         if event.keycode in [KEY_W, KEY_UP] or event.physical_keycode in [KEY_W, KEY_UP]:
             thrust_key_down = event.pressed
-        if event.keycode in [KEY_S, KEY_DOWN] or event.physical_keycode in [KEY_S, KEY_DOWN]:
-            if event.pressed:
-                thrust_key_down = false
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+        thrust_key_down = false
 
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
@@ -153,17 +150,16 @@ func _draw() -> void:
     if show_grid:
         _draw_grid(view_center)
 
-    var pad_width := 34.0
-    var pad_y := earth_screen.y - radius_px - 2.0
-    draw_line(Vector2(earth_screen.x - pad_width, pad_y), Vector2(earth_screen.x + pad_width, pad_y), Color(0.65, 0.72, 0.82), 3.0)
-    draw_line(Vector2(earth_screen.x - 20.0, pad_y), Vector2(earth_screen.x - 20.0, pad_y + 7.0), Color(0.65, 0.72, 0.82), 2.0)
-    draw_line(Vector2(earth_screen.x + 20.0, pad_y), Vector2(earth_screen.x + 20.0, pad_y + 7.0), Color(0.65, 0.72, 0.82), 2.0)
-
     draw_circle(earth_screen, radius_px + 7, Color(0.15, 0.35, 0.58, 0.12))
     draw_circle(earth_screen, radius_px, Color(0.10, 0.28, 0.53))
     draw_arc(earth_screen, radius_px, 0, TAU, 120, Color(0.28, 0.64, 0.95), 2.0)
     draw_arc(earth_screen, radius_px * 0.76, -0.4, 2.4, 48, Color(0.18, 0.43, 0.48, 0.45), 2.0)
     draw_arc(earth_screen, radius_px * 0.53, 2.2, 5.4, 48, Color(0.18, 0.43, 0.48, 0.35), 2.0)
+    var pad_width := 34.0
+    var pad_y := earth_screen.y - radius_px - 2.0
+    draw_line(Vector2(earth_screen.x - pad_width, pad_y), Vector2(earth_screen.x + pad_width, pad_y), Color(0.65, 0.72, 0.82), 3.0)
+    draw_line(Vector2(earth_screen.x - 20.0, pad_y), Vector2(earth_screen.x - 20.0, pad_y + 7.0), Color(0.65, 0.72, 0.82), 2.0)
+    draw_line(Vector2(earth_screen.x + 20.0, pad_y), Vector2(earth_screen.x + 20.0, pad_y + 7.0), Color(0.65, 0.72, 0.82), 2.0)
     draw_string(ThemeDB.fallback_font, earth_screen + Vector2(radius_px + 12, 4), "EARTH", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.78, 1.0))
 
     var moon_world := PlanetarySystem.moon_position(sim_time)
