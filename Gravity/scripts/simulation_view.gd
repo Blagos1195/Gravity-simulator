@@ -19,7 +19,7 @@ var paused := false
 var sim_time := 0.0
 var time_warp := 1.0
 var rocket_position := Vector2(0, -EARTH_RADIUS - 2.0)
-var velocity := Vector2.ZERO
+var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
 var fuel := FUEL_CAPACITY
 var throttle := 0.0
@@ -332,7 +332,7 @@ func get_save_data() -> Dictionary:
 func load_save_data(data: Dictionary) -> void:
     sim_time = float(data.get("sim_time", 0.0))
     var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 2.0])
-    var v: Array = data.get("velocity", [0.0, 0.0])
+    var v: Array = data.get("velocity", [EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0])
     rocket_position = Vector2(float(p[0]), float(p[1]))
     velocity = Vector2(float(v[0]), float(v[1]))
     rotation_angle = float(data.get("rotation_angle", 0.0))
