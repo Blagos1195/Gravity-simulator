@@ -217,6 +217,30 @@ func _show_vehicle_editor() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_color_override("font_color", Color(0.35, 0.66, 0.82))
 	root.add_child(subtitle)
+	var preset_row := HBoxContainer.new()
+	preset_row.add_theme_constant_override("separation", 10)
+	root.add_child(preset_row)
+	var preset_selector := OptionButton.new()
+	preset_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for preset in RocketDesign.preset_options():
+		preset_selector.add_item(str(preset.label))
+		preset_selector.set_item_metadata(preset_selector.item_count - 1, str(preset.id))
+	preset_selector.select(1)
+	preset_row.add_child(preset_selector)
+	var preset_description := Label.new()
+	preset_description.text = RocketDesign.preset_description("LEO_CARGO")
+	preset_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	preset_description.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
+	root.add_child(preset_description)
+	preset_selector.item_selected.connect(func(index: int):
+		var selected_preset_id := str(preset_selector.get_item_metadata(index))
+		preset_description.text = RocketDesign.preset_description(selected_preset_id)
+	)
+	_add_button(preset_row, "LOAD PRESET", func():
+		var selected_preset_id := str(preset_selector.get_item_metadata(preset_selector.selected))
+		rocket_design = RocketDesign.create_preset(selected_preset_id)
+		_show_vehicle_editor()
+	)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(scroll)
