@@ -878,7 +878,16 @@ func _show_flight_computer() -> void:
 		var target_is_near := not target_state.is_empty() and target_distance <= float(target_state.get("soi", 0.0))
 		var current_altitude := float(current_body.distance) - float(current_body.radius)
 		var stable_current_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0
-		sim.autopilot_phase = "ASCENT" if sim.landed or current_altitude < 120000.0 else "ARRIVAL_APPROACH" if target_is_near else "PLAN_TRANSFER" if stable_current_orbit or current_altitude >= 120000.0 else "ASCENT"
+		var already_at_destination_surface := sim.landed and sim.landed_body_name == sim._autopilot_target_body_name()
+		if already_at_destination_surface:
+			sim.autopilot_phase = "COMPLETE"
+			sim.autopilot_complete = true
+		elif target_is_near:
+			sim.autopilot_phase = "ARRIVAL_APPROACH"
+		elif sim.landed or (current_altitude < 120000.0 and not stable_current_orbit):
+			sim.autopilot_phase = "ASCENT"
+		else:
+			sim.autopilot_phase = "PLAN_TRANSFER"
 		sim.guidance_enabled = true
 		sim.thrust_key_down = sim.landed or sim.autopilot_phase == "ASCENT"
 		report.text += "\n\nAUTOPILOT ENGAGED. " + ("Target orbit: %.0f km." % (sim.autopilot_target_altitude / 1000.0) if selected_id > 0 else "Target: " + str(target.get_item_text(target.selected)) + ". A trajectory search will use your current position and velocity.")
