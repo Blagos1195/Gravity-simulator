@@ -38,6 +38,7 @@ var design_preview: Control
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
 	_configure_input_actions()
+	_load_general_settings()
 	_build_menu()
 
 func _configure_input_actions() -> void:
@@ -59,6 +60,19 @@ func _save_controls() -> void:
 		if not events.is_empty() and events[0] is InputEventKey:
 			config.set_value("controls", action, int(events[0].physical_keycode))
 	config.save("user://controls.cfg")
+
+func _load_general_settings() -> void:
+	var config := ConfigFile.new()
+	config.load("user://settings.cfg")
+	autosave_enabled = bool(config.get_value("general", "autosave", true))
+	var fullscreen := bool(config.get_value("general", "fullscreen", false))
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
+
+func _save_general_settings() -> void:
+	var config := ConfigFile.new()
+	config.set_value("general", "autosave", autosave_enabled)
+	config.set_value("general", "fullscreen", DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN)
+	config.save("user://settings.cfg")
 
 func _input(event: InputEvent) -> void:
 	if rebinding_action.is_empty() or not event is InputEventKey or not event.pressed or event.echo:
@@ -516,12 +530,16 @@ func _show_settings() -> void:
 	fullscreen.button_pressed = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 	fullscreen.toggled.connect(func(enabled: bool):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if enabled else DisplayServer.WINDOW_MODE_WINDOWED)
+		_save_general_settings()
 	)
 	settings_root.add_child(fullscreen)
 	var autosave := CheckButton.new()
 	autosave.text = "Automatic saving every 60 seconds"
 	autosave.button_pressed = autosave_enabled
-	autosave.toggled.connect(func(enabled: bool): autosave_enabled = enabled)
+	autosave.toggled.connect(func(enabled: bool):
+		autosave_enabled = enabled
+		_save_general_settings()
+	)
 	settings_root.add_child(autosave)
 	_add_setting_label(settings_root, "KEYBOARD CONTROLS")
 	for action in CONTROL_BINDINGS:
