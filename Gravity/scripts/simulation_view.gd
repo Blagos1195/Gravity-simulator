@@ -85,9 +85,9 @@ func _physics_step(dt: float) -> void:
     velocity += (final_gravity + thrust_accel) * (0.5 * dt)
 
     if realism in ["Realistic", "Hardcore"]:
-        var altitude := rocket_position.length() - EARTH_RADIUS
-        if altitude < 120000.0:
-            var density := PlanetarySystem.atmospheric_density(altitude)
+        var atmospheric_altitude := rocket_position.length() - EARTH_RADIUS
+        if atmospheric_altitude < 120000.0:
+            var density := PlanetarySystem.atmospheric_density(atmospheric_altitude)
             var speed := velocity.length()
             var drag_factor := 0.5 * density * speed * speed * 0.45 / maxf(1.0, ROCKET_DRY_MASS + fuel)
             velocity -= velocity.normalized() * drag_factor * dt
