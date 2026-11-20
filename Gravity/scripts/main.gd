@@ -728,20 +728,27 @@ func _show_flight_computer() -> void:
 	var update_report := func() -> void:
 		var selected_id: int = target.get_selected_id()
 		landing.disabled = selected_id > 0
-		var state := FlightComputer.orbital_state(sim.rocket_position, sim.velocity)
-		var current_altitude: float = float(sim.rocket_position.length()) - FlightComputer.EARTH_RADIUS
+		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
+		var current_position: Vector2 = sim.rocket_position - current_body.position
+		var current_velocity: Vector2 = sim.velocity - current_body.velocity
+		var state := FlightComputer.orbital_state(current_position, current_velocity, FlightComputer.G * float(current_body.mass))
+		var current_altitude: float = float(current_body.distance) - float(current_body.radius)
 		var text_lines := PackedStringArray()
 		var remaining_delta_v := FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel)
 		var required_delta_v := 0.0
 		var mission_valid := true
-		var in_orbit := current_altitude > 70000.0 and bool(state.get("bound", false))
+		var in_orbit := str(current_body.name) == "Earth" and current_altitude > 70000.0 and bool(state.get("bound", false))
 		text_lines.append("CURRENT FLIGHT STATE")
+		text_lines.append("Current body: %s" % str(current_body.name))
 		text_lines.append("Altitude: %.1f km" % (current_altitude / 1000.0))
-		text_lines.append("Speed: %.0f m/s" % sim.velocity.length())
-		text_lines.append("Apoapsis: %s" % ("UNBOUND" if not bool(state.get("bound", false)) else "%.1f km" % (float(state.get("apoapsis", 0.0)) / 1000.0)))
-		text_lines.append("Periapsis: %.1f km" % (float(state.get("periapsis", 0.0)) / 1000.0))
+		text_lines.append("Speed: %.0f m/s" % current_velocity.length())
+		text_lines.append("Apoapsis: %s" % ("UNBOUND" if not bool(state.get("bound", false)) else "%.1f km" % ((float(state.get("apoapsis", 0.0)) - float(current_body.radius)) / 1000.0)))
+		text_lines.append("Periapsis: %.1f km" % ((float(state.get("periapsis", 0.0)) - float(current_body.radius)) / 1000.0))
 		text_lines.append("")
 		if selected_id > 0:
+			if str(current_body.name) != "Earth":
+				mission_valid = false
+				text_lines.append("Earth-orbit targets can only be planned from the Earth system.")
 			var target_radius := FlightComputer.EARTH_RADIUS + float(selected_id)
 			var circular := FlightComputer.circularisation_burn(sim.rocket_position, sim.velocity)
 			var orbit_origin_radius := maxf(FlightComputer.EARTH_RADIUS + 100000.0, sim.rocket_position.length())
@@ -757,10 +764,14 @@ func _show_flight_computer() -> void:
 			text_lines.append("Arrival burn: %s at apoapsis" % ("RETROGRADE" if orbit_departure_direction == "PROGRADE" else "PROGRADE"))
 			var parking_radius := FlightComputer.EARTH_RADIUS + 200000.0
 			var target_orbit_transfer := FlightComputer.hohmann_transfer(parking_radius, target_radius)
-			required_delta_v = float(target_orbit_transfer.get("total_delta_v", 0.0)) if in_orbit else 9400.0 + float(target_orbit_transfer.get("total_delta_v", 0.0))
+			if str(current_body.name) == "Earth":
+				required_delta_v = float(target_orbit_transfer.get("total_delta_v", 0.0)) if in_orbit else 9400.0 + float(target_orbit_transfer.get("total_delta_v", 0.0))
 		else:
 			var planet_index := -1 if selected_id == -1 else -selected_id - 2
 			var destination_transfer := FlightComputer.interplanetary_transfer(planet_index, maxf(200000.0, current_altitude))
+			if str(current_body.name) != "Earth":
+				mission_valid = false
+				text_lines.append("Interplanetary transfer planning currently launches from Earth. Use landing guidance for the current body.")
 			text_lines.append("INTERPLANETARY TRANSFER")
 			if bool(destination_transfer.get("valid", false)):
 				text_lines.append("Destination: %s" % str(destination_transfer.get("name", "Unknown")))
