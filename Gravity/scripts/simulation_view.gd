@@ -214,8 +214,9 @@ func _adaptive_step_size() -> float:
 	var orbital_limit := 0.015 * sqrt(radius / maxf(0.001, gravity))
 	var speed: float = (velocity - body.velocity).length()
 	var deep_space := altitude > 1.0e8
-	var maximum_step := 30.0 if deep_space else 0.25
-	var travel_limit := 250.0 / maxf(100.0, speed) if altitude < 150000.0 else (1000000.0 / maxf(100.0, speed) if deep_space else 0.25)
+	var maximum_step := 30.0 if deep_space else (1.0 if altitude > 80000.0 else 0.25)
+	var travel_distance_limit := 2500.0 if altitude > 80000.0 else 250.0
+	var travel_limit := travel_distance_limit / maxf(100.0, speed) if not deep_space else 1000000.0 / maxf(100.0, speed)
 	var drag_acceleration := _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass())).length()
 	var drag_limit := 0.08 * speed / drag_acceleration if drag_acceleration > 0.01 else maximum_step
 	var active := _active_stage_data()
@@ -263,6 +264,8 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: 
 			"gamma": 1.4,
 			"relative_velocity": current_velocity - Vector2(-position.y, position.x) * EARTH_ROTATION_RATE
 		}
+	if position.length() < 1.0e8:
+		return best
 	for body in PlanetarySystem.PLANETS:
 		var body_name := str(body.name)
 		if body_name == "Earth":
