@@ -56,6 +56,8 @@ func _initialize() -> void:
 	assert(float(capture.get("delta_v", 0.0)) > 0.0)
 	var captured_orbit := FlightComputer.orbital_state(arrival_position, capture.desired_velocity, mars_mu)
 	assert(bool(captured_orbit.get("bound", false)))
+	assert(float(captured_orbit.get("eccentricity", 1.0)) < 0.000001)
+	assert(absf(float(captured_orbit.get("apoapsis", 0.0)) - arrival_position.length()) < 1.0)
 	assert(float(captured_orbit.get("periapsis", 0.0)) > 3.3895e6 + 50000.0)
 	assert(not bool(FlightComputer.arrival_capture_burn(Vector2(3.4e6, 0.0), Vector2.ZERO, mars_mu, 3.3895e6).get("valid", true)))
 
