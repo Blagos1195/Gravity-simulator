@@ -286,7 +286,7 @@ static func _simulated_target_state(target_index: int, time_seconds: float) -> D
 	}
 
 
-static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float) -> Dictionary:
+static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0) -> Dictionary:
 	if target_index < -2 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Invalid target or no remaining manoeuvre capability."}
 	var initial_target := _simulated_target_state(target_index, start_time)
@@ -301,6 +301,9 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 	var integration_steps := 480
 	var best_score := INF
 	var best_plan: Dictionary = {}
+	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
+	var time_weight := 1.0 - fuel_weight
+	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
 		for direction_index in range(direction_count):
@@ -342,9 +345,14 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 					continue
 				var capture_delta_v := float(capture.get("delta_v", INF))
 				var total_delta_v := departure_delta_v + capture_delta_v
-				if total_delta_v > maximum_delta_v or total_delta_v >= best_score:
+				if total_delta_v > maximum_delta_v:
 					continue
-				best_score = total_delta_v
+				var fuel_cost := total_delta_v / maxf(1.0, maximum_delta_v)
+				var time_cost := closest_time / maxf(1.0, maximum_flight_duration)
+				var candidate_score := fuel_cost * fuel_weight + time_cost * time_weight
+				if candidate_score >= best_score:
+					continue
+				best_score = candidate_score
 				best_plan = {
 					"valid": true,
 					"departure_delta_v": departure_delta_v,
