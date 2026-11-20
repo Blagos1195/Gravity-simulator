@@ -533,12 +533,15 @@ func _update_guidance(dt: float) -> void:
 					thrust_key_down = false
 					autopilot_phase = "COAST"
 				else:
-					var ascent_tangential_speed := absf(float(orbit.get("tangential_speed", 0.0)))
-					var ascent_speed_fraction := clampf(ascent_tangential_speed / 7600.0, 0.0, 1.0)
-					var ascent_altitude_fraction := clampf((altitude - 1500.0) / 60000.0, 0.0, 1.0)
-					var altitude_pitch := lerpf(85.0, 2.0, ascent_altitude_fraction)
-					var speed_pitch := lerpf(85.0, 2.0, ascent_speed_fraction)
-					pitch_above_horizon = minf(altitude_pitch, speed_pitch)
+					var ascent_tangential_speed: float = absf(float(orbit.get("tangential_speed", 0.0)))
+					var surface_rotation_speed: float = absf(float(guidance_body.get("rotation_rate", 0.0))) * float(guidance_body.radius)
+					var ascent_speed_gain: float = maxf(0.0, ascent_tangential_speed - surface_rotation_speed)
+					var ascent_altitude_fraction: float = clampf((altitude - 1000.0) / 59000.0, 0.0, 1.0)
+					var ascent_speed_fraction: float = clampf(ascent_speed_gain / 7200.0, 0.0, 1.0)
+					var altitude_pitch: float = lerpf(88.0, 4.0, ascent_altitude_fraction)
+					var speed_pitch: float = lerpf(88.0, 4.0, ascent_speed_fraction)
+					pitch_above_horizon = maxf(altitude_pitch, speed_pitch)
+					status_message = "AUTOPILOT  •  ASCENT  •  ALT %.0F KM  •  Vt %.2F KM/S  •  PITCH %.0F°" % [altitude / 1000.0, ascent_tangential_speed / 1000.0, pitch_above_horizon]
 					thrust_key_down = fuel > 0.0
 			"COAST":
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
@@ -699,7 +702,7 @@ func _update_guidance(dt: float) -> void:
 			var landing_direction_vector := landing_direction_up * landing_direction_radial_acceleration + landing_direction_tangent * landing_direction_tangential_acceleration
 			autopilot_direction = landing_direction_vector.normalized() if landing_direction_vector.length_squared() > 0.001 else landing_direction_up
 		var autopilot_target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
-		rotation_angle = lerp_angle(rotation_angle, autopilot_target_rotation, clampf(dt * 0.8, 0.0, 1.0))
+		rotation_angle = lerp_angle(rotation_angle, autopilot_target_rotation, clampf(dt * 1.2, 0.0, 1.0))
 		return
 	elif guidance_velocity.length() > 1500.0:
 		pitch_above_horizon = minf(pitch_above_horizon, 12.0)
