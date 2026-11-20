@@ -129,9 +129,9 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		var burnout_twr := ignition_thrust * engines / maxf(1.0, burnout_mass * G0)
 		if i == 0 and (thrust_to_weight < 1.1 or thrust_to_weight > 2.5):
 			errors.append("First-stage pad TWR must be between 1.10 and 2.50.")
-		elif i > 0 and (thrust_to_weight < 0.08 or thrust_to_weight > 4.0):
-			errors.append("Stage %d ignition TWR must be between 0.08 and 4.00." % (i + 1))
-		if burnout_twr > 9.0:
+		elif i > 0 and (thrust_to_weight < 0.65 or thrust_to_weight > 3.5):
+			errors.append("Stage %d ignition TWR must be between 0.65 and 3.50 to sustain a practical ascent or orbital burn." % (i + 1))
+		if burnout_twr > 8.0:
 			errors.append("Stage %d burnout acceleration is too high; reduce thrust or increase dry mass." % (i + 1))
 	if total_mass > 0.0 and stages.size() >= MIN_STAGES:
 		var delta_v := total_delta_v(design)
