@@ -5,17 +5,20 @@ const G := 6.67430e-11
 const EARTH_MU := 3.986004418e14
 const EARTH_RADIUS := 6.371e6
 const MOON_ORBIT_RADIUS := 3.844e8
+const MOON_MASS := 7.342e22
+const MOON_RADIUS := 1.7374e6
+const MOON_MU := G * MOON_MASS
 const SUN_MU := 1.32712440018e20
 const EARTH_ORBIT_RADIUS := 1.495978707e11
 const EARTH_ORBIT_PERIOD := 365.256363004 * 86400.0
 const PLANET_TARGETS := [
-	{"name": "Mercury", "radius": 5.7909e10, "period_days": 87.969},
-	{"name": "Venus", "radius": 1.0821e11, "period_days": 224.701},
-	{"name": "Mars", "radius": 2.2794e11, "period_days": 686.980},
-	{"name": "Jupiter", "radius": 7.7857e11, "period_days": 4332.59},
-	{"name": "Saturn", "radius": 1.4335e12, "period_days": 10759.22},
-	{"name": "Uranus", "radius": 2.8725e12, "period_days": 30688.5},
-	{"name": "Neptune", "radius": 4.4951e12, "period_days": 60182.0}
+	{"name": "Mercury", "radius": 5.7909e10, "planet_radius": 2.4397e6, "mass": 3.3011e23, "period_days": 87.969},
+	{"name": "Venus", "radius": 1.0821e11, "planet_radius": 6.0518e6, "mass": 4.8675e24, "period_days": 224.701},
+	{"name": "Mars", "radius": 2.2794e11, "planet_radius": 3.3895e6, "mass": 6.4171e23, "period_days": 686.980},
+	{"name": "Jupiter", "radius": 7.7857e11, "planet_radius": 6.9911e7, "mass": 1.8982e27, "period_days": 4332.59},
+	{"name": "Saturn", "radius": 1.4335e12, "planet_radius": 5.8232e7, "mass": 5.6834e26, "period_days": 10759.22},
+	{"name": "Uranus", "radius": 2.8725e12, "planet_radius": 2.5362e7, "mass": 8.6810e25, "period_days": 30688.5},
+	{"name": "Neptune", "radius": 4.4951e12, "planet_radius": 2.4622e7, "mass": 1.0241e26, "period_days": 60182.0}
 ]
 
 static func orbital_state(position: Vector2, velocity: Vector2, mu: float = EARTH_MU) -> Dictionary:
@@ -93,16 +96,24 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 		var lunar := hohmann_transfer(EARTH_RADIUS + parking_altitude, EARTH_RADIUS + MOON_ORBIT_RADIUS)
 		if not bool(lunar.get("valid", false)):
 			return {"valid": false}
+		var transfer_axis := (EARTH_RADIUS + parking_altitude + EARTH_RADIUS + MOON_ORBIT_RADIUS) * 0.5
+		var lunar_arrival_speed := sqrt(EARTH_MU * (2.0 / (EARTH_RADIUS + MOON_ORBIT_RADIUS) - 1.0 / transfer_axis))
+		var moon_orbital_speed := sqrt(EARTH_MU / (EARTH_RADIUS + MOON_ORBIT_RADIUS))
+		var arrival_excess := absf(lunar_arrival_speed - moon_orbital_speed)
+		var lunar_parking_radius := MOON_RADIUS + 100000.0
+		var lunar_circular_speed := sqrt(MOON_MU / lunar_parking_radius)
+		var lunar_capture_speed := sqrt(arrival_excess * arrival_excess + 2.0 * MOON_MU / lunar_parking_radius)
+		var lunar_capture_delta_v := lunar_capture_speed - lunar_circular_speed
 		return {
 			"valid": true,
 			"name": "Moon",
 			"departure_delta_v": float(lunar.departure_delta_v),
-			"arrival_delta_v": float(lunar.arrival_delta_v),
-			"total_delta_v": float(lunar.total_delta_v),
+			"arrival_delta_v": lunar_capture_delta_v,
+			"total_delta_v": float(lunar.departure_delta_v) + lunar_capture_delta_v,
 			"transfer_time": float(lunar.transfer_time),
 			"direction": 1.0,
 			"phase_angle": 0.0,
-			"arrival_excess_speed": 0.0
+			"arrival_excess_speed": arrival_excess
 		}
 	if target_index < 0 or target_index >= PLANET_TARGETS.size():
 		return {"valid": false}
@@ -115,6 +126,11 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 	var transfer_arrival_speed := sqrt(SUN_MU * (2.0 / target_radius - 1.0 / transfer_axis))
 	var departure_excess := absf(transfer_departure_speed - earth_speed)
 	var arrival_excess := absf(target_speed - transfer_arrival_speed)
+	var target_parking_radius := float(target.planet_radius) + 200000.0
+	var target_mu := G * float(target.mass)
+	var target_circular_speed := sqrt(target_mu / target_parking_radius)
+	var target_capture_speed := sqrt(arrival_excess * arrival_excess + 2.0 * target_mu / target_parking_radius)
+	var arrival_capture_delta_v := target_capture_speed - target_circular_speed
 	var parking_radius := EARTH_RADIUS + maxf(70000.0, parking_altitude)
 	var parking_speed := circular_orbit_speed(parking_radius)
 	var escape_speed := sqrt(departure_excess * departure_excess + 2.0 * EARTH_MU / parking_radius)
@@ -126,8 +142,8 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 		"valid": true,
 		"name": str(target.name),
 		"departure_delta_v": injection_delta_v,
-		"arrival_delta_v": arrival_excess,
-		"total_delta_v": injection_delta_v + arrival_excess,
+		"arrival_delta_v": arrival_capture_delta_v,
+		"total_delta_v": injection_delta_v + arrival_capture_delta_v,
 		"transfer_time": transfer_time,
 		"departure_excess_speed": departure_excess,
 		"arrival_excess_speed": arrival_excess,
