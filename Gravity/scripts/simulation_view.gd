@@ -279,14 +279,19 @@ func _update_guidance(dt: float) -> void:
 				var desired_speed := FlightComputer.circular_orbit_speed(rocket_position.length())
 				var tangential_speed := float(orbit.get("tangential_speed", 0.0))
 				var radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
-				if tangential_speed >= desired_speed - 2.0 and radial_speed < 100.0:
+				var speed_error := desired_speed - tangential_speed
+				autopilot_transfer_direction = 1.0 if speed_error >= 0.0 else -1.0
+				var circular_burn_direction := tangent * autopilot_transfer_direction
+				var circular_burn_rotation := circular_burn_direction.angle() - Vector2.UP.angle()
+				rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				if absf(speed_error) <= 2.0 and radial_speed < 100.0:
 					thrust_key_down = false
 					if autopilot_target_mode == "PLANET":
 						var transfer := FlightComputer.interplanetary_transfer(autopilot_planet_index, altitude)
 					if bool(transfer.get("valid", false)):
 						autopilot_burn_remaining = float(transfer.get("departure_delta_v", 0.0))
 						autopilot_transfer_direction = float(transfer.get("direction", 1.0))
-						var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time)
+						var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
 						autopilot_phase = "TRANSFER_BURN" if wait_time <= 1.0 else "WAIT_WINDOW"
 					else:
 						autopilot_phase = "FAILED"
