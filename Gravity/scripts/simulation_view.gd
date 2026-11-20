@@ -810,6 +810,10 @@ func _draw() -> void:
 		for point in predicted_path:
 			prediction_points.append(rocket_screen + (point - rocket_position) * camera_zoom * world_scale_factor)
 		draw_polyline(prediction_points, Color(1.0, 0.72, 0.22, 0.85), 2.0)
+	if landed:
+		draw_line(rocket_screen + Vector2(-30.0, 13.0) * object_scale, rocket_screen + Vector2(30.0, 13.0) * object_scale, Color(0.72, 0.78, 0.86), 3.0 * object_scale)
+		draw_line(rocket_screen + Vector2(-18.0, 13.0) * object_scale, rocket_screen + Vector2(-18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
+		draw_line(rocket_screen + Vector2(18.0, 13.0) * object_scale, rocket_screen + Vector2(18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
 	_draw_rocket(rocket_screen + Vector2.UP.rotated(rotation_angle) * 14.0 * object_scale, object_scale)
 	if show_vectors:
 		var velocity_end := rocket_screen + velocity.normalized() * 65.0
