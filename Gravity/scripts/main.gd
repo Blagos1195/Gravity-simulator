@@ -187,9 +187,9 @@ func _build_flight_hud() -> void:
 
 	var bottom := Label.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.position = Vector2(20, -34)
-	bottom.size = Vector2(900, 24)
-	bottom.text = "W / ↑ ENGINE ON/OFF     S / ↓ ENGINE CUTOFF     A / D ROTATE     SPACE PAUSE     +/- TIME WARP     F5 SAVE     F9 LOAD"
+	bottom.position = Vector2(20, -54)
+	bottom.size = Vector2(1300, 46)
+	bottom.text = "W / ↑ ENGINE ON/OFF     S / ↓ CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE ASSIST     SPACE PAUSE     +/- TIME WARP     F5 SAVE     F9 LOAD"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
