@@ -817,18 +817,24 @@ func _load_game() -> void:
 			status_label.text = "NO SAVE FOUND IN SLOT %02d" % save_slot
 		return
 	var file := FileAccess.open(path, FileAccess.READ)
-	var parsed = JSON.parse_string(file.get_as_text())
+	if file == null:
+		if status_label:
+			status_label.text = "SAVE COULD NOT BE OPENED"
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	file.close()
-	if typeof(parsed) == TYPE_DICTIONARY and sim:
-		realism = parsed.get("realism", realism)
-		world_scale = parsed.get("world_scale", world_scale)
-		career_enabled = parsed.get("career_enabled", career_enabled)
+	if parsed is Dictionary and sim:
+		realism = str(parsed.get("realism", realism))
+		world_scale = str(parsed.get("world_scale", world_scale))
+		career_enabled = bool(parsed.get("career_enabled", career_enabled))
 		sim.load_save_data(parsed)
 		var saved_design: Variant = parsed.get("rocket_design", null)
 		if saved_design is Dictionary:
 			rocket_design = saved_design
 		if status_label:
 			status_label.text = "LOADED  •  SLOT %02d" % save_slot
+	elif status_label:
+		status_label.text = "SAVE DATA IS INVALID  •  SLOT %02d" % save_slot
 
 func _add_button(parent: Node, text_value: String, callback: Callable) -> void:
 	var button := Button.new()
