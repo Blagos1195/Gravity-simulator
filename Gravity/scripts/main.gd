@@ -457,7 +457,7 @@ func _latest_save_slot() -> int:
 			continue
 		var parsed: Variant = JSON.parse_string(file.get_as_text())
 		file.close()
-		if not parsed is Dictionary:
+		if not (parsed is Dictionary):
 			continue
 		var modified := FileAccess.get_modified_time(path)
 		if modified > latest_time:
