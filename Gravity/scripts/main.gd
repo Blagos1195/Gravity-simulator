@@ -866,7 +866,7 @@ func _show_flight_computer() -> void:
 		sim.autopilot_complete = false
 		sim.autopilot_target_altitude = float(selected_id) if selected_id > 0 else 200000.0
 		sim.autopilot_target_mode = "ORBIT" if selected_id > 0 else "PLANET"
-		sim.autopilot_planet_index = -1 if selected_id == -1 else -selected_id - 2
+		sim.autopilot_planet_index = -2 if selected_id > 0 else -1 if selected_id == -1 else -selected_id - 2
 		sim.autopilot_burn_remaining = 0.0
 		sim.autopilot_burn_direction = Vector2.ZERO
 		sim.autopilot_transfer_corrections = 0
@@ -879,12 +879,19 @@ func _show_flight_computer() -> void:
 		var target_is_near := not target_state.is_empty() and target_distance <= float(target_state.get("soi", 0.0))
 		var current_altitude := float(current_body.distance) - float(current_body.radius)
 		var stable_current_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0
-		var already_at_destination_surface := sim.landed and sim.landed_body_name == sim._autopilot_target_body_name()
+		var selected_earth_orbit := selected_id > 0
+		var source_is_earth := str(current_body.name) == "Earth"
+		var already_at_destination_surface := not selected_earth_orbit and sim.landed and sim.landed_body_name == sim._autopilot_target_body_name()
 		if already_at_destination_surface:
 			sim.autopilot_phase = "COMPLETE"
 			sim.autopilot_complete = true
-		elif target_is_near:
+		elif target_is_near and not (selected_earth_orbit and source_is_earth):
 			sim.autopilot_phase = "ARRIVAL_APPROACH"
+		elif selected_earth_orbit and source_is_earth:
+			if sim.landed or (current_altitude < 120000.0 and not stable_current_orbit):
+				sim.autopilot_phase = "ASCENT"
+			else:
+				sim.autopilot_phase = "CIRCULARISE"
 		elif sim.landed or (current_altitude < 120000.0 and not stable_current_orbit):
 			sim.autopilot_phase = "ASCENT"
 		else:
