@@ -1,6 +1,7 @@
 extends SceneTree
 
 const FlightComputer = preload("res://scripts/flight_computer.gd")
+const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 
 func _initialize() -> void:
 	var radius := FlightComputer.EARTH_RADIUS + 200000.0
@@ -39,6 +40,24 @@ func _initialize() -> void:
 		assert(target_wait >= 0.0 and target_wait < 900.0 * 86400.0)
 		var target_direction := FlightComputer.departure_periapsis_direction(target_index, 0.0, radius)
 		assert(absf(target_direction.length() - 1.0) < 0.000001)
+
+	var mars_position := PlanetarySystem.planet_position_relative_to_earth("Mars", 86400.0 * 100.0)
+	var mars_velocity := PlanetarySystem.planet_velocity_relative_to_earth("Mars", 86400.0 * 100.0)
+	assert(mars_position.length() > 1.0e11)
+	assert(mars_velocity.length() > 1000.0)
+	assert(PlanetarySystem.planet_soi_radius("Mars") > 1.0e8)
+	assert(PlanetarySystem.moon_soi_radius() > 1.0e7)
+
+	var mars_mu := FlightComputer.G * 6.4171e23
+	var arrival_position := Vector2(1.0e7, 0.0)
+	var arrival_velocity := Vector2(500.0, 7000.0)
+	var capture := FlightComputer.arrival_capture_burn(arrival_position, arrival_velocity, mars_mu, 3.3895e6)
+	assert(bool(capture.get("valid", false)))
+	assert(float(capture.get("delta_v", 0.0)) > 0.0)
+	var captured_orbit := FlightComputer.orbital_state(arrival_position, capture.desired_velocity, mars_mu)
+	assert(bool(captured_orbit.get("bound", false)))
+	assert(float(captured_orbit.get("periapsis", 0.0)) > 3.3895e6 + 50000.0)
+	assert(not bool(FlightComputer.arrival_capture_burn(Vector2(3.4e6, 0.0), Vector2.ZERO, mars_mu, 3.3895e6).get("valid", true)))
 
 	var moon_transfer := FlightComputer.interplanetary_transfer(-1, 200000.0)
 	assert(bool(moon_transfer.get("valid", false)))
