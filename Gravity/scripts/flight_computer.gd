@@ -286,6 +286,16 @@ static func _simulated_target_state(target_index: int, time_seconds: float) -> D
 	}
 
 
+static func _segment_intersects_circle(start: Vector2, finish: Vector2, center: Vector2, radius: float) -> bool:
+	var segment := finish - start
+	var length_squared := segment.length_squared()
+	var fraction := 0.0
+	if length_squared > 0.0:
+		fraction = clampf((center - start).dot(segment) / length_squared, 0.0, 1.0)
+	var closest := start + segment * fraction
+	return closest.distance_squared_to(center) <= radius * radius
+
+
 static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false) -> Dictionary:
 	if target_index < -2 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Invalid target or no remaining manoeuvre capability."}
@@ -298,7 +308,6 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
 	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.25, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v * 0.8, maximum_delta_v]
 	var direction_count := 12 if coarse_search else 24
-	var integration_steps := 360 if coarse_search else 720
 	var best_score := INF
 	var best_plan: Dictionary = {}
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
@@ -306,6 +315,9 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
+		var minimum_steps := 360 if coarse_search else 720
+		var maximum_steps := 1200 if coarse_search else 2400
+		var integration_steps := clampi(int(ceil(flight_duration / 21600.0)), minimum_steps, maximum_steps)
 		var step_size := flight_duration / float(integration_steps)
 		var gravity_states: Array[Dictionary] = []
 		var target_states: Array[Dictionary] = []
@@ -332,14 +344,14 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 					var final_acceleration := PlanetarySystem.gravity_acceleration_from_states(next_position, gravity_states[step_index + 1])
 					velocity = half_velocity + final_acceleration * (step_size * 0.5)
 					position = next_position
-					if position.length_squared() <= EARTH_RADIUS * EARTH_RADIUS:
+					if _segment_intersects_circle(position - half_velocity * step_size, position, Vector2.ZERO, EARTH_RADIUS):
 						collided = true
 						break
 					var bodies: Array = gravity_states[step_index + 1].get("bodies", [])
 					for body in bodies:
 						var body_position: Vector2 = body.position
 						var body_radius := float(body.radius)
-						if position.distance_squared_to(body_position) <= body_radius * body_radius:
+						if _segment_intersects_circle(position - half_velocity * step_size, position, body_position, body_radius):
 							collided = true
 							break
 					if collided:
