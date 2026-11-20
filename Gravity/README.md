@@ -5,7 +5,10 @@ A procedural 2D spaceflight simulator built with Godot 4.
 ## Current prototype
 
 - Procedural starfield and vector-drawn spacecraft
-- Earth-centred Newtonian gravity
+- Earth-centred Newtonian gravity with lunar perturbations
+- Centralised planetary data for all eight planets
+- Time-dependent circular Moon orbit and lunar gravity
+- Exponential Earth atmosphere model
 - Basic rocket thrust and propellant consumption
 - Approximate atmospheric drag in Realistic and Hardcore modes
 - Orbital trajectory and apsis readouts
@@ -48,4 +51,4 @@ Saves are stored in the user's Godot application data directory under `saves/`.
 
 ## Important
 
-This is the first playable foundation, not the finished simulator. The current flight model is an early Earth-centred prototype. Multi-body gravity, robust numerical integration, the vehicle assembly system, complete planetary data, career progression, missions, docking, re-entry heating, replay tooling and multiplayer are planned follow-on systems.
+This is the first playable foundation, not the finished simulator. The current flight model is an early Earth-centred prototype. The Moon currently follows a simplified circular orbit, and the planetary catalogue is data groundwork rather than a complete heliocentric simulation. Accurate planetary ephemerides, a robust numerical integrator, the vehicle assembly system, career progression, missions, docking, re-entry heating, replay tooling and multiplayer remain planned follow-on systems.
