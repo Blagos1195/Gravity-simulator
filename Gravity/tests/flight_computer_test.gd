@@ -47,6 +47,11 @@ func _initialize() -> void:
 	assert(mars_velocity.length() > 1000.0)
 	assert(PlanetarySystem.planet_soi_radius("Mars") > 1.0e8)
 	assert(PlanetarySystem.moon_soi_radius() > 1.0e7)
+	assert(absf(PlanetarySystem.planetary_atmosphere_density("Mars", 0.0) - 0.020) < 0.000001)
+	assert(absf(PlanetarySystem.planetary_atmosphere_density("Venus", 0.0) - 65.0) < 0.000001)
+	assert(PlanetarySystem.planetary_atmosphere_density("Jupiter", 0.0) > 0.1)
+	assert(PlanetarySystem.planetary_atmosphere_density("Mercury", 0.0) == 0.0)
+	assert(PlanetarySystem.planetary_atmosphere_density("Mars", 200000.0) == 0.0)
 
 	var mars_mu := FlightComputer.G * 6.4171e23
 	var arrival_position := Vector2(1.0e7, 0.0)
