@@ -294,7 +294,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 		return {"valid": false, "reason": "Destination state unavailable."}
 	var initial_distance := start_position.distance_to(Vector2(initial_target.position))
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
-	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index == -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
+	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index <= -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations := [nominal_time * 0.65, nominal_time, nominal_time * 1.5, nominal_time * 2.5]
 	var magnitudes := [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.2, maximum_delta_v * 0.35, maximum_delta_v * 0.5, maximum_delta_v * 0.65, maximum_delta_v * 0.8, maximum_delta_v]
 	var direction_count := 24
