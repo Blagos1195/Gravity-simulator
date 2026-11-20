@@ -918,6 +918,7 @@ func _show_flight_computer() -> void:
 			return
 		launch_windows_button.disabled = true
 		report.text = "SCANNING FUTURE DEPARTURE DATES...\nThis simulates coarse candidate transfers and may take a little while."
+		await get_tree().process_frame
 		var available := FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel) * (1.0 - sim.autopilot_safety_margin)
 		var windows := FlightComputer.scan_launch_windows(relative_position, relative_velocity, sim.sim_time, destination_index, available, sim.autopilot_speed_priority)
 		launch_windows_button.disabled = false
