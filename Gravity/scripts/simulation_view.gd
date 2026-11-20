@@ -268,7 +268,7 @@ func _update_guidance(dt: float) -> void:
 					var apoapsis: float = float(orbit.get("apoapsis", 0.0))
 					var apoapsis_fraction := clampf((apoapsis - EARTH_RADIUS) / maxf(1.0, autopilot_target_altitude), 0.0, 1.0) if is_finite(apoapsis) else 0.0
 					var speed_fraction := clampf(velocity.length() / 7800.0, 0.0, 1.0)
-					pitch_above_horizon = lerpf(90.0, 2.0, clampf(maxf(altitude / maxf(1.0, autopilot_target_altitude), apoapsis_fraction * 0.92, speed_fraction * 0.9), 0.0, 1.0))
+					pitch_above_horizon = lerpf(90.0, 2.0, clampf(maxf(maxf(altitude / maxf(1.0, autopilot_target_altitude), apoapsis_fraction * 0.92), speed_fraction * 0.9), 0.0, 1.0))
 					thrust_key_down = fuel > 0.0
 			"COAST":
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
