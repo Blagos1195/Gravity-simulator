@@ -553,8 +553,8 @@ func _update_guidance(dt: float) -> void:
 				autopilot_transfer_direction = 1.0 if circular_speed_error >= 0.0 else -1.0
 				var circular_burn_direction := tangent * autopilot_transfer_direction
 				var circular_burn_rotation := circular_burn_direction.angle() - Vector2.UP.angle()
-				rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				if absf(circular_speed_error) <= 2.0 and circular_radial_speed < 100.0:
+				var circular_alignment_error := absf(angle_difference(rotation_angle, circular_burn_rotation))
+				if absf(circular_speed_error) <= 2.0 and circular_radial_speed < 10.0:
 					thrust_key_down = false
 					if autopilot_target_mode == "PLANET" or (autopilot_planet_index == -2 and str(guidance_body.name) != "Earth"):
 						autopilot_phase = "PLAN_TRANSFER"
@@ -562,7 +562,8 @@ func _update_guidance(dt: float) -> void:
 						autopilot_phase = "COMPLETE"
 						autopilot_complete = true
 				else:
-					thrust_key_down = fuel > 0.0
+					thrust_key_down = fuel > 0.0 and circular_alignment_error < deg_to_rad(2.0)
+
 			"PLAN_TRANSFER":
 				status_message = "AUTOPILOT  •  SIMULATING TRANSFER TRAJECTORIES"
 				thrust_key_down = false
@@ -673,6 +674,9 @@ func _update_guidance(dt: float) -> void:
 		var autopilot_direction := prograde
 		if autopilot_phase == "ASCENT":
 			autopilot_direction = radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
+		elif autopilot_phase == "CIRCULARISE":
+			var circular_direction_sign := 1.0 if float(orbit.get("tangential_speed", 0.0)) <= FlightComputer.circular_orbit_speed(guidance_position.length(), G * float(guidance_body.mass)) else -1.0
+			autopilot_direction = tangent * circular_direction_sign
 		elif autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"]:
 			autopilot_direction = tangent * autopilot_transfer_direction
 		elif autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"]:
