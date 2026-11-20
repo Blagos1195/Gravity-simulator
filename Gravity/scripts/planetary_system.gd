@@ -113,25 +113,38 @@ static func moon_position(time_seconds: float) -> Vector2:
 static func moon_velocity(time_seconds: float) -> Vector2:
 	return (moon_position(time_seconds + 30.0) - moon_position(time_seconds - 30.0)) / 60.0
 
-static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vector2:
-	var distance := maxf(position.length(), EARTH_RADIUS)
-	var acceleration := -position.normalized() * G * EARTH_MASS / (distance * distance)
-	var moon := moon_position(time_seconds)
-	var relative := moon - position
-	var relative_distance := maxf(relative.length(), MOON_RADIUS)
-	var moon_pull := relative.normalized() * G * MOON_MASS / (relative_distance * relative_distance)
-	var moon_orbit_distance := maxf(moon.length(), 1.0)
-	var earth_moon_pull := moon.normalized() * G * MOON_MASS / (moon_orbit_distance * moon_orbit_distance)
-	acceleration += moon_pull - earth_moon_pull
+static func gravity_body_states(time_seconds: float) -> Dictionary:
 	var earth_state := _earth_heliocentric_state(time_seconds)
 	var earth_position: Vector2 = earth_state.position
-	acceleration += _differential_body_gravity(position, SUN_MASS, -earth_position)
+	var bodies: Array[Dictionary] = [
+		{"mass": SUN_MASS, "position": -earth_position, "radius": 6.957e8},
+		{"mass": MOON_MASS, "position": moon_position(time_seconds), "radius": MOON_RADIUS}
+	]
 	for planet in PLANETS:
 		if planet.name == "Earth":
 			continue
 		var planet_state := _planet_heliocentric_state(planet, time_seconds)
-		var planet_position: Vector2 = planet_state.position - earth_position
-		acceleration += _differential_body_gravity(position, float(planet.mass), planet_position, float(planet.radius))
+		bodies.append({"mass": float(planet.mass), "position": planet_state.position - earth_position, "radius": float(planet.radius)})
+	return {"bodies": bodies}
+
+static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vector2:
+	return gravity_acceleration_from_states(position, gravity_body_states(time_seconds))
+
+static func gravity_acceleration_from_states(position: Vector2, body_states: Dictionary) -> Vector2:
+	var distance := maxf(position.length(), EARTH_RADIUS)
+	var acceleration := -position.normalized() * G * EARTH_MASS / (distance * distance)
+	for body in body_states.get("bodies", []):
+		var body_position: Vector2 = body.position
+		var body_mass := float(body.mass)
+		var body_radius := float(body.radius)
+		if body_mass == MOON_MASS:
+			var relative := body_position - position
+			var relative_distance := maxf(relative.length(), body_radius)
+			var body_pull := relative.normalized() * G * body_mass / (relative_distance * relative_distance)
+			var earth_pull := body_position.normalized() * G * body_mass / maxf(body_position.length() * body_position.length(), 1.0)
+			acceleration += body_pull - earth_pull
+		else:
+			acceleration += _differential_body_gravity(position, body_mass, body_position, body_radius)
 	return acceleration
 
 static func _sun_relative_position(time_seconds: float) -> Vector2:
