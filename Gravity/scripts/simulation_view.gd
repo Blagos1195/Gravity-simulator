@@ -30,6 +30,10 @@ var gimbal_angle := 0.0
 var guidance_enabled := false
 var autopilot_enabled := false
 var autopilot_target_altitude := 200000.0
+var autopilot_target_mode := "ORBIT"
+var autopilot_planet_index := -1
+var autopilot_burn_remaining := 0.0
+var autopilot_transfer_direction := 1.0
 var autopilot_complete := false
 var autopilot_phase := "IDLE"
 var heat_flux_mw := 0.0
@@ -131,6 +135,12 @@ func _physics_step(dt: float) -> void:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
 	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var thrust_impulse := thrust_direction * thrust_delta_v
+	if autopilot_enabled and autopilot_phase == "TRANSFER_BURN" and thrust_delta_v > 0.0:
+		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
+		if autopilot_burn_remaining <= 1.0:
+			thrust_key_down = false
+			autopilot_phase = "TRANSFER_COAST"
+			autopilot_complete = true
 	var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, start_time)
 	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
@@ -253,7 +263,7 @@ func _update_guidance(dt: float) -> void:
 					thrust_key_down = false
 					autopilot_phase = "COAST"
 				else:
-					var apoapsis := float(orbit.get("apoapsis", 0.0))
+					var apoapsis: float = float(orbit.get("apoapsis", 0.0))
 					var apoapsis_fraction := clampf((apoapsis - EARTH_RADIUS) / maxf(1.0, autopilot_target_altitude), 0.0, 1.0) if is_finite(apoapsis) else 0.0
 					var speed_fraction := clampf(velocity.length() / 7800.0, 0.0, 1.0)
 					pitch_above_horizon = lerpf(90.0, 2.0, clampf(maxf(altitude / maxf(1.0, autopilot_target_altitude), apoapsis_fraction * 0.92, speed_fraction * 0.9), 0.0, 1.0))
@@ -261,7 +271,7 @@ func _update_guidance(dt: float) -> void:
 			"COAST":
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
 				thrust_key_down = false
-				if float(orbit.get("radial_speed", 0.0)) <= 5.0 and altitude > 70000.0:
+				if absf(float(orbit.get("radial_speed", 0.0))) <= 5.0 and altitude > 70000.0:
 					autopilot_phase = "CIRCULARISE"
 					thrust_key_down = true
 			"CIRCULARISE":
@@ -271,15 +281,41 @@ func _update_guidance(dt: float) -> void:
 				var radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
 				if tangential_speed >= desired_speed - 2.0 and radial_speed < 100.0:
 					thrust_key_down = false
+					if autopilot_target_mode == "PLANET":
+						var transfer := FlightComputer.interplanetary_transfer(autopilot_planet_index, altitude)
+					if bool(transfer.get("valid", false)):
+						autopilot_burn_remaining = float(transfer.get("departure_delta_v", 0.0))
+						autopilot_transfer_direction = float(transfer.get("direction", 1.0))
+						autopilot_phase = "TRANSFER_BURN"
+					else:
+						autopilot_phase = "FAILED"
+				else:
 					autopilot_phase = "COMPLETE"
 					autopilot_complete = true
 				else:
 					thrust_key_down = fuel > 0.0
+			"TRANSFER_BURN":
+				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
+				var burn_direction := tangent * autopilot_transfer_direction
+				var burn_rotation := burn_direction.angle() - Vector2.UP.angle()
+				rotation_angle = lerp_angle(rotation_angle, burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0
+				if fuel <= 0.0:
+					autopilot_phase = "FAILED"
+			"TRANSFER_COAST":
+				status_message = "AUTOPILOT  •  TRANSFER BURN COMPLETE"
+				thrust_key_down = false
 			"COMPLETE":
 				status_message = "AUTOPILOT  •  TARGET ORBIT ACHIEVED"
 				thrust_key_down = false
 				autopilot_complete = true
-		var target_rotation := prograde.angle() - Vector2.UP.angle()
+			"FAILED":
+				status_message = "AUTOPILOT  •  BURN INCOMPLETE"
+				thrust_key_down = false
+		var target_direction := prograde
+		if autopilot_phase == "TRANSFER_BURN":
+			target_direction = tangent * autopilot_transfer_direction
+		var target_rotation := target_direction.angle() - Vector2.UP.angle()
 		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
 		return
 	elif velocity.length() > 1500.0:
@@ -637,6 +673,10 @@ func get_save_data() -> Dictionary:
 		"guidance_enabled": guidance_enabled,
 		"autopilot_enabled": autopilot_enabled,
 		"autopilot_target_altitude": autopilot_target_altitude,
+		"autopilot_target_mode": autopilot_target_mode,
+		"autopilot_planet_index": autopilot_planet_index,
+		"autopilot_burn_remaining": autopilot_burn_remaining,
+		"autopilot_transfer_direction": autopilot_transfer_direction,
 		"autopilot_complete": autopilot_complete,
 		"autopilot_phase": autopilot_phase,
 		"heat_shield_temperature": heat_shield_temperature,
@@ -664,6 +704,10 @@ func load_save_data(data: Dictionary) -> void:
 	guidance_enabled = bool(data.get("guidance_enabled", false))
 	autopilot_enabled = bool(data.get("autopilot_enabled", false))
 	autopilot_target_altitude = float(data.get("autopilot_target_altitude", 200000.0))
+	autopilot_target_mode = str(data.get("autopilot_target_mode", "ORBIT"))
+	autopilot_planet_index = int(data.get("autopilot_planet_index", -1))
+	autopilot_burn_remaining = float(data.get("autopilot_burn_remaining", 0.0))
+	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
 	autopilot_complete = bool(data.get("autopilot_complete", false))
 	autopilot_phase = str(data.get("autopilot_phase", "IDLE"))
 	heat_shield_temperature = float(data.get("heat_shield_temperature", 290.0))
