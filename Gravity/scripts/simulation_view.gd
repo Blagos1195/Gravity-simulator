@@ -108,7 +108,8 @@ func _physics_step(dt: float) -> void:
     velocity += (final_gravity + final_aero + thrust_acceleration) * (0.5 * dt)
     fuel = maxf(0.0, fuel - fuel_used)
 
-    _update_heating(dt, rocket_position.length() - EARTH_RADIUS, velocity.length())
+    var atmospheric_velocity := Vector2(-rocket_position.y, rocket_position.x) * EARTH_ROTATION_RATE
+    _update_heating(dt, rocket_position.length() - EARTH_RADIUS, (velocity - atmospheric_velocity).length())
 
     if fuel <= 0.0 and stage_index == 0:
         _separate_stage()
@@ -344,7 +345,6 @@ func _draw_hud() -> void:
     var active_dry_mass := FIRST_STAGE_DRY_MASS if stage_index == 0 else UPPER_STAGE_DRY_MASS
     var upper_stack_mass := UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL if stage_index == 0 else 0.0
     var current_mass := active_dry_mass + upper_stack_mass + fuel
-    var engine_flow := FIRST_STAGE_FLOW if stage_index == 0 else UPPER_STAGE_FLOW
     var thrust_to_weight := current_thrust / (current_mass * local_gravity)
     var remaining_delta_v := _remaining_ideal_delta_v(current_mass)
     var lines := [
