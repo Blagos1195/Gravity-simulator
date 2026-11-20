@@ -136,6 +136,25 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 		"transfer_semi_major_axis": transfer_axis
 	}
 
+static func departure_wait_time(target_index: int, current_time: float) -> float:
+	if target_index < 0 or target_index >= PLANET_TARGETS.size():
+		return 0.0
+	var target: Dictionary = PLANET_TARGETS[target_index]
+	var earth_rate := TAU / EARTH_ORBIT_PERIOD
+	var target_rate := TAU / (float(target.period_days) * 86400.0)
+	var relative_rate := target_rate - earth_rate
+	if absf(relative_rate) < 0.000000000001:
+		return 0.0
+	var earth_angle := earth_rate * current_time
+	var target_angle := target_rate * current_time
+	var current_phase := wrapf(target_angle - earth_angle, -PI, PI)
+	var transfer := interplanetary_transfer(target_index)
+	var desired_phase := float(transfer.get("phase_angle", 0.0))
+	var phase_difference := wrapf(desired_phase - current_phase, -PI, PI)
+	var wait := phase_difference / relative_rate
+	var synodic_period := TAU / absf(relative_rate)
+	return fposmod(wait, synodic_period)
+
 static func target_orbit_report(position: Vector2, velocity: Vector2, altitude: float) -> Dictionary:
 	var target_radius := EARTH_RADIUS + maxf(0.0, altitude)
 	var state := orbital_state(position, velocity)
