@@ -604,14 +604,14 @@ func _update_guidance(dt: float) -> void:
 				var distance := relative_position.length()
 				var landing_altitude := distance - float(destination_state.radius)
 				var up := relative_position.normalized()
-				var tangent := Vector2(-up.y, up.x)
+				var landing_tangent := Vector2(-up.y, up.x)
 				var gravity := G * float(destination_state.mass) / (distance * distance)
 				var radial_speed := relative_velocity.dot(up)
-				var tangential_speed := relative_velocity.dot(tangent)
+				var tangential_speed := relative_velocity.dot(landing_tangent)
 				var target_descent_speed := -maxf(1.5, minf(60.0, sqrt(2.0 * gravity * maxf(0.0, landing_altitude - 2.0))))
 				var radial_acceleration := maxf(0.0, gravity + (target_descent_speed - radial_speed) / 15.0)
 				var tangential_acceleration := -tangential_speed / 180.0
-				var required_acceleration := up * radial_acceleration + tangent * tangential_acceleration
+				var required_acceleration := up * radial_acceleration + landing_tangent * tangential_acceleration
 				var available_acceleration := _engine_thrust(landing_altitude) / maxf(1.0, _current_vehicle_mass())
 				autopilot_throttle = clampf(required_acceleration.length() / maxf(0.01, available_acceleration), 0.0, 1.0)
 				thrust_key_down = autopilot_throttle > 0.001
