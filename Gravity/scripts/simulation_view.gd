@@ -328,23 +328,14 @@ func _autopilot_target_state() -> Dictionary:
 func _begin_arrival_capture(target_state: Dictionary) -> void:
 	var relative_position: Vector2 = rocket_position - target_state.position
 	var relative_velocity: Vector2 = velocity - target_state.velocity
-	var radius := relative_position.length()
-	var mu := G * float(target_state.mass)
-	var safe_radius := float(target_state.radius) + 100000.0
-	if radius <= safe_radius:
+	var capture := FlightComputer.arrival_capture_burn(relative_position, relative_velocity, G * float(target_state.mass), float(target_state.radius))
+	if not bool(capture.get("valid", false)):
 		autopilot_phase = "FAILED"
 		status_message = "ARRIVAL FAILED  •  TRAJECTORY INTERSECTS THE BODY"
 		return
-	var angular_momentum := relative_position.cross(relative_velocity)
-	var tangent := Vector2(-relative_position.y, relative_position.x).normalized()
-	var direction := 1.0 if angular_momentum >= 0.0 else -1.0
-	var desired_apoapsis := maxf(radius * 2.0, safe_radius + 200000.0)
-	var semi_major_axis := (radius + desired_apoapsis) * 0.5
-	var desired_speed := sqrt(mu * (2.0 / radius - 1.0 / semi_major_axis))
-	var desired_velocity := tangent * direction * desired_speed
-	autopilot_arrival_burn_vector = desired_velocity - relative_velocity
+	autopilot_arrival_burn_vector = capture.burn_vector
 	autopilot_burn_direction = autopilot_arrival_burn_vector.normalized()
-	autopilot_burn_remaining = autopilot_arrival_burn_vector.length()
+	autopilot_burn_remaining = float(capture.delta_v)
 	if autopilot_burn_remaining < 1.0:
 		autopilot_phase = "COMPLETE"
 		autopilot_complete = true
