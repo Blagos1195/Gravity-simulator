@@ -436,7 +436,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		plan["departure_wait_days"] = wait_days
 		plan["departure_time_seconds"] = start_time + wait_seconds
 		coarse_windows.append(plan)
-		var score := float(plan.get("total_delta_v", INF)) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / 86400.0 * clampf(speed_priority, 0.0, 1.0)
+		var score := float(plan.get("total_delta_v", INF)) / maxf(1.0, maximum_delta_v) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / (30.0 * 365.25 * 86400.0) * clampf(speed_priority, 0.0, 1.0)
 		if score < best_score:
 			best_score = score
 			best_window = plan
@@ -456,7 +456,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 			continue
 		plan["departure_wait_days"] = wait_days
 		plan["departure_time_seconds"] = start_time + wait_seconds
-		var score := float(plan.get("total_delta_v", INF)) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / 86400.0 * clampf(speed_priority, 0.0, 1.0)
+		var score := float(plan.get("total_delta_v", INF)) / maxf(1.0, maximum_delta_v) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / (30.0 * 365.25 * 86400.0) * clampf(speed_priority, 0.0, 1.0)
 		if score < best_score:
 			best_score = score
 			best_window = plan
@@ -473,7 +473,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 			continue
 		plan["departure_wait_days"] = wait_days
 		plan["departure_time_seconds"] = start_time + wait_seconds
-		var score := float(plan.get("total_delta_v", INF)) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / 86400.0 * clampf(speed_priority, 0.0, 1.0)
+		var score := float(plan.get("total_delta_v", INF)) / maxf(1.0, maximum_delta_v) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / (30.0 * 365.25 * 86400.0) * clampf(speed_priority, 0.0, 1.0)
 		if score < best_score:
 			best_score = score
 			best_window = plan
