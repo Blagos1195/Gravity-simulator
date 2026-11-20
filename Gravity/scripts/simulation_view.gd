@@ -543,16 +543,7 @@ func _update_guidance(dt: float) -> void:
 				if absf(circular_speed_error) <= 2.0 and circular_radial_speed < 100.0:
 					thrust_key_down = false
 					if autopilot_target_mode == "PLANET":
-						var departure_transfer := FlightComputer.interplanetary_transfer(autopilot_planet_index, altitude)
-						if bool(departure_transfer.get("valid", false)):
-							autopilot_burn_remaining = float(departure_transfer.get("departure_delta_v", 0.0))
-							autopilot_transfer_duration = float(departure_transfer.get("transfer_time", 0.0))
-							autopilot_transfer_start_time = -1.0
-							autopilot_transfer_direction = float(departure_transfer.get("direction", 1.0))
-							var initial_window_wait := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
-							autopilot_phase = "ALIGN_DEPARTURE" if initial_window_wait <= 3600.0 else "WAIT_WINDOW"
-						else:
-							autopilot_phase = "FAILED"
+						autopilot_phase = "PLAN_TRANSFER"
 					else:
 						autopilot_phase = "COMPLETE"
 						autopilot_complete = true
@@ -568,7 +559,8 @@ func _update_guidance(dt: float) -> void:
 					autopilot_phase = "FAILED"
 					status_message = "TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY"))
 				else:
-					autopilot_burn_direction = Vector2(transfer_plan.get("departure_direction", Vector2.ZERO)).normalized()
+					var planned_burn_direction: Vector2 = transfer_plan.get("departure_direction", Vector2.ZERO)
+					autopilot_burn_direction = planned_burn_direction.normalized()
 					autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
 					autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
 					autopilot_transfer_start_time = -1.0
