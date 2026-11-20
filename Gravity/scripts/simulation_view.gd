@@ -5,9 +5,9 @@ const G := PlanetarySystem.G
 const EARTH_MASS := PlanetarySystem.EARTH_MASS
 const EARTH_RADIUS := PlanetarySystem.EARTH_RADIUS
 const ROCKET_DRY_MASS := 12000.0
-const FUEL_CAPACITY := 80000.0
-const ENGINE_THRUST := 2.4e6
-const FUEL_FLOW := 550.0
+const FUEL_CAPACITY := 300000.0
+const ENGINE_THRUST := 9.0e6
+const FUEL_FLOW := 2058.0
 
 var realism := "Realistic"
 var world_scale := "Compressed"
