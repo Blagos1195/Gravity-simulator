@@ -651,7 +651,7 @@ func _show_flight_computer() -> void:
 	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 	root.add_child(heading)
 	var description := Label.new()
-	description.text = "Choose an orbit or destination. The computer compares remaining vehicle delta-v with an estimated mission budget, including a 10% reserve."
+	description.text = "Choose an orbit or destination. The computer compares remaining vehicle delta-v with an estimated mission budget, including a 10% reserve, and reports departure and arrival manoeuvres."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 	var target_label := Label.new()
@@ -739,13 +739,13 @@ func _show_flight_computer() -> void:
 				var window_wait := FlightComputer.departure_wait_time(planet_index, sim.sim_time, sim.rocket_position)
 				text_lines.append("Next ideal departure window: %.1f days" % (window_wait / 86400.0))
 				text_lines.append("Departure burn: %s from the aligned 200 km parking orbit" % ("prograde" if float(destination_transfer.get("direction", 1.0)) > 0.0 else "retrograde"))
-				text_lines.append("Arrival burn: capture into an approximately 200 km orbit (or 1.1 planetary radii for gas giants)")
+				text_lines.append("Arrival burn: circularise at closest approach; the estimate uses a nominal low orbit")
 				required_delta_v = float(destination_transfer.get("total_delta_v", 0.0)) if in_orbit else 9400.0 + float(destination_transfer.get("total_delta_v", 0.0))
 			else:
 				mission_valid = false
 				text_lines.append("ERROR: No valid transfer solution is available for this destination.")
 			text_lines.append("")
-			text_lines.append("Estimates assume circular coplanar orbits and patched-conic departure. Arrival capture is calculated but not yet flown by autopilot.")
+			text_lines.append("Estimates assume circular coplanar orbits and patched-conic transfers. Autopilot captures into a circular orbit at closest approach; landing is not yet implemented.")
 		text_lines.append("")
 		text_lines.append("VEHICLE FUEL FEASIBILITY")
 		text_lines.append("Remaining ideal vehicle Δv: %.2f km/s" % (remaining_delta_v / 1000.0))
