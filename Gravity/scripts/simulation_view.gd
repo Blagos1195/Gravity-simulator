@@ -36,6 +36,7 @@ var autopilot_burn_remaining := 0.0
 var autopilot_throttle := 0.0
 var autopilot_transfer_start_time := -1.0
 var autopilot_transfer_duration := 0.0
+var autopilot_transfer_corrections := 0
 var autopilot_transfer_direction := 1.0
 var autopilot_arrival_burn_vector := Vector2.ZERO
 var autopilot_burn_direction := Vector2.ZERO
@@ -601,6 +602,10 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1F DAYS REMAINING" % [str(transfer_destination_state.name).to_upper(), transfer_remaining / 86400.0]
 				if destination_distance <= encounter_radius:
 					autopilot_phase = "ARRIVAL_APPROACH"
+				elif transfer_elapsed > autopilot_transfer_duration * 0.4 and autopilot_transfer_corrections < 2:
+					autopilot_transfer_corrections += 1
+					autopilot_phase = "PLAN_TRANSFER"
+					status_message = "AUTOPILOT  •  SIMULATING MID-COURSE CORRECTION"
 				elif transfer_elapsed > autopilot_transfer_duration * 1.5:
 					autopilot_phase = "ARRIVAL_PENDING"
 			"ARRIVAL_APPROACH":
