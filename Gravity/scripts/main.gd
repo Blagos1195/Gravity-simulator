@@ -475,7 +475,11 @@ class RocketPreview:
 		var fin_y := first_y + first_height - 25.0
 		draw_colored_polygon(PackedVector2Array([Vector2(center_x - width * 0.62, fin_y), Vector2(center_x - width, fin_y + 25.0), Vector2(center_x - width * 0.62, fin_y + 25.0)]), Color(0.65, 0.72, 0.82))
 		draw_colored_polygon(PackedVector2Array([Vector2(center_x + width * 0.62, fin_y), Vector2(center_x + width, fin_y + 25.0), Vector2(center_x + width * 0.62, fin_y + 25.0)]), Color(0.65, 0.72, 0.82))
-		draw_colored_polygon(PackedVector2Array([Vector2(center_x - 12.0, first_y + first_height), Vector2(center_x, first_y + first_height + 22.0), Vector2(center_x + 12.0, first_y + first_height)]), Color(0.42, 0.48, 0.56))
+		var engine_count := int(stages[0].get("engine_count", 1))
+		var engine_spacing := width * 1.1 / float(engine_count)
+		for engine_index in range(engine_count):
+			var engine_x := center_x + (float(engine_index) - float(engine_count - 1) * 0.5) * engine_spacing
+			draw_colored_polygon(PackedVector2Array([Vector2(engine_x - 5.0, first_y + first_height), Vector2(engine_x, first_y + first_height + 18.0), Vector2(engine_x + 5.0, first_y + first_height)]), Color(0.42, 0.48, 0.56))
 		draw_string(ThemeDB.fallback_font, Vector2(12, size.y - 8), str(design.get("name", "CUSTOM VEHICLE")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.65, 0.8, 0.92))
 
 class Starfield:
