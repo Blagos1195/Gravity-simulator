@@ -40,10 +40,10 @@ static func get_planet_catalog() -> Array[Dictionary]:
 	return result
 
 static func moon_position(time_seconds: float) -> Vector2:
-	return _kepler_position(MOON_ORBIT_RADIUS, MOON_ORBIT_ECCENTRICITY, 0.0, TAU * time_seconds / MOON_ORBIT_PERIOD)
+	return _kepler_position(MOON_ORBIT_RADIUS, MOON_ORBIT_ECCENTRICITY, 0.0, TAU * time_seconds / MOON_ORBIT_PERIOD, MOON_ORBIT_PERIOD)
 
 static func moon_velocity(time_seconds: float) -> Vector2:
-	return _kepler_velocity(MOON_ORBIT_RADIUS, MOON_ORBIT_ECCENTRICITY, 0.0, TAU * time_seconds / MOON_ORBIT_PERIOD)
+	return _kepler_velocity(MOON_ORBIT_RADIUS, MOON_ORBIT_ECCENTRICITY, 0.0, TAU * time_seconds / MOON_ORBIT_PERIOD, MOON_ORBIT_PERIOD)
 
 static func _kepler_state(semi_major_axis: float, eccentricity: float, perihelion: float, mean_anomaly: float, orbital_period: float) -> Dictionary:
 	var mean := fposmod(mean_anomaly, TAU)
@@ -75,7 +75,8 @@ static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vect
 	var relative := moon - position
 	var relative_distance := maxf(relative.length(), MOON_RADIUS)
 	var moon_pull := relative.normalized() * G * MOON_MASS / (relative_distance * relative_distance)
-	var earth_moon_pull := moon.normalized() * G * MOON_MASS / (MOON_ORBIT_RADIUS * MOON_ORBIT_RADIUS)
+	var moon_orbit_distance := maxf(moon.length(), 1.0)
+	var earth_moon_pull := moon.normalized() * G * MOON_MASS / (moon_orbit_distance * moon_orbit_distance)
 	acceleration += moon_pull - earth_moon_pull
 	acceleration += _differential_body_gravity(position, SUN_MASS, _sun_relative_position(time_seconds))
 	for planet in PLANETS:
