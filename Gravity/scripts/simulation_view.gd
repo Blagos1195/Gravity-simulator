@@ -546,20 +546,17 @@ func _update_guidance(dt: float) -> void:
 			"COAST":
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
 				thrust_key_down = false
-				if absf(float(orbit.get("radial_speed", 0.0))) <= 5.0 and altitude > 70000.0:
+				var coast_radial_speed: float = float(orbit.get("radial_speed", 0.0))
+				if coast_radial_speed <= 30.0 and altitude > 70000.0:
 					autopilot_phase = "CIRCULARISE"
-					thrust_key_down = true
 			"CIRCULARISE":
 				status_message = "AUTOPILOT  •  ORBITAL CIRCULARISATION"
-				var circular_desired_speed := FlightComputer.circular_orbit_speed(guidance_position.length(), G * float(guidance_body.mass))
-				var circular_tangential_speed := float(orbit.get("tangential_speed", 0.0))
-				var circular_radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
-				var circular_speed_error := circular_desired_speed - circular_tangential_speed
-				autopilot_transfer_direction = 1.0 if circular_speed_error >= 0.0 else -1.0
-				var circular_burn_direction := tangent * autopilot_transfer_direction
-				var circular_burn_rotation := circular_burn_direction.angle() - Vector2.UP.angle()
+				var circular_plan: Dictionary = FlightComputer.circularisation_burn(guidance_position, guidance_velocity, true, G * float(guidance_body.mass))
+				var circular_burn_vector: Vector2 = circular_plan.get("burn_vector", Vector2.ZERO)
+				autopilot_burn_direction = circular_burn_vector.normalized()
+				var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				var circular_alignment_error := absf(angle_difference(rotation_angle, circular_burn_rotation))
-				if absf(circular_speed_error) <= 2.0 and circular_radial_speed < 10.0:
+				if not bool(circular_plan.get("valid", false)) or float(circular_plan.get("delta_v", INF)) <= 2.0:
 					thrust_key_down = false
 					if autopilot_target_mode == "PLANET" or (autopilot_planet_index == -2 and str(guidance_body.name) != "Earth"):
 						autopilot_phase = "PLAN_TRANSFER"
@@ -680,8 +677,7 @@ func _update_guidance(dt: float) -> void:
 		if autopilot_phase == "ASCENT":
 			autopilot_direction = radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
 		elif autopilot_phase == "CIRCULARISE":
-			var circular_direction_sign := 1.0 if float(orbit.get("tangential_speed", 0.0)) <= FlightComputer.circular_orbit_speed(guidance_position.length(), G * float(guidance_body.mass)) else -1.0
-			autopilot_direction = tangent * circular_direction_sign
+			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent
 		elif autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"]:
 			autopilot_direction = tangent * autopilot_transfer_direction
 		elif autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"]:
