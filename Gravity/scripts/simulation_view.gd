@@ -33,6 +33,7 @@ var autopilot_target_altitude := 200000.0
 var autopilot_target_mode := "ORBIT"
 var autopilot_planet_index := -1
 var autopilot_burn_remaining := 0.0
+var autopilot_throttle := 0.0
 var autopilot_transfer_start_time := -1.0
 var autopilot_transfer_duration := 0.0
 var autopilot_transfer_direction := 1.0
@@ -145,7 +146,7 @@ func _physics_step(dt: float) -> void:
 		thrust_key_down = false
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	throttle = 1.0 if thrust_key_down and fuel > 0.0 else 0.0
+	throttle = autopilot_throttle if autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and fuel > 0.0 else (1.0 if thrust_key_down and fuel > 0.0 else 0.0)
 	var fuel_used := minf(fuel, total_flow * throttle * dt)
 	var mass_before := maxf(1.0, _current_vehicle_mass())
 	var mass_after := maxf(1.0, mass_before - fuel_used)
@@ -588,6 +589,28 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, burn_rotation)) < deg_to_rad(1.0)
 				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
+			"LANDING_DESCENT":
+				var destination_state := _autopilot_target_state()
+				var relative_position: Vector2 = rocket_position - destination_state.position
+				var relative_velocity: Vector2 = velocity - destination_state.velocity
+				var distance := relative_position.length()
+				var landing_altitude := distance - float(destination_state.radius)
+				var up := relative_position.normalized()
+				var tangent := Vector2(-up.y, up.x)
+				var gravity := G * float(destination_state.mass) / (distance * distance)
+				var radial_speed := relative_velocity.dot(up)
+				var tangential_speed := relative_velocity.dot(tangent)
+				var target_descent_speed := -minf(60.0, sqrt(2.0 * gravity * maxf(0.0, landing_altitude - 2.0)))
+				var radial_acceleration := maxf(0.0, gravity + (target_descent_speed - radial_speed) / 15.0)
+				var tangential_acceleration := -tangential_speed / 180.0
+				var required_acceleration := up * radial_acceleration + tangent * tangential_acceleration
+				var available_acceleration := _engine_thrust(landing_altitude) / maxf(1.0, _current_vehicle_mass())
+				autopilot_throttle = clampf(required_acceleration.length() / maxf(0.01, available_acceleration), 0.0, 1.0)
+				thrust_key_down = autopilot_throttle > 0.001
+				status_message = "LANDING GUIDANCE  •  %s  •  ALT %.1F KM  •  V/S %.1F M/S" % [str(destination_state.name).to_upper(), landing_altitude / 1000.0, radial_speed]
+				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
+					autopilot_phase = "FAILED"
+					thrust_key_down = false
 			"ARRIVAL_PENDING":
 				status_message = "ARRIVAL WINDOW MISSED  •  TARGET OUTSIDE CAPTURE REGION"
 				thrust_key_down = false
@@ -605,6 +628,21 @@ func _update_guidance(dt: float) -> void:
 			autopilot_direction = tangent * autopilot_transfer_direction
 		elif autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"]:
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
+		elif autopilot_phase == "LANDING_DESCENT":
+			var destination_state := _autopilot_target_state()
+			var relative_position: Vector2 = rocket_position - destination_state.position
+			var relative_velocity: Vector2 = velocity - destination_state.velocity
+			var up := relative_position.normalized()
+			var tangent := Vector2(-up.y, up.x)
+			var gravity := G * float(destination_state.mass) / pow(relative_position.length(), 2.0)
+			var radial_speed := relative_velocity.dot(up)
+			var tangential_speed := relative_velocity.dot(tangent)
+			var landing_altitude := relative_position.length() - float(destination_state.radius)
+			var target_descent_speed := -minf(60.0, sqrt(2.0 * gravity * maxf(0.0, landing_altitude - 2.0)))
+			var radial_acceleration := maxf(0.0, gravity + (target_descent_speed - radial_speed) / 15.0)
+			var tangential_acceleration := -tangential_speed / 180.0
+			var landing_direction := up * radial_acceleration + tangent * tangential_acceleration
+			autopilot_direction = landing_direction.normalized() if landing_direction.length_squared() > 0.001 else up
 		var target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
 		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
 		return
@@ -1023,6 +1061,7 @@ func get_save_data() -> Dictionary:
 		"autopilot_target_mode": autopilot_target_mode,
 		"autopilot_planet_index": autopilot_planet_index,
 		"autopilot_burn_remaining": autopilot_burn_remaining,
+		"autopilot_throttle": autopilot_throttle,
 		"autopilot_transfer_start_time": autopilot_transfer_start_time,
 		"autopilot_transfer_duration": autopilot_transfer_duration,
 		"autopilot_transfer_direction": autopilot_transfer_direction,
@@ -1064,6 +1103,7 @@ func load_save_data(data: Dictionary) -> void:
 	autopilot_target_mode = str(data.get("autopilot_target_mode", "ORBIT"))
 	autopilot_planet_index = int(data.get("autopilot_planet_index", -1))
 	autopilot_burn_remaining = float(data.get("autopilot_burn_remaining", 0.0))
+	autopilot_throttle = float(data.get("autopilot_throttle", 0.0))
 	autopilot_transfer_start_time = float(data.get("autopilot_transfer_start_time", sim_time if str(data.get("autopilot_phase", "IDLE")) == "TRANSFER_COAST" else -1.0))
 	autopilot_transfer_duration = float(data.get("autopilot_transfer_duration", 0.0))
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
