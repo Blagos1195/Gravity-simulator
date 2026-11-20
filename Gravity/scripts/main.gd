@@ -66,7 +66,8 @@ func _input(event: InputEvent) -> void:
 	if event.keycode == KEY_ESCAPE:
 		rebinding_action = ""
 		if is_instance_valid(rebinding_button):
-			rebinding_button.text = _binding_label(rebinding_button.get_meta("action"))
+			rebinding_button.text = _binding_label(str(rebinding_button.get_meta("action")))
+		rebinding_button = null
 		return
 	var key_event := InputEventKey.new()
 	key_event.physical_keycode = event.physical_keycode if event.physical_keycode != 0 else event.keycode
@@ -87,6 +88,7 @@ func _binding_label(action: String) -> String:
 
 func _add_rebind_button(parent: Node, action: String) -> void:
 	var button := Button.new()
+	button.set_meta("action", action)
 	button.text = _binding_label(action)
 	button.custom_minimum_size = Vector2(0, 42)
 	button.pressed.connect(func():
