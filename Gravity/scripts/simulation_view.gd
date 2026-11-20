@@ -281,9 +281,9 @@ func _draw() -> void:
     var pad_width := clampf(34.0 * object_scale, 9.0, 85.0)
     var pad_height := clampf(7.0 * object_scale, 3.0, 18.0)
     var pad_y := earth_screen.y - radius_px - 2.0 * object_scale
-    draw_line(Vector2(earth_screen.x - pad_width, pad_y), Vector2(earth_screen.x + pad_width, pad_y), Color(0.65, 0.72, 0.82), 3.0)
-    draw_line(Vector2(earth_screen.x - 20.0, pad_y), Vector2(earth_screen.x - 20.0, pad_y + pad_height), Color(0.65, 0.72, 0.82), 2.0)
-    draw_line(Vector2(earth_screen.x + 20.0, pad_y), Vector2(earth_screen.x + 20.0, pad_y + 7.0), Color(0.65, 0.72, 0.82), 2.0)
+    draw_line(Vector2(earth_screen.x - pad_width, pad_y), Vector2(earth_screen.x + pad_width, pad_y), Color(0.65, 0.72, 0.82), 3.0 * object_scale)
+    draw_line(Vector2(earth_screen.x - 20.0 * object_scale, pad_y), Vector2(earth_screen.x - 20.0 * object_scale, pad_y + pad_height), Color(0.65, 0.72, 0.82), 2.0 * object_scale)
+    draw_line(Vector2(earth_screen.x + 20.0 * object_scale, pad_y), Vector2(earth_screen.x + 20.0 * object_scale, pad_y + pad_height), Color(0.65, 0.72, 0.82), 2.0 * object_scale)
     draw_string(ThemeDB.fallback_font, earth_screen + Vector2(radius_px + 12, 4), "EARTH", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.78, 1.0))
 
     var moon_world := PlanetarySystem.moon_position(sim_time)
