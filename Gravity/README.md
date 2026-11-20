@@ -12,7 +12,8 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Vehicle assembly screen with 2–8 configurable stages and payload mass
 - Adjustable stage dry mass, propellant capacity, engine count, sea-level/vacuum thrust and per-engine fuel flow
 - Live vehicle preview, initial mass, ideal delta-v and launch thrust-to-weight estimates
-- Rocket design validation and local JSON save/load
+- Rocket design validation for specific impulse, stage mass fraction, ignition and burnout thrust-to-weight, total mass and total delta-v
+- Local JSON save/load rejects invalid vehicle designs
 - Custom vehicle parameters applied to flight mass, engine thrust, propellant use, staging and telemetry
 - Surface launch pad with toggleable engine controls
 - Multi-stage launch vehicle with automatic and manual staging
@@ -85,6 +86,6 @@ Flight saves are stored in the user's Godot application data directory under `sa
 
 ## Important
 
-The vehicle assembly system supports 2–8 configurable stages. It edits stage-level performance values rather than placing individual physical parts, and the preview is illustrative.
+The vehicle assembly system supports 2–8 configurable stages. It checks engine specific impulse, stage mass fractions, ignition and burnout thrust-to-weight, total mass and total delta-v. Invalid designs cannot be launched or saved. Stage-level values remain an abstraction rather than a detailed component-by-component engineering model.
 
-This remains an early Earth-centred prototype. The two-stage vehicle, adaptive substepping, gimbal, lift, heating and gravity-turn guidance are simplified gameplay models, not validated launch-vehicle engineering. Planetary gravity uses circular coplanar orbits and differential perturbations rather than accurate ephemerides or a full n-body solar-system integration. Atmospheric heating is an estimate and does not yet damage or destroy the vehicle. The rocket editor, vehicle structural limits, detailed aerodynamic coefficients, career progression, missions, docking, replay tooling and multiplayer remain planned follow-on systems.
+This remains an early Earth-centred prototype. The two-stage vehicle, adaptive substepping, gimbal, lift, heating and gravity-turn guidance are simplified gameplay models, not validated launch-vehicle engineering. Planetary gravity uses circular coplanar orbits and differential perturbations rather than accurate ephemerides or a full n-body solar-system integration. Atmospheric heating is an estimate and does not yet damage or destroy the vehicle. Detailed tank and engine structural modelling, detailed aerodynamic coefficients, career progression, missions, docking, replay tooling and multiplayer remain planned follow-on systems.
