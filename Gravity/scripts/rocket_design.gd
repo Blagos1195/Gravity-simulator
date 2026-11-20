@@ -41,7 +41,7 @@ const PRESET_DESIGNS := {
 		"stages": [
 			{"name": "BOOSTER", "dry_mass": 3500.0, "fuel_capacity": 35000.0, "thrust": 750000.0, "vacuum_thrust": 850000.0, "flow": 250.0, "engine_count": 1},
 			{"name": "UPPER STAGE", "dry_mass": 1200.0, "fuel_capacity": 9000.0, "thrust": 180000.0, "vacuum_thrust": 220000.0, "flow": 65.0, "engine_count": 1},
-			{"name": "ORBITAL KICK STAGE", "dry_mass": 500.0, "fuel_capacity": 3500.0, "thrust": 45000.0, "vacuum_thrust": 50000.0, "flow": 14.0, "engine_count": 1}
+			{"name": "ORBITAL KICK STAGE", "dry_mass": 1300.0, "fuel_capacity": 3500.0, "thrust": 100000.0, "vacuum_thrust": 110000.0, "flow": 30.0, "engine_count": 1}
 		]
 	},
 	"LEO_CARGO": {
@@ -78,7 +78,7 @@ const PRESET_DESIGNS := {
 			{"name": "CORE BOOSTER", "dry_mass": 28000.0, "fuel_capacity": 300000.0, "thrust": 6200000.0, "vacuum_thrust": 7000000.0, "flow": 1950.0, "engine_count": 1},
 			{"name": "UPPER STAGE", "dry_mass": 7000.0, "fuel_capacity": 80000.0, "thrust": 1200000.0, "vacuum_thrust": 1450000.0, "flow": 410.0, "engine_count": 1},
 			{"name": "TRANSFER STAGE", "dry_mass": 2500.0, "fuel_capacity": 24000.0, "thrust": 250000.0, "vacuum_thrust": 310000.0, "flow": 87.0, "engine_count": 1},
-			{"name": "DEEP-SPACE KICK STAGE", "dry_mass": 700.0, "fuel_capacity": 4500.0, "thrust": 80000.0, "vacuum_thrust": 100000.0, "flow": 28.0, "engine_count": 1}
+			{"name": "DEEP-SPACE KICK STAGE", "dry_mass": 700.0, "fuel_capacity": 4500.0, "thrust": 100000.0, "vacuum_thrust": 120000.0, "flow": 34.0, "engine_count": 1}
 		]
 	}
 }
