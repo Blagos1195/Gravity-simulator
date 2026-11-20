@@ -83,11 +83,14 @@ static func planet_velocity_relative_to_earth(planet_name: String, time_seconds:
 	var planet_velocity := Vector2(-sin(planet_angle), cos(planet_angle)) * (TAU * float(planet.semi_major_axis) / (float(planet.orbital_period) * 86400.0))
 	return planet_velocity - earth_velocity
 
+static func moon_soi_radius() -> float:
+	return MOON_ORBIT_RADIUS * pow(MOON_MASS / (3.0 * EARTH_MASS), 1.0 / 3.0)
+
 static func planet_soi_radius(planet_name: String) -> float:
 	var planet := _find_planet(planet_name)
 	if planet.is_empty():
 		return 0.0
-	return float(planet.semi_major_axis) * pow(float(planet.mass) / (3.0 * SUN_MASS), 0.4)
+	return float(planet.semi_major_axis) * pow(float(planet.mass) / (3.0 * SUN_MASS), 1.0 / 3.0)
 
 static func _find_planet(planet_name: String) -> Dictionary:
 	for planet in PLANETS:
