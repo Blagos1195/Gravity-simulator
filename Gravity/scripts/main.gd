@@ -514,10 +514,10 @@ func _show_flight_computer() -> void:
 				text_lines.append("Arrival capture estimate: %.0f m/s Δv" % float(destination_transfer.get("arrival_delta_v", 0.0)))
 				text_lines.append("Total ideal Δv: %.0f m/s" % float(destination_transfer.get("total_delta_v", 0.0)))
 				text_lines.append("Transfer time: %.1f days" % (float(destination_transfer.get("transfer_time", 0.0)) / 86400.0))
-				text_lines.append("Required departure phase angle: %.1f°" % rad_to_deg(float(destination_transfer.get("phase_angle", 0.0))))
-				if planet_index >= -1:
-					var window_wait := FlightComputer.departure_wait_time(planet_index, sim.sim_time, sim.rocket_position)
-					text_lines.append("Next ideal departure window: %.1f days" % (window_wait / 86400.0))
+				if planet_index >= 0:
+					text_lines.append("Required departure phase angle: %.1f°" % rad_to_deg(float(destination_transfer.get("phase_angle", 0.0))))
+				var window_wait := FlightComputer.departure_wait_time(planet_index, sim.sim_time, sim.rocket_position)
+				text_lines.append("Next ideal departure window: %.1f days" % (window_wait / 86400.0))
 				text_lines.append("Departure burn: %s from the aligned 200 km parking orbit" % ("prograde" if float(destination_transfer.get("direction", 1.0)) > 0.0 else "retrograde"))
 				text_lines.append("Arrival burn: capture into an approximately 200 km orbit (or 1.1 planetary radii for gas giants)")
 			text_lines.append("")
