@@ -793,52 +793,43 @@ func _show_flight_computer() -> void:
 		text_lines.append("Apoapsis: %s" % ("UNBOUND" if not bool(state.get("bound", false)) else "%.1f km" % ((float(state.get("apoapsis", 0.0)) - float(current_body.radius)) / 1000.0)))
 		text_lines.append("Periapsis: %.1f km" % ((float(state.get("periapsis", 0.0)) - float(current_body.radius)) / 1000.0))
 		text_lines.append("")
-		if selected_id > 0:
-			if str(current_body.name) != "Earth":
-				mission_valid = false
-				text_lines.append("Earth-orbit targets can only be planned from the Earth system.")
+		if selected_id > 0 and str(current_body.name) == "Earth":
 			var target_radius := FlightComputer.EARTH_RADIUS + float(selected_id)
 			var circular := FlightComputer.circularisation_burn(current_position, current_velocity, true, FlightComputer.G * float(current_body.mass))
 			var orbit_origin_radius := maxf(float(current_body.radius) + 100000.0, current_position.length())
 			var orbit_transfer := FlightComputer.hohmann_transfer(orbit_origin_radius, target_radius)
 			var orbit_departure_direction := "PROGRADE" if target_radius > orbit_origin_radius else "RETROGRADE"
-			text_lines.append("TARGET ORBIT")
+			text_lines.append("TARGET EARTH ORBIT")
 			text_lines.append("Altitude: %.0f km" % (float(selected_id) / 1000.0))
 			text_lines.append("Circular speed: %.0f m/s" % FlightComputer.circular_orbit_speed(target_radius))
 			text_lines.append("Circularise at current position: %.0f m/s Δv" % float(circular.get("delta_v", 0.0)))
-			text_lines.append("Hohmann transfer from current radius (100 km minimum): %.0f m/s Δv" % float(orbit_transfer.get("total_delta_v", 0.0)))
+			text_lines.append("Hohmann orbit-change estimate: %.0f m/s Δv" % float(orbit_transfer.get("total_delta_v", 0.0)))
 			text_lines.append("Transfer time: %.1f minutes" % (float(orbit_transfer.get("transfer_time", 0.0)) / 60.0))
-			text_lines.append("Departure burn: %s at periapsis" % orbit_departure_direction)
-			text_lines.append("Arrival burn: %s at apoapsis" % ("RETROGRADE" if orbit_departure_direction == "PROGRADE" else "PROGRADE"))
-			var parking_radius := FlightComputer.EARTH_RADIUS + 200000.0
-			var target_orbit_transfer := FlightComputer.hohmann_transfer(parking_radius, target_radius)
-			if str(current_body.name) == "Earth":
-				required_delta_v = float(target_orbit_transfer.get("total_delta_v", 0.0)) if in_orbit else 9400.0 + float(target_orbit_transfer.get("total_delta_v", 0.0))
-		else:
-			var planet_index := -1 if selected_id == -1 else -selected_id - 2
-			var destination_transfer := FlightComputer.interplanetary_transfer(planet_index, maxf(200000.0, current_altitude))
-			if str(current_body.name) != "Earth":
+			required_delta_v = float(orbit_transfer.get("total_delta_v", 0.0)) if in_orbit else 9400.0 + float(orbit_transfer.get("total_delta_v", 0.0))
+		elif selected_id > 0 or selected_id <= 0:
+			var destination_index := -2 if selected_id > 0 else (-1 if selected_id == -1 else -selected_id - 2)
+			var stable_departure_state := bool(state.get("bound", false)) and float(state.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0
+			text_lines.append("SIMULATED TRANSFER")
+			text_lines.append("Destination: %s" % sim._autopilot_target_body_name())
+			if sim.landed or (current_altitude < 120000.0 and not stable_departure_state):
 				mission_valid = false
-				text_lines.append("Interplanetary transfer planning currently launches from Earth. Use landing guidance for the current body.")
-			text_lines.append("INTERPLANETARY TRANSFER")
-			if bool(destination_transfer.get("valid", false)):
-				text_lines.append("Destination: %s" % str(destination_transfer.get("name", "Unknown")))
-				text_lines.append("Departure injection: %.0f m/s Δv" % float(destination_transfer.get("departure_delta_v", 0.0)))
-				text_lines.append("Arrival capture estimate: %.0f m/s Δv" % float(destination_transfer.get("arrival_delta_v", 0.0)))
-				text_lines.append("Total ideal Δv: %.0f m/s" % float(destination_transfer.get("total_delta_v", 0.0)))
-				text_lines.append("Transfer time: %.1f days" % (float(destination_transfer.get("transfer_time", 0.0)) / 86400.0))
-				if planet_index >= 0:
-					text_lines.append("Required departure phase angle: %.1f°" % rad_to_deg(float(destination_transfer.get("phase_angle", 0.0))))
-				var window_wait := FlightComputer.departure_wait_time(planet_index, sim.sim_time, sim.rocket_position)
-				text_lines.append("Next ideal departure window: %.1f days" % (window_wait / 86400.0))
-				text_lines.append("Departure burn: %s from the aligned 200 km parking orbit" % ("prograde" if float(destination_transfer.get("direction", 1.0)) > 0.0 else "retrograde"))
-				text_lines.append("Arrival burn: circularise at closest approach; the estimate uses a nominal low orbit")
-				required_delta_v = float(destination_transfer.get("total_delta_v", 0.0)) if in_orbit else 9400.0 + float(destination_transfer.get("total_delta_v", 0.0))
+				text_lines.append("A stable departure orbit is required before the transfer search can run.")
+				text_lines.append("Autopilot will establish the departure orbit, then simulate candidate trajectories.")
 			else:
-				mission_valid = false
-				text_lines.append("ERROR: No valid transfer solution is available for this destination.")
-			text_lines.append("")
-			text_lines.append("Estimates assume circular coplanar orbits and patched-conic transfers. Autopilot captures into a circular orbit at closest approach. Powered landing guidance is available from a stable orbit around solid bodies.")
+				var simulated_plan := FlightComputer.simulated_transfer_search(sim.rocket_position, sim.velocity, sim.sim_time, destination_index, remaining_delta_v * 0.9)
+				if bool(simulated_plan.get("valid", false)):
+					text_lines.append("Departure manoeuvre: %.0f m/s Δv" % float(simulated_plan.get("departure_delta_v", 0.0)))
+					text_lines.append("Arrival capture: %.0f m/s Δv" % float(simulated_plan.get("capture_delta_v", 0.0)))
+					text_lines.append("Total simulated Δv: %.0f m/s" % float(simulated_plan.get("total_delta_v", 0.0)))
+					text_lines.append("Predicted flight time: %.1f days" % (float(simulated_plan.get("transfer_time", 0.0)) / 86400.0))
+					text_lines.append("Closest approach: %.0f km" % (float(simulated_plan.get("closest_approach", 0.0)) / 1000.0))
+					text_lines.append("Candidate trajectories simulated: %d" % int(simulated_plan.get("search_candidates", 0)))
+					required_delta_v = float(simulated_plan.get("total_delta_v", 0.0))
+				else:
+					mission_valid = false
+					text_lines.append("NO FEASIBLE TRAJECTORY FOUND")
+					text_lines.append(str(simulated_plan.get("reason", "No candidate passed the trajectory and capture checks.")))
+			text_lines.append("The search propagates candidate burns through the current multi-body gravity model. Finite engine-burn and atmospheric losses are not included in the search estimate.")
 		text_lines.append("")
 		text_lines.append("VEHICLE FUEL FEASIBILITY")
 		text_lines.append("Remaining ideal vehicle Δv: %.2f km/s" % (remaining_delta_v / 1000.0))
