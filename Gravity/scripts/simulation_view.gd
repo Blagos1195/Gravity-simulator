@@ -600,7 +600,7 @@ func _update_guidance(dt: float) -> void:
 				var gravity := G * float(destination_state.mass) / (distance * distance)
 				var radial_speed := relative_velocity.dot(up)
 				var tangential_speed := relative_velocity.dot(tangent)
-				var target_descent_speed := -minf(60.0, sqrt(2.0 * gravity * maxf(0.0, landing_altitude - 2.0)))
+				var target_descent_speed := -maxf(1.5, minf(60.0, sqrt(2.0 * gravity * maxf(0.0, landing_altitude - 2.0))))
 				var radial_acceleration := maxf(0.0, gravity + (target_descent_speed - radial_speed) / 15.0)
 				var tangential_acceleration := -tangential_speed / 180.0
 				var required_acceleration := up * radial_acceleration + tangent * tangential_acceleration
@@ -638,7 +638,7 @@ func _update_guidance(dt: float) -> void:
 			var radial_speed := relative_velocity.dot(up)
 			var tangential_speed := relative_velocity.dot(tangent)
 			var landing_altitude := relative_position.length() - float(destination_state.radius)
-			var target_descent_speed := -minf(60.0, sqrt(2.0 * gravity * maxf(0.0, landing_altitude - 2.0)))
+			var target_descent_speed := -maxf(1.5, minf(60.0, sqrt(2.0 * gravity * maxf(0.0, landing_altitude - 2.0))))
 			var radial_acceleration := maxf(0.0, gravity + (target_descent_speed - radial_speed) / 15.0)
 			var tangential_acceleration := -tangential_speed / 180.0
 			var landing_direction := up * radial_acceleration + tangent * tangential_acceleration
