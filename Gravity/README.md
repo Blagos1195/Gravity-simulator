@@ -55,7 +55,7 @@ A procedural 2D spaceflight simulator built with Godot 4.
 
 ## Requirements
 
-- Godot Engine 4.3 or newer
+- Godot Engine 4.7 or newer
 - Windows, Linux or macOS for development
 
 ## Run
