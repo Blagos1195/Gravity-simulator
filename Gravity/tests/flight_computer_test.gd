@@ -53,7 +53,7 @@ func _initialize() -> void:
 	assert(PlanetarySystem.planetary_atmosphere_density("Jupiter", 0.0) > 0.1)
 	assert(PlanetarySystem.planetary_atmosphere_density("Mercury", 0.0) == 0.0)
 	assert(PlanetarySystem.planetary_atmosphere_density("Mars", 200000.0) == 0.0)
-	var simulation := SimulationView.new()
+	var simulation: Variant = SimulationView.new()
 	simulation.sim_time = 86400.0 * 100.0
 	var mars_surface_position_for_view := mars_position + Vector2(3.3895e6 + 150000.0, 0.0)
 	var mars_local_body: Dictionary = simulation._nearest_body_state(mars_surface_position_for_view)
