@@ -351,8 +351,14 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		if event.pressed and not event.echo:
 			if event.keycode in [KEY_W, KEY_UP] or event.physical_keycode in [KEY_W, KEY_UP]:
+				if autopilot_enabled:
+					autopilot_enabled = false
+					guidance_enabled = false
 				thrust_key_down = not thrust_key_down
 			if event.keycode in [KEY_S, KEY_DOWN] or event.physical_keycode in [KEY_S, KEY_DOWN]:
+				if autopilot_enabled:
+					autopilot_enabled = false
+					guidance_enabled = false
 				thrust_key_down = false
 			throttle_cutoff_key_down = false
 
