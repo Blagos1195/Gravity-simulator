@@ -59,8 +59,8 @@ static func total_delta_v(design: Dictionary) -> float:
 static func validation_errors(design: Dictionary) -> PackedStringArray:
 	var errors := PackedStringArray()
 	var stages: Array = design.get("stages", [])
-	if stages.size() != 2:
-		errors.append("The current flight model requires exactly two stages.")
+	if stages.size() < 2 or stages.size() > 8:
+		errors.append("A vehicle must have between 2 and 8 stages.")
 	if float(design.get("payload_mass", 0.0)) <= 0.0:
 		errors.append("Payload mass must be greater than zero.")
 	for i in range(stages.size()):
