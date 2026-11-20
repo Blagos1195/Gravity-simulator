@@ -101,7 +101,8 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _physics_step(dt: float) -> void:
-	sim_time += dt
+	var start_time := sim_time
+	var end_time := sim_time + dt
 	var altitude := rocket_position.length() - EARTH_RADIUS
 	if altitude < 0.5:
 		var normal := rocket_position.normalized()
@@ -112,22 +113,31 @@ func _physics_step(dt: float) -> void:
 	if guidance_enabled:
 		_update_guidance(dt)
 	var active := _active_stage_data()
-	var flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
+	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 	throttle = 1.0 if thrust_key_down and fuel > 0.0 else 0.0
-	var fuel_used := minf(fuel, flow * throttle * dt)
-	var mass := maxf(1.0, _current_vehicle_mass(fuel - fuel_used * 0.5))
-	var acceleration := Vector2.UP.rotated(rotation_angle + gimbal_angle) * (_engine_thrust(maxf(0.0, altitude)) * throttle / mass)
-	var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time - dt)
-	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass)
-	velocity += (initial_gravity + initial_aero + acceleration) * (0.5 * dt)
-	rocket_position += velocity * dt
-	var final_gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time)
-	var final_aero := _aerodynamic_acceleration(rocket_position, velocity, mass)
-	velocity += (final_gravity + final_aero + acceleration) * (0.5 * dt)
+	var fuel_used := minf(fuel, total_flow * throttle * dt)
+	var mass_before := maxf(1.0, _current_vehicle_mass())
+	var mass_after := maxf(1.0, mass_before - fuel_used)
+	var mass_mid := (mass_before + mass_after) * 0.5
+	var thrust_force := _engine_thrust(maxf(0.0, altitude)) * throttle
+	var thrust_delta_v := 0.0
+	if fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
+		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
+	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
+	var thrust_impulse := thrust_direction * thrust_delta_v
+	var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, start_time)
+	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid)
+	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
+	var next_position := rocket_position + half_velocity * dt
+	var final_gravity := PlanetarySystem.gravity_acceleration(next_position, end_time)
+	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid)
+	velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
+	rocket_position = next_position
+	sim_time = end_time
 	fuel = maxf(0.0, fuel - fuel_used)
 	var atmosphere_velocity := Vector2(-rocket_position.y, rocket_position.x) * EARTH_ROTATION_RATE
 	_update_heating(dt, rocket_position.length() - EARTH_RADIUS, (velocity - atmosphere_velocity).length())
-	if fuel <= 0.0 and stage_index < rocket_stages.size() - 1:
+	if fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
 	if rocket_position.length() < EARTH_RADIUS + 0.5:
 		var normal := rocket_position.normalized()
@@ -139,16 +149,25 @@ func _physics_step(dt: float) -> void:
 	status_message = "STAGE %d  •  ENGINE FIRING" % (stage_index + 1) if throttle > 0.0 else "PAD READY  •  W TO IGNITE" if final_altitude < 100.0 else "FLIGHT ACTIVE"
 
 func _adaptive_step_size() -> float:
-	var altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
-	var gravity := G * EARTH_MASS / pow(rocket_position.length(), 2.0)
-	var dynamic_limit := 0.02 * sqrt(maxf(1.0, altitude + 100.0) / maxf(0.1, gravity))
-	var atmosphere_limit := 1000.0 / maxf(100.0, velocity.length()) if altitude < PlanetarySystem.ATMOSPHERE_HEIGHT else 0.25
-	return clampf(minf(dynamic_limit, atmosphere_limit), 0.002, 0.25)
+	var radius := maxf(EARTH_RADIUS, rocket_position.length())
+	var altitude := maxf(0.0, radius - EARTH_RADIUS)
+	var gravity := G * EARTH_MASS / (radius * radius)
+	var orbital_limit := 0.015 * sqrt(radius / maxf(0.001, gravity))
+	var speed := velocity.length()
+	var travel_limit := 250.0 / maxf(100.0, speed) if altitude < 150000.0 else 0.25
+	var drag_acceleration := _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass())).length()
+	var drag_limit := 0.08 * speed / drag_acceleration if drag_acceleration > 0.01 else 0.25
+	var active := _active_stage_data()
+	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and fuel > 0.0 else 0.0
+	var thrust_limit := 0.08 * maxf(100.0, speed) / engine_acceleration if engine_acceleration > 0.01 else 0.25
+	return clampf(minf(0.25, orbital_limit, travel_limit, drag_limit, thrust_limit), 0.0005, 0.25)
 
 func _engine_thrust(altitude: float) -> float:
 	var active := _active_stage_data()
-	var fraction := clampf(altitude / 100000.0, 0.0, 1.0)
-	return lerpf(float(active.get("thrust", 0.0)), float(active.get("vacuum_thrust", 0.0)), fraction) * float(active.get("engine_count", 1))
+	var ambient_pressure_ratio := PlanetarySystem.atmospheric_pressure(altitude) / 101325.0
+	var sea_level_thrust := float(active.get("thrust", 0.0))
+	var vacuum_thrust := float(active.get("vacuum_thrust", 0.0))
+	return lerpf(vacuum_thrust, sea_level_thrust, clampf(ambient_pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1))
 
 func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float) -> Vector2:
 	if realism not in ["Realistic", "Hardcore"]:
