@@ -83,7 +83,7 @@ func _input(event: InputEvent) -> void:
 			rebinding_button.text = _binding_label(str(rebinding_button.get_meta("action")))
 		rebinding_button = null
 		return
-	var candidate_key := event.physical_keycode if event.physical_keycode != 0 else event.keycode
+	var candidate_key: int = int(event.physical_keycode if event.physical_keycode != 0 else event.keycode)
 	for action in CONTROL_BINDINGS:
 		if action == rebinding_action:
 			continue
