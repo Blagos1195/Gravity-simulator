@@ -514,7 +514,7 @@ func _update_guidance(dt: float) -> void:
 				var already_in_stable_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + 70000.0 and ascent_orbit_radial_speed < 100.0
 				if autopilot_target_mode == "PLANET" and already_in_stable_orbit:
 					thrust_key_down = false
-					autopilot_phase = "CIRCULARISE"
+					autopilot_phase = "PLAN_TRANSFER"
 				elif bool(orbit.get("bound", false)) and float(orbit.get("apoapsis", 0.0)) >= target_radius:
 					thrust_key_down = false
 					autopilot_phase = "COAST"
@@ -558,6 +558,26 @@ func _update_guidance(dt: float) -> void:
 						autopilot_complete = true
 				else:
 					thrust_key_down = fuel > 0.0
+			"PLAN_TRANSFER":
+				status_message = "AUTOPILOT  •  SIMULATING TRANSFER TRAJECTORIES"
+				thrust_key_down = false
+				var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
+				var available_transfer_delta_v := FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * 0.9
+				var transfer_plan := FlightComputer.simulated_transfer_search(rocket_position, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v)
+				if not bool(transfer_plan.get("valid", false)):
+					autopilot_phase = "FAILED"
+					status_message = "TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY"))
+				else:
+					autopilot_burn_direction = Vector2(transfer_plan.get("departure_direction", Vector2.ZERO)).normalized()
+					autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
+					autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
+					autopilot_transfer_start_time = -1.0
+					if autopilot_burn_remaining <= 1.0:
+						autopilot_transfer_start_time = sim_time
+						autopilot_phase = "TRANSFER_COAST"
+					else:
+						autopilot_phase = "TRANSFER_BURN"
+					status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2F KM/S" % (autopilot_burn_remaining / 1000.0)
 			"WAIT_WINDOW":
 				var remaining_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
 				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1f DAYS" % (remaining_window / 86400.0)
