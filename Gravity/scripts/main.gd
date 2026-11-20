@@ -493,15 +493,17 @@ func _show_flight_computer() -> void:
 		if selected_id > 0:
 			var target_radius := FlightComputer.EARTH_RADIUS + float(selected_id)
 			var circular := FlightComputer.circularisation_burn(sim.rocket_position, sim.velocity)
-			var orbit_transfer := FlightComputer.hohmann_transfer(maxf(FlightComputer.EARTH_RADIUS + 100000.0, sim.rocket_position.length()), target_radius)
+			var orbit_origin_radius := maxf(FlightComputer.EARTH_RADIUS + 100000.0, sim.rocket_position.length())
+			var orbit_transfer := FlightComputer.hohmann_transfer(orbit_origin_radius, target_radius)
+			var orbit_departure_direction := "PROGRADE" if target_radius > orbit_origin_radius else "RETROGRADE"
 			text_lines.append("TARGET ORBIT")
 			text_lines.append("Altitude: %.0f km" % (float(selected_id) / 1000.0))
 			text_lines.append("Circular speed: %.0f m/s" % FlightComputer.circular_orbit_speed(target_radius))
 			text_lines.append("Circularise at current position: %.0f m/s Δv" % float(circular.get("delta_v", 0.0)))
 			text_lines.append("Transfer from a 100 km reference orbit: %.0f m/s Δv" % float(orbit_transfer.get("total_delta_v", 0.0)))
 			text_lines.append("Transfer time: %.1f minutes" % (float(orbit_transfer.get("transfer_time", 0.0)) / 60.0))
-			text_lines.append("Departure burn: PROGRADE at periapsis")
-			text_lines.append("Arrival burn: RETROGRADE at apoapsis")
+			text_lines.append("Departure burn: %s at periapsis" % orbit_departure_direction)
+			text_lines.append("Arrival burn: %s at apoapsis" % ("RETROGRADE" if orbit_departure_direction == "PROGRADE" else "PROGRADE"))
 		else:
 			var planet_index := -1 if selected_id == -1 else -selected_id - 2
 			var destination_transfer := FlightComputer.interplanetary_transfer(planet_index, maxf(200000.0, current_altitude))
