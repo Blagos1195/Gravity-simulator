@@ -6,8 +6,11 @@ const EARTH_MASS := PlanetarySystem.EARTH_MASS
 const EARTH_RADIUS := PlanetarySystem.EARTH_RADIUS
 const ROCKET_DRY_MASS := 12000.0
 const FUEL_CAPACITY := 300000.0
-const ENGINE_THRUST := 9.0e6
+const SEA_LEVEL_THRUST := 7.5e6
+const VACUUM_THRUST := 9.0e6
 const FUEL_FLOW := 2058.0
+const DRAG_AREA := 0.45
+const EARTH_ROTATION_RATE := 7.2921159e-5
 
 var realism := "Realistic"
 var world_scale := "Compressed"
@@ -56,37 +59,30 @@ func _process(delta: float) -> void:
 
 func _physics_step(dt: float) -> void:
     sim_time += dt
-    var radial := rocket_position.normalized()
     var altitude := rocket_position.length() - EARTH_RADIUS
     if altitude < 0.5:
-        rocket_position = radial * (EARTH_RADIUS + 0.5)
-        var inward_speed := velocity.dot(radial)
+        var surface_normal := rocket_position.normalized()
+        rocket_position = surface_normal * (EARTH_RADIUS + 0.5)
+        var inward_speed := velocity.dot(surface_normal)
         if inward_speed < 0.0:
-            velocity -= radial * inward_speed
+            velocity -= surface_normal * inward_speed
 
-    throttle = 1.0 if thrust_key_down else 0.0
-    var thrust_accel := Vector2.ZERO
-    if fuel <= 0.0:
-        throttle = 0.0
-    if throttle > 0.0 and fuel > 0.0:
-        var mass := ROCKET_DRY_MASS + fuel
-        thrust_accel = Vector2.UP.rotated(rotation_angle) * (ENGINE_THRUST * throttle / mass)
-        var consumed := minf(fuel, FUEL_FLOW * throttle * dt)
-        fuel -= consumed
+    throttle = 1.0 if thrust_key_down and fuel > 0.0 else 0.0
+    var fuel_used := minf(fuel, FUEL_FLOW * throttle * dt)
+    var average_fuel := fuel - fuel_used * 0.5
+    var mass := ROCKET_DRY_MASS + average_fuel
+    var thrust := _engine_thrust(maxf(0.0, altitude)) * throttle
+    var thrust_acceleration := Vector2.UP.rotated(rotation_angle) * (thrust / maxf(1.0, mass))
 
     var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time - dt)
-    velocity += (initial_gravity + thrust_accel) * (0.5 * dt)
+    var initial_drag := _aerodynamic_acceleration(rocket_position, velocity, mass)
+    velocity += (initial_gravity + initial_drag + thrust_acceleration) * (0.5 * dt)
     rocket_position += velocity * dt
-    var final_gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time)
-    velocity += (final_gravity + thrust_accel) * (0.5 * dt)
 
-    if realism in ["Realistic", "Hardcore"]:
-        var atmospheric_altitude := rocket_position.length() - EARTH_RADIUS
-        if atmospheric_altitude < 120000.0:
-            var density := PlanetarySystem.atmospheric_density(atmospheric_altitude)
-            var speed := velocity.length()
-            var drag_factor := 0.5 * density * speed * speed * 0.45 / maxf(1.0, ROCKET_DRY_MASS + fuel)
-            velocity -= velocity.normalized() * drag_factor * dt
+    var final_gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time)
+    var final_drag := _aerodynamic_acceleration(rocket_position, velocity, mass)
+    velocity += (final_gravity + final_drag + thrust_acceleration) * (0.5 * dt)
+    fuel = maxf(0.0, fuel - fuel_used)
 
     var final_radius := rocket_position.length()
     if final_radius < EARTH_RADIUS + 0.5:
@@ -96,7 +92,27 @@ func _physics_step(dt: float) -> void:
         if surface_velocity < 0.0:
             velocity -= surface_normal * surface_velocity
 
-    status_message = "ENGINE FIRING  •  T+%s" % _format_time(sim_time) if throttle > 0.0 and fuel > 0.0 else "PAD READY  •  HOLD W / ↑ TO LAUNCH" if altitude < 100.0 else "FLIGHT ACTIVE"
+    var final_altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
+    status_message = "ENGINE FIRING  •  T+%s" % _format_time(sim_time) if throttle > 0.0 else "PAD READY  •  W TO IGNITE" if final_altitude < 100.0 else "FLIGHT ACTIVE"
+
+func _engine_thrust(altitude: float) -> float:
+    var vacuum_fraction := clampf(altitude / 100000.0, 0.0, 1.0)
+    return lerpf(SEA_LEVEL_THRUST, VACUUM_THRUST, vacuum_fraction)
+
+func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float) -> Vector2:
+    if realism not in ["Realistic", "Hardcore"]:
+        return Vector2.ZERO
+    var altitude := position.length() - EARTH_RADIUS
+    if altitude >= PlanetarySystem.ATMOSPHERE_HEIGHT:
+        return Vector2.ZERO
+    var density := PlanetarySystem.atmospheric_density(altitude)
+    var atmospheric_velocity := Vector2(-position.y, position.x) * EARTH_ROTATION_RATE
+    var relative_velocity := current_velocity - atmospheric_velocity
+    var relative_speed := relative_velocity.length()
+    if relative_speed < 0.01:
+        return Vector2.ZERO
+    var drag_force := 0.5 * density * relative_speed * relative_speed * DRAG_AREA
+    return -relative_velocity.normalized() * (drag_force / maxf(1.0, mass))
 
 func _input(event: InputEvent) -> void:
     if event is InputEventKey:
@@ -244,23 +260,27 @@ func _draw_hud() -> void:
     var periapsis := _apsis(false)
     var apoapsis := _apsis(true)
     var local_gravity := G * EARTH_MASS / pow(rocket_position.length(), 2.0)
-    var thrust_to_weight := ENGINE_THRUST / ((ROCKET_DRY_MASS + fuel) * local_gravity)
+    var current_thrust := _engine_thrust(altitude)
+    var thrust_to_weight := current_thrust / ((ROCKET_DRY_MASS + fuel) * local_gravity)
+    var effective_exhaust_velocity := current_thrust / FUEL_FLOW
+    var remaining_delta_v := effective_exhaust_velocity * log((ROCKET_DRY_MASS + fuel) / ROCKET_DRY_MASS)
     var lines := [
         "ALTITUDE       %s" % _format_distance(altitude),
         "VELOCITY       %s" % _format_speed(orbital_speed),
         "FUEL           %s%%" % str(roundi(100.0 * fuel / FUEL_CAPACITY)),
         "THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
         "THRUST / WEIGHT %.2f" % thrust_to_weight,
+        "AVAILABLE ΔV   %.2f km/s" % (remaining_delta_v / 1000.0),
         "PERIAPSIS      %s" % _format_distance(periapsis),
         "APOAPSIS       %s" % _format_distance(apoapsis),
         "MISSION TIME   %s" % _format_time(sim_time),
         "TIME WARP      x%s" % str(snappedf(time_warp, 0.01))
     ]
-    var box := Rect2(Vector2(18, size.y - 249), Vector2(270, 228))
+    var box := Rect2(Vector2(18, size.y - 272), Vector2(290, 251))
     draw_rect(box, Color(0.015, 0.035, 0.065, 0.86), true)
     draw_rect(box, Color(0.18, 0.42, 0.6, 0.7), false, 1.0)
     for i in range(lines.size()):
-        draw_string(ThemeDB.fallback_font, Vector2(32, size.y - 222 + i * 23), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.68, 0.82, 0.94))
+        draw_string(ThemeDB.fallback_font, Vector2(32, size.y - 245 + i * 23), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.68, 0.82, 0.94))
     draw_string(ThemeDB.fallback_font, Vector2(315, size.y - 28), status_message, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.35, 0.85, 0.75))
     draw_string(ThemeDB.fallback_font, Vector2(size.x - 280, size.y - 28), realism.to_upper() + "  /  " + world_scale.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.48, 0.68, 0.84))
 
