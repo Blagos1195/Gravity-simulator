@@ -50,7 +50,7 @@ func _configure_input_actions() -> void:
 		InputMap.action_erase_events(action)
 		var keycode := int(config.get_value("controls", action, CONTROL_BINDINGS[action][1]))
 		var key_event := InputEventKey.new()
-		key_event.physical_keycode = keycode
+		key_event.keycode = keycode
 		InputMap.action_add_event(action, key_event)
 
 func _save_controls() -> void:
@@ -58,7 +58,7 @@ func _save_controls() -> void:
 	for action in CONTROL_BINDINGS:
 		var events := InputMap.action_get_events(action)
 		if not events.is_empty() and events[0] is InputEventKey:
-			config.set_value("controls", action, int(events[0].physical_keycode))
+			config.set_value("controls", action, int(events[0].keycode))
 	config.save("user://controls.cfg")
 
 func _load_general_settings() -> void:
@@ -83,17 +83,17 @@ func _input(event: InputEvent) -> void:
 			rebinding_button.text = _binding_label(str(rebinding_button.get_meta("action")))
 		rebinding_button = null
 		return
-	var candidate_key: int = int(event.physical_keycode if event.physical_keycode != 0 else event.keycode)
+	var candidate_key: int = int(event.keycode)
 	for action in CONTROL_BINDINGS:
 		if action == rebinding_action:
 			continue
 		for assigned_event in InputMap.action_get_events(action):
-			if assigned_event is InputEventKey and assigned_event.physical_keycode == candidate_key:
+			if assigned_event is InputEventKey and assigned_event.keycode == candidate_key:
 				if is_instance_valid(rebinding_button):
 					rebinding_button.text = "KEY ALREADY ASSIGNED"
 				return
 	var key_event := InputEventKey.new()
-	key_event.physical_keycode = candidate_key
+	key_event.keycode = candidate_key
 	InputMap.action_erase_events(rebinding_action)
 	InputMap.action_add_event(rebinding_action, key_event)
 	_save_controls()
@@ -106,7 +106,7 @@ func _binding_label(action: String) -> String:
 	var events := InputMap.action_get_events(action)
 	var key_name := "UNBOUND"
 	if not events.is_empty() and events[0] is InputEventKey:
-		key_name = OS.get_keycode_string(events[0].physical_keycode)
+		key_name = OS.get_keycode_string(events[0].keycode)
 	return "%s  [%s]" % [str(CONTROL_BINDINGS[action][0]), key_name]
 
 func _add_rebind_button(parent: Node, action: String) -> void:
