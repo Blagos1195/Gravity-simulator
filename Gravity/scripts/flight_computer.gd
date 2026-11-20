@@ -375,13 +375,16 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 	return best_plan
 
 
-static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 45) -> Dictionary:
+static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 30) -> Dictionary:
 	if target_index < -1 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Select the Moon or a planet and provide a positive manoeuvre budget."}
 	var radius := start_position.length()
 	if radius < EARTH_RADIUS + 70000.0:
 		return {"valid": false, "reason": "A stable Earth departure orbit is required."}
 	var mu := G * PlanetarySystem.EARTH_MASS
+	var initial_orbit := orbital_state(start_position, start_velocity, mu)
+	if float(initial_orbit.get("eccentricity", 1.0)) > 0.05:
+		return {"valid": false, "reason": "Launch-window scanning currently requires a near-circular Earth parking orbit."}
 	var orbital_rate := sqrt(mu / pow(radius, 3.0))
 	var windows: Array[Dictionary] = []
 	var best_total := INF
