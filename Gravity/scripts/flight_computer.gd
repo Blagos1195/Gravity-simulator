@@ -298,7 +298,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
 	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.25, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v * 0.8, maximum_delta_v]
 	var direction_count := 12 if coarse_search else 24
-	var integration_steps := 240 if coarse_search else 480
+	var integration_steps := 360 if coarse_search else 720
 	var best_score := INF
 	var best_plan: Dictionary = {}
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
@@ -324,6 +324,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 				var closest_relative_position := Vector2.ZERO
 				var closest_relative_velocity := Vector2.ZERO
 				var closest_time := flight_duration
+				var collided := false
 				for step_index in range(integration_steps):
 					var initial_acceleration := PlanetarySystem.gravity_acceleration_from_states(position, gravity_states[step_index])
 					var half_velocity := velocity + initial_acceleration * (step_size * 0.5)
@@ -331,16 +332,30 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 					var final_acceleration := PlanetarySystem.gravity_acceleration_from_states(next_position, gravity_states[step_index + 1])
 					velocity = half_velocity + final_acceleration * (step_size * 0.5)
 					position = next_position
+					if position.length_squared() <= EARTH_RADIUS * EARTH_RADIUS:
+						collided = true
+						break
+					var bodies: Array = gravity_states[step_index + 1].get("bodies", [])
+					for body in bodies:
+						var body_position: Vector2 = body.position
+						var body_radius := float(body.radius)
+						if position.distance_squared_to(body_position) <= body_radius * body_radius:
+							collided = true
+							break
+					if collided:
+						break
 					var target_state: Dictionary = target_states[step_index + 1]
 					var target_position: Vector2 = target_state.get("position", Vector2.ZERO)
 					var target_velocity: Vector2 = target_state.get("velocity", Vector2.ZERO)
 					var relative_position: Vector2 = position - target_position
-					var distance := relative_position.length()
-					if distance < closest_distance:
-						closest_distance = distance
+					var distance_squared := relative_position.length_squared()
+					if distance_squared < closest_distance * closest_distance:
+						closest_distance = sqrt(distance_squared)
 						closest_relative_position = relative_position
 						closest_relative_velocity = velocity - target_velocity
 						closest_time = float(step_index + 1) * step_size
+				if collided:
+					continue
 				var target_soi := float(initial_target.soi)
 				if closest_distance > target_soi:
 					continue
@@ -391,9 +406,10 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 	if float(initial_orbit.get("eccentricity", 1.0)) > 0.05:
 		return {"valid": false, "reason": "Launch-window scanning currently requires a near-circular Earth parking orbit."}
 	var orbital_rate := sqrt(mu / pow(radius, 3.0))
-	var windows: Array[Dictionary] = []
-	var best_total := INF
 	var best_window: Dictionary = {}
+	var best_score := INF
+	var dates_checked := 0
+	var coarse_windows: Array[Dictionary] = []
 	var samples := maxi(2, int(ceil(float(scan_days) / float(interval_days))) + 1)
 	for sample_index in range(samples):
 		var wait_days := mini(scan_days, sample_index * interval_days)
@@ -402,17 +418,62 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		var future_position := start_position.rotated(rotation)
 		var future_velocity := start_velocity.rotated(rotation)
 		var plan := simulated_transfer_search(future_position, future_velocity, start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true)
+		dates_checked += 1
 		if not bool(plan.get("valid", false)):
 			continue
 		plan["departure_wait_days"] = wait_days
 		plan["departure_time_seconds"] = start_time + wait_seconds
-		windows.append(plan)
-		if float(plan.get("total_delta_v", INF)) < best_total:
-			best_total = float(plan.total_delta_v)
+		coarse_windows.append(plan)
+		var score := float(plan.get("total_delta_v", INF)) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / 86400.0 * clampf(speed_priority, 0.0, 1.0)
+		if score < best_score:
+			best_score = score
 			best_window = plan
 	if best_window.is_empty():
-		return {"valid": false, "reason": "No sampled departure date produced a feasible simulated transfer.", "dates_checked": samples}
-	return {"valid": true, "best": best_window, "windows": windows, "dates_checked": samples}
+		return {"valid": false, "reason": "No sampled departure date produced a feasible simulated transfer.", "dates_checked": dates_checked}
+	var coarse_best_day := float(best_window.departure_wait_days)
+	var refinement_spacing := maxf(1.0, float(interval_days) / 4.0)
+	for refinement_index in range(-2, 3):
+		var wait_days := clampf(coarse_best_day + float(refinement_index) * refinement_spacing, 0.0, float(scan_days))
+		if absf(wait_days - coarse_best_day) < 0.01:
+			continue
+		var wait_seconds := wait_days * 86400.0
+		var rotation := orbital_rate * wait_seconds
+		var plan := simulated_transfer_search(start_position.rotated(rotation), start_velocity.rotated(rotation), start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true)
+		dates_checked += 1
+		if not bool(plan.get("valid", false)):
+			continue
+		plan["departure_wait_days"] = wait_days
+		plan["departure_time_seconds"] = start_time + wait_seconds
+		var score := float(plan.get("total_delta_v", INF)) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / 86400.0 * clampf(speed_priority, 0.0, 1.0)
+		if score < best_score:
+			best_score = score
+			best_window = plan
+	var refined_best_day := float(best_window.departure_wait_days)
+	for refinement_index in range(-2, 3):
+		var wait_days := clampf(refined_best_day + float(refinement_index), 0.0, float(scan_days))
+		if absf(wait_days - refined_best_day) < 0.01:
+			continue
+		var wait_seconds := wait_days * 86400.0
+		var rotation := orbital_rate * wait_seconds
+		var plan := simulated_transfer_search(start_position.rotated(rotation), start_velocity.rotated(rotation), start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true)
+		dates_checked += 1
+		if not bool(plan.get("valid", false)):
+			continue
+		plan["departure_wait_days"] = wait_days
+		plan["departure_time_seconds"] = start_time + wait_seconds
+		var score := float(plan.get("total_delta_v", INF)) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / 86400.0 * clampf(speed_priority, 0.0, 1.0)
+		if score < best_score:
+			best_score = score
+			best_window = plan
+	var final_wait_days := float(best_window.departure_wait_days)
+	var final_wait_seconds := final_wait_days * 86400.0
+	var final_rotation := orbital_rate * final_wait_seconds
+	var final_plan := simulated_transfer_search(start_position.rotated(final_rotation), start_velocity.rotated(final_rotation), start_time + final_wait_seconds, target_index, maximum_delta_v, speed_priority, false)
+	if bool(final_plan.get("valid", false)):
+		final_plan["departure_wait_days"] = final_wait_days
+		final_plan["departure_time_seconds"] = start_time + final_wait_seconds
+		best_window = final_plan
+	return {"valid": true, "best": best_window, "windows": coarse_windows, "dates_checked": dates_checked, "refined": true}
 
 static func target_orbit_report(position: Vector2, velocity: Vector2, altitude: float) -> Dictionary:
 	var target_radius := EARTH_RADIUS + maxf(0.0, altitude)
