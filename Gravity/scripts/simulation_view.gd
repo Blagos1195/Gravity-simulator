@@ -95,7 +95,7 @@ func _ready() -> void:
 	set_process(true)
 
 func _process(delta: float) -> void:
-	if not paused:
+	if not paused and not crashed:
 		var effective_warp := minf(time_warp, 100.0) if rocket_position.length() < EARTH_RADIUS + 1.0e8 else time_warp
 		var remaining := effective_warp * delta
 		var iterations := 0
