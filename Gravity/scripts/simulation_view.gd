@@ -591,6 +591,33 @@ func _draw() -> void:
 		draw_arc(moon_screen, moon_radius_px, 0.0, TAU, 64, Color(0.72, 0.74, 0.78), 1.0)
 		draw_string(ThemeDB.fallback_font, moon_screen + Vector2(moon_radius_px + 8.0, 4.0), "MOON", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.75, 0.78, 0.84))
 
+	if autopilot_target_mode == "PLANET" and autopilot_planet_index >= 0 and autopilot_planet_index < FlightComputer.PLANET_TARGETS.size():
+		var destination := _autopilot_target_state()
+		var destination_screen := rocket_screen + (destination.position - rocket_position) * altitude_visual_scale
+		var destination_radius := clampf(float(destination.radius) * altitude_visual_scale, 3.0, 72.0)
+		if destination_screen.x > -destination_radius - 30.0 and destination_screen.x < size.x + destination_radius + 30.0 and destination_screen.y > -destination_radius - 30.0 and destination_screen.y < size.y + destination_radius + 30.0:
+			var destination_color := Color(0.82, 0.38, 0.25)
+			match str(destination.name):
+				"Mercury":
+					destination_color = Color(0.62, 0.58, 0.52)
+				"Venus":
+					destination_color = Color(0.88, 0.72, 0.42)
+				"Jupiter":
+					destination_color = Color(0.78, 0.62, 0.46)
+				"Saturn":
+					destination_color = Color(0.82, 0.75, 0.55)
+				"Uranus":
+					destination_color = Color(0.48, 0.78, 0.82)
+				"Neptune":
+					destination_color = Color(0.28, 0.42, 0.88)
+			draw_circle(destination_screen, destination_radius + 5.0, Color(0.45, 0.7, 1.0, 0.12))
+			draw_circle(destination_screen, destination_radius, destination_color)
+			draw_arc(destination_screen, destination_radius, 0.0, TAU, 80, Color(0.9, 0.92, 1.0, 0.8), 1.0)
+			draw_string(ThemeDB.fallback_font, destination_screen + Vector2(destination_radius + 8.0, 4.0), str(destination.name).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.8, 0.88, 1.0))
+		var soi_pixels := float(destination.soi) * altitude_visual_scale
+		if soi_pixels > destination_radius and soi_pixels < 1200.0:
+			draw_arc(destination_screen, soi_pixels, 0.0, TAU, 100, Color(0.35, 0.72, 1.0, 0.22), 1.0)
+
 	if show_orbit:
 		_draw_orbit(rocket_screen, earth_screen, radius_px, world_scale_factor)
 
