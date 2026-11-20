@@ -10,11 +10,17 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Time-dependent circular Moon orbit and lunar gravity
 - Exponential Earth atmosphere model
 - Surface launch pad with toggleable engine controls
-- Variable-mass rocket thrust and propellant consumption
-- Engine thrust interpolates from sea-level to vacuum performance
-- Earth rotation inherited at launch and rotating-atmosphere-relative drag
-- Atmospheric drag in Realistic and Hardcore modes
-- Remaining ideal delta-v and thrust-to-weight telemetry
+- Two-stage launch vehicle with automatic and manual staging
+- Variable-mass thrust and propellant consumption for each stage
+- Separate sea-level and vacuum engine performance
+- Engine gimbal controls
+- Adaptive substepping based on local flight conditions
+- Earth rotation inherited at launch and rotating-atmosphere-relative aerodynamics
+- Atmospheric drag and approximate lift in Realistic and Hardcore modes
+- Simplified atmospheric heating and heat-shield temperature telemetry
+- Differential gravity from the Moon, Sun and other planets
+- Optional gravity-turn guidance assist
+- Remaining ideal vehicle delta-v and thrust-to-weight telemetry
 - Orbital trajectory, periapsis, apoapsis and thrust-to-weight readouts
 - Adjustable time warp
 - Compressed, balanced and realistic-distance display scales
@@ -39,8 +45,11 @@ A procedural 2D spaceflight simulator built with Godot 4.
 |---|---|
 | W / Up | Toggle engine on/off |
 | S / Down | Cut engine |
+| X | Separate current stage |
+| Q / E | Adjust engine gimbal |
 | A / Left | Rotate left |
 | D / Right | Rotate right |
+| H | Toggle gravity-turn guidance assist |
 | Space | Pause / resume |
 | + / - | Increase / decrease time warp |
 | Mouse wheel | Zoom |
@@ -55,4 +64,4 @@ Saves are stored in the user's Godot application data directory under `saves/`.
 
 ## Important
 
-This is the first playable foundation, not the finished simulator. The current flight model is still an Earth-centred prototype. It now accounts for variable rocket mass, altitude-dependent engine thrust, Earth's rotational launch velocity and atmospheric co-rotation, but it does not yet model multiple rocket stages, engine gimbal, lift, heating, structural limits or a full aerodynamic coefficient model. The Moon follows a simplified circular orbit, and the planetary catalogue is data groundwork rather than a complete heliocentric simulation. Accurate planetary ephemerides, an adaptive high-accuracy integrator, the vehicle assembly system, career progression, missions, docking, re-entry heating, replay tooling and multiplayer remain planned follow-on systems.
+This remains an early Earth-centred prototype. The two-stage vehicle, adaptive substepping, gimbal, lift, heating and gravity-turn guidance are simplified gameplay models, not validated launch-vehicle engineering. Planetary gravity uses circular coplanar orbits and differential perturbations rather than accurate ephemerides or a full n-body solar-system integration. Atmospheric heating is an estimate and does not yet damage or destroy the vehicle. The rocket editor, vehicle structural limits, detailed aerodynamic coefficients, career progression, missions, docking, replay tooling and multiplayer remain planned follow-on systems.
