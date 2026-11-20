@@ -30,6 +30,8 @@ var upper_stage_vacuum_thrust := UPPER_STAGE_VACUUM_THRUST
 var first_stage_flow := FIRST_STAGE_FLOW
 var upper_stage_flow := UPPER_STAGE_FLOW
 var payload_mass := 500.0
+var first_stage_engine_count := 1
+var upper_stage_engine_count := 1
 
 var realism := "Realistic"
 var world_scale := "Compressed"
@@ -76,12 +78,14 @@ func set_rocket_design(design: Dictionary) -> void:
 	upper_stage_dry_mass = float(upper.get("dry_mass", UPPER_STAGE_DRY_MASS))
 	first_stage_fuel_capacity = float(first.get("fuel_capacity", FIRST_STAGE_FUEL))
 	upper_stage_fuel_capacity = float(upper.get("fuel_capacity", UPPER_STAGE_FUEL))
-	first_stage_thrust = float(first.get("thrust", FIRST_STAGE_THRUST))
-	first_stage_vacuum_thrust = float(first.get("vacuum_thrust", FIRST_STAGE_VACUUM_THRUST))
-	upper_stage_thrust = float(upper.get("thrust", UPPER_STAGE_THRUST))
-	upper_stage_vacuum_thrust = float(upper.get("vacuum_thrust", UPPER_STAGE_VACUUM_THRUST))
-	first_stage_flow = float(first.get("flow", FIRST_STAGE_FLOW))
-	upper_stage_flow = float(upper.get("flow", UPPER_STAGE_FLOW))
+	first_stage_engine_count = int(first.get("engine_count", 1))
+	upper_stage_engine_count = int(upper.get("engine_count", 1))
+	first_stage_thrust = float(first.get("thrust", FIRST_STAGE_THRUST)) * first_stage_engine_count
+	first_stage_vacuum_thrust = float(first.get("vacuum_thrust", FIRST_STAGE_VACUUM_THRUST)) * first_stage_engine_count
+	upper_stage_thrust = float(upper.get("thrust", UPPER_STAGE_THRUST)) * upper_stage_engine_count
+	upper_stage_vacuum_thrust = float(upper.get("vacuum_thrust", UPPER_STAGE_VACUUM_THRUST)) * upper_stage_engine_count
+	first_stage_flow = float(first.get("flow", FIRST_STAGE_FLOW)) * first_stage_engine_count
+	upper_stage_flow = float(upper.get("flow", UPPER_STAGE_FLOW)) * upper_stage_engine_count
 	payload_mass = float(design.get("payload_mass", 500.0))
 	fuel = first_stage_fuel_capacity
 
@@ -557,8 +561,8 @@ func get_save_data() -> Dictionary:
         "rocket_design": {
             "payload_mass": payload_mass,
             "stages": [
-                {"dry_mass": first_stage_dry_mass, "fuel_capacity": first_stage_fuel_capacity, "thrust": first_stage_thrust, "vacuum_thrust": first_stage_vacuum_thrust, "flow": first_stage_flow},
-                {"dry_mass": upper_stage_dry_mass, "fuel_capacity": upper_stage_fuel_capacity, "thrust": upper_stage_thrust, "vacuum_thrust": upper_stage_vacuum_thrust, "flow": upper_stage_flow}
+                {"dry_mass": first_stage_dry_mass, "fuel_capacity": first_stage_fuel_capacity, "thrust": first_stage_thrust / first_stage_engine_count, "vacuum_thrust": first_stage_vacuum_thrust / first_stage_engine_count, "flow": first_stage_flow / first_stage_engine_count, "engine_count": first_stage_engine_count},
+                {"dry_mass": upper_stage_dry_mass, "fuel_capacity": upper_stage_fuel_capacity, "thrust": upper_stage_thrust / upper_stage_engine_count, "vacuum_thrust": upper_stage_vacuum_thrust / upper_stage_engine_count, "flow": upper_stage_flow / upper_stage_engine_count, "engine_count": upper_stage_engine_count}
             ]
         }
     }
