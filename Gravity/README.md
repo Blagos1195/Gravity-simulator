@@ -48,6 +48,14 @@ A procedural 2D spaceflight simulator built with Godot 4.
 2. Open `project.godot` using Godot's Project Manager.
 3. Press F6 or F5 to run the project.
 
+## Development checks
+
+Run the rocket design calculation tests from the project directory:
+
+```powershell
+godot --headless --path . --script res://tests/rocket_design_test.gd
+```
+
 ## Controls
 
 | Input | Action |
