@@ -257,6 +257,14 @@ static func available_delta_v(design: Dictionary, active_stage_index: int = 0, a
 
 
 static func _simulated_target_state(target_index: int, time_seconds: float) -> Dictionary:
+	if target_index == -2:
+		return {
+			"position": Vector2.ZERO,
+			"velocity": Vector2.ZERO,
+			"mass": PlanetarySystem.EARTH_MASS,
+			"radius": PlanetarySystem.EARTH_RADIUS,
+			"soi": 9.25e8
+		}
 	if target_index == -1:
 		return {
 			"position": PlanetarySystem.moon_position(time_seconds),
@@ -279,7 +287,7 @@ static func _simulated_target_state(target_index: int, time_seconds: float) -> D
 
 
 static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float) -> Dictionary:
-	if target_index < -1 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
+	if target_index < -2 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Invalid target or no remaining manoeuvre capability."}
 	var initial_target := _simulated_target_state(target_index, start_time)
 	if initial_target.is_empty():
