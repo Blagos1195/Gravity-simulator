@@ -787,6 +787,13 @@ func _draw_hud() -> void:
 		"MISSION TIME   %s" % _format_time(sim_time),
 		"TIME WARP      x%s" % str(snappedf(time_warp, 0.01))
 	]
+	if autopilot_target_mode == "PLANET" and autopilot_enabled:
+		var target_state: Dictionary = _autopilot_target_state()
+		var target_range: float = rocket_position.distance_to(target_state["position"])
+		var target_relative_speed: float = (velocity - target_state["velocity"]).length()
+		lines.append("TARGET RANGE   %s" % _format_distance(target_range))
+		lines.append("TARGET SPEED   %s" % _format_speed(target_relative_speed))
+		lines.append("AUTOPILOT      %s" % autopilot_phase.replace("_", " "))
 	var box := Rect2(Vector2(18.0 * ui_scale, size.y - 435.0 * ui_scale), Vector2(310.0 * ui_scale, 415.0 * ui_scale))
 	draw_rect(box, Color(0.015, 0.035, 0.065, 0.86), true)
 	draw_rect(box, Color(0.18, 0.42, 0.6, 0.7), false, 1.0)
