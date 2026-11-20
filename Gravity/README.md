@@ -10,10 +10,10 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Time-dependent circular Moon orbit and lunar gravity
 - Exponential Earth atmosphere model
 - Initial vehicle assembly screen with two configurable stages and payload mass
-- Adjustable stage dry mass, propellant capacity, sea-level/vacuum thrust and fuel flow
+- Adjustable stage dry mass, propellant capacity, engine count, sea-level/vacuum thrust and per-engine fuel flow
 - Live vehicle preview, initial mass, ideal delta-v and launch thrust-to-weight estimates
 - Rocket design validation and local JSON save/load
-- Custom vehicle parameters applied to flight mass, thrust, propellant use, staging and telemetry
+- Custom vehicle parameters applied to flight mass, engine thrust, propellant use, staging and telemetry
 - Surface launch pad with toggleable engine controls
 - Two-stage launch vehicle with automatic and manual staging
 - Variable-mass thrust and propellant consumption for each stage
