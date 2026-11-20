@@ -31,6 +31,7 @@ var show_orbit := true
 var show_grid := true
 var show_vectors := true
 var thrust_key_down := false
+var throttle_cutoff_key_down := false
 
 func _ready() -> void:
     var rng := RandomNumberGenerator.new()
@@ -66,6 +67,8 @@ func _physics_step(dt: float) -> void:
     throttle = 1.0 if thrust_key_down else 0.0
     if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
         throttle = 1.0
+    if throttle_cutoff_key_down or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+        throttle = 0.0
     var thrust_accel := Vector2.ZERO
     if fuel <= 0.0:
         throttle = 0.0
@@ -103,9 +106,13 @@ func _input(event: InputEvent) -> void:
     if event is InputEventKey:
         if event.keycode in [KEY_W, KEY_UP] or event.physical_keycode in [KEY_W, KEY_UP]:
             thrust_key_down = event.pressed
+        if event.keycode in [KEY_S, KEY_DOWN] or event.physical_keycode in [KEY_S, KEY_DOWN]:
+            throttle_cutoff_key_down = event.pressed
+
 func _notification(what: int) -> void:
     if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
         thrust_key_down = false
+        throttle_cutoff_key_down = false
 
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
