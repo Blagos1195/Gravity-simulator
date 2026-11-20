@@ -2,6 +2,7 @@ extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const FlightComputer = preload("res://scripts/flight_computer.gd")
 const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
 
@@ -397,6 +398,7 @@ func _build_flight_hud() -> void:
 	right.add_child(slot_picker)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
+	_add_button(right, "FLIGHT COMPUTER", _show_flight_computer)
 	_add_button(right, "PREDICTED PATH  [P]", func():
 		sim.show_predicted_trajectory = not sim.show_predicted_trajectory
 		if sim.show_predicted_trajectory:
@@ -418,6 +420,96 @@ func _build_flight_hud() -> void:
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
+
+func _show_flight_computer() -> void:
+	var window := Window.new()
+	window.title = "FLIGHT COMPUTER"
+	window.size = Vector2i(440, 560)
+	window.min_size = Vector2i(400, 480)
+	window.unresizable = false
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var root := VBoxContainer.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_theme_constant_override("separation", 12)
+	root.add_theme_constant_override("margin_left", 18)
+	root.add_theme_constant_override("margin_right", 18)
+	root.add_theme_constant_override("margin_top", 18)
+	root.add_theme_constant_override("margin_bottom", 18)
+	window.add_child(root)
+	var heading := Label.new()
+	heading.text = "ORBITAL FLIGHT COMPUTER"
+	heading.add_theme_font_size_override("font_size", 22)
+	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	root.add_child(heading)
+	var description := Label.new()
+	description.text = "Select a target orbit or transfer destination. Calculations use the current Earth-centred state."
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(description)
+	var target_label := Label.new()
+	target_label.text = "TARGET"
+	root.add_child(target_label)
+	var target := OptionButton.new()
+	target.add_item("Low Earth orbit · 200 km", 200000)
+	target.add_item("Medium Earth orbit · 2,000 km", 2000000)
+	target.add_item("Geostationary orbit · 35,786 km", 35786000)
+	target.add_item("Lunar distance · 384,400 km", 384400000)
+	root.add_child(target)
+	var report := Label.new()
+	report.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	report.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(report)
+	var calculate := Button.new()
+	calculate.text = "CALCULATE MANOEUVRE"
+	root.add_child(calculate)
+	var autopilot := Button.new()
+	autopilot.text = "ENGAGE ORBIT AUTOPILOT"
+	root.add_child(autopilot)
+	var cancel := Button.new()
+	cancel.text = "CLOSE"
+	cancel.pressed.connect(window.queue_free)
+	root.add_child(cancel)
+	var update_report := func() -> void:
+		var target_radius := FlightComputer.EARTH_RADIUS + float(target.get_selected_id())
+		var state := FlightComputer.orbital_state(sim.rocket_position, sim.velocity)
+		var current_altitude := sim.rocket_position.length() - FlightComputer.EARTH_RADIUS
+		var circular := FlightComputer.circularisation_burn(sim.rocket_position, sim.velocity)
+		var transfer := FlightComputer.hohmann_transfer(maxf(FlightComputer.EARTH_RADIUS + 100000.0, sim.rocket_position.length()), target_radius)
+		var apoapsis_text := "UNBOUND" if not bool(state.get("bound", false)) else "%.0f km" % (float(state.get("apoapsis", 0.0)) / 1000.0)
+		var periapsis_text := "%.0f km" % (float(state.get("periapsis", 0.0)) / 1000.0)
+		var text_lines := PackedStringArray()
+		text_lines.append("CURRENT ALTITUDE    %.1f km" % (current_altitude / 1000.0))
+		text_lines.append("CURRENT SPEED       %.0f m/s" % sim.velocity.length())
+		text_lines.append("CURRENT APOAPSIS    %s" % apoapsis_text)
+		text_lines.append("CURRENT PERIAPSIS    %s" % periapsis_text)
+		text_lines.append("")
+		text_lines.append("CIRCULARISE HERE")
+		text_lines.append("Required Δv: %.0f m/s" % float(circular.get("delta_v", 0.0)))
+		text_lines.append("")
+		text_lines.append("HOHMANN TRANSFER ESTIMATE")
+		text_lines.append("Departure Δv: %.0f m/s" % float(transfer.get("departure_delta_v", 0.0)))
+		text_lines.append("Arrival Δv: %.0f m/s" % float(transfer.get("arrival_delta_v", 0.0)))
+		text_lines.append("Total Δv: %.0f m/s" % float(transfer.get("total_delta_v", 0.0)))
+		text_lines.append("Transfer time: %.1f days" % (float(transfer.get("transfer_time", 0.0)) / 86400.0))
+		text_lines.append("")
+		text_lines.append("Transfer estimates assume circular, coplanar Earth orbits. Lunar-distance transfer is a two-body approximation, not a complete Moon rendezvous solution.")
+		report.text = "\n".join(text_lines)
+	calculate.pressed.connect(update_report)
+	target.item_selected.connect(func(_index: int): update_report.call())
+	autopilot.pressed.connect(func():
+		var selected_altitude := float(target.get_selected_id())
+		if selected_altitude > 50000000.0:
+			report.text += "\n\nAUTOPILOT NOT AVAILABLE: lunar rendezvous guidance is not implemented yet."
+			return
+		sim.autopilot_target_altitude = selected_altitude
+		sim.autopilot_enabled = true
+		sim.autopilot_complete = false
+		sim.guidance_enabled = true
+		sim.thrust_key_down = true
+		report.text += "\n\nORBIT AUTOPILOT ENGAGED. Target altitude: %.0f km." % (selected_altitude / 1000.0)
+	)
+	update_report.call()
+	window.popup_centered()
 
 func _pause_simulation() -> void:
 	if sim:
