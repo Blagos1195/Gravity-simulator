@@ -14,6 +14,17 @@ var save_slot := 1
 var sim
 var autosave_elapsed := 0.0
 var autosave_enabled := true
+var rebinding_action := ""
+var rebinding_button: Button
+const CONTROL_BINDINGS := {
+	"engine_toggle": ["ENGINE TOGGLE", KEY_W],
+	"throttle_cutoff": ["ENGINE CUTOFF", KEY_S],
+	"rotate_left": ["ROTATE LEFT", KEY_A],
+	"rotate_right": ["ROTATE RIGHT", KEY_D],
+	"pause_game": ["PAUSE", KEY_SPACE],
+	"stage_separation": ["STAGE SEPARATION", KEY_X],
+	"guidance_toggle": ["GUIDANCE", KEY_H]
+}
 var status_label: Label
 var menu_root: VBoxContainer
 var settings_root: VBoxContainer
@@ -26,7 +37,64 @@ var design_preview: Control
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
+	_configure_input_actions()
 	_build_menu()
+
+func _configure_input_actions() -> void:
+	var config := ConfigFile.new()
+	config.load("user://controls.cfg")
+	for action in CONTROL_BINDINGS:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action)
+		InputMap.action_erase_events(action)
+		var keycode := int(config.get_value("controls", action, CONTROL_BINDINGS[action][1]))
+		var key_event := InputEventKey.new()
+		key_event.physical_keycode = keycode
+		InputMap.action_add_event(action, key_event)
+
+func _save_controls() -> void:
+	var config := ConfigFile.new()
+	for action in CONTROL_BINDINGS:
+		var events := InputMap.action_get_events(action)
+		if not events.is_empty() and events[0] is InputEventKey:
+			config.set_value("controls", action, int(events[0].physical_keycode))
+	config.save("user://controls.cfg")
+
+func _input(event: InputEvent) -> void:
+	if rebinding_action.is_empty() or not event is InputEventKey or not event.pressed or event.echo:
+		return
+	if event.keycode == KEY_ESCAPE:
+		rebinding_action = ""
+		if is_instance_valid(rebinding_button):
+			rebinding_button.text = _binding_label(rebinding_button.get_meta("action"))
+		return
+	var key_event := InputEventKey.new()
+	key_event.physical_keycode = event.physical_keycode if event.physical_keycode != 0 else event.keycode
+	InputMap.action_erase_events(rebinding_action)
+	InputMap.action_add_event(rebinding_action, key_event)
+	_save_controls()
+	if is_instance_valid(rebinding_button):
+		rebinding_button.text = _binding_label(rebinding_action)
+	rebinding_action = ""
+	rebinding_button = null
+
+func _binding_label(action: String) -> String:
+	var events := InputMap.action_get_events(action)
+	var key_name := "UNBOUND"
+	if not events.is_empty() and events[0] is InputEventKey:
+		key_name = OS.get_keycode_string(events[0].physical_keycode)
+	return "%s  [%s]" % [str(CONTROL_BINDINGS[action][0]), key_name]
+
+func _add_rebind_button(parent: Node, action: String) -> void:
+	var button := Button.new()
+	button.text = _binding_label(action)
+	button.custom_minimum_size = Vector2(0, 42)
+	button.pressed.connect(func():
+		rebinding_action = action
+		rebinding_button = button
+		button.text = "PRESS A KEY  •  ESC TO CANCEL"
+	)
+	parent.add_child(button)
 
 func _process(delta: float) -> void:
 	if mode == "flight":
@@ -452,8 +520,11 @@ func _show_settings() -> void:
 	autosave.button_pressed = autosave_enabled
 	autosave.toggled.connect(func(enabled: bool): autosave_enabled = enabled)
 	settings_root.add_child(autosave)
+	_add_setting_label(settings_root, "KEYBOARD CONTROLS")
+	for action in CONTROL_BINDINGS:
+		_add_rebind_button(settings_root, action)
 	var controls_note := Label.new()
-	controls_note.text = "Control remapping and audio settings will live here. Physics, universe scale and career are selected when creating a new game."
+	controls_note.text = "Physics, universe scale and career are selected when creating a new game. Key bindings are saved globally."
 	controls_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	controls_note.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
 	settings_root.add_child(controls_note)
