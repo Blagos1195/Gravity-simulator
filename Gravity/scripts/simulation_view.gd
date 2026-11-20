@@ -202,13 +202,19 @@ func _adaptive_step_size() -> float:
 	var burnout_limit := fuel / total_flow if thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
 	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, maximum_step)
 	var step_limit := minf(physics_limit, burnout_limit)
-	if autopilot_enabled and autopilot_phase == "TRANSFER_BURN" and autopilot_burn_remaining > 0.0 and total_flow > 0.0:
+	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"] and autopilot_burn_remaining > 0.0 and total_flow > 0.0:
 		var current_mass := maxf(1.0, _current_vehicle_mass())
 		var current_thrust := _engine_thrust(altitude)
 		var effective_exhaust_velocity := current_thrust / total_flow
 		if effective_exhaust_velocity > 0.0:
 			var required_propellant := current_mass * (1.0 - exp(-autopilot_burn_remaining / effective_exhaust_velocity))
 			step_limit = minf(step_limit, required_propellant / total_flow)
+	if autopilot_enabled and autopilot_phase in ["TRANSFER_COAST", "ARRIVAL_APPROACH"]:
+		var destination_state := _autopilot_target_state()
+		var relative_distance := rocket_position.distance_to(destination_state.position)
+		var relative_speed := (velocity - destination_state.velocity).length()
+		if relative_speed > 1.0:
+			step_limit = minf(step_limit, 0.02 * relative_distance / relative_speed)
 	return step_limit
 
 func _engine_thrust(altitude: float) -> float:
@@ -432,23 +438,25 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1F DAYS REMAINING" % [str(destination_state.name).to_upper(), transfer_remaining / 86400.0]
 				if transfer_elapsed >= autopilot_transfer_duration * 0.75 and destination_distance <= encounter_radius:
 					autopilot_phase = "ARRIVAL_APPROACH"
-				"ARRIVAL_APPROACH":
-					thrust_key_down = false
-					var destination_state := _autopilot_target_state()
-					var relative_position: Vector2 = rocket_position - destination_state.position
-					var relative_velocity: Vector2 = velocity - destination_state.velocity
-					var arrival_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, G * float(destination_state.mass))
-					var radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
-					status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0F KM" % [str(destination_state.name).to_upper(), (relative_position.length() - float(destination_state.radius)) / 1000.0]
-					if radial_speed >= -10.0:
-						_begin_arrival_capture(destination_state)
+				elif transfer_elapsed > autopilot_transfer_duration * 1.5:
+					autopilot_phase = "ARRIVAL_PENDING"
+			"ARRIVAL_APPROACH":
+				thrust_key_down = false
+				var destination_state := _autopilot_target_state()
+				var relative_position: Vector2 = rocket_position - destination_state.position
+				var relative_velocity: Vector2 = velocity - destination_state.velocity
+				var arrival_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, G * float(destination_state.mass))
+				var radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
+				status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0F KM" % [str(destination_state.name).to_upper(), (relative_position.length() - float(destination_state.radius)) / 1000.0]
+				if radial_speed >= -10.0:
+					_begin_arrival_capture(destination_state)
 			"ARRIVAL_CAPTURE_BURN":
-					status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0F M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
-					var burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-					rotation_angle = lerp_angle(rotation_angle, burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-					thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, burn_rotation)) < deg_to_rad(1.0)
-					if fuel <= 0.0:
-						autopilot_phase = "FAILED"
+				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0F M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
+				var burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
+				rotation_angle = lerp_angle(rotation_angle, burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, burn_rotation)) < deg_to_rad(1.0)
+				if fuel <= 0.0:
+					autopilot_phase = "FAILED"
 			"ARRIVAL_PENDING":
 				status_message = "ARRIVAL WINDOW MISSED  •  TARGET OUTSIDE CAPTURE REGION"
 				thrust_key_down = false
