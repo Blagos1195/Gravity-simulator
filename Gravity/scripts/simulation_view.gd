@@ -31,6 +31,8 @@ var guidance_enabled := false
 var heat_flux_mw := 0.0
 var heat_shield_temperature := 290.0
 var peak_heat_flux_mw := 0.0
+var mach_number := 0.0
+var dynamic_pressure_pa := 0.0
 var camera_zoom := 0.000045
 var solar_map_zoom := 1.0
 var camera_offset := Vector2.ZERO
@@ -135,8 +137,8 @@ func _physics_step(dt: float) -> void:
 	rocket_position = next_position
 	sim_time = end_time
 	fuel = maxf(0.0, fuel - fuel_used)
-	var atmosphere_velocity := Vector2(-rocket_position.y, rocket_position.x) * EARTH_ROTATION_RATE
-	_update_heating(dt, rocket_position.length() - EARTH_RADIUS, (velocity - atmosphere_velocity).length())
+	_update_flight_environment()
+	_update_heating(dt, rocket_position.length() - EARTH_RADIUS, (velocity - Vector2(-rocket_position.y, rocket_position.x) * EARTH_ROTATION_RATE).length())
 	if fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
 	if rocket_position.length() < EARTH_RADIUS + 0.5:
@@ -187,10 +189,28 @@ func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mas
 	var direction := relative_velocity / relative_speed
 	var nose := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var angle_of_attack := asin(clampf(nose.cross(direction), -1.0, 1.0))
-	var drag_force := 0.5 * density * relative_speed * relative_speed * DRAG_AREA * DRAG_COEFFICIENT
-	var lift_force := 0.5 * density * relative_speed * relative_speed * LIFT_AREA * sin(2.0 * angle_of_attack) * 0.35
+	var temperature := PlanetarySystem.atmospheric_temperature(altitude)
+	var speed_of_sound := sqrt(1.4 * 287.05287 * temperature)
+	var mach := relative_speed / maxf(1.0, speed_of_sound)
+	var drag_coefficient := 0.22 + 0.28 * exp(-pow((mach - 1.0) / 0.3, 2.0)) + 0.08 * pow(sin(angle_of_attack), 2.0)
+	var dynamic_pressure := 0.5 * density * relative_speed * relative_speed
+	var drag_force := dynamic_pressure * DRAG_AREA * drag_coefficient
+	var lift_force := dynamic_pressure * LIFT_AREA * sin(2.0 * angle_of_attack) * 0.35
 	var lift_direction := Vector2(-direction.y, direction.x)
 	return -direction * (drag_force / maxf(1.0, mass)) + lift_direction * (lift_force / maxf(1.0, mass))
+
+func _update_flight_environment() -> void:
+	var altitude := rocket_position.length() - EARTH_RADIUS
+	if altitude >= PlanetarySystem.ATMOSPHERE_HEIGHT:
+		mach_number = 0.0
+		dynamic_pressure_pa = 0.0
+		return
+	var atmospheric_velocity := Vector2(-rocket_position.y, rocket_position.x) * EARTH_ROTATION_RATE
+	var relative_speed := (velocity - atmospheric_velocity).length()
+	var density := PlanetarySystem.atmospheric_density(altitude)
+	var temperature := PlanetarySystem.atmospheric_temperature(altitude)
+	mach_number = relative_speed / sqrt(1.4 * 287.05287 * temperature)
+	dynamic_pressure_pa = 0.5 * density * relative_speed * relative_speed
 
 func _update_heating(dt: float, altitude: float, speed: float) -> void:
 	var heat_flux_w := 0.0
@@ -489,6 +509,8 @@ func _draw_hud() -> void:
 		"THRUST / WEIGHT %.2f" % thrust_to_weight,
 		"IDEAL ΔV EST.  %.2f km/s" % (remaining_delta_v / 1000.0),
 		"STAGE          %d / %d" % [stage_index + 1, rocket_stages.size()],
+		"MACH NUMBER    %.2f" % mach_number,
+		"DYNA PRESSURE  %.1f kPa" % (dynamic_pressure_pa / 1000.0),
 		"HEAT FLUX      %.2f MW/m²" % heat_flux_mw,
 		"SHIELD TEMP    %.0f K" % heat_shield_temperature,
 		"PEAK HEATING   %.2f MW/m²" % peak_heat_flux_mw,
@@ -498,11 +520,11 @@ func _draw_hud() -> void:
 		"MISSION TIME   %s" % _format_time(sim_time),
 		"TIME WARP      x%s" % str(snappedf(time_warp, 0.01))
 	]
-	var box := Rect2(Vector2(18.0 * ui_scale, size.y - 388.0 * ui_scale), Vector2(310.0 * ui_scale, 367.0 * ui_scale))
+	var box := Rect2(Vector2(18.0 * ui_scale, size.y - 435.0 * ui_scale), Vector2(310.0 * ui_scale, 415.0 * ui_scale))
 	draw_rect(box, Color(0.015, 0.035, 0.065, 0.86), true)
 	draw_rect(box, Color(0.18, 0.42, 0.6, 0.7), false, 1.0)
 	for i in range(lines.size()):
-		draw_string(ThemeDB.fallback_font, Vector2(32.0 * ui_scale, size.y - 361.0 * ui_scale + i * 23.0 * ui_scale), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(13.0 * ui_scale)), Color(0.68, 0.82, 0.94))
+		draw_string(ThemeDB.fallback_font, Vector2(32.0 * ui_scale, size.y - 408.0 * ui_scale + i * 23.0 * ui_scale), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(13.0 * ui_scale)), Color(0.68, 0.82, 0.94))
 	draw_string(ThemeDB.fallback_font, Vector2(315.0 * ui_scale, size.y - 28.0 * ui_scale), status_message, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(13.0 * ui_scale)), Color(0.35, 0.85, 0.75))
 	draw_string(ThemeDB.fallback_font, Vector2(size.x - 280.0 * ui_scale, size.y - 28.0 * ui_scale), realism.to_upper() + "  /  " + world_scale.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(12.0 * ui_scale)), Color(0.48, 0.68, 0.84))
 
