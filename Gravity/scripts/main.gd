@@ -452,6 +452,13 @@ func _latest_save_slot() -> int:
 		var path := "%s/slot_%02d.json" % [SAVE_DIR, slot]
 		if not FileAccess.file_exists(path):
 			continue
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			continue
+		var parsed: Variant = JSON.parse_string(file.get_as_text())
+		file.close()
+		if not parsed is Dictionary:
+			continue
 		var modified := FileAccess.get_modified_time(path)
 		if modified > latest_time:
 			latest_time = modified
@@ -496,12 +503,17 @@ func _show_game_load() -> void:
 		var label := "SLOT %02d  •  EMPTY" % slot
 		if FileAccess.file_exists(path):
 			var file := FileAccess.open(path, FileAccess.READ)
+			var parsed: Variant = null
 			if file:
-				var parsed: Variant = JSON.parse_string(file.get_as_text())
+				parsed = JSON.parse_string(file.get_as_text())
 				file.close()
-				if parsed is Dictionary:
-					label = "SLOT %02d  •  %s  •  %s" % [slot, str(parsed.get("realism", "Unknown")), str(parsed.get("world_scale", "Unknown"))]
-			_add_button(root, label, _load_menu_slot.bind(slot))
+			if parsed is Dictionary:
+				label = "SLOT %02d  •  %s  •  %s" % [slot, str(parsed.get("realism", "Unknown")), str(parsed.get("world_scale", "Unknown"))]
+				_add_button(root, label, _load_menu_slot.bind(slot))
+			else:
+				var corrupt_label := Label.new()
+				corrupt_label.text = "SLOT %02d  •  INVALID SAVE" % slot
+				root.add_child(corrupt_label)
 		else:
 			var empty_label := Label.new()
 			empty_label.text = label
