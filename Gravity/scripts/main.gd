@@ -181,6 +181,7 @@ func _show_vehicle_editor() -> void:
 		rocket_design = RocketDesign.create_default()
 		_show_vehicle_editor()
 	)
+	_add_button(actions, "LOAD DESIGN", _load_rocket_design)
 	_add_button(actions, "SAVE DESIGN", _save_rocket_design)
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _build_menu)
@@ -220,6 +221,25 @@ func _save_rocket_design() -> void:
 		file.close()
 		if is_instance_valid(design_error_label):
 			design_error_label.text = "DESIGN SAVED"
+
+
+func _load_rocket_design() -> void:
+	var path := "user://rocket_design.json"
+	if not FileAccess.file_exists(path):
+		if is_instance_valid(design_error_label):
+			design_error_label.text = "NO SAVED DESIGN FOUND"
+		return
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
+		rocket_design = parsed
+		_show_vehicle_editor()
+	else:
+		if is_instance_valid(design_error_label):
+			design_error_label.text = "SAVED DESIGN IS INVALID"
 
 func _launch_designed_vehicle() -> void:
 	var errors := RocketDesign.validation_errors(rocket_design)
