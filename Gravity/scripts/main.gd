@@ -687,6 +687,10 @@ func _build_flight_hud() -> void:
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
 
+func _load_history_in_flight(path: String, window: Window) -> void:
+	_load_game_from_path(path)
+	window.queue_free()
+
 func _show_autosave_history() -> void:
 	var history_paths: Array[String] = _autosave_history_paths(save_slot)
 	var window := Window.new()
@@ -717,10 +721,7 @@ func _show_autosave_history() -> void:
 	for history_path in history_paths:
 		var history_time: int = FileAccess.get_modified_time(history_path)
 		var history_label := "LOAD  •  %s" % Time.get_datetime_string_from_unix_time(history_time, true)
-		_add_button(entries, history_label, func():
-			_load_game_from_path(history_path)
-			window.queue_free()
-		)
+		_add_button(entries, history_label, _load_history_in_flight.bind(history_path, window))
 	_add_button(layout, "CLOSE", func(): window.queue_free())
 	window.popup_centered()
 
