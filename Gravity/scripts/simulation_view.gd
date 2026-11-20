@@ -482,7 +482,7 @@ func _handle_body_contact() -> void:
 		else:
 			crashed = true
 			landed = false
-			status_message = "CRASHED  •  %s  •  %.0F M/S" % [str(body.name).to_upper(), relative_speed]
+			status_message = "CRASHED  •  %s  •  %.0f M/S" % [str(body.name).to_upper(), relative_speed]
 		if crashed:
 			velocity = body_velocity
 		else:
@@ -554,7 +554,7 @@ func _update_guidance(dt: float) -> void:
 					thrust_key_down = fuel > 0.0
 			"WAIT_WINDOW":
 				var remaining_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
-				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1F DAYS" % (remaining_window / 86400.0)
+				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1f DAYS" % (remaining_window / 86400.0)
 				thrust_key_down = false
 				if remaining_window <= 3600.0:
 					autopilot_phase = "ALIGN_DEPARTURE"
@@ -982,7 +982,8 @@ func _draw_hud() -> void:
 		"BODY           %s" % str(local_body.name).to_upper(),
 		"FLIGHT STATE   %s" % ("CRASHED" if crashed else "LANDED: " + landed_body_name if landed else "IN FLIGHT"),
 		"ALTITUDE       %s" % _format_distance(altitude),
-		"VELOCITY       %s" % _format_speed(orbital_speed),
+		"INERTIAL SPEED %s" % _format_speed(orbital_speed),
+		"VERTICAL SPEED %s" % _format_speed(local_velocity.dot(local_position.normalized())),
 		"FUEL           %s%%" % str(roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
 		"THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
 		"THRUST / WEIGHT %.2f" % thrust_to_weight,
@@ -1060,6 +1061,8 @@ func _format_distance(value: float) -> String:
 		return "ESCAPE"
 	if absf(value) >= 1000000.0:
 		return "%.2f Mm" % (value / 1000000.0)
+	if absf(value) < 100000.0:
+		return "%.1f km" % (value / 1000.0)
 	return "%.0f km" % (value / 1000.0)
 
 func _format_speed(value: float) -> String:
