@@ -509,7 +509,13 @@ func _update_guidance(dt: float) -> void:
 		match autopilot_phase:
 			"ASCENT":
 				status_message = "AUTOPILOT  •  ASCENT TO %.0F KM" % (autopilot_target_altitude / 1000.0)
-				if bool(orbit.get("bound", false)) and float(orbit.get("apoapsis", 0.0)) >= target_radius:
+				var ascent_orbit_periapsis := float(orbit.get("periapsis", 0.0))
+				var ascent_orbit_radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
+				var already_in_stable_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + 70000.0 and ascent_orbit_radial_speed < 100.0
+				if autopilot_target_mode == "PLANET" and already_in_stable_orbit:
+					thrust_key_down = false
+					autopilot_phase = "CIRCULARISE"
+				elif bool(orbit.get("bound", false)) and float(orbit.get("apoapsis", 0.0)) >= target_radius:
 					thrust_key_down = false
 					autopilot_phase = "COAST"
 				else:
