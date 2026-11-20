@@ -192,7 +192,7 @@ func _engine_thrust(altitude: float) -> float:
 	return lerpf(vacuum_thrust, sea_level_thrust, clampf(ambient_pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1))
 
 func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float) -> Vector2:
-	if realism not in ["Realistic", "Hardcore"]:
+	if realism == "Arcade":
 		return Vector2.ZERO
 	var altitude := position.length() - EARTH_RADIUS
 	if altitude >= PlanetarySystem.ATMOSPHERE_HEIGHT:
@@ -204,15 +204,20 @@ func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mas
 	if relative_speed < 0.01:
 		return Vector2.ZERO
 	var direction := relative_velocity / relative_speed
-	var nose := Vector2.UP.rotated(rotation_angle + gimbal_angle)
-	var angle_of_attack := asin(clampf(nose.cross(direction), -1.0, 1.0))
-	var temperature := PlanetarySystem.atmospheric_temperature(altitude)
-	var speed_of_sound := sqrt(1.4 * 287.05287 * temperature)
-	var mach := relative_speed / maxf(1.0, speed_of_sound)
-	var drag_coefficient := 0.22 + 0.28 * exp(-pow((mach - 1.0) / 0.3, 2.0)) + 0.08 * pow(sin(angle_of_attack), 2.0)
 	var dynamic_pressure := 0.5 * density * relative_speed * relative_speed
+	var drag_coefficient := 0.35
+	var lift_force := 0.0
+	if realism in ["Realistic", "Hardcore"]:
+		var nose := Vector2.UP.rotated(rotation_angle + gimbal_angle)
+		var angle_of_attack := asin(clampf(nose.cross(direction), -1.0, 1.0))
+		var temperature := PlanetarySystem.atmospheric_temperature(altitude)
+		var speed_of_sound := sqrt(1.4 * 287.05287 * temperature)
+		var mach := relative_speed / maxf(1.0, speed_of_sound)
+		drag_coefficient = 0.22 + 0.28 * exp(-pow((mach - 1.0) / 0.3, 2.0)) + 0.08 * pow(sin(angle_of_attack), 2.0)
+		if realism == "Hardcore":
+			drag_coefficient += 0.12 + 0.18 * pow(sin(angle_of_attack), 2.0)
+			lift_force = dynamic_pressure * LIFT_AREA * sin(2.0 * angle_of_attack) * (0.45 if realism == "Hardcore" else 0.35)
 	var drag_force := dynamic_pressure * DRAG_AREA * drag_coefficient
-	var lift_force := dynamic_pressure * LIFT_AREA * sin(2.0 * angle_of_attack) * 0.35
 	var lift_direction := Vector2(-direction.y, direction.x)
 	return -direction * (drag_force / maxf(1.0, mass)) + lift_direction * (lift_force / maxf(1.0, mass))
 
@@ -237,7 +242,7 @@ func _update_heating(dt: float, altitude: float, speed: float) -> void:
 		heat_flux_w = 1.83e-4 * sqrt(maxf(0.0, density) / nose_radius) * pow(speed, 3.0)
 	heat_flux_mw = heat_flux_w / 1000000.0
 	peak_heat_flux_mw = maxf(peak_heat_flux_mw, heat_flux_mw)
-	var absorbed_flux := heat_flux_w * 0.15
+	var absorbed_flux := heat_flux_w * (0.22 if realism == "Hardcore" else 0.15)
 	var radiated_flux := 0.82 * 5.670374419e-8 * (pow(heat_shield_temperature, 4.0) - pow(290.0, 4.0))
 	var temperature_rate := (absorbed_flux - radiated_flux) / 60000.0
 	heat_shield_temperature = maxf(290.0, heat_shield_temperature + temperature_rate * dt)
@@ -246,6 +251,7 @@ func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
 		return
 	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0)) + fuel
+	velocity += Vector2.UP.rotated(rotation_angle) * 2.0
 	stage_index += 1
 	fuel = float(_active_stage_data().get("fuel_capacity", 0.0))
 	thrust_key_down = false
