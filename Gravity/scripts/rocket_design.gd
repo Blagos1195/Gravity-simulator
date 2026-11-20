@@ -66,11 +66,10 @@ static func total_delta_v(design: Dictionary) -> float:
 		var fuel := float(stage.get("fuel_capacity", 0.0))
 		var flow := float(stage.get("flow", 0.0))
 		var thrust := float(stage.get("vacuum_thrust", 0.0))
-		var engines := float(stage.get("engine_count", 1))
 		var initial_mass := stage_ignition_mass(design, i)
 		var final_mass := initial_mass - fuel
 		if fuel > 0.0 and flow > 0.0 and thrust > 0.0 and final_mass > 0.0:
-			delta_v += thrust / (flow * G0) * G0 * log(initial_mass / final_mass)
+			delta_v += thrust / flow * log(initial_mass / final_mass)
 	return delta_v
 
 static func validation_errors(design: Dictionary) -> PackedStringArray:
@@ -139,5 +138,5 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		if delta_v < MIN_TOTAL_DELTA_V:
 			errors.append("Vehicle ideal delta-v is too low for a credible Earth launch (minimum 8.5 km/s).")
 		if delta_v > MAX_TOTAL_DELTA_V:
-			errors.append("Vehicle ideal delta-v exceeds the 20.5 km/s design limit.")
+			errors.append("Vehicle ideal delta-v exceeds the 16.5 km/s design limit.")
 	return errors
