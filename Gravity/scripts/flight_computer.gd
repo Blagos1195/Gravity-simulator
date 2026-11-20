@@ -1,6 +1,8 @@
 extends RefCounted
 class_name FlightComputer
 
+const PlanetarySystem = preload("res://scripts/planetary_system.gd")
+
 const G := 6.67430e-11
 const EARTH_MU := 3.986004418e14
 const EARTH_RADIUS := 6.371e6
@@ -252,6 +254,105 @@ static func available_delta_v(design: Dictionary, active_stage_index: int = 0, a
 			delta_v += thrust / flow * log(mass / final_mass)
 		mass = final_mass - dry_mass
 	return delta_v
+
+
+static func _simulated_target_state(target_index: int, time_seconds: float) -> Dictionary:
+	if target_index == -1:
+		return {
+			"position": PlanetarySystem.moon_position(time_seconds),
+			"velocity": PlanetarySystem.moon_velocity(time_seconds),
+			"mass": PlanetarySystem.MOON_MASS,
+			"radius": PlanetarySystem.MOON_RADIUS,
+			"soi": PlanetarySystem.moon_soi_radius()
+		}
+	if target_index < 0 or target_index >= PLANET_TARGETS.size():
+		return {}
+	var target: Dictionary = PLANET_TARGETS[target_index]
+	var target_name := str(target.get("name", ""))
+	return {
+		"position": PlanetarySystem.planet_position_relative_to_earth(target_name, time_seconds),
+		"velocity": PlanetarySystem.planet_velocity_relative_to_earth(target_name, time_seconds),
+		"mass": float(target.get("mass", 0.0)),
+		"radius": float(target.get("planet_radius", 0.0)),
+		"soi": PlanetarySystem.planet_soi_radius(target_name)
+	}
+
+
+static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float) -> Dictionary:
+	if target_index < -1 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
+		return {"valid": false, "reason": "Invalid target or no remaining manoeuvre capability."}
+	var initial_target := _simulated_target_state(target_index, start_time)
+	if initial_target.is_empty():
+		return {"valid": false, "reason": "Destination state unavailable."}
+	var initial_distance := start_position.distance_to(Vector2(initial_target.position))
+	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
+	var nominal_time := clampf(initial_distance / rough_speed, 3600.0, 30.0 * 365.25 * 86400.0)
+	var durations := [nominal_time * 0.65, nominal_time, nominal_time * 1.5]
+	var magnitudes := [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v * 0.8, maximum_delta_v]
+	var direction_count := 24
+	var integration_steps := 720
+	var best_score := INF
+	var best_plan: Dictionary = {}
+	for duration_value in durations:
+		var flight_duration: float = float(duration_value)
+		for direction_index in range(direction_count):
+			var angle := TAU * float(direction_index) / float(direction_count)
+			var burn_direction := Vector2(cos(angle), sin(angle))
+			for magnitude_value in magnitudes:
+				var departure_delta_v: float = float(magnitude_value)
+				var position := start_position
+				var velocity := start_velocity + burn_direction * departure_delta_v
+				var step_size := flight_duration / float(integration_steps)
+				var closest_distance := INF
+				var closest_relative_position := Vector2.ZERO
+				var closest_relative_velocity := Vector2.ZERO
+				for step_index in range(integration_steps):
+					var current_time := start_time + float(step_index) * step_size
+					var initial_acceleration := PlanetarySystem.gravity_acceleration(position, current_time)
+					var half_velocity := velocity + initial_acceleration * (step_size * 0.5)
+					var next_position := position + half_velocity * step_size
+					var final_acceleration := PlanetarySystem.gravity_acceleration(next_position, current_time + step_size)
+					velocity = half_velocity + final_acceleration * (step_size * 0.5)
+					position = next_position
+					var target_state := _simulated_target_state(target_index, current_time + step_size)
+					var relative_position: Vector2 = position - Vector2(target_state.position)
+					var distance := relative_position.length()
+					if distance < closest_distance:
+						closest_distance = distance
+						closest_relative_position = relative_position
+						closest_relative_velocity = velocity - Vector2(target_state.velocity)
+				var target_soi := float(initial_target.soi)
+				if closest_distance > target_soi:
+					continue
+				var target_mu := G * float(initial_target.mass)
+				var capture := arrival_capture_burn(closest_relative_position, closest_relative_velocity, target_mu, float(initial_target.radius))
+				if not bool(capture.get("valid", false)):
+					continue
+				var capture_delta_v := float(capture.get("delta_v", INF))
+				var total_delta_v := departure_delta_v + capture_delta_v
+				if total_delta_v > maximum_delta_v or total_delta_v >= best_score:
+					continue
+				best_score = total_delta_v
+				best_plan = {
+					"valid": true,
+					"departure_delta_v": departure_delta_v,
+					"departure_direction": burn_direction,
+					"capture_delta_v": capture_delta_v,
+					"capture_direction": Vector2(capture.get("direction", Vector2.ZERO)),
+					"total_delta_v": total_delta_v,
+					"transfer_time": flight_duration,
+					"closest_approach": closest_distance,
+					"target_soi": target_soi,
+					"simulated_steps": integration_steps,
+					"search_candidates": direction_count * magnitudes.size() * durations.size()
+				}
+	if best_plan.is_empty():
+		return {
+			"valid": false,
+			"reason": "No sampled trajectory reached the destination sphere of influence within the available delta-v.",
+			"search_candidates": direction_count * magnitudes.size() * durations.size()
+		}
+	return best_plan
 
 static func target_orbit_report(position: Vector2, velocity: Vector2, altitude: float) -> Dictionary:
 	var target_radius := EARTH_RADIUS + maxf(0.0, altitude)
