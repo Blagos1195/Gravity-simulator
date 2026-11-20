@@ -8,10 +8,10 @@ const MOON_RADIUS := 1.7374e6
 const MOON_ORBIT_RADIUS := 3.844e8
 const MOON_ORBIT_ECCENTRICITY := 0.0549
 const MOON_ANOMALOUS_PERIOD := 27.55455 * 86400.0
-const MOON_MEAN_ANOMALY_J2000 := deg_to_rad(134.963)
-const MOON_PERIHELION_J2000 := deg_to_rad(208.398)
-const MOON_MEAN_MOTION := deg_to_rad(13.064993) / 86400.0
-const MOON_PERIHELION_RATE := deg_to_rad(0.05845) / 86400.0
+const MOON_MEAN_ANOMALY_J2000 := 2.355555
+const MOON_PERIHELION_J2000 := 3.63734
+const MOON_MEAN_MOTION := 0.00022791
+const MOON_PERIHELION_RATE := 1.182e-8
 const EPHEMERIS_EPOCH_JD := 2461364.5
 const J2000_JD := 2451545.0
 const J2000_CENTURY_DAYS := 36525.0
@@ -159,7 +159,12 @@ static func _sun_relative_position(time_seconds: float) -> Vector2:
 	return -_earth_heliocentric_state(time_seconds).position
 
 static func _earth_heliocentric_state(time_seconds: float) -> Dictionary:
-	return _planet_heliocentric_state(PLANETS[2], time_seconds)
+	var barycentre := _planet_heliocentric_state(PLANETS[2], time_seconds)
+	var earth_moon_ratio := MOON_MASS / (EARTH_MASS + MOON_MASS)
+	return {
+		"position": barycentre.position - moon_position(time_seconds) * earth_moon_ratio,
+		"velocity": barycentre.velocity - moon_velocity(time_seconds) * earth_moon_ratio
+	}
 
 static func planet_position_relative_to_earth(planet_name: String, time_seconds: float) -> Vector2:
 	var planet := _find_planet(planet_name)
