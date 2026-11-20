@@ -500,6 +500,8 @@ func _show_flight_computer() -> void:
 			text_lines.append("Circularise at current position: %.0f m/s Δv" % float(circular.get("delta_v", 0.0)))
 			text_lines.append("Transfer from a 100 km reference orbit: %.0f m/s Δv" % float(orbit_transfer.get("total_delta_v", 0.0)))
 			text_lines.append("Transfer time: %.1f minutes" % (float(orbit_transfer.get("transfer_time", 0.0)) / 60.0))
+			text_lines.append("Departure burn: PROGRADE at periapsis")
+			text_lines.append("Arrival burn: RETROGRADE at apoapsis")
 		else:
 			var planet_index := -1 if selected_id == -1 else -selected_id - 2
 			var destination_transfer := FlightComputer.interplanetary_transfer(planet_index, maxf(200000.0, current_altitude))
@@ -514,7 +516,8 @@ func _show_flight_computer() -> void:
 				if planet_index >= -1:
 					var window_wait := FlightComputer.departure_wait_time(planet_index, sim.sim_time, sim.rocket_position)
 					text_lines.append("Next ideal departure window: %.1f days" % (window_wait / 86400.0))
-				text_lines.append("Departure burn: %s" % ("prograde" if float(destination_transfer.get("direction", 1.0)) > 0.0 else "retrograde"))
+				text_lines.append("Departure burn: %s from the aligned 200 km parking orbit" % ("prograde" if float(destination_transfer.get("direction", 1.0)) > 0.0 else "retrograde"))
+				text_lines.append("Arrival burn: capture into an approximately 200 km orbit (or 1.1 planetary radii for gas giants)")
 			text_lines.append("")
 			text_lines.append("The planetary estimate assumes circular coplanar orbits and patched-conic departure. It does not yet solve arrival targeting or atmospheric capture.")
 		report.text = "\n".join(text_lines)
