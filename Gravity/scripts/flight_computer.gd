@@ -203,6 +203,34 @@ static func departure_periapsis_direction(target_index: int, current_time: float
 	var periapsis_tangent := asymptote_direction.rotated(direction_sign * bend_angle)
 	return periapsis_tangent.rotated(-direction_sign * PI * 0.5).normalized()
 
+
+static func available_delta_v(design: Dictionary, active_stage_index: int = 0, active_fuel: float = -1.0) -> float:
+	var stages: Array = design.get("stages", [])
+	if stages.is_empty():
+		return 0.0
+	var stage_start := clampi(active_stage_index, 0, stages.size() - 1)
+	var mass := float(design.get("payload_mass", 0.0))
+	for i in range(stage_start, stages.size()):
+		var stage: Dictionary = stages[i]
+		var stage_fuel := float(stage.get("fuel_capacity", 0.0))
+		if i == stage_start and active_fuel >= 0.0:
+			stage_fuel = minf(stage_fuel, active_fuel)
+		mass += float(stage.get("dry_mass", 0.0)) + stage_fuel
+	var delta_v := 0.0
+	for i in range(stage_start, stages.size()):
+		var stage: Dictionary = stages[i]
+		var stage_fuel := float(stage.get("fuel_capacity", 0.0))
+		if i == stage_start and active_fuel >= 0.0:
+			stage_fuel = minf(stage_fuel, active_fuel)
+		var dry_mass := float(stage.get("dry_mass", 0.0))
+		var flow := float(stage.get("flow", 0.0))
+		var thrust := float(stage.get("vacuum_thrust", 0.0))
+		var final_mass := mass - stage_fuel
+		if stage_fuel > 0.0 and flow > 0.0 and thrust > 0.0 and final_mass > 0.0:
+			delta_v += thrust / flow * log(mass / final_mass)
+		mass = final_mass - dry_mass
+	return delta_v
+
 static func target_orbit_report(position: Vector2, velocity: Vector2, altitude: float) -> Dictionary:
 	var target_radius := EARTH_RADIUS + maxf(0.0, altitude)
 	var state := orbital_state(position, velocity)
