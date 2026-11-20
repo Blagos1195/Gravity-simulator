@@ -25,9 +25,9 @@ const DEFAULT_DESIGN := {
 			"name": "UPPER STAGE",
 			"dry_mass": 3000.0,
 			"fuel_capacity": 80000.0,
-			"thrust": 1200000.0,
-			"vacuum_thrust": 1500000.0,
-			"flow": 380.0,
+			"thrust": 200000.0,
+			"vacuum_thrust": 250000.0,
+			"flow": 63.3,
 			"engine_count": 1
 		}
 	]
@@ -132,7 +132,7 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 			errors.append("First-stage pad TWR must be between 1.10 and 2.50.")
 		elif i > 0 and (thrust_to_weight < 0.08 or thrust_to_weight > 4.0):
 			errors.append("Stage %d ignition TWR must be between 0.08 and 4.00." % (i + 1))
-		if burnout_twr > 8.0:
+		if burnout_twr > 9.0:
 			errors.append("Stage %d burnout acceleration is too high; reduce thrust or increase dry mass." % (i + 1))
 	if total_mass > 0.0 and stages.size() >= MIN_STAGES:
 		var delta_v := total_delta_v(design)
