@@ -65,10 +65,6 @@ func _physics_step(dt: float) -> void:
             velocity -= radial * inward_speed
 
     throttle = 1.0 if thrust_key_down else 0.0
-    if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
-        throttle = 1.0
-    if throttle_cutoff_key_down or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
-        throttle = 0.0
     var thrust_accel := Vector2.ZERO
     if fuel <= 0.0:
         throttle = 0.0
@@ -104,10 +100,12 @@ func _physics_step(dt: float) -> void:
 
 func _input(event: InputEvent) -> void:
     if event is InputEventKey:
-        if event.keycode in [KEY_W, KEY_UP] or event.physical_keycode in [KEY_W, KEY_UP]:
-            thrust_key_down = event.pressed
-        if event.keycode in [KEY_S, KEY_DOWN] or event.physical_keycode in [KEY_S, KEY_DOWN]:
-            throttle_cutoff_key_down = event.pressed
+        if event.pressed and not event.echo:
+            if event.keycode in [KEY_W, KEY_UP] or event.physical_keycode in [KEY_W, KEY_UP]:
+                thrust_key_down = not thrust_key_down
+            if event.keycode in [KEY_S, KEY_DOWN] or event.physical_keycode in [KEY_S, KEY_DOWN]:
+                thrust_key_down = false
+            throttle_cutoff_key_down = false
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
@@ -142,13 +140,12 @@ func _unhandled_input(event: InputEvent) -> void:
 func _draw() -> void:
     var view_center := get_viewport_rect().size * 0.5
     var world_scale_factor := _visual_scale()
-    var earth_screen := view_center + Vector2(0, 0)
     var radius_px := maxf(4.0, EARTH_RADIUS * camera_zoom * world_scale_factor)
-    var rocket_screen := view_center + (rocket_position * camera_zoom * world_scale_factor)
-    if rocket_screen.distance_to(view_center) > minf(size.x, size.y) * 0.35:
-        camera_offset = rocket_position
-        rocket_screen = view_center
-        earth_screen = view_center - rocket_position * camera_zoom * world_scale_factor
+    var rocket_screen := view_center
+    var radial_direction := rocket_position.normalized()
+    var altitude_for_view := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
+    var earth_screen := view_center - radial_direction * (radius_px + altitude_for_view * 0.015)
+    camera_offset = rocket_position
 
     for star in star_points:
         var p := view_center + star * 0.035
