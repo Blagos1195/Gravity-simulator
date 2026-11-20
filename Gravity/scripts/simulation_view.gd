@@ -339,7 +339,7 @@ func _draw_solar_system(center: Vector2) -> void:
             planet_color = Color(0.82, 0.75, 0.53)
         draw_circle(planet_position, planet_radius, planet_color)
         draw_string(ThemeDB.fallback_font, planet_position + Vector2(planet_radius + 5.0, 4.0), str(planet.name).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.72, 0.82, 0.92))
-    draw_string(ThemeDB.fallback_font, Vector2(24, size.y - 420), "SOLAR SYSTEM OVERVIEW  •  ALL PLANETARY ORBITS", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
+    draw_string(ThemeDB.fallback_font, Vector2(24, size.y - 420.0 * clampf(minf(size.x / 1440.0, size.y / 900.0), 0.7, 1.0)), "SOLAR SYSTEM OVERVIEW  •  ALL PLANETARY ORBITS", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
 
 func _calculate_predicted_trajectory() -> void:
     predicted_path.clear()
@@ -420,6 +420,7 @@ func _draw_rocket(p: Vector2, object_scale: float) -> void:
         draw_colored_polygon(PackedVector2Array([flame_base - side * 3 * object_scale, flame_tip, flame_base + side * 3 * object_scale]), Color(1.0, 0.48, 0.12, 0.9))
 
 func _draw_hud() -> void:
+    var ui_scale := clampf(minf(size.x / 1440.0, size.y / 900.0), 0.7, 1.0)
     var altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
     var orbital_speed := velocity.length()
     var periapsis := _apsis(false)
@@ -448,13 +449,13 @@ func _draw_hud() -> void:
         "MISSION TIME   %s" % _format_time(sim_time),
         "TIME WARP      x%s" % str(snappedf(time_warp, 0.01))
     ]
-    var box := Rect2(Vector2(18, size.y - 388), Vector2(310, 367))
+    var box := Rect2(Vector2(18.0 * ui_scale, size.y - 388.0 * ui_scale), Vector2(310.0 * ui_scale, 367.0 * ui_scale))
     draw_rect(box, Color(0.015, 0.035, 0.065, 0.86), true)
     draw_rect(box, Color(0.18, 0.42, 0.6, 0.7), false, 1.0)
     for i in range(lines.size()):
-        draw_string(ThemeDB.fallback_font, Vector2(32, size.y - 361 + i * 23), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.68, 0.82, 0.94))
-    draw_string(ThemeDB.fallback_font, Vector2(315, size.y - 28), status_message, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.35, 0.85, 0.75))
-    draw_string(ThemeDB.fallback_font, Vector2(size.x - 280, size.y - 28), realism.to_upper() + "  /  " + world_scale.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.48, 0.68, 0.84))
+        draw_string(ThemeDB.fallback_font, Vector2(32.0 * ui_scale, size.y - 361.0 * ui_scale + i * 23.0 * ui_scale), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(13.0 * ui_scale)), Color(0.68, 0.82, 0.94))
+    draw_string(ThemeDB.fallback_font, Vector2(315.0 * ui_scale, size.y - 28.0 * ui_scale), status_message, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(13.0 * ui_scale)), Color(0.35, 0.85, 0.75))
+    draw_string(ThemeDB.fallback_font, Vector2(size.x - 280.0 * ui_scale, size.y - 28.0 * ui_scale), realism.to_upper() + "  /  " + world_scale.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(12.0 * ui_scale)), Color(0.48, 0.68, 0.84))
 
 func _remaining_ideal_delta_v(current_mass: float) -> float:
     if stage_index == 0:
