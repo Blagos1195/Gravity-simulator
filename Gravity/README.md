@@ -8,7 +8,7 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Earth-centred Newtonian gravity with lunar perturbations
 - Centralised planetary data for all eight planets
 - Time-dependent circular Moon orbit and lunar gravity
-- Exponential Earth atmosphere model
+- Layered standard-atmosphere pressure and temperature model through 120 km
 - Vehicle assembly screen with 2–8 configurable stages and payload mass
 - Adjustable stage dry mass, propellant capacity, engine count, sea-level/vacuum thrust and per-engine fuel flow
 - Live vehicle preview, initial mass, ideal delta-v and launch thrust-to-weight estimates
@@ -17,10 +17,12 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Custom vehicle parameters applied to flight mass, engine thrust, propellant use, staging and telemetry
 - Surface launch pad with toggleable engine controls
 - Multi-stage launch vehicle with automatic and manual staging
-- Variable-mass thrust and propellant consumption for each stage
+- Variable-mass thrust integrated with the rocket equation for each stage
+- Engine thrust varies with ambient atmospheric pressure rather than a linear altitude approximation
 - Separate sea-level and vacuum engine performance
 - Engine gimbal controls
-- Adaptive substepping based on local flight conditions
+- Adaptive substepping based on orbital timescale, atmospheric travel distance, drag, thrust and exact propellant depletion
+- Sutton–Graves stagnation-point heating estimate and radiative heat-shield temperature response
 - Earth rotation inherited at launch and rotating-atmosphere-relative aerodynamics
 - Atmospheric drag and approximate lift in Realistic and Hardcore modes
 - Simplified atmospheric heating and heat-shield temperature telemetry
