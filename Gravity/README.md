@@ -24,8 +24,9 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Adaptive substepping based on orbital timescale, atmospheric travel distance, drag, thrust and exact propellant depletion
 - Sutton–Graves stagnation-point heating estimate and radiative heat-shield temperature response
 - Earth rotation inherited at launch and rotating-atmosphere-relative aerodynamics
-- Atmospheric drag and approximate lift in Realistic and Hardcore modes
-- Simplified atmospheric heating and heat-shield temperature telemetry
+- Mach-dependent atmospheric drag and approximate angle-of-attack lift in Realistic and Hardcore modes
+- Live Mach number and dynamic-pressure telemetry
+- Atmospheric heat-flux and radiative heat-shield temperature telemetry
 - Differential gravity from the Moon, Sun and other planets
 - Optional gravity-turn guidance assist
 - Remaining ideal vehicle delta-v and thrust-to-weight telemetry
