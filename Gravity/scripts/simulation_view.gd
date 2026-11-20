@@ -34,6 +34,7 @@ var autopilot_target_mode := "ORBIT"
 var autopilot_planet_index := -1
 var autopilot_burn_remaining := 0.0
 var autopilot_transfer_direction := 1.0
+var autopilot_burn_direction := Vector2.ZERO
 var autopilot_complete := false
 var autopilot_phase := "IDLE"
 var heat_flux_mw := 0.0
@@ -311,10 +312,11 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = false
 				var desired_radial := FlightComputer.departure_periapsis_direction(autopilot_planet_index, sim_time, rocket_position.length())
 				if desired_radial.length_squared() > 0.5 and rocket_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)):
+					autopilot_burn_direction = tangent * autopilot_transfer_direction
 					autopilot_phase = "TRANSFER_BURN"
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0F M/S" % autopilot_burn_remaining
-				var burn_direction := tangent * autopilot_transfer_direction
+				var burn_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 				var burn_rotation := burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, burn_rotation)) < deg_to_rad(1.0)
@@ -331,8 +333,10 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  BURN INCOMPLETE"
 				thrust_key_down = false
 		var autopilot_direction := prograde
-		if autopilot_phase in ["TRANSFER_BURN", "WAIT_WINDOW", "ALIGN_DEPARTURE"]:
+		if autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"]:
 			autopilot_direction = tangent * autopilot_transfer_direction
+		elif autopilot_phase == "TRANSFER_BURN":
+			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 		var target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
 		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
 		return
@@ -695,6 +699,8 @@ func get_save_data() -> Dictionary:
 		"autopilot_planet_index": autopilot_planet_index,
 		"autopilot_burn_remaining": autopilot_burn_remaining,
 		"autopilot_transfer_direction": autopilot_transfer_direction,
+		"autopilot_burn_direction_x": autopilot_burn_direction.x,
+		"autopilot_burn_direction_y": autopilot_burn_direction.y,
 		"autopilot_complete": autopilot_complete,
 		"autopilot_phase": autopilot_phase,
 		"heat_shield_temperature": heat_shield_temperature,
@@ -726,6 +732,7 @@ func load_save_data(data: Dictionary) -> void:
 	autopilot_planet_index = int(data.get("autopilot_planet_index", -1))
 	autopilot_burn_remaining = float(data.get("autopilot_burn_remaining", 0.0))
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
+	autopilot_burn_direction = Vector2(float(data.get("autopilot_burn_direction_x", 0.0)), float(data.get("autopilot_burn_direction_y", 0.0)))
 	autopilot_complete = bool(data.get("autopilot_complete", false))
 	autopilot_phase = str(data.get("autopilot_phase", "IDLE"))
 	heat_shield_temperature = float(data.get("heat_shield_temperature", 290.0))
