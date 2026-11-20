@@ -11,6 +11,9 @@ const MOON_ORBITAL_SPEED := TAU * MOON_ORBIT_RADIUS / MOON_ORBIT_PERIOD
 const ATMOSPHERE_HEIGHT := 120000.0
 const SEA_LEVEL_DENSITY := 1.225
 const ATMOSPHERE_SCALE_HEIGHT := 8500.0
+const ASTRONOMICAL_UNIT := 1.4960e11
+const SUN_MASS := 1.98847e30
+const EARTH_ORBIT_PERIOD := 365.256 * 86400.0
 
 const PLANETS := [
 	{"name": "Mercury", "mass": 3.3011e23, "radius": 2.4397e6, "semi_major_axis": 5.7909e10, "orbital_period": 87.969},
@@ -43,10 +46,34 @@ static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vect
 	var moon := moon_position(time_seconds)
 	var relative := moon - position
 	var relative_distance := maxf(relative.length(), MOON_RADIUS)
-	var earth_distance := moon.length()
 	var moon_pull := relative.normalized() * G * MOON_MASS / (relative_distance * relative_distance)
-	var earth_pull := moon.normalized() * G * MOON_MASS / (earth_distance * earth_distance)
-	return acceleration + moon_pull - earth_pull
+	var earth_moon_pull := moon.normalized() * G * MOON_MASS / (MOON_ORBIT_RADIUS * MOON_ORBIT_RADIUS)
+	acceleration += moon_pull - earth_moon_pull
+	acceleration += _differential_body_gravity(position, time_seconds, Vector2.ZERO, SUN_MASS, _sun_relative_position(time_seconds))
+	for planet in PLANETS:
+		if planet.name == "Earth":
+			continue
+		var planet_position := _planet_relative_position(planet, time_seconds)
+		acceleration += _differential_body_gravity(position, time_seconds, Vector2.ZERO, float(planet.mass), planet_position)
+	return acceleration
+
+static func _sun_relative_position(time_seconds: float) -> Vector2:
+	var angle := TAU * time_seconds / EARTH_ORBIT_PERIOD
+	return Vector2(cos(angle), sin(angle)) * -ASTRONOMICAL_UNIT
+
+static func _planet_relative_position(planet: Dictionary, time_seconds: float) -> Vector2:
+	var earth_angle := TAU * time_seconds / EARTH_ORBIT_PERIOD
+	var earth_position := Vector2(cos(earth_angle), sin(earth_angle)) * ASTRONOMICAL_UNIT
+	var period := float(planet.orbital_period) * 86400.0
+	var angle := TAU * time_seconds / period
+	var planet_position := Vector2(cos(angle), sin(angle)) * float(planet.semi_major_axis)
+	return planet_position - earth_position
+
+static func _differential_body_gravity(position: Vector2, time_seconds: float, unused: Vector2, body_mass: float, body_position: Vector2) -> Vector2:
+	var relative := body_position - position
+	var body_distance := maxf(relative.length(), 1.0e7)
+	var earth_distance := maxf(body_position.length(), 1.0e7)
+	return relative.normalized() * G * body_mass / (body_distance * body_distance) - body_position.normalized() * G * body_mass / (earth_distance * earth_distance)
 
 static func atmospheric_density(altitude: float) -> float:
 	if altitude >= ATMOSPHERE_HEIGHT:
