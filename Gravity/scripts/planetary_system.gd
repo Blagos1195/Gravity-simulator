@@ -45,7 +45,7 @@ static func moon_position(time_seconds: float) -> Vector2:
 static func moon_velocity(time_seconds: float) -> Vector2:
 	return _kepler_velocity(MOON_ORBIT_RADIUS, MOON_ORBIT_ECCENTRICITY, 0.0, TAU * time_seconds / MOON_ORBIT_PERIOD)
 
-static func _kepler_state(semi_major_axis: float, eccentricity: float, perihelion: float, mean_anomaly: float) -> Dictionary:
+static func _kepler_state(semi_major_axis: float, eccentricity: float, perihelion: float, mean_anomaly: float, orbital_period: float) -> Dictionary:
 	var mean := fposmod(mean_anomaly, TAU)
 	var eccentric_anomaly := mean
 	for i in range(12):
@@ -56,18 +56,17 @@ static func _kepler_state(semi_major_axis: float, eccentricity: float, perihelio
 	var root := sqrt(1.0 - eccentricity * eccentricity)
 	var x := semi_major_axis * (cos(eccentric_anomaly) - eccentricity)
 	var y := semi_major_axis * root * sin(eccentric_anomaly)
-	var mean_motion := TAU / (MOON_ORBIT_PERIOD if is_equal_approx(semi_major_axis, MOON_ORBIT_RADIUS) else 1.0)
+	var mean_motion := TAU / orbital_period
 	var position := Vector2(x, y).rotated(perihelion)
 	var velocity := Vector2(-sin(eccentric_anomaly), root * cos(eccentric_anomaly)) * (semi_major_axis * mean_motion / maxf(1.0e-9, 1.0 - eccentricity * cos(eccentric_anomaly)))
 	return {"position": position, "velocity": velocity.rotated(perihelion)}
 
-static func _kepler_position(semi_major_axis: float, eccentricity: float, perihelion: float, mean_anomaly: float) -> Vector2:
-	var mean_motion := TAU / MOON_ORBIT_PERIOD
-	var state := _kepler_state(semi_major_axis, eccentricity, perihelion, mean_anomaly)
+static func _kepler_position(semi_major_axis: float, eccentricity: float, perihelion: float, mean_anomaly: float, orbital_period: float) -> Vector2:
+	var state := _kepler_state(semi_major_axis, eccentricity, perihelion, mean_anomaly, orbital_period)
 	return state.position
 
-static func _kepler_velocity(semi_major_axis: float, eccentricity: float, perihelion: float, mean_anomaly: float) -> Vector2:
-	return _kepler_state(semi_major_axis, eccentricity, perihelion, mean_anomaly).velocity
+static func _kepler_velocity(semi_major_axis: float, eccentricity: float, perihelion: float, mean_anomaly: float, orbital_period: float) -> Vector2:
+	return _kepler_state(semi_major_axis, eccentricity, perihelion, mean_anomaly, orbital_period).velocity
 
 static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vector2:
 	var distance := maxf(position.length(), EARTH_RADIUS)
@@ -100,7 +99,7 @@ static func _earth_heliocentric_state(time_seconds: float) -> Dictionary:
 static func _planet_heliocentric_state(planet: Dictionary, time_seconds: float) -> Dictionary:
 	var period := float(planet.orbital_period) * 86400.0
 	var mean_anomaly := TAU * time_seconds / period
-	return _kepler_state(float(planet.semi_major_axis), float(planet.eccentricity), float(planet.perihelion), mean_anomaly)
+	return _kepler_state(float(planet.semi_major_axis), float(planet.eccentricity), float(planet.perihelion), mean_anomaly, period)
 
 static func planet_position_relative_to_earth(planet_name: String, time_seconds: float) -> Vector2:
 	var planet := _find_planet(planet_name)
