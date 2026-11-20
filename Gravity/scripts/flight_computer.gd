@@ -286,7 +286,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 		return {"valid": false, "reason": "Destination state unavailable."}
 	var initial_distance := start_position.distance_to(Vector2(initial_target.position))
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
-	var nominal_time := clampf(initial_distance / rough_speed, 3600.0, 30.0 * 365.25 * 86400.0)
+	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index == -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations := [nominal_time * 0.65, nominal_time, nominal_time * 1.5]
 	var magnitudes := [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v * 0.8, maximum_delta_v]
 	var direction_count := 24
@@ -316,12 +316,14 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 					velocity = half_velocity + final_acceleration * (step_size * 0.5)
 					position = next_position
 					var target_state := _simulated_target_state(target_index, current_time + step_size)
-					var relative_position: Vector2 = position - Vector2(target_state.position)
+					var target_position: Vector2 = target_state.get("position", Vector2.ZERO)
+					var target_velocity: Vector2 = target_state.get("velocity", Vector2.ZERO)
+					var relative_position: Vector2 = position - target_position
 					var distance := relative_position.length()
 					if distance < closest_distance:
 						closest_distance = distance
 						closest_relative_position = relative_position
-						closest_relative_velocity = velocity - Vector2(target_state.velocity)
+						closest_relative_velocity = velocity - target_velocity
 						closest_time = float(step_index + 1) * step_size
 				var target_soi := float(initial_target.soi)
 				if closest_distance > target_soi:
@@ -340,7 +342,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 					"departure_delta_v": departure_delta_v,
 					"departure_direction": burn_direction,
 					"capture_delta_v": capture_delta_v,
-					"capture_direction": Vector2(capture.get("direction", Vector2.ZERO)),
+					"capture_direction": capture.get("direction", Vector2.ZERO),
 					"total_delta_v": total_delta_v,
 					"transfer_time": closest_time,
 					"closest_approach": closest_distance,
