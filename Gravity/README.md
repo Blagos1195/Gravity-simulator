@@ -9,13 +9,13 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Centralised planetary data for all eight planets
 - Time-dependent circular Moon orbit and lunar gravity
 - Exponential Earth atmosphere model
-- Initial vehicle assembly screen with two configurable stages and payload mass
+- Vehicle assembly screen with 2–8 configurable stages and payload mass
 - Adjustable stage dry mass, propellant capacity, engine count, sea-level/vacuum thrust and per-engine fuel flow
 - Live vehicle preview, initial mass, ideal delta-v and launch thrust-to-weight estimates
 - Rocket design validation and local JSON save/load
 - Custom vehicle parameters applied to flight mass, engine thrust, propellant use, staging and telemetry
 - Surface launch pad with toggleable engine controls
-- Two-stage launch vehicle with automatic and manual staging
+- Multi-stage launch vehicle with automatic and manual staging
 - Variable-mass thrust and propellant consumption for each stage
 - Separate sea-level and vacuum engine performance
 - Engine gimbal controls
@@ -32,6 +32,7 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Solar-system overview showing the Sun and orbital paths of all eight planets
 - Predicted rocket trajectory overlay using current flight state and engine settings
 - Rocket and launch-pad graphics scale with camera zoom
+- Extended close-up and far-out zoom range, including independent solar-system map zoom
 - Resizable window with a minimum supported size and expanded viewport scaling
 - Physics presets
 - Optional career setting placeholder
@@ -69,7 +70,8 @@ godot --headless --path . --script res://tests/rocket_design_test.gd
 | H | Toggle gravity-turn guidance assist |
 | Space | Pause / resume |
 | + / - | Increase / decrease time warp |
-| Mouse wheel | Zoom |
+| Mouse wheel | Zoom flight view or solar-system map |
+| Home | Reset zoom |
 | O | Toggle current rocket orbit display |
 | M | Toggle full solar-system overview |
 | P | Toggle predicted rocket trajectory |
@@ -83,6 +85,6 @@ Flight saves are stored in the user's Godot application data directory under `sa
 
 ## Important
 
-The vehicle assembly system is an initial two-stage configuration editor. It edits stage-level performance values rather than placing individual physical parts, and the preview is illustrative.
+The vehicle assembly system supports 2–8 configurable stages. It edits stage-level performance values rather than placing individual physical parts, and the preview is illustrative.
 
 This remains an early Earth-centred prototype. The two-stage vehicle, adaptive substepping, gimbal, lift, heating and gravity-turn guidance are simplified gameplay models, not validated launch-vehicle engineering. Planetary gravity uses circular coplanar orbits and differential perturbations rather than accurate ephemerides or a full n-body solar-system integration. Atmospheric heating is an estimate and does not yet damage or destroy the vehicle. The rocket editor, vehicle structural limits, detailed aerodynamic coefficients, career progression, missions, docking, replay tooling and multiplayer remain planned follow-on systems.
