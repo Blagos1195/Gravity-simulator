@@ -24,6 +24,10 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Orbital trajectory, periapsis, apoapsis and thrust-to-weight readouts
 - Adjustable time warp
 - Compressed, balanced and realistic-distance display scales
+- Solar-system overview showing the Sun and orbital paths of all eight planets
+- Predicted rocket trajectory overlay using current flight state and engine settings
+- Rocket and launch-pad graphics scale with camera zoom
+- Resizable window with a minimum supported size and expanded viewport scaling
 - Physics presets
 - Optional career setting placeholder
 - Eight selectable JSON save slots, manual save and 60-second automatic save
@@ -53,7 +57,9 @@ A procedural 2D spaceflight simulator built with Godot 4.
 | Space | Pause / resume |
 | + / - | Increase / decrease time warp |
 | Mouse wheel | Zoom |
-| O | Toggle orbit display |
+| O | Toggle current rocket orbit display |
+| M | Toggle full solar-system overview |
+| P | Toggle predicted rocket trajectory |
 | G | Toggle grid |
 | V | Toggle velocity vector |
 | F5 | Save current slot |
