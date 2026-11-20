@@ -33,6 +33,8 @@ var autopilot_target_altitude := 200000.0
 var autopilot_target_mode := "ORBIT"
 var autopilot_planet_index := -1
 var autopilot_burn_remaining := 0.0
+var autopilot_transfer_start_time := -1.0
+var autopilot_transfer_duration := 0.0
 var autopilot_transfer_direction := 1.0
 var autopilot_burn_direction := Vector2.ZERO
 var autopilot_complete := false
@@ -92,7 +94,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if not paused:
-		var remaining := time_warp * delta
+		var effective_warp := minf(time_warp, 100.0) if rocket_position.length() < EARTH_RADIUS + 1.0e8 else time_warp
+		var remaining := effective_warp * delta
 		var iterations := 0
 		while remaining > 0.000001 and iterations < 20000:
 			var step_delta := minf(remaining, _adaptive_step_size())
@@ -124,7 +127,7 @@ func _physics_step(dt: float) -> void:
 			velocity -= normal * inward_speed
 	if guidance_enabled:
 		_update_guidance(dt)
-	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "COMPLETE", "FAILED"]:
+	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_PENDING", "COMPLETE", "FAILED"]:
 		thrust_key_down = false
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
@@ -143,6 +146,7 @@ func _physics_step(dt: float) -> void:
 		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
 		if autopilot_burn_remaining <= 1.0:
 			thrust_key_down = false
+			autopilot_transfer_start_time = sim_time
 			autopilot_phase = "TRANSFER_COAST"
 	var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, start_time)
 	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid)
@@ -174,15 +178,17 @@ func _adaptive_step_size() -> float:
 	var gravity := G * EARTH_MASS / (radius * radius)
 	var orbital_limit := 0.015 * sqrt(radius / maxf(0.001, gravity))
 	var speed := velocity.length()
-	var travel_limit := 250.0 / maxf(100.0, speed) if altitude < 150000.0 else 0.25
+	var deep_space := altitude > 1.0e8
+	var maximum_step := 30.0 if deep_space else 0.25
+	var travel_limit := 250.0 / maxf(100.0, speed) if altitude < 150000.0 else (1000000.0 / maxf(100.0, speed) if deep_space else 0.25)
 	var drag_acceleration := _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass())).length()
-	var drag_limit := 0.08 * speed / drag_acceleration if drag_acceleration > 0.01 else 0.25
+	var drag_limit := 0.08 * speed / drag_acceleration if drag_acceleration > 0.01 else maximum_step
 	var active := _active_stage_data()
 	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and fuel > 0.0 else 0.0
-	var thrust_limit := 0.08 * maxf(100.0, speed) / engine_acceleration if engine_acceleration > 0.01 else 0.25
+	var thrust_limit := 0.08 * maxf(100.0, speed) / engine_acceleration if engine_acceleration > 0.01 else maximum_step
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	var burnout_limit := fuel / total_flow if thrust_key_down and fuel > 0.0 and total_flow > 0.0 else 0.25
-	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, 0.25)
+	var burnout_limit := fuel / total_flow if thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
+	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, maximum_step)
 	return minf(physics_limit, burnout_limit)
 
 func _engine_thrust(altitude: float) -> float:
@@ -307,6 +313,8 @@ func _update_guidance(dt: float) -> void:
 						var transfer := FlightComputer.interplanetary_transfer(autopilot_planet_index, altitude)
 						if bool(transfer.get("valid", false)):
 							autopilot_burn_remaining = float(transfer.get("departure_delta_v", 0.0))
+							autopilot_transfer_duration = float(transfer.get("transfer_time", 0.0))
+							autopilot_transfer_start_time = -1.0
 							autopilot_transfer_direction = float(transfer.get("direction", 1.0))
 							var initial_window_wait := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
 							autopilot_phase = "ALIGN_DEPARTURE" if initial_window_wait <= 3600.0 else "WAIT_WINDOW"
@@ -339,7 +347,15 @@ func _update_guidance(dt: float) -> void:
 				if fuel <= 0.0:
 					autopilot_phase = "FAILED"
 			"TRANSFER_COAST":
-				status_message = "AUTOPILOT  •  BURN COMPLETE, COASTING TO TARGET"
+				thrust_key_down = false
+				var transfer_elapsed := maxf(0.0, sim_time - autopilot_transfer_start_time)
+				var transfer_remaining := maxf(0.0, autopilot_transfer_duration - transfer_elapsed)
+				var destination_name := "MOON" if autopilot_planet_index == -1 else str(FlightComputer.PLANET_TARGETS[autopilot_planet_index].get("name", "UNKNOWN"))
+				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1F DAYS REMAINING" % [destination_name, transfer_remaining / 86400.0]
+				if autopilot_transfer_start_time >= 0.0 and transfer_remaining <= 0.0:
+					autopilot_phase = "ARRIVAL_PENDING"
+			"ARRIVAL_PENDING":
+				status_message = "TRANSFER TIME ELAPSED  •  ARRIVAL TARGETING NOT YET IMPLEMENTED"
 				thrust_key_down = false
 			"COMPLETE":
 				status_message = "AUTOPILOT  •  TARGET ORBIT ACHIEVED"
@@ -404,7 +420,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					camera_zoom = 0.000045
 					solar_map_zoom = 1.0
 				KEY_EQUAL, KEY_KP_ADD:
-					time_warp = minf(100.0, time_warp * 2.0)
+					time_warp = minf(1000000.0, time_warp * 2.0)
 				KEY_MINUS, KEY_KP_SUBTRACT:
 					time_warp = maxf(0.25, time_warp / 2.0)
 				KEY_O:
@@ -727,6 +743,8 @@ func get_save_data() -> Dictionary:
 		"autopilot_target_mode": autopilot_target_mode,
 		"autopilot_planet_index": autopilot_planet_index,
 		"autopilot_burn_remaining": autopilot_burn_remaining,
+		"autopilot_transfer_start_time": autopilot_transfer_start_time,
+		"autopilot_transfer_duration": autopilot_transfer_duration,
 		"autopilot_transfer_direction": autopilot_transfer_direction,
 		"autopilot_burn_direction_x": autopilot_burn_direction.x,
 		"autopilot_burn_direction_y": autopilot_burn_direction.y,
@@ -761,6 +779,8 @@ func load_save_data(data: Dictionary) -> void:
 	autopilot_target_mode = str(data.get("autopilot_target_mode", "ORBIT"))
 	autopilot_planet_index = int(data.get("autopilot_planet_index", -1))
 	autopilot_burn_remaining = float(data.get("autopilot_burn_remaining", 0.0))
+	autopilot_transfer_start_time = float(data.get("autopilot_transfer_start_time", -1.0))
+	autopilot_transfer_duration = float(data.get("autopilot_transfer_duration", 0.0))
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
 	autopilot_burn_direction = Vector2(float(data.get("autopilot_burn_direction_x", 0.0)), float(data.get("autopilot_burn_direction_y", 0.0)))
 	autopilot_complete = bool(data.get("autopilot_complete", false))
