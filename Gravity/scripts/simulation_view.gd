@@ -171,7 +171,7 @@ func _physics_step(dt: float) -> void:
 	sim_time = end_time
 	fuel = maxf(0.0, fuel - fuel_used)
 	_update_flight_environment()
-	_update_heating(dt, rocket_position.length() - EARTH_RADIUS, (velocity - Vector2(-rocket_position.y, rocket_position.x) * EARTH_ROTATION_RATE).length())
+	_update_heating(dt)
 	if fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
 	if rocket_position.length() < EARTH_RADIUS + 0.5:
@@ -217,9 +217,50 @@ func _adaptive_step_size() -> float:
 			step_limit = minf(step_limit, 0.02 * relative_distance / relative_speed)
 	return step_limit
 
+func _atmosphere_at(position: Vector2, current_velocity: Vector2) -> Dictionary:
+	var best := {
+		"body_name": "",
+		"altitude": 0.0,
+		"density": 0.0,
+		"temperature": 250.0,
+		"relative_velocity": Vector2.ZERO
+	}
+	var earth_altitude := position.length() - EARTH_RADIUS
+	var earth_density := PlanetarySystem.atmospheric_density(earth_altitude)
+	if earth_density > 0.0:
+		best = {
+			"body_name": "Earth",
+			"altitude": earth_altitude,
+			"density": earth_density,
+			"temperature": PlanetarySystem.atmospheric_temperature(earth_altitude),
+			"relative_velocity": current_velocity - Vector2(-position.y, position.x) * EARTH_ROTATION_RATE
+		}
+	for body in PlanetarySystem.PLANETS:
+		var body_name := str(body.name)
+		if body_name == "Earth":
+			continue
+		var body_position := PlanetarySystem.planet_position_relative_to_earth(body_name, sim_time)
+		var relative_position := position - body_position
+		var body_altitude := relative_position.length() - float(body.radius)
+		var density := PlanetarySystem.planetary_atmosphere_density(body_name, body_altitude)
+		if density <= float(best.density):
+			continue
+		var body_velocity := PlanetarySystem.planet_velocity_relative_to_earth(body_name, sim_time)
+		var atmospheric_rotation := Vector2(-relative_position.y, relative_position.x) * PlanetarySystem.planetary_rotation_rate(body_name)
+		best = {
+			"body_name": body_name,
+			"altitude": body_altitude,
+			"density": density,
+			"temperature": PlanetarySystem.planetary_atmosphere_temperature(body_name),
+			"relative_velocity": current_velocity - body_velocity - atmospheric_rotation
+		}
+	return best
+
 func _engine_thrust(altitude: float) -> float:
 	var active := _active_stage_data()
-	var ambient_pressure_ratio := PlanetarySystem.atmospheric_pressure(altitude) / 101325.0
+	var atmosphere := _atmosphere_at(rocket_position, velocity)
+	var gas_constant := 3500.0 if str(atmosphere.body_name) in ["Jupiter", "Saturn", "Uranus", "Neptune"] else 287.05287
+	var ambient_pressure_ratio := float(atmosphere.density) * gas_constant * float(atmosphere.temperature) / 101325.0
 	var sea_level_thrust := float(active.get("thrust", 0.0))
 	var vacuum_thrust := float(active.get("vacuum_thrust", 0.0))
 	return lerpf(vacuum_thrust, sea_level_thrust, clampf(ambient_pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1))
@@ -227,14 +268,11 @@ func _engine_thrust(altitude: float) -> float:
 func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float) -> Vector2:
 	if realism == "Arcade":
 		return Vector2.ZERO
-	var altitude := position.length() - EARTH_RADIUS
-	if altitude >= PlanetarySystem.ATMOSPHERE_HEIGHT:
-		return Vector2.ZERO
-	var density := PlanetarySystem.atmospheric_density(altitude)
-	var atmospheric_velocity := Vector2(-position.y, position.x) * EARTH_ROTATION_RATE
-	var relative_velocity := current_velocity - atmospheric_velocity
+	var atmosphere := _atmosphere_at(position, current_velocity)
+	var density := float(atmosphere.density)
+	var relative_velocity: Vector2 = atmosphere.relative_velocity
 	var relative_speed := relative_velocity.length()
-	if relative_speed < 0.01:
+	if density <= 0.0 or relative_speed < 0.01:
 		return Vector2.ZERO
 	var direction := relative_velocity / relative_speed
 	var dynamic_pressure := 0.5 * density * relative_speed * relative_speed
@@ -243,7 +281,7 @@ func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mas
 	if realism in ["Realistic", "Hardcore"]:
 		var nose := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 		var angle_of_attack := asin(clampf(nose.cross(direction), -1.0, 1.0))
-		var temperature := PlanetarySystem.atmospheric_temperature(altitude)
+		var temperature := float(atmosphere.temperature)
 		var speed_of_sound := sqrt(1.4 * 287.05287 * temperature)
 		var mach := relative_speed / maxf(1.0, speed_of_sound)
 		drag_coefficient = 0.22 + 0.28 * exp(-pow((mach - 1.0) / 0.3, 2.0)) + 0.08 * pow(sin(angle_of_attack), 2.0)
@@ -255,28 +293,30 @@ func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mas
 	return -direction * (drag_force / maxf(1.0, mass)) + lift_direction * (lift_force / maxf(1.0, mass))
 
 func _update_flight_environment() -> void:
-	var altitude := rocket_position.length() - EARTH_RADIUS
-	if altitude >= PlanetarySystem.ATMOSPHERE_HEIGHT:
+	var atmosphere := _atmosphere_at(rocket_position, velocity)
+	var density := float(atmosphere.density)
+	if density <= 0.0:
 		mach_number = 0.0
 		dynamic_pressure_pa = 0.0
 		return
-	var atmospheric_velocity := Vector2(-rocket_position.y, rocket_position.x) * EARTH_ROTATION_RATE
-	var relative_speed := (velocity - atmospheric_velocity).length()
-	var density := PlanetarySystem.atmospheric_density(altitude)
-	var temperature := PlanetarySystem.atmospheric_temperature(altitude)
+	var relative_velocity: Vector2 = atmosphere.relative_velocity
+	var relative_speed := relative_velocity.length()
+	var temperature := float(atmosphere.temperature)
 	mach_number = relative_speed / sqrt(1.4 * 287.05287 * temperature)
 	dynamic_pressure_pa = 0.5 * density * relative_speed * relative_speed
 	max_dynamic_pressure_pa = maxf(max_dynamic_pressure_pa, dynamic_pressure_pa)
 
-func _update_heating(dt: float, altitude: float, speed: float) -> void:
+func _update_heating(dt: float) -> void:
 	if realism == "Arcade":
 		heat_flux_mw = 0.0
 		return
+	var atmosphere := _atmosphere_at(rocket_position, velocity)
+	var density := float(atmosphere.density)
+	var relative_velocity: Vector2 = atmosphere.relative_velocity
 	var heat_flux_w := 0.0
-	if altitude < PlanetarySystem.ATMOSPHERE_HEIGHT:
-		var density := PlanetarySystem.atmospheric_density(altitude)
+	if density > 0.0:
 		var nose_radius := 0.5
-		heat_flux_w = 1.83e-4 * sqrt(maxf(0.0, density) / nose_radius) * pow(speed, 3.0)
+		heat_flux_w = 1.83e-4 * sqrt(density / nose_radius) * pow(relative_velocity.length(), 3.0)
 	if realism == "Standard":
 		heat_flux_w *= 0.65
 	heat_flux_mw = heat_flux_w / 1000000.0
