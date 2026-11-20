@@ -34,6 +34,7 @@ func _initialize() -> void:
 	var moon_transfer := FlightComputer.interplanetary_transfer(-1, 200000.0)
 	assert(bool(moon_transfer.get("valid", false)))
 	assert(float(moon_transfer.get("departure_delta_v", 0.0)) > 0.0)
+	assert(float(moon_transfer.get("arrival_delta_v", 0.0)) > 0.0)
 	var moon_wait := FlightComputer.departure_wait_time(-1, 0.0, Vector2(radius, 0.0))
 	assert(moon_wait >= 0.0)
 	assert(moon_wait < 86400.0)
