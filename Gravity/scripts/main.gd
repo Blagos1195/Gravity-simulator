@@ -207,11 +207,13 @@ func _confirm_menu() -> void:
 func _save_game(automatic: bool) -> void:
 	if not sim:
 		return
-	var data: Variant = JSON.parse_string(file.get_as_text())
+
+	var data: Dictionary = sim.get_save_data()
 	data["realism"] = realism
 	data["world_scale"] = world_scale
 	data["career_enabled"] = career_enabled
 	data["slot"] = save_slot
+
 	var path := "%s/slot_%02d.json" % [SAVE_DIR, save_slot]
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file:
