@@ -204,6 +204,29 @@ static func departure_periapsis_direction(target_index: int, current_time: float
 	return periapsis_tangent.rotated(-direction_sign * PI * 0.5).normalized()
 
 
+static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float) -> Dictionary:
+	var radius := position.length()
+	var safe_periapsis := body_radius + 100000.0
+	if radius <= safe_periapsis or body_mu <= 0.0:
+		return {"valid": false}
+	var angular_momentum := position.cross(velocity)
+	var tangent := Vector2(-position.y, position.x).normalized()
+	var direction := 1.0 if angular_momentum >= 0.0 else -1.0
+	var desired_apoapsis := maxf(radius * 2.0, safe_periapsis + 200000.0)
+	var semi_major_axis := (radius + desired_apoapsis) * 0.5
+	var desired_speed := sqrt(body_mu * (2.0 / radius - 1.0 / semi_major_axis))
+	var desired_velocity := tangent * direction * desired_speed
+	var burn_vector := desired_velocity - velocity
+	return {
+		"valid": true,
+		"burn_vector": burn_vector,
+		"delta_v": burn_vector.length(),
+		"desired_velocity": desired_velocity,
+		"periapsis": radius,
+		"apoapsis": desired_apoapsis,
+		"safe_periapsis": safe_periapsis
+	}
+
 static func available_delta_v(design: Dictionary, active_stage_index: int = 0, active_fuel: float = -1.0) -> float:
 	var stages: Array = design.get("stages", [])
 	if stages.is_empty():
