@@ -869,6 +869,7 @@ func _show_flight_computer() -> void:
 		sim.autopilot_planet_index = -1 if selected_id == -1 else -selected_id - 2
 		sim.autopilot_burn_remaining = 0.0
 		sim.autopilot_burn_direction = Vector2.ZERO
+		sim.autopilot_transfer_corrections = 0
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
 		var relative_position: Vector2 = sim.rocket_position - current_body.position
 		var relative_velocity: Vector2 = sim.velocity - current_body.velocity
