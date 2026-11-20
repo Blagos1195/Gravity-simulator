@@ -700,7 +700,6 @@ func _show_flight_computer() -> void:
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 	var calculate_simulated_transfer := false
-	var refresh_report: Callable = Callable()
 	var priority_label := Label.new()
 	var initial_priority_percent := roundi(sim.autopilot_speed_priority * 100.0)
 	priority_label.text = "TRAJECTORY PRIORITY  •  " + ("FUEL" if initial_priority_percent < 35 else "SPEED" if initial_priority_percent > 65 else "BALANCED") + "  (%d%% SPEED)" % initial_priority_percent
@@ -715,8 +714,6 @@ func _show_flight_computer() -> void:
 		sim.autopilot_speed_priority = value / 100.0
 		priority_label.text = "TRAJECTORY PRIORITY  •  " + ("FUEL" if value < 35.0 else "SPEED" if value > 65.0 else "BALANCED") + "  (%d%% SPEED)" % roundi(value)
 		calculate_simulated_transfer = false
-		if refresh_report.is_valid():
-			refresh_report.call()
 	)
 	root.add_child(priority_slider)
 	var safety_label := Label.new()
@@ -734,8 +731,6 @@ func _show_flight_computer() -> void:
 	safety.item_selected.connect(func(index: int):
 		sim.autopilot_safety_margin = float(safety.get_item_id(index)) / 100.0
 		calculate_simulated_transfer = false
-		if refresh_report.is_valid():
-			refresh_report.call()
 	)
 	root.add_child(safety)
 	var target_label := Label.new()
@@ -893,7 +888,14 @@ func _show_flight_computer() -> void:
 			text_lines.append("STATUS: INSUFFICIENT DELTA-V")
 		text_lines.append("Ideal rocket-equation estimate only. Real ascent, steering and correction losses can make a nominal pass fail.")
 		report.text = "\n".join(text_lines)
-	refresh_report = func(): update_report.call()
+	priority_slider.value_changed.connect(func(_value: float):
+		calculate_simulated_transfer = false
+		update_report.call()
+	)
+	safety.item_selected.connect(func(_index: int):
+		calculate_simulated_transfer = false
+		update_report.call()
+	)
 	calculate.pressed.connect(func():
 		calculate_simulated_transfer = true
 		update_report.call()
