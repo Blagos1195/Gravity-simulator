@@ -161,11 +161,11 @@ func _physics_step(dt: float) -> void:
 				else:
 					autopilot_phase = "FAILED"
 	var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, start_time)
-	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid)
+	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid, start_time)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	var next_position := rocket_position + half_velocity * dt
 	var final_gravity := PlanetarySystem.gravity_acceleration(next_position, end_time)
-	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid)
+	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, end_time)
 	velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	rocket_position = next_position
 	sim_time = end_time
@@ -217,7 +217,8 @@ func _adaptive_step_size() -> float:
 			step_limit = minf(step_limit, 0.02 * relative_distance / relative_speed)
 	return step_limit
 
-func _atmosphere_at(position: Vector2, current_velocity: Vector2) -> Dictionary:
+func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: float = -1.0) -> Dictionary:
+	var sample_time := sim_time if time_seconds < 0.0 else time_seconds
 	var best := {
 		"body_name": "",
 		"altitude": 0.0,
@@ -239,13 +240,13 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2) -> Dictionary:
 		var body_name := str(body.name)
 		if body_name == "Earth":
 			continue
-		var body_position := PlanetarySystem.planet_position_relative_to_earth(body_name, sim_time)
+		var body_position := PlanetarySystem.planet_position_relative_to_earth(body_name, sample_time)
 		var relative_position := position - body_position
 		var body_altitude := relative_position.length() - float(body.radius)
 		var density := PlanetarySystem.planetary_atmosphere_density(body_name, body_altitude)
 		if density <= float(best.density):
 			continue
-		var body_velocity := PlanetarySystem.planet_velocity_relative_to_earth(body_name, sim_time)
+		var body_velocity := PlanetarySystem.planet_velocity_relative_to_earth(body_name, sample_time)
 		var atmospheric_rotation := Vector2(-relative_position.y, relative_position.x) * PlanetarySystem.planetary_rotation_rate(body_name)
 		best = {
 			"body_name": body_name,
@@ -265,10 +266,10 @@ func _engine_thrust(altitude: float) -> float:
 	var vacuum_thrust := float(active.get("vacuum_thrust", 0.0))
 	return lerpf(vacuum_thrust, sea_level_thrust, clampf(ambient_pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1))
 
-func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float) -> Vector2:
+func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float, time_seconds: float = -1.0) -> Vector2:
 	if realism == "Arcade":
 		return Vector2.ZERO
-	var atmosphere := _atmosphere_at(position, current_velocity)
+	var atmosphere := _atmosphere_at(position, current_velocity, time_seconds)
 	var density := float(atmosphere.density)
 	var relative_velocity: Vector2 = atmosphere.relative_velocity
 	var relative_speed := relative_velocity.length()
@@ -735,11 +736,11 @@ func _calculate_predicted_trajectory() -> void:
 		var thrust_impulse := Vector2.UP.rotated(rotation_angle + gimbal_angle) * thrust_delta_v
 		var step_time := sim_time + float(i) * dt
 		var initial_gravity := PlanetarySystem.gravity_acceleration(position, step_time)
-		var initial_aero := _aerodynamic_acceleration(position, predicted_velocity, mass_mid)
+		var initial_aero := _aerodynamic_acceleration(position, predicted_velocity, mass_mid, step_time)
 		var half_velocity := predicted_velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
 		var next_position := position + half_velocity * dt
 		var final_gravity := PlanetarySystem.gravity_acceleration(next_position, step_time + dt)
-		var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid)
+		var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, step_time + dt)
 		predicted_velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
 		position = next_position
 		predicted_fuel = maxf(0.0, predicted_fuel - burn)
