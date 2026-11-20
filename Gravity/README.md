@@ -76,13 +76,14 @@ godot --headless --path . --script res://tests/flight_computer_test.gd
 
 | Input | Action |
 |---|---|
-| W / Up | Toggle engine on/off; disengages autopilot for manual control |
-| S / Down | Cut engine; disengages autopilot for manual control |
+| W | Toggle engine on/off; disengages autopilot for manual control |
+| S | Cut engine; disengages autopilot for manual control |
 | X | Separate current stage |
 | Q / E | Adjust engine gimbal |
-| A / Left | Rotate left |
-| D / Right | Rotate right |
+| A / D | Rotate left / right |
 | H | Toggle guidance / disengage autopilot |
+
+The engine, cutoff, rotation, pause, staging and guidance keys can be remapped in global Settings.
 | Space | Pause / resume |
 | + / - | Increase / decrease time warp |
 | Mouse wheel | Zoom flight view or solar-system map |
