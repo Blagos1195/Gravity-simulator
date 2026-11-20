@@ -185,6 +185,22 @@ static func planetary_atmosphere_density(planet_name: String, altitude: float) -
 		return 0.0
 	return surface_density * exp(-maxf(0.0, altitude) / scale_height)
 
+static func planetary_atmosphere_temperature(planet_name: String) -> float:
+	match planet_name:
+		"Venus":
+			return 735.0
+		"Mars":
+			return 210.0
+		"Jupiter":
+			return 165.0
+		"Saturn":
+			return 135.0
+		"Uranus":
+			return 76.0
+		"Neptune":
+			return 72.0
+	return 250.0
+
 static func planetary_rotation_rate(planet_name: String) -> float:
 	match planet_name:
 		"Mercury":
