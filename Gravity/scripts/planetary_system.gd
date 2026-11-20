@@ -169,8 +169,8 @@ static func planet_velocity_relative_to_earth(planet_name: String, time_seconds:
 	var planet := _find_planet(planet_name)
 	if planet.is_empty() or planet_name == "Earth":
 		return Vector2.ZERO
-	var earth_velocity := _earth_heliocentric_state(time_seconds).velocity
-	var planet_velocity := _planet_heliocentric_state(planet, time_seconds).velocity
+	var earth_velocity: Vector2 = _earth_heliocentric_state(time_seconds).velocity
+	var planet_velocity: Vector2 = _planet_heliocentric_state(planet, time_seconds).velocity
 	return planet_velocity - earth_velocity
 
 static func moon_soi_radius() -> float:
@@ -189,8 +189,8 @@ static func _find_planet(planet_name: String) -> Dictionary:
 	return {}
 
 static func _planet_relative_position(planet: Dictionary, time_seconds: float) -> Vector2:
-	var earth_position := _earth_heliocentric_state(time_seconds).position
-	var planet_position := _planet_heliocentric_state(planet, time_seconds).position
+	var earth_position: Vector2 = _earth_heliocentric_state(time_seconds).position
+	var planet_position: Vector2 = _planet_heliocentric_state(planet, time_seconds).position
 	return planet_position - earth_position
 
 static func _differential_body_gravity(position: Vector2, body_mass: float, body_position: Vector2, body_radius: float = 1.0e7) -> Vector2:
