@@ -162,7 +162,8 @@ func _physics_step(dt: float) -> void:
 		if radial_speed < 0.0:
 			velocity -= normal * radial_speed
 	var final_altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
-	status_message = "STAGE %d  •  ENGINE FIRING" % (stage_index + 1) if throttle > 0.0 else "PAD READY  •  W TO IGNITE" if final_altitude < 100.0 else "FLIGHT ACTIVE"
+	if not autopilot_enabled:
+		status_message = "STAGE %d  •  ENGINE FIRING" % (stage_index + 1) if throttle > 0.0 else "PAD READY  •  W TO IGNITE" if final_altitude < 100.0 else "FLIGHT ACTIVE"
 
 func _adaptive_step_size() -> float:
 	var radius := maxf(EARTH_RADIUS, rocket_position.length())
