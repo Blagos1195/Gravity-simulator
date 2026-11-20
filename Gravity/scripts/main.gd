@@ -1,6 +1,7 @@
 extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const RocketDesign = preload("res://scripts/rocket_design.gd")
 const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
 
@@ -16,6 +17,9 @@ var menu_root: VBoxContainer
 var settings_root: VBoxContainer
 var hud_root: Control
 var scale_factor := 1.0
+var rocket_design: Dictionary = RocketDesign.create_default()
+var design_stats_label: Label
+var design_error_label: Label
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
@@ -74,6 +78,7 @@ func _build_menu() -> void:
 	_add_spacer(menu_root, 18)
 
 	_add_button(menu_root, "START FLIGHT", _start_flight)
+	_add_button(menu_root, "VEHICLE ASSEMBLY", _show_vehicle_editor)
 	_add_button(menu_root, "SETTINGS", _show_settings)
 	_add_button(menu_root, "QUIT", _quit_game)
 
@@ -83,6 +88,145 @@ func _build_menu() -> void:
 	footer.add_theme_font_size_override("font_size", 10)
 	footer.add_theme_color_override("font_color", Color(0.28, 0.38, 0.5))
 	menu_root.add_child(footer)
+
+
+func _show_vehicle_editor() -> void:
+	for child in get_children():
+		child.queue_free()
+	mode = "editor"
+	var bg := ColorRect.new()
+	bg.color = Color(0.012, 0.018, 0.035)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+	var root := VBoxContainer.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_theme_constant_override("separation", 10)
+	root.offset_left = 28
+	root.offset_right = -28
+	root.offset_top = 22
+	root.offset_bottom = -22
+	add_child(root)
+	var heading := Label.new()
+	heading.text = "VEHICLE ASSEMBLY"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 32)
+	heading.add_theme_color_override("font_color", Color(0.78, 0.9, 1.0))
+	root.add_child(heading)
+	var subtitle := Label.new()
+	subtitle.text = "CONFIGURE YOUR TWO-STAGE LAUNCH VEHICLE"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_color_override("font_color", Color(0.35, 0.66, 0.82))
+	root.add_child(subtitle)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(scroll)
+	var columns := HBoxContainer.new()
+	columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	columns.add_theme_constant_override("separation", 24)
+	scroll.add_child(columns)
+	for stage_index in range(2):
+		var panel := PanelContainer.new()
+		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		columns.add_child(panel)
+		var fields := VBoxContainer.new()
+		fields.add_theme_constant_override("separation", 10)
+		panel.add_child(fields)
+		var stage: Dictionary = rocket_design["stages"][stage_index]
+		var stage_title := Label.new()
+		stage_title.text = "FIRST STAGE" if stage_index == 0 else "UPPER STAGE"
+		stage_title.add_theme_font_size_override("font_size", 20)
+		stage_title.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+		fields.add_child(stage_title)
+		_add_design_field(fields, stage_index, "dry_mass", "Dry mass (kg)", 100.0, 100000.0, 100.0)
+		_add_design_field(fields, stage_index, "fuel_capacity", "Propellant capacity (kg)", 100.0, 1000000.0, 1000.0)
+		_add_design_field(fields, stage_index, "thrust", "Sea-level thrust (N)", 10000.0, 50000000.0, 100000.0)
+		_add_design_field(fields, stage_index, "vacuum_thrust", "Vacuum thrust (N)", 10000.0, 60000000.0, 100000.0)
+		_add_design_field(fields, stage_index, "flow", "Fuel flow (kg/s)", 1.0, 20000.0, 10.0)
+	var payload_panel := PanelContainer.new()
+	payload_panel.custom_minimum_size.x = 230
+	columns.add_child(payload_panel)
+	var payload_fields := VBoxContainer.new()
+	payload_panel.add_child(payload_fields)
+	var payload_title := Label.new()
+	payload_title.text = "PAYLOAD"
+	payload_title.add_theme_font_size_override("font_size", 20)
+	payload_title.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	payload_fields.add_child(payload_title)
+	var payload_label := Label.new()
+	payload_label.text = "Payload mass (kg)"
+	payload_fields.add_child(payload_label)
+	var payload := SpinBox.new()
+	payload.min_value = 1.0
+	payload.max_value = 100000.0
+	payload.step = 10.0
+	payload.value = float(rocket_design.get("payload_mass", 500.0))
+	payload.value_changed.connect(func(value: float):
+		rocket_design["payload_mass"] = value
+		_update_design_stats()
+	)
+	payload_fields.add_child(payload)
+	design_stats_label = Label.new()
+	design_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	payload_fields.add_child(design_stats_label)
+	design_error_label = Label.new()
+	design_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	design_error_label.add_theme_color_override("font_color", Color(1.0, 0.48, 0.35))
+	payload_fields.add_child(design_error_label)
+	_update_design_stats()
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	actions.add_theme_constant_override("separation", 12)
+	root.add_child(actions)
+	_add_button(actions, "RESET DESIGN", func():
+		rocket_design = RocketDesign.create_default()
+		_show_vehicle_editor()
+	)
+	_add_button(actions, "SAVE DESIGN", _save_rocket_design)
+	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
+	_add_button(actions, "BACK", _build_menu)
+
+func _add_design_field(parent: VBoxContainer, stage_index: int, key: String, label_text: String, minimum: float, maximum: float, step: float) -> void:
+	var label := Label.new()
+	label.text = label_text
+	parent.add_child(label)
+	var spin := SpinBox.new()
+	spin.min_value = minimum
+	spin.max_value = maximum
+	spin.step = step
+	spin.allow_greater = false
+	spin.allow_lesser = false
+	spin.value = float(rocket_design["stages"][stage_index].get(key, minimum))
+	spin.value_changed.connect(func(value: float):
+		rocket_design["stages"][stage_index][key] = value
+		_update_design_stats()
+	)
+	parent.add_child(spin)
+
+func _update_design_stats() -> void:
+	if not is_instance_valid(design_stats_label) or not is_instance_valid(design_error_label):
+		return
+	var errors := RocketDesign.validation_errors(rocket_design)
+	var total_mass := RocketDesign.total_initial_mass(rocket_design)
+	var delta_v := RocketDesign.total_delta_v(rocket_design)
+	var first: Dictionary = rocket_design["stages"][0]
+	var initial_twr := float(first["thrust"]) / maxf(1.0, total_mass * 9.81)
+	design_stats_label.text = "INITIAL MASS\n%.1f tonnes\n\nIDEAL ΔV\n%.2f km/s\n\nPAD TWR\n%.2f" % [total_mass / 1000.0, delta_v / 1000.0, initial_twr]
+	design_error_label.text = "\n".join(errors) if not errors.is_empty() else "DESIGN VALID"
+
+func _save_rocket_design() -> void:
+	var file := FileAccess.open("user://rocket_design.json", FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(rocket_design, "\t"))
+		file.close()
+		if is_instance_valid(design_error_label):
+			design_error_label.text = "DESIGN SAVED"
+
+func _launch_designed_vehicle() -> void:
+	var errors := RocketDesign.validation_errors(rocket_design)
+	if not errors.is_empty():
+		_update_design_stats()
+		return
+	_start_flight()
 
 func _show_settings() -> void:
 	for child in get_children():
@@ -139,6 +283,7 @@ func _start_flight() -> void:
 	sim.realism = realism
 	sim.world_scale = world_scale
 	sim.career_enabled = career_enabled
+	sim.set_rocket_design(rocket_design)
 	sim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(sim)
 	_build_flight_hud()
