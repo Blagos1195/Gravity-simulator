@@ -500,7 +500,7 @@ func _show_flight_computer() -> void:
 			text_lines.append("Altitude: %.0f km" % (float(selected_id) / 1000.0))
 			text_lines.append("Circular speed: %.0f m/s" % FlightComputer.circular_orbit_speed(target_radius))
 			text_lines.append("Circularise at current position: %.0f m/s Δv" % float(circular.get("delta_v", 0.0)))
-			text_lines.append("Hohmann transfer from current orbit: %.0f m/s Δv" % float(orbit_transfer.get("total_delta_v", 0.0)))
+			text_lines.append("Hohmann transfer from current radius (100 km minimum): %.0f m/s Δv" % float(orbit_transfer.get("total_delta_v", 0.0)))
 			text_lines.append("Transfer time: %.1f minutes" % (float(orbit_transfer.get("transfer_time", 0.0)) / 60.0))
 			text_lines.append("Departure burn: %s at periapsis" % orbit_departure_direction)
 			text_lines.append("Arrival burn: %s at apoapsis" % ("RETROGRADE" if orbit_departure_direction == "PROGRADE" else "PROGRADE"))
