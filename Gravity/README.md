@@ -12,7 +12,7 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Vehicle assembly screen with 2–8 configurable stages and payload mass
 - Adjustable stage dry mass, propellant capacity, engine count, sea-level/vacuum thrust and per-engine fuel flow
 - Live vehicle preview, initial mass, ideal delta-v and launch thrust-to-weight estimates
-- Rocket design validation for specific impulse, stage mass fraction, ignition and burnout thrust-to-weight, total mass and total delta-v
+- Rocket design validation for specific impulse, stage mass fraction, minimum upper-stage ignition TWR, burnout acceleration, total mass and total delta-v
 - Local JSON save/load rejects invalid vehicle designs
 - Custom vehicle parameters applied to flight mass, engine thrust, propellant use, staging and telemetry
 - Surface launch pad with toggleable engine controls
@@ -43,7 +43,12 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Rocket and launch-pad graphics scale with camera zoom
 - Extended close-up and far-out zoom range, including independent solar-system map zoom
 - Resizable window with a minimum supported size and expanded viewport scaling
-- Physics presets
+- Save-aware main menu with Continue, New Game, Game Load and global Settings
+- New-game setup for physics preset, universe scale and optional career mode
+- Global fullscreen and autosave preferences
+- Persistent keyboard remapping for engine toggle/cutoff, rotation, pause, staging and guidance
+- Distinct Arcade, Standard, Realistic and Hardcore aerodynamic/heating presets
+- Peak dynamic-pressure (Max-Q) telemetry saved with flight state
 - Optional career setting placeholder
 - Eight selectable JSON save slots, manual save and 60-second automatic save
 
