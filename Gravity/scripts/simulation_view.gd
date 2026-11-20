@@ -101,13 +101,12 @@ func _physics_step(dt: float) -> void:
 
     var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time - dt)
     var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass)
-    velocity += (initial_gravity + initial_aero) * (0.5 * dt)
+    velocity += (initial_gravity + initial_aero + thrust_acceleration) * (0.5 * dt)
     rocket_position += velocity * dt
 
     var final_gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time)
     var final_aero := _aerodynamic_acceleration(rocket_position, velocity, mass)
     velocity += (final_gravity + final_aero + thrust_acceleration) * (0.5 * dt)
-    velocity += thrust_acceleration * (0.5 * dt)
     fuel = maxf(0.0, fuel - fuel_used)
 
     _update_heating(dt, rocket_position.length() - EARTH_RADIUS, velocity.length())
