@@ -688,12 +688,46 @@ func _show_flight_computer() -> void:
 	var autopilot := Button.new()
 	autopilot.text = "ENGAGE AUTOPILOT FOR SELECTED TARGET"
 	root.add_child(autopilot)
+	var landing := Button.new()
+	landing.text = "ENGAGE POWERED LANDING"
+	landing.pressed.connect(func():
+		var selected_id: int = target.get_selected_id()
+		if selected_id > 0:
+			report.text += "\n\nSelect a planetary body or the Moon for landing guidance."
+			return
+		var planet_index := -1 if selected_id == -1 else -selected_id - 2
+		var body_name := "Moon" if planet_index == -1 else str(FlightComputer.PLANET_TARGETS[planet_index].get("name", ""))
+		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
+		if str(current_body.get("name", "")) != body_name:
+			report.text += "\n\nLanding guidance requires you to be inside the selected body's sphere of influence."
+			return
+		if not bool(current_body.get("solid", false)):
+			report.text += "\n\nGas giants have no solid landing surface in this simulation."
+			return
+		var relative_position: Vector2 = sim.rocket_position - current_body.position
+		var relative_velocity: Vector2 = sim.velocity - current_body.velocity
+		var local_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(current_body.mass))
+		if not bool(local_orbit.get("bound", false)):
+			report.text += "\n\nFirst establish a stable orbit around %s." % body_name
+			return
+		sim.autopilot_enabled = true
+		sim.autopilot_complete = false
+		sim.autopilot_target_mode = "LAND"
+		sim.autopilot_planet_index = planet_index
+		sim.autopilot_phase = "LANDING_DESCENT"
+		sim.autopilot_throttle = 0.0
+		sim.guidance_enabled = true
+		sim.thrust_key_down = false
+		report.text += "\n\nPowered landing guidance engaged for %s. It will manage braking and descent; touchdown still depends on available thrust and fuel." % body_name
+	)
+	root.add_child(landing)
 	var cancel := Button.new()
 	cancel.text = "CLOSE"
 	cancel.pressed.connect(window.queue_free)
 	root.add_child(cancel)
 	var update_report := func() -> void:
 		var selected_id: int = target.get_selected_id()
+		landing.disabled = selected_id > 0
 		var state := FlightComputer.orbital_state(sim.rocket_position, sim.velocity)
 		var current_altitude: float = float(sim.rocket_position.length()) - FlightComputer.EARTH_RADIUS
 		var text_lines := PackedStringArray()
