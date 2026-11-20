@@ -30,10 +30,10 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Differential gravity from the Moon, Sun and other planets
 - Optional gravity-turn guidance assist
 - Orbital flight computer with osculating orbit elements, circularisation burns, lunar transfers and heliocentric Hohmann estimates
-- Destination planner for the Moon and all seven other planets, including ideal departure phase and transfer-window estimates
+- Destination planner for the Moon and all seven other planets, including ideal departure phase, transfer-window timing, hyperbolic departure orientation and capture delta-v estimates
 - Orbit autopilot with ascent, coast-to-apoapsis and prograde/retrograde circularisation
 - Destination autopilot with parking-orbit insertion, transfer-window waiting, hyperbolic departure alignment and calculated injection burn
-- Manual override and saved autopilot target, transfer burn and phase
+- Manual engine controls disengage autopilot; saved flight state preserves the selected target, departure burn vector and guidance phase
 - Remaining ideal vehicle delta-v and thrust-to-weight telemetry
 - Orbital trajectory, periapsis, apoapsis and thrust-to-weight readouts
 - Adjustable time warp
@@ -71,8 +71,8 @@ godot --headless --path . --script res://tests/flight_computer_test.gd
 
 | Input | Action |
 |---|---|
-| W / Up | Toggle engine on/off |
-| S / Down | Cut engine |
+| W / Up | Toggle engine on/off; disengages autopilot for manual control |
+| S / Down | Cut engine; disengages autopilot for manual control |
 | X | Separate current stage |
 | Q / E | Adjust engine gimbal |
 | A / Left | Rotate left |
