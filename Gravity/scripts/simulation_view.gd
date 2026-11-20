@@ -137,10 +137,10 @@ func _physics_step(dt: float) -> void:
 			status_message = "LAUNCHING FROM %s" % landed_body_name.to_upper()
 		else:
 			sim_time = end_time
-			var surface_state := _surface_body_state(landed_body_name)
-			var normal: Vector2 = (rocket_position - surface_state.position).normalized()
-			rocket_position = surface_state.position + normal * (float(surface_state.radius) + 0.5)
-			velocity = surface_state.velocity + Vector2(-normal.y, normal.x) * float(surface_state.radius) * float(surface_state.rotation_rate)
+			var landed_surface_state := _surface_body_state(landed_body_name)
+			var landed_normal: Vector2 = (rocket_position - landed_surface_state.position).normalized()
+			rocket_position = landed_surface_state.position + landed_normal * (float(landed_surface_state.radius) + 0.5)
+			velocity = landed_surface_state.velocity + Vector2(-landed_normal.y, landed_normal.x) * float(landed_surface_state.radius) * float(landed_surface_state.rotation_rate)
 			throttle = 0.0
 			return
 	if crashed:
