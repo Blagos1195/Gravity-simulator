@@ -699,6 +699,36 @@ func _show_flight_computer() -> void:
 	description.text = "Choose an orbit or destination. The computer compares remaining vehicle delta-v with an estimated mission budget, including a 10% reserve, and reports departure and arrival manoeuvres."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
+	var priority_label := Label.new()
+	priority_label.text = "TRAJECTORY PRIORITY  •  BALANCED"
+	root.add_child(priority_label)
+	var priority_slider := HSlider.new()
+	priority_slider.min_value = 0.0
+	priority_slider.max_value = 100.0
+	priority_slider.step = 5.0
+	priority_slider.value = sim.autopilot_speed_priority * 100.0
+	priority_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	priority_slider.value_changed.connect(func(value: float):
+		sim.autopilot_speed_priority = value / 100.0
+		priority_label.text = "TRAJECTORY PRIORITY  •  " + ("FUEL" if value < 35.0 else "SPEED" if value > 65.0 else "BALANCED") + "  (%d%% SPEED)" % roundi(value)
+	)
+	root.add_child(priority_slider)
+	var safety_label := Label.new()
+	safety_label.text = "FUEL RESERVE"
+	root.add_child(safety_label)
+	var safety := OptionButton.new()
+	safety.add_item("Conservative · 20% reserve", 20)
+	safety.add_item("Normal · 10% reserve", 10)
+	safety.add_item("Aggressive · 3% reserve", 3)
+	var safety_index := 1
+	for option_index in range(safety.item_count):
+		if safety.get_item_id(option_index) == roundi(sim.autopilot_safety_margin * 100.0):
+			safety_index = option_index
+	safety.select(safety_index)
+	safety.item_selected.connect(func(index: int):
+		sim.autopilot_safety_margin = float(safety.get_item_id(index)) / 100.0
+	)
+	root.add_child(safety)
 	var target_label := Label.new()
 	target_label.text = "PLANNED DESTINATION / ORBIT"
 	root.add_child(target_label)
@@ -820,7 +850,8 @@ func _show_flight_computer() -> void:
 			elif not calculate_simulated_transfer:
 				text_lines.append("Press CALCULATE FLIGHT PLAN to simulate candidate trajectories from the current state.")
 			else:
-				var simulated_plan := FlightComputer.simulated_transfer_search(sim.rocket_position, sim.velocity, sim.sim_time, destination_index, remaining_delta_v * 0.9)
+				var available_for_transfer := remaining_delta_v * (1.0 - sim.autopilot_safety_margin)
+				var simulated_plan := FlightComputer.simulated_transfer_search(sim.rocket_position, sim.velocity, sim.sim_time, destination_index, available_for_transfer, sim.autopilot_speed_priority)
 				if bool(simulated_plan.get("valid", false)):
 					text_lines.append("Departure manoeuvre: %.0f m/s Δv" % float(simulated_plan.get("departure_delta_v", 0.0)))
 					text_lines.append("Arrival capture: %.0f m/s Δv" % float(simulated_plan.get("capture_delta_v", 0.0)))
@@ -838,8 +869,9 @@ func _show_flight_computer() -> void:
 		text_lines.append("VEHICLE FUEL FEASIBILITY")
 		text_lines.append("Remaining ideal vehicle Δv: %.2f km/s" % (remaining_delta_v / 1000.0))
 		text_lines.append("Estimated mission budget: %.2f km/s" % (required_delta_v / 1000.0))
-		text_lines.append("Budget with 10%% reserve: %.2f km/s" % (required_delta_v * 1.1 / 1000.0))
-		var margin := remaining_delta_v - required_delta_v * 1.1
+		text_lines.append("Selected fuel reserve: %.0f%%" % (sim.autopilot_safety_margin * 100.0))
+		text_lines.append("Available Δv after reserve: %.2f km/s" % (remaining_delta_v * (1.0 - sim.autopilot_safety_margin) / 1000.0))
+		var margin := remaining_delta_v * (1.0 - sim.autopilot_safety_margin) - required_delta_v
 		text_lines.append("Margin after reserve: %+.2f km/s" % (margin / 1000.0))
 		if not mission_valid:
 			text_lines.append("STATUS: NO VALID FLIGHT PLAN")
