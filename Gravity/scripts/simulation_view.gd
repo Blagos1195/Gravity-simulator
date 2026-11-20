@@ -484,15 +484,18 @@ func _handle_body_contact() -> void:
 		return
 
 func _update_guidance(dt: float) -> void:
-	var radial := rocket_position.normalized()
-	var altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
+	var guidance_body := _nearest_body_state(rocket_position)
+	var guidance_position: Vector2 = rocket_position - guidance_body.position
+	var guidance_velocity: Vector2 = velocity - guidance_body.velocity
+	var radial := guidance_position.normalized()
+	var altitude := maxf(0.0, float(guidance_body.distance) - float(guidance_body.radius))
 	var tangent := Vector2(-radial.y, radial.x)
 	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / 100000.0, 0.0, 1.0))
 	if autopilot_enabled:
 		gimbal_angle = 0.0
-		var orbit := FlightComputer.orbital_state(rocket_position, velocity)
-		var target_radius := EARTH_RADIUS + autopilot_target_altitude
-		var prograde := velocity.normalized() if velocity.length() > 1.0 else tangent
+		var orbit := FlightComputer.orbital_state(guidance_position, guidance_velocity, G * float(guidance_body.mass))
+		var target_radius := float(guidance_body.radius) + autopilot_target_altitude
+		var prograde := guidance_velocity.normalized() if guidance_velocity.length() > 1.0 else tangent
 		match autopilot_phase:
 			"ASCENT":
 				status_message = "AUTOPILOT  •  ASCENT TO %.0f KM" % (autopilot_target_altitude / 1000.0)
@@ -502,7 +505,7 @@ func _update_guidance(dt: float) -> void:
 				else:
 					var apoapsis: float = float(orbit.get("apoapsis", 0.0))
 					var apoapsis_fraction := clampf((apoapsis - EARTH_RADIUS) / maxf(1.0, autopilot_target_altitude), 0.0, 1.0) if is_finite(apoapsis) else 0.0
-					var speed_fraction := clampf(velocity.length() / 7800.0, 0.0, 1.0)
+					var speed_fraction := clampf(guidance_velocity.length() / 7800.0, 0.0, 1.0)
 					pitch_above_horizon = lerpf(90.0, 2.0, clampf(maxf(maxf(altitude / maxf(1.0, autopilot_target_altitude), apoapsis_fraction * 0.92), speed_fraction * 0.9), 0.0, 1.0))
 					thrust_key_down = fuel > 0.0
 			"COAST":
@@ -513,7 +516,7 @@ func _update_guidance(dt: float) -> void:
 					thrust_key_down = true
 			"CIRCULARISE":
 				status_message = "AUTOPILOT  •  ORBITAL CIRCULARISATION"
-				var desired_speed := FlightComputer.circular_orbit_speed(rocket_position.length())
+				var desired_speed := FlightComputer.circular_orbit_speed(guidance_position.length(), G * float(guidance_body.mass))
 				var tangential_speed := float(orbit.get("tangential_speed", 0.0))
 				var radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
 				var speed_error := desired_speed - tangential_speed
@@ -646,7 +649,7 @@ func _update_guidance(dt: float) -> void:
 		var target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
 		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
 		return
-	elif velocity.length() > 1500.0:
+	elif guidance_velocity.length() > 1500.0:
 		pitch_above_horizon = minf(pitch_above_horizon, 12.0)
 	var target_direction := radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
 	var target_rotation := target_direction.angle() - Vector2.UP.angle()
