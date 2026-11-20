@@ -853,7 +853,7 @@ func _show_flight_computer() -> void:
 			elif not calculate_simulated_transfer:
 				text_lines.append("Press CALCULATE FLIGHT PLAN to simulate candidate trajectories from the current state.")
 			else:
-				var available_for_transfer := remaining_delta_v * (1.0 - sim.autopilot_safety_margin)
+				var available_for_transfer: float := remaining_delta_v * (1.0 - sim.autopilot_safety_margin)
 				var simulated_plan := FlightComputer.simulated_transfer_search(sim.rocket_position, sim.velocity, sim.sim_time, destination_index, available_for_transfer, sim.autopilot_speed_priority)
 				if bool(simulated_plan.get("valid", false)):
 					text_lines.append("Departure manoeuvre: %.0f m/s Δv" % float(simulated_plan.get("departure_delta_v", 0.0)))
@@ -874,7 +874,7 @@ func _show_flight_computer() -> void:
 		text_lines.append("Estimated mission budget: %.2f km/s" % (required_delta_v / 1000.0))
 		text_lines.append("Selected fuel reserve: %.0f%%" % (sim.autopilot_safety_margin * 100.0))
 		text_lines.append("Available Δv after reserve: %.2f km/s" % (remaining_delta_v * (1.0 - sim.autopilot_safety_margin) / 1000.0))
-		var margin := remaining_delta_v * (1.0 - sim.autopilot_safety_margin) - required_delta_v
+		var margin: float := remaining_delta_v * (1.0 - sim.autopilot_safety_margin) - required_delta_v
 		text_lines.append("Margin after reserve: %+.2f km/s" % (margin / 1000.0))
 		if not mission_valid:
 			text_lines.append("STATUS: NO VALID FLIGHT PLAN")
@@ -919,13 +919,13 @@ func _show_flight_computer() -> void:
 		var relative_velocity: Vector2 = sim.velocity - current_body.velocity
 		var current_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(current_body.mass))
 		var target_state: Dictionary = sim._autopilot_target_state()
-		var target_distance := sim.rocket_position.distance_to(Vector2(target_state.get("position", Vector2.ZERO)))
-		var target_is_near := not target_state.is_empty() and target_distance <= float(target_state.get("soi", 0.0)) and (sim.autopilot_planet_index != -2 or str(current_body.name) == "Earth")
+		var target_distance: float := sim.rocket_position.distance_to(Vector2(target_state.get("position", Vector2.ZERO)))
+		var target_is_near: bool := not target_state.is_empty() and target_distance <= float(target_state.get("soi", 0.0)) and (sim.autopilot_planet_index != -2 or str(current_body.name) == "Earth")
 		var current_altitude := float(current_body.distance) - float(current_body.radius)
 		var stable_current_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0
 		var selected_earth_orbit := selected_id > 0
 		var source_is_earth := str(current_body.name) == "Earth"
-		var already_at_destination_surface := not selected_earth_orbit and sim.landed and sim.landed_body_name == sim._autopilot_target_body_name()
+		var already_at_destination_surface: bool := not selected_earth_orbit and sim.landed and sim.landed_body_name == sim._autopilot_target_body_name()
 		if already_at_destination_surface:
 			sim.autopilot_phase = "COMPLETE"
 			sim.autopilot_complete = true
