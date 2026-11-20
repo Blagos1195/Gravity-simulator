@@ -32,6 +32,7 @@ var heat_flux_mw := 0.0
 var heat_shield_temperature := 290.0
 var peak_heat_flux_mw := 0.0
 var camera_zoom := 0.000045
+var solar_map_zoom := 1.0
 var camera_offset := Vector2.ZERO
 var trail: Array[Vector2] = []
 var trail_timer := 0.0
@@ -183,7 +184,7 @@ func _update_heating(dt: float, altitude: float, speed: float) -> void:
 func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
 		return
-	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0))
+	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0)) + fuel
 	stage_index += 1
 	fuel = float(_active_stage_data().get("fuel_capacity", 0.0))
 	thrust_key_down = false
@@ -222,6 +223,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				rotation_angle += 0.12
 			KEY_SPACE:
 				paused = not paused
+			KEY_HOME:
+				camera_zoom = 0.000045
+				solar_map_zoom = 1.0
 			KEY_EQUAL, KEY_KP_ADD:
 				time_warp = minf(100.0, time_warp * 2.0)
 			KEY_MINUS, KEY_KP_SUBTRACT:
@@ -247,10 +251,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_X:
 				_separate_stage()
 	elif event is InputEventMouseButton and event.pressed:
-		if not show_solar_system and event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			camera_zoom = minf(0.0025, camera_zoom * 1.2)
-		elif not show_solar_system and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			camera_zoom = maxf(0.0000005, camera_zoom / 1.2)
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			if show_solar_system:
+				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
+			else:
+				camera_zoom = minf(0.0025, camera_zoom * 1.2)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			if show_solar_system:
+				solar_map_zoom = maxf(0.25, solar_map_zoom / 1.2)
+			else:
+				camera_zoom = maxf(0.0000005, camera_zoom / 1.2)
 
 func _draw() -> void:
 	var view_center := get_viewport_rect().size * 0.5
@@ -321,7 +331,7 @@ func _draw() -> void:
 	_draw_hud()
 
 func _draw_solar_system(center: Vector2) -> void:
-	var map_scale := minf(size.x, size.y) * 0.43 / 4.4951e12
+	var map_scale := minf(size.x, size.y) * 0.43 / 4.4951e12 * solar_map_zoom
 	draw_circle(center, 5.0, Color(1.0, 0.78, 0.28))
 	draw_string(ThemeDB.fallback_font, center + Vector2(10, 4), "SUN", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.82, 0.48))
 	for planet in PlanetarySystem.PLANETS:
