@@ -428,7 +428,7 @@ func _surface_body_state(body_name: String) -> Dictionary:
 	if body_name == "Earth":
 		return {"name": "Earth", "position": Vector2.ZERO, "velocity": Vector2.ZERO, "radius": EARTH_RADIUS, "rotation_rate": EARTH_ROTATION_RATE, "mass": EARTH_MASS, "solid": true, "soi": 9.25e8}
 	if body_name == "Moon":
-		return {"name": "Moon", "position": PlanetarySystem.moon_position(sim_time), "velocity": PlanetarySystem.moon_velocity(sim_time), "radius": PlanetarySystem.MOON_RADIUS, "rotation_rate": TAU / PlanetarySystem.MOON_ORBIT_PERIOD, "mass": PlanetarySystem.MOON_MASS, "solid": true, "soi": PlanetarySystem.moon_soi_radius()}
+		return {"name": "Moon", "position": PlanetarySystem.moon_position(sim_time), "velocity": PlanetarySystem.moon_velocity(sim_time), "radius": PlanetarySystem.MOON_RADIUS, "rotation_rate": TAU / PlanetarySystem.MOON_ROTATION_PERIOD, "mass": PlanetarySystem.MOON_MASS, "solid": true, "soi": PlanetarySystem.moon_soi_radius()}
 	for body in PlanetarySystem.PLANETS:
 		if str(body.name) == body_name:
 			return {
