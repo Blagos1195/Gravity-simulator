@@ -443,7 +443,7 @@ func _show_flight_computer() -> void:
 	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 	root.add_child(heading)
 	var description := Label.new()
-	description.text = "Choose an Earth orbit or a destination. Planetary estimates use circular, coplanar Hohmann transfers."
+	description.text = "Choose an orbit or destination. The computer compares remaining vehicle delta-v with an estimated mission budget, including a 10% reserve."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 	var target_label := Label.new()
@@ -484,6 +484,8 @@ func _show_flight_computer() -> void:
 		var state := FlightComputer.orbital_state(sim.rocket_position, sim.velocity)
 		var current_altitude: float = float(sim.rocket_position.length()) - FlightComputer.EARTH_RADIUS
 		var text_lines := PackedStringArray()
+		var remaining_delta_v := FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel)
+		var required_delta_v := 0.0
 		text_lines.append("CURRENT FLIGHT STATE")
 		text_lines.append("Altitude: %.1f km" % (current_altitude / 1000.0))
 		text_lines.append("Speed: %.0f m/s" % sim.velocity.length())
@@ -504,6 +506,9 @@ func _show_flight_computer() -> void:
 			text_lines.append("Transfer time: %.1f minutes" % (float(orbit_transfer.get("transfer_time", 0.0)) / 60.0))
 			text_lines.append("Departure burn: %s at periapsis" % orbit_departure_direction)
 			text_lines.append("Arrival burn: %s at apoapsis" % ("RETROGRADE" if orbit_departure_direction == "PROGRADE" else "PROGRADE"))
+			var parking_radius := FlightComputer.EARTH_RADIUS + 200000.0
+			var target_orbit_transfer := FlightComputer.hohmann_transfer(parking_radius, target_radius)
+			required_delta_v = 9400.0 + float(target_orbit_transfer.get("total_delta_v", 0.0))
 		else:
 			var planet_index := -1 if selected_id == -1 else -selected_id - 2
 			var destination_transfer := FlightComputer.interplanetary_transfer(planet_index, maxf(200000.0, current_altitude))
@@ -520,8 +525,25 @@ func _show_flight_computer() -> void:
 				text_lines.append("Next ideal departure window: %.1f days" % (window_wait / 86400.0))
 				text_lines.append("Departure burn: %s from the aligned 200 km parking orbit" % ("prograde" if float(destination_transfer.get("direction", 1.0)) > 0.0 else "retrograde"))
 				text_lines.append("Arrival burn: capture into an approximately 200 km orbit (or 1.1 planetary radii for gas giants)")
+				required_delta_v = 9400.0 + float(destination_transfer.get("total_delta_v", 0.0))
 			text_lines.append("")
 			text_lines.append("Estimates assume circular coplanar orbits and patched-conic departure. Arrival capture is calculated but not yet flown by autopilot.")
+		text_lines.append("")
+		text_lines.append("VEHICLE FUEL FEASIBILITY")
+		text_lines.append("Remaining ideal vehicle Δv: %.2f km/s" % (remaining_delta_v / 1000.0))
+		text_lines.append("Estimated mission budget: %.2f km/s" % (required_delta_v / 1000.0))
+		text_lines.append("Budget with 10%% reserve: %.2f km/s" % (required_delta_v * 1.1 / 1000.0))
+		var margin := remaining_delta_v - required_delta_v * 1.1
+		text_lines.append("Margin after reserve: %+.2f km/s" % (margin / 1000.0))
+		if remaining_delta_v <= 0.0:
+			text_lines.append("STATUS: NO USABLE PROPELLANT")
+		elif margin >= 0.0:
+			text_lines.append("STATUS: DELTA-V BUDGET PASSES")
+		elif remaining_delta_v >= required_delta_v:
+			text_lines.append("STATUS: MARGINAL - NO 10%% RESERVE")
+		else:
+			text_lines.append("STATUS: INSUFFICIENT DELTA-V")
+		text_lines.append("Ideal rocket-equation estimate only. Real ascent, steering and correction losses can make a nominal pass fail.")
 		report.text = "\n".join(text_lines)
 	calculate.pressed.connect(update_report)
 	target.item_selected.connect(func(_index: int): update_report.call())
