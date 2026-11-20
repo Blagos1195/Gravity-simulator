@@ -9,6 +9,11 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Centralised planetary data for all eight planets
 - Time-dependent circular Moon orbit and lunar gravity
 - Exponential Earth atmosphere model
+- Initial vehicle assembly screen with two configurable stages and payload mass
+- Adjustable stage dry mass, propellant capacity, sea-level/vacuum thrust and fuel flow
+- Live vehicle preview, initial mass, ideal delta-v and launch thrust-to-weight estimates
+- Rocket design validation and local JSON save/load
+- Custom vehicle parameters applied to flight mass, thrust, propellant use, staging and telemetry
 - Surface launch pad with toggleable engine controls
 - Two-stage launch vehicle with automatic and manual staging
 - Variable-mass thrust and propellant consumption for each stage
@@ -66,8 +71,10 @@ A procedural 2D spaceflight simulator built with Godot 4.
 | F9 | Load current slot |
 | Escape | Pause / resume |
 
-Saves are stored in the user's Godot application data directory under `saves/`.
+Flight saves are stored in the user's Godot application data directory under `saves/`. The active vehicle design can be saved separately as `rocket_design.json` in the same user data area.
 
 ## Important
+
+The vehicle assembly system is an initial two-stage configuration editor. It edits stage-level performance values rather than placing individual physical parts, and the preview is illustrative.
 
 This remains an early Earth-centred prototype. The two-stage vehicle, adaptive substepping, gimbal, lift, heating and gravity-turn guidance are simplified gameplay models, not validated launch-vehicle engineering. Planetary gravity uses circular coplanar orbits and differential perturbations rather than accurate ephemerides or a full n-body solar-system integration. Atmospheric heating is an estimate and does not yet damage or destroy the vehicle. The rocket editor, vehicle structural limits, detailed aerodynamic coefficients, career progression, missions, docking, replay tooling and multiplayer remain planned follow-on systems.
