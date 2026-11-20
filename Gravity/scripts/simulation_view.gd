@@ -37,6 +37,8 @@ var autopilot_throttle := 0.0
 var autopilot_transfer_start_time := -1.0
 var autopilot_transfer_duration := 0.0
 var autopilot_transfer_corrections := 0
+var autopilot_speed_priority := 0.35
+var autopilot_safety_margin := 0.10
 var autopilot_transfer_direction := 1.0
 var autopilot_arrival_burn_vector := Vector2.ZERO
 var autopilot_burn_direction := Vector2.ZERO
@@ -565,8 +567,8 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  SIMULATING TRANSFER TRAJECTORIES"
 				thrust_key_down = false
 				var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
-				var available_transfer_delta_v := FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * 0.9
-				var transfer_plan := FlightComputer.simulated_transfer_search(rocket_position, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v)
+				var available_transfer_delta_v := FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
+				var transfer_plan := FlightComputer.simulated_transfer_search(rocket_position, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority)
 				if not bool(transfer_plan.get("valid", false)):
 					autopilot_phase = "FAILED"
 					status_message = "TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY"))
@@ -1125,6 +1127,8 @@ func get_save_data() -> Dictionary:
 		"autopilot_throttle": autopilot_throttle,
 		"autopilot_transfer_start_time": autopilot_transfer_start_time,
 		"autopilot_transfer_duration": autopilot_transfer_duration,
+		"autopilot_speed_priority": autopilot_speed_priority,
+		"autopilot_safety_margin": autopilot_safety_margin,
 		"autopilot_transfer_direction": autopilot_transfer_direction,
 		"autopilot_arrival_burn_x": autopilot_arrival_burn_vector.x,
 		"autopilot_arrival_burn_y": autopilot_arrival_burn_vector.y,
@@ -1167,6 +1171,8 @@ func load_save_data(data: Dictionary) -> void:
 	autopilot_throttle = float(data.get("autopilot_throttle", 0.0))
 	autopilot_transfer_start_time = float(data.get("autopilot_transfer_start_time", sim_time if str(data.get("autopilot_phase", "IDLE")) == "TRANSFER_COAST" else -1.0))
 	autopilot_transfer_duration = float(data.get("autopilot_transfer_duration", 0.0))
+	autopilot_speed_priority = clampf(float(data.get("autopilot_speed_priority", 0.35)), 0.0, 1.0)
+	autopilot_safety_margin = clampf(float(data.get("autopilot_safety_margin", 0.10)), 0.0, 0.4)
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
 	autopilot_arrival_burn_vector = Vector2(float(data.get("autopilot_arrival_burn_x", 0.0)), float(data.get("autopilot_arrival_burn_y", 0.0)))
 	landed = bool(data.get("landed", false))
