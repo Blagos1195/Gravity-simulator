@@ -140,7 +140,6 @@ func _physics_step(dt: float) -> void:
 		if autopilot_burn_remaining <= 1.0:
 			thrust_key_down = false
 			autopilot_phase = "TRANSFER_COAST"
-			autopilot_complete = true
 	var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, start_time)
 	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
@@ -322,7 +321,7 @@ func _update_guidance(dt: float) -> void:
 				if fuel <= 0.0:
 					autopilot_phase = "FAILED"
 			"TRANSFER_COAST":
-				status_message = "AUTOPILOT  •  TRANSFER BURN COMPLETE"
+				status_message = "AUTOPILOT  •  BURN COMPLETE, COASTING TO TARGET"
 				thrust_key_down = false
 			"COMPLETE":
 				status_message = "AUTOPILOT  •  TARGET ORBIT ACHIEVED"
