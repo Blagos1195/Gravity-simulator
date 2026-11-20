@@ -40,7 +40,7 @@ var time_warp := 1.0
 var rocket_position := Vector2(0, -EARTH_RADIUS - 2.0)
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
-var fuel := first_stage_fuel_capacity
+var fuel := FIRST_STAGE_FUEL
 var stage_index := 0
 var discarded_stage_mass := 0.0
 var throttle := 0.0
@@ -553,10 +553,20 @@ func get_save_data() -> Dictionary:
         "peak_heat_flux_mw": peak_heat_flux_mw,
         "throttle": throttle,
         "time_warp": time_warp,
-        "paused": paused
+        "paused": paused,
+        "rocket_design": {
+            "payload_mass": payload_mass,
+            "stages": [
+                {"dry_mass": first_stage_dry_mass, "fuel_capacity": first_stage_fuel_capacity, "thrust": first_stage_thrust, "vacuum_thrust": first_stage_vacuum_thrust, "flow": first_stage_flow},
+                {"dry_mass": upper_stage_dry_mass, "fuel_capacity": upper_stage_fuel_capacity, "thrust": upper_stage_thrust, "vacuum_thrust": upper_stage_vacuum_thrust, "flow": upper_stage_flow}
+            ]
+        }
     }
 
 func load_save_data(data: Dictionary) -> void:
+    var saved_design: Variant = data.get("rocket_design", null)
+    if saved_design is Dictionary:
+        set_rocket_design(saved_design)
     sim_time = float(data.get("sim_time", 0.0))
     var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 2.0])
     var v: Array = data.get("velocity", [EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0])
