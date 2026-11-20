@@ -254,6 +254,7 @@ func _update_guidance(dt: float) -> void:
 	var tangent := Vector2(-radial.y, radial.x)
 	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / 100000.0, 0.0, 1.0))
 	if autopilot_enabled:
+		gimbal_angle = 0.0
 		var orbit := FlightComputer.orbital_state(rocket_position, velocity)
 		var target_radius := EARTH_RADIUS + autopilot_target_altitude
 		var prograde := velocity.normalized() if velocity.length() > 1.0 else tangent
