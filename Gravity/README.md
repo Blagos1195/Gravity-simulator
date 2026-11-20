@@ -35,6 +35,9 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Destination autopilot with parking-orbit insertion, transfer-window waiting, hyperbolic departure alignment, calculated injection burn, target-relative encounter detection and a one-burn circular capture at closest approach
 - Destination-relative range and velocity telemetry, plus selected-planet rendering during interplanetary flight
 - Planetary Hill-sphere encounter radii and target-relative ephemeris/velocity calculations
+- Approximate Venus, Mars and gas-giant atmospheric density, temperature, rotation, drag, heating and engine-pressure effects
+- Body-relative orbital telemetry and orbit drawing around the local planet
+- Surface contact, low-speed landing and high-speed crash states for the Moon and rocky planets; gas-giant 1-bar reference levels are treated as atmospheric loss boundaries
 - Deep-space adaptive integration with up to 1,000,000× time warp while retaining fine steps near Earth
 - Manual engine controls disengage autopilot; saved flight state preserves the selected target, departure burn vector and guidance phase
 - Remaining ideal vehicle delta-v and thrust-to-weight telemetry
