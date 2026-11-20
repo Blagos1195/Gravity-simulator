@@ -78,7 +78,7 @@ static func hohmann_transfer(origin_radius: float, target_radius: float, mu: flo
 	var origin_speed := sqrt(mu / origin_radius)
 	var target_speed := sqrt(mu / target_radius)
 	var transfer_origin_speed := sqrt(mu * (2.0 / origin_radius - 1.0 / transfer_axis))
-	var transfer_target_speed := sqrt(mu * (2.0 / target_radius - 1.0 / transfer_axis))
+	var transfer_target_speed := sqrt(mu * (2.0 / target_radius - 1.0 / planet_transfer_axis))
 	var first_burn := absf(transfer_origin_speed - origin_speed)
 	var second_burn := absf(target_speed - transfer_target_speed)
 	var transfer_time := PI * sqrt(pow(transfer_axis, 3.0) / mu)
@@ -88,7 +88,7 @@ static func hohmann_transfer(origin_radius: float, target_radius: float, mu: flo
 		"arrival_delta_v": second_burn,
 		"total_delta_v": first_burn + second_burn,
 		"transfer_time": transfer_time,
-		"transfer_semi_major_axis": transfer_axis
+		"transfer_semi_major_axis": planet_transfer_axis
 	}
 
 static func interplanetary_transfer(target_index: int, parking_altitude: float = 200000.0) -> Dictionary:
@@ -96,13 +96,13 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 		var lunar := hohmann_transfer(EARTH_RADIUS + parking_altitude, EARTH_RADIUS + MOON_ORBIT_RADIUS)
 		if not bool(lunar.get("valid", false)):
 			return {"valid": false}
-		var transfer_axis := (EARTH_RADIUS + parking_altitude + EARTH_RADIUS + MOON_ORBIT_RADIUS) * 0.5
-		var lunar_arrival_speed := sqrt(EARTH_MU * (2.0 / (EARTH_RADIUS + MOON_ORBIT_RADIUS) - 1.0 / transfer_axis))
+		var lunar_transfer_axis := (EARTH_RADIUS + parking_altitude + EARTH_RADIUS + MOON_ORBIT_RADIUS) * 0.5
+		var lunar_arrival_speed := sqrt(EARTH_MU * (2.0 / (EARTH_RADIUS + MOON_ORBIT_RADIUS) - 1.0 / lunar_transfer_axis))
 		var moon_orbital_speed := sqrt(EARTH_MU / (EARTH_RADIUS + MOON_ORBIT_RADIUS))
-		var arrival_excess := absf(lunar_arrival_speed - moon_orbital_speed)
+		var lunar_arrival_excess := absf(lunar_arrival_speed - moon_orbital_speed)
 		var lunar_parking_radius := MOON_RADIUS + 100000.0
 		var lunar_circular_speed := sqrt(MOON_MU / lunar_parking_radius)
-		var lunar_capture_speed := sqrt(arrival_excess * arrival_excess + 2.0 * MOON_MU / lunar_parking_radius)
+		var lunar_capture_speed := sqrt(lunar_arrival_excess * lunar_arrival_excess + 2.0 * MOON_MU / lunar_parking_radius)
 		var lunar_capture_delta_v := lunar_capture_speed - lunar_circular_speed
 		return {
 			"valid": true,
@@ -113,16 +113,16 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 			"transfer_time": float(lunar.transfer_time),
 			"direction": 1.0,
 			"phase_angle": 0.0,
-			"arrival_excess_speed": arrival_excess
+			"arrival_excess_speed": lunar_arrival_excess
 		}
 	if target_index < 0 or target_index >= PLANET_TARGETS.size():
 		return {"valid": false}
 	var target: Dictionary = PLANET_TARGETS[target_index]
 	var target_radius := float(target.radius)
-	var transfer_axis := (EARTH_ORBIT_RADIUS + target_radius) * 0.5
+	var planet_transfer_axis := (EARTH_ORBIT_RADIUS + target_radius) * 0.5
 	var earth_speed := sqrt(SUN_MU / EARTH_ORBIT_RADIUS)
 	var target_speed := sqrt(SUN_MU / target_radius)
-	var transfer_departure_speed := sqrt(SUN_MU * (2.0 / EARTH_ORBIT_RADIUS - 1.0 / transfer_axis))
+	var transfer_departure_speed := sqrt(SUN_MU * (2.0 / EARTH_ORBIT_RADIUS - 1.0 / planet_transfer_axis))
 	var transfer_arrival_speed := sqrt(SUN_MU * (2.0 / target_radius - 1.0 / transfer_axis))
 	var departure_excess := absf(transfer_departure_speed - earth_speed)
 	var arrival_excess := absf(target_speed - transfer_arrival_speed)
@@ -135,7 +135,7 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 	var parking_speed := circular_orbit_speed(parking_radius)
 	var escape_speed := sqrt(departure_excess * departure_excess + 2.0 * EARTH_MU / parking_radius)
 	var injection_delta_v := escape_speed - parking_speed
-	var transfer_time := PI * sqrt(pow(transfer_axis, 3.0) / SUN_MU)
+	var transfer_time := PI * sqrt(pow(planet_transfer_axis, 3.0) / SUN_MU)
 	var target_mean_motion := TAU / (float(target.period_days) * 86400.0)
 	var phase_angle := wrapf(PI - target_mean_motion * transfer_time, -PI, PI)
 	return {
