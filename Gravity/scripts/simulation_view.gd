@@ -189,15 +189,16 @@ func _physics_step(dt: float) -> void:
 		_separate_stage()
 	_handle_body_contact()
 	var final_altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
-	if not autopilot_enabled:
+	if not autopilot_enabled and not landed and not crashed:
 		status_message = "STAGE %d  •  ENGINE FIRING" % (stage_index + 1) if throttle > 0.0 else "PAD READY  •  W TO IGNITE" if final_altitude < 100.0 else "FLIGHT ACTIVE"
 
 func _adaptive_step_size() -> float:
-	var radius := maxf(EARTH_RADIUS, rocket_position.length())
-	var altitude := maxf(0.0, radius - EARTH_RADIUS)
-	var gravity := G * EARTH_MASS / (radius * radius)
+	var body := _nearest_body_state(rocket_position)
+	var radius := maxf(float(body.radius), float(body.distance))
+	var altitude := maxf(0.0, float(body.distance) - float(body.radius))
+	var gravity := G * float(body.mass) / (radius * radius)
 	var orbital_limit := 0.015 * sqrt(radius / maxf(0.001, gravity))
-	var speed := velocity.length()
+	var speed := (velocity - body.velocity).length()
 	var deep_space := altitude > 1.0e8
 	var maximum_step := 30.0 if deep_space else 0.25
 	var travel_limit := 250.0 / maxf(100.0, speed) if altitude < 150000.0 else (1000000.0 / maxf(100.0, speed) if deep_space else 0.25)
