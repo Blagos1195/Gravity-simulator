@@ -729,8 +729,8 @@ func _draw() -> void:
 		draw_arc(moon_screen, moon_radius_px, 0.0, TAU, 64, Color(0.72, 0.74, 0.78), 1.0)
 		draw_string(ThemeDB.fallback_font, moon_screen + Vector2(moon_radius_px + 8.0, 4.0), "MOON", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.75, 0.78, 0.84))
 
-	if autopilot_target_mode == "PLANET" and autopilot_planet_index >= 0 and autopilot_planet_index < FlightComputer.PLANET_TARGETS.size():
-		var destination := _autopilot_target_state()
+	var destination := _nearest_body_state(rocket_position)
+	if str(destination.name) not in ["Earth", "Moon"] and float(destination.distance) < float(destination.soi):
 		var destination_screen := rocket_screen + (destination.position - rocket_position) * altitude_visual_scale
 		var destination_radius := clampf(float(destination.radius) * altitude_visual_scale, 3.0, 72.0)
 		if destination_screen.x > -destination_radius - 30.0 and destination_screen.x < size.x + destination_radius + 30.0 and destination_screen.y > -destination_radius - 30.0 and destination_screen.y < size.y + destination_radius + 30.0:
