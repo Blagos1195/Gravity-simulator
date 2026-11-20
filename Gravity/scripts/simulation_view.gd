@@ -7,7 +7,6 @@ const EARTH_MASS := PlanetarySystem.EARTH_MASS
 const EARTH_RADIUS := PlanetarySystem.EARTH_RADIUS
 const DRAG_AREA := 0.45
 const LIFT_AREA := 1.8
-const DRAG_COEFFICIENT := 0.45
 const EARTH_ROTATION_RATE := 7.2921159e-5
 
 var rocket_stages: Array = []
