@@ -424,14 +424,14 @@ func _build_flight_hud() -> void:
 func _show_flight_computer() -> void:
 	var window := Window.new()
 	window.title = "FLIGHT COMPUTER"
-	window.size = Vector2i(440, 560)
-	window.min_size = Vector2i(400, 480)
+	window.size = Vector2i(500, 650)
+	window.min_size = Vector2i(440, 560)
 	window.unresizable = false
 	window.close_requested.connect(window.queue_free)
 	add_child(window)
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 12)
+	root.add_theme_constant_override("separation", 10)
 	root.offset_left = 18
 	root.offset_right = -18
 	root.offset_top = 18
@@ -443,71 +443,92 @@ func _show_flight_computer() -> void:
 	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 	root.add_child(heading)
 	var description := Label.new()
-	description.text = "Select a target orbit or transfer destination. Calculations use the current Earth-centred state."
+	description.text = "Choose an Earth orbit or a destination. Planetary estimates use circular, coplanar Hohmann transfers."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 	var target_label := Label.new()
-	target_label.text = "TARGET"
+	target_label.text = "PLANNED DESTINATION / ORBIT"
 	root.add_child(target_label)
 	var target := OptionButton.new()
 	target.add_item("Low Earth orbit · 200 km", 200000)
 	target.add_item("Medium Earth orbit · 2,000 km", 2000000)
 	target.add_item("Geostationary orbit · 35,786 km", 35786000)
-	target.add_item("Lunar distance · 384,400 km", 384400000)
+	target.add_separator()
+	target.add_item("Moon", -1)
+	target.add_item("Mercury", -2)
+	target.add_item("Venus", -3)
+	target.add_item("Mars", -4)
+	target.add_item("Jupiter", -5)
+	target.add_item("Saturn", -6)
+	target.add_item("Uranus", -7)
+	target.add_item("Neptune", -8)
 	root.add_child(target)
-	var report := Label.new()
-	report.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var report := RichTextLabel.new()
+	report.bbcode_enabled = false
+	report.fit_content = true
+	report.scroll_active = true
 	report.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(report)
 	var calculate := Button.new()
-	calculate.text = "CALCULATE MANOEUVRE"
+	calculate.text = "CALCULATE FLIGHT PLAN"
 	root.add_child(calculate)
 	var autopilot := Button.new()
-	autopilot.text = "ENGAGE ORBIT AUTOPILOT"
+	autopilot.text = "ENGAGE AUTOPILOT FOR SELECTED TARGET"
 	root.add_child(autopilot)
 	var cancel := Button.new()
 	cancel.text = "CLOSE"
 	cancel.pressed.connect(window.queue_free)
 	root.add_child(cancel)
 	var update_report := func() -> void:
-		var target_radius := FlightComputer.EARTH_RADIUS + float(target.get_selected_id())
+		var selected_id: int = target.get_selected_id()
 		var state := FlightComputer.orbital_state(sim.rocket_position, sim.velocity)
-		var current_altitude := sim.rocket_position.length() - FlightComputer.EARTH_RADIUS
-		var circular := FlightComputer.circularisation_burn(sim.rocket_position, sim.velocity)
-		var transfer := FlightComputer.hohmann_transfer(maxf(FlightComputer.EARTH_RADIUS + 100000.0, sim.rocket_position.length()), target_radius)
-		var apoapsis_text := "UNBOUND" if not bool(state.get("bound", false)) else "%.0f km" % (float(state.get("apoapsis", 0.0)) / 1000.0)
-		var periapsis_text := "%.0f km" % (float(state.get("periapsis", 0.0)) / 1000.0)
+		var current_altitude: float = float(sim.rocket_position.length()) - FlightComputer.EARTH_RADIUS
 		var text_lines := PackedStringArray()
-		text_lines.append("CURRENT ALTITUDE    %.1f km" % (current_altitude / 1000.0))
-		text_lines.append("CURRENT SPEED       %.0f m/s" % sim.velocity.length())
-		text_lines.append("CURRENT APOAPSIS    %s" % apoapsis_text)
-		text_lines.append("CURRENT PERIAPSIS    %s" % periapsis_text)
+		text_lines.append("CURRENT FLIGHT STATE")
+		text_lines.append("Altitude: %.1f km" % (current_altitude / 1000.0))
+		text_lines.append("Speed: %.0f m/s" % sim.velocity.length())
+		text_lines.append("Apoapsis: %s" % ("UNBOUND" if not bool(state.get("bound", false)) else "%.1f km" % (float(state.get("apoapsis", 0.0)) / 1000.0)))
+		text_lines.append("Periapsis: %.1f km" % (float(state.get("periapsis", 0.0)) / 1000.0))
 		text_lines.append("")
-		text_lines.append("CIRCULARISE HERE")
-		text_lines.append("Required Δv: %.0f m/s" % float(circular.get("delta_v", 0.0)))
-		text_lines.append("")
-		text_lines.append("HOHMANN TRANSFER ESTIMATE")
-		text_lines.append("Departure Δv: %.0f m/s" % float(transfer.get("departure_delta_v", 0.0)))
-		text_lines.append("Arrival Δv: %.0f m/s" % float(transfer.get("arrival_delta_v", 0.0)))
-		text_lines.append("Total Δv: %.0f m/s" % float(transfer.get("total_delta_v", 0.0)))
-		text_lines.append("Transfer time: %.1f days" % (float(transfer.get("transfer_time", 0.0)) / 86400.0))
-		text_lines.append("")
-		text_lines.append("Transfer estimates assume circular, coplanar Earth orbits. Lunar-distance transfer is a two-body approximation, not a complete Moon rendezvous solution.")
+		if selected_id > 0:
+			var target_radius := FlightComputer.EARTH_RADIUS + float(selected_id)
+			var circular := FlightComputer.circularisation_burn(sim.rocket_position, sim.velocity)
+			var transfer := FlightComputer.hohmann_transfer(maxf(FlightComputer.EARTH_RADIUS + 100000.0, sim.rocket_position.length()), target_radius)
+			text_lines.append("TARGET ORBIT")
+			text_lines.append("Altitude: %.0f km" % (float(selected_id) / 1000.0))
+			text_lines.append("Circular speed: %.0f m/s" % FlightComputer.circular_orbit_speed(target_radius))
+			text_lines.append("Circularise at current position: %.0f m/s Δv" % float(circular.get("delta_v", 0.0)))
+			text_lines.append("Transfer from a 100 km reference orbit: %.0f m/s Δv" % float(transfer.get("total_delta_v", 0.0)))
+			text_lines.append("Transfer time: %.1f minutes" % (float(transfer.get("transfer_time", 0.0)) / 60.0))
+		else:
+			var planet_index := -1 if selected_id == -1 else -selected_id - 2
+			var transfer := FlightComputer.interplanetary_transfer(planet_index, maxf(200000.0, current_altitude))
+			text_lines.append("INTERPLANETARY TRANSFER")
+			if bool(transfer.get("valid", false)):
+				text_lines.append("Destination: %s" % str(transfer.get("name", "Unknown")))
+				text_lines.append("Departure injection: %.0f m/s Δv" % float(transfer.get("departure_delta_v", 0.0)))
+				text_lines.append("Arrival capture estimate: %.0f m/s Δv" % float(transfer.get("arrival_delta_v", 0.0)))
+				text_lines.append("Total ideal Δv: %.0f m/s" % float(transfer.get("total_delta_v", 0.0)))
+				text_lines.append("Transfer time: %.1f days" % (float(transfer.get("transfer_time", 0.0)) / 86400.0))
+				text_lines.append("Required departure phase angle: %.1f°" % rad_to_deg(float(transfer.get("phase_angle", 0.0))))
+				text_lines.append("Departure burn: %s" % ("prograde" if float(transfer.get("direction", 1.0)) > 0.0 else "retrograde"))
+			text_lines.append("")
+			text_lines.append("The planetary estimate assumes circular coplanar orbits and patched-conic departure. It does not yet solve arrival targeting or atmospheric capture.")
 		report.text = "\n".join(text_lines)
 	calculate.pressed.connect(update_report)
 	target.item_selected.connect(func(_index: int): update_report.call())
 	autopilot.pressed.connect(func():
-		var selected_altitude := float(target.get_selected_id())
-		if selected_altitude > 50000000.0:
-			report.text += "\n\nAUTOPILOT NOT AVAILABLE: lunar rendezvous guidance is not implemented yet."
-			return
-		sim.autopilot_target_altitude = selected_altitude
+		var selected_id: int = target.get_selected_id()
 		sim.autopilot_enabled = true
 		sim.autopilot_complete = false
+		sim.autopilot_target_altitude = float(selected_id) if selected_id > 0 else 200000.0
+		sim.autopilot_target_mode = "ORBIT" if selected_id > 0 else "PLANET"
+		sim.autopilot_planet_index = -1 if selected_id == -1 else -selected_id - 2
+		sim.autopilot_burn_remaining = 0.0
 		sim.autopilot_phase = "ASCENT"
 		sim.guidance_enabled = true
 		sim.thrust_key_down = true
-		report.text += "\n\nORBIT AUTOPILOT ENGAGED. Target altitude: %.0f km." % (selected_altitude / 1000.0)
+		report.text += "\n\nAUTOPILOT ENGAGED. " + ("Target orbit: %.0f km." % (sim.autopilot_target_altitude / 1000.0) if selected_id > 0 else "Target: " + str(target.get_item_text(target.selected)) + ". Parking orbit: 200 km, followed by the calculated departure burn.")
 	)
 	update_report.call()
 	window.popup_centered()
