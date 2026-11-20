@@ -167,7 +167,7 @@ func _physics_step(dt: float) -> void:
 			else:
 				var arrival_state := _autopilot_target_state()
 				var arrival_position: Vector2 = rocket_position - arrival_state.position
-				var arrival_velocity: Vector2 = velocity - arrival_state.velocity
+				var arrival_velocity: Vector2 = velocity + thrust_impulse - arrival_state.velocity
 				var arrival_orbit := FlightComputer.orbital_state(arrival_position, arrival_velocity, G * float(arrival_state.mass))
 				if bool(arrival_orbit.get("bound", false)) and float(arrival_orbit.get("periapsis", 0.0)) > float(arrival_state.radius) + 50000.0:
 					autopilot_phase = "COMPLETE"
