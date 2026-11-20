@@ -22,7 +22,7 @@ var time_warp := 1.0
 var rocket_position := Vector2(0, -EARTH_RADIUS - 2.0)
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
-var fuel := FIRST_STAGE_FUEL
+var fuel := 300000.0
 var stage_index := 0
 var discarded_stage_mass := 0.0
 var throttle := 0.0
@@ -540,7 +540,6 @@ func load_save_data(data: Dictionary) -> void:
 	rocket_position = Vector2(float(p[0]), float(p[1]))
 	velocity = Vector2(float(v[0]), float(v[1]))
 	rotation_angle = float(data.get("rotation_angle", 0.0))
-	stage_index = int(data.get("stage_index", 0))
 	fuel = float(data.get("fuel", _active_stage_data().get("fuel_capacity", 0.0)))
 	discarded_stage_mass = float(data.get("discarded_stage_mass", 0.0))
 	gimbal_angle = float(data.get("gimbal_angle", 0.0))
