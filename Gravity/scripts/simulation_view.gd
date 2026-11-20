@@ -778,6 +778,39 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				camera_zoom = maxf(0.0000005, camera_zoom / 1.2)
 
+func _draw_atmosphere(center: Vector2, planet_radius: float, atmosphere_height: float, atmosphere_color: Color) -> void:
+	if atmosphere_height <= 0.0:
+		return
+	var physical_thickness := atmosphere_height * camera_zoom * _visual_scale()
+	var visible_thickness := clampf(physical_thickness, 3.0, 34.0)
+	var rings := 5
+	for ring in range(rings):
+		var fraction := float(ring + 1) / float(rings)
+		var ring_radius := planet_radius + visible_thickness * fraction
+		var alpha := 0.035 + 0.13 * (1.0 - fraction)
+		draw_arc(center, ring_radius, 0.0, TAU, 96, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, alpha), maxf(1.0, visible_thickness / float(rings) * 1.5))
+	draw_arc(center, planet_radius + visible_thickness, 0.0, TAU, 96, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, 0.5), 1.0)
+
+
+func _planet_atmosphere_visual(name: String) -> Dictionary:
+	match name:
+		"Earth":
+			return {"height": 100000.0, "color": Color(0.22, 0.62, 1.0)}
+		"Venus":
+			return {"height": 250000.0, "color": Color(0.96, 0.72, 0.36)}
+		"Mars":
+			return {"height": 125000.0, "color": Color(0.91, 0.48, 0.31)}
+		"Jupiter":
+			return {"height": 1000000.0, "color": Color(0.86, 0.67, 0.48)}
+		"Saturn":
+			return {"height": 1500000.0, "color": Color(0.91, 0.79, 0.56)}
+		"Uranus":
+			return {"height": 1000000.0, "color": Color(0.46, 0.81, 0.86)}
+		"Neptune":
+			return {"height": 1500000.0, "color": Color(0.36, 0.53, 1.0)}
+	return {"height": 0.0, "color": Color.TRANSPARENT}
+
+
 func _draw() -> void:
 	var view_center := get_viewport_rect().size * 0.5
 	var world_scale_factor := _visual_scale()
@@ -802,6 +835,7 @@ func _draw() -> void:
 	if show_grid:
 		_draw_grid(view_center)
 
+	_draw_atmosphere(earth_screen, radius_px, 100000.0, Color(0.22, 0.62, 1.0))
 	draw_circle(earth_screen, radius_px + 7, Color(0.15, 0.35, 0.58, 0.12))
 	draw_circle(earth_screen, radius_px, Color(0.10, 0.28, 0.53))
 	draw_arc(earth_screen, radius_px, 0, TAU, 120, Color(0.28, 0.64, 0.95), 2.0)
@@ -844,6 +878,8 @@ func _draw() -> void:
 					destination_color = Color(0.48, 0.78, 0.82)
 				"Neptune":
 					destination_color = Color(0.28, 0.42, 0.88)
+			var atmosphere_visual: Dictionary = _planet_atmosphere_visual(str(destination.name))
+			_draw_atmosphere(destination_screen, destination_radius, float(atmosphere_visual.get("height", 0.0)), atmosphere_visual.get("color", Color.TRANSPARENT))
 			draw_circle(destination_screen, destination_radius + 5.0, Color(0.45, 0.7, 1.0, 0.12))
 			draw_circle(destination_screen, destination_radius, destination_color)
 			draw_arc(destination_screen, destination_radius, 0.0, TAU, 80, Color(0.9, 0.92, 1.0, 0.8), 1.0)
