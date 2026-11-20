@@ -365,6 +365,8 @@ func _separate_stage() -> void:
 	thrust_key_down = false
 
 func _autopilot_target_body_name() -> String:
+	if autopilot_planet_index == -2:
+		return "Earth"
 	if autopilot_planet_index == -1:
 		return "Moon"
 	if autopilot_planet_index >= 0 and autopilot_planet_index < FlightComputer.PLANET_TARGETS.size():
@@ -373,6 +375,15 @@ func _autopilot_target_body_name() -> String:
 
 func _autopilot_target_state() -> Dictionary:
 	var body_name := _autopilot_target_body_name()
+	if body_name == "Earth":
+		return {
+			"name": "Earth",
+			"position": Vector2.ZERO,
+			"velocity": Vector2.ZERO,
+			"mass": PlanetarySystem.EARTH_MASS,
+			"radius": PlanetarySystem.EARTH_RADIUS,
+			"soi": 9.25e8
+		}
 	if body_name == "Moon":
 		return {
 			"name": "Moon",
