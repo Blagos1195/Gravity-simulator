@@ -464,6 +464,11 @@ func _continue_game() -> void:
 	_start_flight()
 	_load_game()
 
+func _load_menu_slot(slot: int) -> void:
+	save_slot = slot
+	_start_flight()
+	_load_game()
+
 func _show_game_load() -> void:
 	for child in get_children():
 		child.queue_free()
@@ -494,11 +499,7 @@ func _show_game_load() -> void:
 				file.close()
 				if parsed is Dictionary:
 					label = "SLOT %02d  •  %s  •  %s" % [slot, str(parsed.get("realism", "Unknown")), str(parsed.get("world_scale", "Unknown"))]
-			_add_button(root, label, func():
-				save_slot = slot
-				_start_flight()
-				_load_game()
-			)
+			_add_button(root, label, _load_menu_slot.bind(slot))
 		else:
 			var empty_label := Label.new()
 			empty_label.text = label
