@@ -6,7 +6,7 @@ const MIN_STAGES := 2
 const MAX_STAGES := 8
 const MAX_TOTAL_MASS := 5000000.0
 const MIN_TOTAL_DELTA_V := 8500.0
-const MAX_TOTAL_DELTA_V := 20500.0
+const MAX_TOTAL_DELTA_V := 16500.0
 
 const DEFAULT_DESIGN := {
 	"name": "Explorer I",
@@ -14,17 +14,17 @@ const DEFAULT_DESIGN := {
 	"stages": [
 		{
 			"name": "FIRST STAGE",
-			"dry_mass": 12000.0,
+			"dry_mass": 25000.0,
 			"fuel_capacity": 300000.0,
-			"thrust": 7500000.0,
-			"vacuum_thrust": 9000000.0,
-			"flow": 2200.0,
+			"thrust": 5000000.0,
+			"vacuum_thrust": 6000000.0,
+			"flow": 1500.0,
 			"engine_count": 1
 		},
 		{
 			"name": "UPPER STAGE",
-			"dry_mass": 3000.0,
-			"fuel_capacity": 80000.0,
+			"dry_mass": 4000.0,
+			"fuel_capacity": 30000.0,
 			"thrust": 200000.0,
 			"vacuum_thrust": 250000.0,
 			"flow": 63.3,
@@ -111,7 +111,7 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0:
 			continue
 		var dry_fraction := dry / (dry + fuel)
-		if dry_fraction < 0.025 or dry_fraction > 0.35:
+		if dry_fraction < 0.05 or dry_fraction > 0.35:
 			errors.append("Stage %d has an unrealistic dry-mass-to-propellant ratio." % (i + 1))
 		if vacuum_thrust < sea_thrust:
 			errors.append("Stage %d vacuum thrust cannot be lower than sea-level thrust." % (i + 1))
