@@ -68,7 +68,7 @@ const PRESET_DESIGNS := {
 		"stages": [
 			{"name": "HEAVY CORE", "dry_mass": 30000.0, "fuel_capacity": 540000.0, "thrust": 10080000.0, "vacuum_thrust": 10800000.0, "flow": 3000.0, "engine_count": 1},
 			{"name": "TRANSFER STAGE", "dry_mass": 6000.0, "fuel_capacity": 108000.0, "thrust": 1230000.0, "vacuum_thrust": 1500000.0, "flow": 390.0, "engine_count": 1},
-			{"name": "INJECTION STAGE", "dry_mass": 2000.0, "fuel_capacity": 36000.0, "thrust": 430000.0, "vacuum_thrust": 460000.0, "flow": 110.0, "engine_count": 1}
+			{"name": "INJECTION STAGE", "dry_mass": 2000.0, "fuel_capacity": 36000.0, "thrust": 400000.0, "vacuum_thrust": 460000.0, "flow": 110.0, "engine_count": 1}
 		]
 	},
 	"DEEP_SPACE": {
