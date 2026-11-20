@@ -347,6 +347,7 @@ func _calculate_predicted_trajectory() -> void:
     var predicted_velocity := velocity
     var predicted_fuel := fuel
     var predicted_stage := stage_index
+    var predicted_rotation := rotation_angle
     var dt := 5.0
     for i in range(360):
         var altitude := maxf(0.0, position.length() - EARTH_RADIUS)
@@ -359,7 +360,15 @@ func _calculate_predicted_trajectory() -> void:
         var sea_level_thrust := FIRST_STAGE_THRUST if predicted_stage == 0 else UPPER_STAGE_THRUST
         var vacuum_thrust := FIRST_STAGE_VACUUM_THRUST if predicted_stage == 0 else UPPER_STAGE_VACUUM_THRUST
         var predicted_thrust := lerpf(sea_level_thrust, vacuum_thrust, vacuum_fraction) * throttle
-        var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
+        if guidance_enabled:
+            var radial := position.normalized()
+            var pitch := lerpf(90.0, 5.0, clampf(altitude / 100000.0, 0.0, 1.0))
+            if predicted_velocity.length() > 1500.0:
+                pitch = minf(pitch, 12.0)
+            var tangent := Vector2(-radial.y, radial.x)
+            var target_direction := radial * sin(deg_to_rad(pitch)) + tangent * cos(deg_to_rad(pitch))
+            predicted_rotation = lerp_angle(predicted_rotation, target_direction.angle() - Vector2.UP.angle(), clampf(dt * 0.08, 0.0, 1.0))
+        var thrust_direction := Vector2.UP.rotated(predicted_rotation + gimbal_angle)
         var acceleration := PlanetarySystem.gravity_acceleration(position, sim_time + i * dt)
         if throttle > 0.0 and predicted_fuel > 0.0:
             acceleration += thrust_direction * predicted_thrust / mass
