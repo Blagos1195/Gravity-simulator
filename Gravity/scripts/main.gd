@@ -764,6 +764,9 @@ func _show_flight_computer() -> void:
 	var calculate := Button.new()
 	calculate.text = "CALCULATE FLIGHT PLAN"
 	root.add_child(calculate)
+	var launch_windows_button := Button.new()
+	launch_windows_button.text = "SCAN NEXT 18 MONTHS FOR LAUNCH WINDOWS"
+	root.add_child(launch_windows_button)
 	var autopilot := Button.new()
 	autopilot.text = "ENGAGE AUTOPILOT FOR SELECTED TARGET"
 	root.add_child(autopilot)
@@ -899,6 +902,31 @@ func _show_flight_computer() -> void:
 	calculate.pressed.connect(func():
 		calculate_simulated_transfer = true
 		update_report.call()
+	)
+	launch_windows_button.pressed.connect(func():
+		var selected_id: int = target.get_selected_id()
+		var destination_index := -1 if selected_id == -1 else -selected_id - 2
+		if selected_id > 0:
+			report.text += "\n\nLaunch-window scanning is only available for planetary transfers."
+			return
+		var body: Dictionary = sim._nearest_body_state(sim.rocket_position)
+		var relative_position: Vector2 = sim.rocket_position - body.position
+		var relative_velocity: Vector2 = sim.velocity - body.velocity
+		var orbit_state := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(body.mass))
+		if sim.landed or str(body.get("name", "")) != "Earth" or not bool(orbit_state.get("bound", false)) or float(orbit_state.get("periapsis", 0.0)) < FlightComputer.EARTH_RADIUS + 70000.0:
+			report.text += "\n\nLaunch-window scanning requires a stable Earth parking orbit."
+			return
+		launch_windows_button.disabled = true
+		report.text = "SCANNING FUTURE DEPARTURE DATES...\nThis simulates coarse candidate transfers and may take a little while."
+		var available := FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel) * (1.0 - sim.autopilot_safety_margin)
+		var windows := FlightComputer.scan_launch_windows(relative_position, relative_velocity, sim.sim_time, destination_index, available, sim.autopilot_speed_priority)
+		launch_windows_button.disabled = false
+		if not bool(windows.get("valid", false)):
+			report.text = "NO FEASIBLE WINDOWS FOUND\n" + str(windows.get("reason", "No valid transfer was found."))
+		else:
+			var best: Dictionary = windows.best
+			var destination := "Moon" if destination_index == -1 else str(FlightComputer.PLANET_TARGETS[destination_index].get("name", "Unknown"))
+			report.text = "LAUNCH WINDOW SEARCH: %s\nDates sampled: %d\nBest sampled departure: in %d days\nDeparture Δv: %.0f m/s\nCapture Δv: %.0f m/s\nTotal Δv: %.0f m/s\nTransfer time: %.1f days\n\nThis is the best of the sampled dates and burn candidates, not a guaranteed global optimum. Use CALCULATE FLIGHT PLAN at the selected date for a higher-resolution search." % [destination, int(windows.dates_checked), int(best.departure_wait_days), float(best.departure_delta_v), float(best.capture_delta_v), float(best.total_delta_v), float(best.transfer_time) / 86400.0]
 	)
 	target.item_selected.connect(func(_index: int):
 		calculate_simulated_transfer = false
