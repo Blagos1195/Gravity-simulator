@@ -772,6 +772,7 @@ func _show_flight_computer() -> void:
 	cancel.text = "CLOSE"
 	cancel.pressed.connect(window.queue_free)
 	root.add_child(cancel)
+	var calculate_simulated_transfer := false
 	var update_report := func() -> void:
 		var selected_id: int = target.get_selected_id()
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
@@ -816,6 +817,8 @@ func _show_flight_computer() -> void:
 				mission_valid = false
 				text_lines.append("A stable departure orbit is required before the transfer search can run.")
 				text_lines.append("Autopilot will establish the departure orbit, then simulate candidate trajectories.")
+			elif not calculate_simulated_transfer:
+				text_lines.append("Press CALCULATE FLIGHT PLAN to simulate candidate trajectories from the current state.")
 			else:
 				var simulated_plan := FlightComputer.simulated_transfer_search(sim.rocket_position, sim.velocity, sim.sim_time, destination_index, remaining_delta_v * 0.9)
 				if bool(simulated_plan.get("valid", false)):
@@ -850,8 +853,14 @@ func _show_flight_computer() -> void:
 			text_lines.append("STATUS: INSUFFICIENT DELTA-V")
 		text_lines.append("Ideal rocket-equation estimate only. Real ascent, steering and correction losses can make a nominal pass fail.")
 		report.text = "\n".join(text_lines)
-	calculate.pressed.connect(update_report)
-	target.item_selected.connect(func(_index: int): update_report.call())
+	calculate.pressed.connect(func():
+		calculate_simulated_transfer = true
+		update_report.call()
+	)
+	target.item_selected.connect(func(_index: int):
+		calculate_simulated_transfer = false
+		update_report.call()
+	)
 	autopilot.pressed.connect(func():
 		var selected_id: int = target.get_selected_id()
 		sim.autopilot_enabled = true
