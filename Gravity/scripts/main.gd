@@ -511,6 +511,9 @@ func _show_flight_computer() -> void:
 				text_lines.append("Total ideal Δv: %.0f m/s" % float(transfer.get("total_delta_v", 0.0)))
 				text_lines.append("Transfer time: %.1f days" % (float(transfer.get("transfer_time", 0.0)) / 86400.0))
 				text_lines.append("Required departure phase angle: %.1f°" % rad_to_deg(float(transfer.get("phase_angle", 0.0))))
+				if planet_index >= 0:
+					var window_wait := FlightComputer.departure_wait_time(planet_index, sim.sim_time)
+					text_lines.append("Next ideal departure window: %.1f days" % (window_wait / 86400.0))
 				text_lines.append("Departure burn: %s" % ("prograde" if float(transfer.get("direction", 1.0)) > 0.0 else "retrograde"))
 			text_lines.append("")
 			text_lines.append("The planetary estimate assumes circular coplanar orbits and patched-conic departure. It does not yet solve arrival targeting or atmospheric capture.")
