@@ -358,19 +358,18 @@ func _update_guidance(dt: float) -> void:
 	rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.08, 0.0, 1.0))
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey:
-		if event.pressed and not event.echo:
-			if event.keycode in [KEY_W, KEY_UP] or event.physical_keycode in [KEY_W, KEY_UP]:
-				if autopilot_enabled:
-					autopilot_enabled = false
-					guidance_enabled = false
-				thrust_key_down = not thrust_key_down
-			if event.keycode in [KEY_S, KEY_DOWN] or event.physical_keycode in [KEY_S, KEY_DOWN]:
-				if autopilot_enabled:
-					autopilot_enabled = false
-					guidance_enabled = false
-				thrust_key_down = false
-			throttle_cutoff_key_down = false
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.is_action_pressed("engine_toggle"):
+			if autopilot_enabled:
+				autopilot_enabled = false
+				guidance_enabled = false
+			thrust_key_down = not thrust_key_down
+		elif event.is_action_pressed("throttle_cutoff"):
+			if autopilot_enabled:
+				autopilot_enabled = false
+				guidance_enabled = false
+			thrust_key_down = false
+		throttle_cutoff_key_down = false
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
@@ -379,43 +378,44 @@ func _notification(what: int) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_A, KEY_LEFT:
-				rotation_angle -= 0.12
-			KEY_D, KEY_RIGHT:
-				rotation_angle += 0.12
-			KEY_SPACE:
-				paused = not paused
-			KEY_HOME:
-				camera_zoom = 0.000045
-				solar_map_zoom = 1.0
-			KEY_EQUAL, KEY_KP_ADD:
-				time_warp = minf(100.0, time_warp * 2.0)
-			KEY_MINUS, KEY_KP_SUBTRACT:
-				time_warp = maxf(0.25, time_warp / 2.0)
-			KEY_O:
-				show_orbit = not show_orbit
-			KEY_P:
-				show_predicted_trajectory = not show_predicted_trajectory
-				if show_predicted_trajectory:
-					_calculate_predicted_trajectory()
-			KEY_M:
-				show_solar_system = not show_solar_system
-			KEY_G:
-				show_grid = not show_grid
-			KEY_V:
-				show_vectors = not show_vectors
-			KEY_H:
-				guidance_enabled = not guidance_enabled
-				if not guidance_enabled:
-					autopilot_enabled = false
-					thrust_key_down = false
-			KEY_Q:
-				gimbal_angle = clampf(gimbal_angle - deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
-			KEY_E:
-				gimbal_angle = clampf(gimbal_angle + deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
-			KEY_X:
-				_separate_stage()
+		if event.is_action_pressed("rotate_left"):
+			rotation_angle -= 0.12
+		elif event.is_action_pressed("rotate_right"):
+			rotation_angle += 0.12
+		elif event.is_action_pressed("pause_game"):
+			paused = not paused
+		elif event.is_action_pressed("stage_separation"):
+			_separate_stage()
+		elif event.is_action_pressed("guidance_toggle"):
+			guidance_enabled = not guidance_enabled
+			if not guidance_enabled:
+				autopilot_enabled = false
+				thrust_key_down = false
+		else:
+			match event.keycode:
+				KEY_HOME:
+					camera_zoom = 0.000045
+					solar_map_zoom = 1.0
+				KEY_EQUAL, KEY_KP_ADD:
+					time_warp = minf(100.0, time_warp * 2.0)
+				KEY_MINUS, KEY_KP_SUBTRACT:
+					time_warp = maxf(0.25, time_warp / 2.0)
+				KEY_O:
+					show_orbit = not show_orbit
+				KEY_P:
+					show_predicted_trajectory = not show_predicted_trajectory
+					if show_predicted_trajectory:
+						_calculate_predicted_trajectory()
+				KEY_M:
+					show_solar_system = not show_solar_system
+				KEY_G:
+					show_grid = not show_grid
+				KEY_V:
+					show_vectors = not show_vectors
+				KEY_Q:
+					gimbal_angle = clampf(gimbal_angle - deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
+				KEY_E:
+					gimbal_angle = clampf(gimbal_angle + deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			if show_solar_system:
