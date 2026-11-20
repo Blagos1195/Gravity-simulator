@@ -306,6 +306,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 				var closest_distance := INF
 				var closest_relative_position := Vector2.ZERO
 				var closest_relative_velocity := Vector2.ZERO
+				var closest_time := flight_duration
 				for step_index in range(integration_steps):
 					var current_time := start_time + float(step_index) * step_size
 					var initial_acceleration := PlanetarySystem.gravity_acceleration(position, current_time)
@@ -321,6 +322,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 						closest_distance = distance
 						closest_relative_position = relative_position
 						closest_relative_velocity = velocity - Vector2(target_state.velocity)
+						closest_time = float(step_index + 1) * step_size
 				var target_soi := float(initial_target.soi)
 				if closest_distance > target_soi:
 					continue
@@ -340,7 +342,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 					"capture_delta_v": capture_delta_v,
 					"capture_direction": Vector2(capture.get("direction", Vector2.ZERO)),
 					"total_delta_v": total_delta_v,
-					"transfer_time": flight_duration,
+					"transfer_time": closest_time,
 					"closest_approach": closest_distance,
 					"target_soi": target_soi,
 					"simulated_steps": integration_steps,
