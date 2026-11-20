@@ -1,8 +1,9 @@
 extends Control
 
-const G := 6.67430e-11
-const EARTH_MASS := 5.972e24
-const EARTH_RADIUS := 6.371e6
+const PlanetarySystem = preload("res://scripts/planetary_system.gd")
+const G := PlanetarySystem.G
+const EARTH_MASS := PlanetarySystem.EARTH_MASS
+const EARTH_RADIUS := PlanetarySystem.EARTH_RADIUS
 const ROCKET_DRY_MASS := 12000.0
 const FUEL_CAPACITY := 80000.0
 const ENGINE_THRUST := 1.8e6
@@ -61,7 +62,7 @@ func _physics_step(dt: float) -> void:
         status_message = "SURFACE CONTACT"
         return
 
-    var gravity := -rocket_position.normalized() * G * EARTH_MASS / (r * r)
+    var gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time)
     var thrust_accel := Vector2.ZERO
     if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
         throttle = 1.0
@@ -82,7 +83,7 @@ func _physics_step(dt: float) -> void:
     if realism in ["Realistic", "Hardcore"]:
         var altitude := r - EARTH_RADIUS
         if altitude < 120000.0:
-            var density := 1.225 * exp(-maxf(0.0, altitude) / 8500.0)
+            var density := PlanetarySystem.atmospheric_density(altitude)
             var speed := velocity.length()
             var drag_factor := 0.5 * density * speed * speed * 0.45 / maxf(1.0, ROCKET_DRY_MASS + fuel)
             velocity -= velocity.normalized() * drag_factor * dt
@@ -140,6 +141,15 @@ func _draw() -> void:
     draw_arc(earth_screen, radius_px * 0.76, -0.4, 2.4, 48, Color(0.18, 0.43, 0.48, 0.45), 2.0)
     draw_arc(earth_screen, radius_px * 0.53, 2.2, 5.4, 48, Color(0.18, 0.43, 0.48, 0.35), 2.0)
     draw_string(ThemeDB.fallback_font, earth_screen + Vector2(radius_px + 12, 4), "EARTH", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.78, 1.0))
+
+    var moon_world := PlanetarySystem.moon_position(sim_time)
+    var moon_screen := rocket_screen + (moon_world - rocket_position) * camera_zoom * world_scale_factor
+    var moon_radius_px := maxf(2.0, PlanetarySystem.MOON_RADIUS * camera_zoom * world_scale_factor)
+    if moon_screen.x > -moon_radius_px and moon_screen.x < size.x + moon_radius_px and moon_screen.y > -moon_radius_px and moon_screen.y < size.y + moon_radius_px:
+        draw_circle(moon_screen, moon_radius_px + 3.0, Color(0.55, 0.58, 0.66, 0.16))
+        draw_circle(moon_screen, moon_radius_px, Color(0.48, 0.49, 0.52))
+        draw_arc(moon_screen, moon_radius_px, 0.0, TAU, 64, Color(0.72, 0.74, 0.78), 1.0)
+        draw_string(ThemeDB.fallback_font, moon_screen + Vector2(moon_radius_px + 8.0, 4.0), "MOON", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.75, 0.78, 0.84))
 
     if show_orbit:
         _draw_orbit(rocket_screen, earth_screen, radius_px, world_scale_factor)
