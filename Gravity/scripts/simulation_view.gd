@@ -96,7 +96,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if not paused and not crashed:
-		var effective_warp := minf(time_warp, 100.0) if rocket_position.length() < EARTH_RADIUS + 1.0e8 else time_warp
+		var current_body := _nearest_body_state(rocket_position)
+		var current_body_altitude := float(current_body.distance) - float(current_body.radius)
+		var effective_warp := minf(time_warp, 100.0) if current_body_altitude < 1.0e8 else time_warp
 		var remaining := effective_warp * delta
 		if landed and not thrust_key_down:
 			_physics_step(remaining)
