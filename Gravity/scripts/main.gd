@@ -433,7 +433,7 @@ func _show_new_game_setup() -> void:
 	career.toggled.connect(func(value: bool): career_enabled = value)
 	root.add_child(career)
 	var note := Label.new()
-	note.text = "These choices apply to this new save. You can change supported simulation options during play."
+	note.text = "These choices are stored with this new save and remain separate from global game settings."
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
 	root.add_child(note)
