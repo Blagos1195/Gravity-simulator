@@ -888,7 +888,7 @@ func _show_flight_computer() -> void:
 		elif margin >= 0.0:
 			text_lines.append("STATUS: DELTA-V BUDGET PASSES")
 		elif remaining_delta_v >= required_delta_v:
-			text_lines.append("STATUS: MARGINAL - NO 10%% RESERVE")
+			text_lines.append("STATUS: MARGINAL - SELECTED RESERVE NOT MET")
 		else:
 			text_lines.append("STATUS: INSUFFICIENT DELTA-V")
 		text_lines.append("Ideal rocket-equation estimate only. Real ascent, steering and correction losses can make a nominal pass fail.")
