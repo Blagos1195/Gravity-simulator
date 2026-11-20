@@ -664,17 +664,23 @@ func _update_guidance(dt: float) -> void:
 	rotation_angle = lerp_angle(rotation_angle, manual_target_rotation, clampf(dt * 0.08, 0.0, 1.0))
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.is_action_pressed("engine_toggle"):
-			if autopilot_enabled:
-				autopilot_enabled = false
-				guidance_enabled = false
+	if not event is InputEventKey or not event.pressed or event.echo:
+		return
+	var ignite_pressed := event.is_action_pressed("engine_toggle") or event.keycode == KEY_W or event.physical_keycode == KEY_W
+	var cutoff_pressed := event.is_action_pressed("throttle_cutoff") or event.keycode == KEY_S or event.physical_keycode == KEY_S
+	if ignite_pressed:
+		if autopilot_enabled:
+			autopilot_enabled = false
+			guidance_enabled = false
+		if landed and fuel > 0.0:
+			thrust_key_down = true
+		else:
 			thrust_key_down = not thrust_key_down
-		elif event.is_action_pressed("throttle_cutoff"):
-			if autopilot_enabled:
-				autopilot_enabled = false
-				guidance_enabled = false
-			thrust_key_down = false
+	elif cutoff_pressed:
+		if autopilot_enabled:
+			autopilot_enabled = false
+			guidance_enabled = false
+		thrust_key_down = false
 		throttle_cutoff_key_down = false
 
 func _notification(what: int) -> void:
