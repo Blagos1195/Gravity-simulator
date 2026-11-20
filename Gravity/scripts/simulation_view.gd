@@ -119,13 +119,26 @@ func _process(delta: float) -> void:
 func _physics_step(dt: float) -> void:
 	var start_time := sim_time
 	var end_time := sim_time + dt
+	if landed:
+		if thrust_key_down and fuel > 0.0:
+			var surface_state := _surface_body_state(landed_body_name)
+			var normal: Vector2 = (rocket_position - surface_state.position).normalized()
+			rotation_angle = normal.angle() - Vector2.UP.angle()
+			landed = false
+			status_message = "LAUNCHING FROM %s" % landed_body_name.to_upper()
+		else:
+			var surface_state := _surface_body_state(landed_body_name)
+			var normal: Vector2 = (rocket_position - surface_state.position).normalized()
+			rocket_position = surface_state.position + normal * (float(surface_state.radius) + 0.5)
+			velocity = surface_state.velocity + Vector2(-normal.y, normal.x) * float(surface_state.radius) * float(surface_state.rotation_rate)
+			sim_time = end_time
+			throttle = 0.0
+			return
+	if crashed:
+		sim_time = end_time
+		throttle = 0.0
+		return
 	var altitude := rocket_position.length() - EARTH_RADIUS
-	if altitude < 0.5:
-		var normal := rocket_position.normalized()
-		rocket_position = normal * (EARTH_RADIUS + 0.5)
-		var inward_speed := velocity.dot(normal)
-		if inward_speed < 0.0:
-			velocity -= normal * inward_speed
 	if guidance_enabled:
 		_update_guidance(dt)
 	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "COMPLETE", "FAILED"]:
@@ -174,12 +187,7 @@ func _physics_step(dt: float) -> void:
 	_update_heating(dt)
 	if fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
-	if rocket_position.length() < EARTH_RADIUS + 0.5:
-		var normal := rocket_position.normalized()
-		rocket_position = normal * (EARTH_RADIUS + 0.5)
-		var radial_speed := velocity.dot(normal)
-		if radial_speed < 0.0:
-			velocity -= normal * radial_speed
+	_handle_body_contact()
 	var final_altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
 	if not autopilot_enabled:
 		status_message = "STAGE %d  •  ENGINE FIRING" % (stage_index + 1) if throttle > 0.0 else "PAD READY  •  W TO IGNITE" if final_altitude < 100.0 else "FLIGHT ACTIVE"
@@ -387,6 +395,66 @@ func _begin_arrival_capture(target_state: Dictionary) -> void:
 		autopilot_complete = true
 	else:
 		autopilot_phase = "ARRIVAL_CAPTURE_BURN"
+
+func _surface_body_state(body_name: String) -> Dictionary:
+	if body_name == "Earth":
+		return {"name": "Earth", "position": Vector2.ZERO, "velocity": Vector2.ZERO, "radius": EARTH_RADIUS, "rotation_rate": EARTH_ROTATION_RATE, "mass": EARTH_MASS, "solid": true}
+	if body_name == "Moon":
+		return {"name": "Moon", "position": PlanetarySystem.moon_position(sim_time), "velocity": PlanetarySystem.moon_velocity(sim_time), "radius": PlanetarySystem.MOON_RADIUS, "rotation_rate": TAU / PlanetarySystem.MOON_ORBIT_PERIOD, "mass": PlanetarySystem.MOON_MASS, "solid": true}
+	for body in PlanetarySystem.PLANETS:
+		if str(body.name) == body_name:
+			return {
+				"name": body_name,
+				"position": PlanetarySystem.planet_position_relative_to_earth(body_name, sim_time),
+				"velocity": PlanetarySystem.planet_velocity_relative_to_earth(body_name, sim_time),
+				"radius": float(body.radius),
+				"rotation_rate": PlanetarySystem.planetary_rotation_rate(body_name),
+				"mass": float(body.mass),
+				"solid": body_name in ["Mercury", "Venus", "Earth", "Mars"]
+			}
+	return {}
+
+func _handle_body_contact() -> void:
+	var bodies: Array[Dictionary] = [
+		_surface_body_state("Earth"),
+		_surface_body_state("Moon")
+	]
+	for body in PlanetarySystem.PLANETS:
+		if str(body.name) != "Earth":
+			bodies.append(_surface_body_state(str(body.name)))
+	for body in bodies:
+		var body_position: Vector2 = body.position
+		var relative_position := rocket_position - body_position
+		var body_radius := float(body.radius)
+		if relative_position.length() > body_radius + 0.5:
+			continue
+		var normal := relative_position.normalized()
+		var body_velocity: Vector2 = body.velocity
+		var surface_velocity := body_velocity + Vector2(-relative_position.y, relative_position.x) * float(body.rotation_rate)
+		var relative_speed := (velocity - surface_velocity).length()
+		rocket_position = body_position + normal * (body_radius + 0.5)
+		if not bool(body.solid):
+			crashed = true
+			status_message = "LOST IN %s  •  ATMOSPHERIC LIMIT REACHED" % str(body.name).to_upper()
+		elif relative_speed <= 35.0 and throttle < 0.1:
+			landed = true
+			crashed = false
+			landed_body_name = str(body.name)
+			velocity = surface_velocity
+			status_message = "LANDED  •  %s" % landed_body_name.to_upper()
+		else:
+			crashed = true
+			landed = false
+			status_message = "CRASHED  •  %s  •  %.0F M/S" % [str(body.name).to_upper(), relative_speed]
+		if crashed:
+			velocity = body_velocity
+		else:
+			velocity = surface_velocity
+		thrust_key_down = false
+		throttle = 0.0
+		guidance_enabled = false
+		autopilot_enabled = false
+		return
 
 func _update_guidance(dt: float) -> void:
 	var radial := rocket_position.normalized()
@@ -814,6 +882,7 @@ func _draw_hud() -> void:
 	var thrust_to_weight := current_thrust / (current_mass * local_gravity)
 	var remaining_delta_v := _remaining_ideal_delta_v(current_mass)
 	var lines := [
+		"FLIGHT STATE   %s" % ("CRASHED" if crashed else "LANDED: " + landed_body_name if landed else "IN FLIGHT"),
 		"ALTITUDE       %s" % _format_distance(altitude),
 		"VELOCITY       %s" % _format_speed(orbital_speed),
 		"FUEL           %s%%" % str(roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
@@ -923,6 +992,9 @@ func get_save_data() -> Dictionary:
 		"autopilot_transfer_direction": autopilot_transfer_direction,
 		"autopilot_arrival_burn_x": autopilot_arrival_burn_vector.x,
 		"autopilot_arrival_burn_y": autopilot_arrival_burn_vector.y,
+		"landed": landed,
+		"crashed": crashed,
+		"landed_body_name": landed_body_name,
 		"autopilot_burn_direction_x": autopilot_burn_direction.x,
 		"autopilot_burn_direction_y": autopilot_burn_direction.y,
 		"autopilot_complete": autopilot_complete,
@@ -960,6 +1032,9 @@ func load_save_data(data: Dictionary) -> void:
 	autopilot_transfer_duration = float(data.get("autopilot_transfer_duration", 0.0))
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
 	autopilot_arrival_burn_vector = Vector2(float(data.get("autopilot_arrival_burn_x", 0.0)), float(data.get("autopilot_arrival_burn_y", 0.0)))
+	landed = bool(data.get("landed", false))
+	crashed = bool(data.get("crashed", false))
+	landed_body_name = str(data.get("landed_body_name", "Earth"))
 	autopilot_burn_direction = Vector2(float(data.get("autopilot_burn_direction_x", 0.0)), float(data.get("autopilot_burn_direction_y", 0.0)))
 	autopilot_complete = bool(data.get("autopilot_complete", false))
 	autopilot_phase = str(data.get("autopilot_phase", "IDLE"))
