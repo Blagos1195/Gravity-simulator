@@ -292,7 +292,7 @@ func _update_guidance(dt: float) -> void:
 							autopilot_burn_remaining = float(transfer.get("departure_delta_v", 0.0))
 							autopilot_transfer_direction = float(transfer.get("direction", 1.0))
 							var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
-							autopilot_phase = "TRANSFER_BURN" if wait_time <= 1.0 else "WAIT_WINDOW"
+							autopilot_phase = "ALIGN_DEPARTURE" if wait_time <= 3600.0 else "WAIT_WINDOW"
 						else:
 							autopilot_phase = "FAILED"
 					else:
