@@ -126,7 +126,8 @@ func _initialize() -> void:
 	assert(upper_stage_delta_v < full_vehicle_delta_v)
 
 	var earth_destination := FlightComputer._simulated_target_state(-2, 0.0)
-	assert(is_equal_approx(Vector2(earth_destination.get("position", Vector2.ONE)).length(), 0.0))
+	var earth_destination_position: Vector2 = earth_destination.get("position", Vector2.ONE)
+	assert(is_equal_approx(earth_destination_position.length(), 0.0))
 	assert(is_equal_approx(float(earth_destination.get("mass", 0.0)), PlanetarySystem.EARTH_MASS))
 	var earth_orbit_radius := PlanetarySystem.EARTH_RADIUS + 3000000.0
 	var earth_orbit_speed := FlightComputer.circular_orbit_speed(earth_orbit_radius)
