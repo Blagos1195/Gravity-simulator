@@ -133,6 +133,8 @@ func _physics_step(dt: float) -> void:
 			var surface_state := _surface_body_state(landed_body_name)
 			var normal: Vector2 = (rocket_position - surface_state.position).normalized()
 			rotation_angle = normal.angle() - Vector2.UP.angle()
+			rocket_position = surface_state.position + normal * (float(surface_state.radius) + 5.0)
+			velocity = surface_state.velocity + Vector2(-normal.y, normal.x) * float(surface_state.radius) * float(surface_state.rotation_rate)
 			landed = false
 			status_message = "LAUNCHING FROM %s" % landed_body_name.to_upper()
 		else:
