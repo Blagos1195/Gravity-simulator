@@ -398,9 +398,9 @@ func _begin_arrival_capture(target_state: Dictionary) -> void:
 
 func _surface_body_state(body_name: String) -> Dictionary:
 	if body_name == "Earth":
-		return {"name": "Earth", "position": Vector2.ZERO, "velocity": Vector2.ZERO, "radius": EARTH_RADIUS, "rotation_rate": EARTH_ROTATION_RATE, "mass": EARTH_MASS, "solid": true}
+		return {"name": "Earth", "position": Vector2.ZERO, "velocity": Vector2.ZERO, "radius": EARTH_RADIUS, "rotation_rate": EARTH_ROTATION_RATE, "mass": EARTH_MASS, "solid": true, "soi": 9.25e8}
 	if body_name == "Moon":
-		return {"name": "Moon", "position": PlanetarySystem.moon_position(sim_time), "velocity": PlanetarySystem.moon_velocity(sim_time), "radius": PlanetarySystem.MOON_RADIUS, "rotation_rate": TAU / PlanetarySystem.MOON_ORBIT_PERIOD, "mass": PlanetarySystem.MOON_MASS, "solid": true}
+		return {"name": "Moon", "position": PlanetarySystem.moon_position(sim_time), "velocity": PlanetarySystem.moon_velocity(sim_time), "radius": PlanetarySystem.MOON_RADIUS, "rotation_rate": TAU / PlanetarySystem.MOON_ORBIT_PERIOD, "mass": PlanetarySystem.MOON_MASS, "solid": true, "soi": PlanetarySystem.moon_soi_radius()}
 	for body in PlanetarySystem.PLANETS:
 		if str(body.name) == body_name:
 			return {
@@ -410,9 +410,29 @@ func _surface_body_state(body_name: String) -> Dictionary:
 				"radius": float(body.radius),
 				"rotation_rate": PlanetarySystem.planetary_rotation_rate(body_name),
 				"mass": float(body.mass),
-				"solid": body_name in ["Mercury", "Venus", "Earth", "Mars"]
+				"solid": body_name in ["Mercury", "Venus", "Earth", "Mars"],
+				"soi": PlanetarySystem.planet_soi_radius(body_name)
 			}
 	return {}
+
+func _nearest_body_state(position: Vector2) -> Dictionary:
+	var nearest: Dictionary = _surface_body_state("Earth")
+	var nearest_distance := position.distance_to(nearest.position)
+	var moon := _surface_body_state("Moon")
+	var moon_distance := position.distance_to(moon.position)
+	if moon_distance < nearest_distance:
+		nearest = moon
+		nearest_distance = moon_distance
+	for body in PlanetarySystem.PLANETS:
+		if str(body.name) == "Earth":
+			continue
+		var candidate := _surface_body_state(str(body.name))
+		var candidate_distance := position.distance_to(candidate.position)
+		if candidate_distance < nearest_distance:
+			nearest = candidate
+			nearest_distance = candidate_distance
+	nearest["distance"] = nearest_distance
+	return nearest
 
 func _handle_body_contact() -> void:
 	var bodies: Array[Dictionary] = [
@@ -871,17 +891,22 @@ func _draw_rocket(p: Vector2, object_scale: float) -> void:
 
 func _draw_hud() -> void:
 	var ui_scale := clampf(minf(size.x / 1440.0, size.y / 900.0), 0.7, 1.0)
-	var altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
-	var orbital_speed := velocity.length()
-	var periapsis := _apsis(false)
-	var apoapsis := _apsis(true)
-	var local_gravity := G * EARTH_MASS / pow(rocket_position.length(), 2.0)
+	var local_body := _nearest_body_state(rocket_position)
+	var local_position: Vector2 = rocket_position - local_body.position
+	var local_velocity: Vector2 = velocity - local_body.velocity
+	var altitude := maxf(0.0, float(local_body.distance) - float(local_body.radius))
+	var orbital_speed := local_velocity.length()
+	var local_orbit := FlightComputer.orbital_state(local_position, local_velocity, G * float(local_body.mass))
+	var periapsis := maxf(0.0, float(local_orbit.get("periapsis", 0.0)) - float(local_body.radius)) if bool(local_orbit.get("valid", false)) else 0.0
+	var apoapsis := maxf(0.0, float(local_orbit.get("apoapsis", INF)) - float(local_body.radius)) if bool(local_orbit.get("valid", false)) else INF
+	var local_gravity := G * float(local_body.mass) / pow(maxf(1.0, float(local_body.distance)), 2.0)
 	var current_thrust := _engine_thrust(altitude)
 	var current_mass := _current_vehicle_mass()
 	var active_fuel_capacity := float(_active_stage_data().get("fuel_capacity", 1.0))
 	var thrust_to_weight := current_thrust / (current_mass * local_gravity)
 	var remaining_delta_v := _remaining_ideal_delta_v(current_mass)
 	var lines := [
+		"BODY           %s" % str(local_body.name).to_upper(),
 		"FLIGHT STATE   %s" % ("CRASHED" if crashed else "LANDED: " + landed_body_name if landed else "IN FLIGHT"),
 		"ALTITUDE       %s" % _format_distance(altitude),
 		"VELOCITY       %s" % _format_speed(orbital_speed),
@@ -939,14 +964,14 @@ func _remaining_ideal_delta_v(current_mass: float) -> float:
 	return total
 
 func _apsis(apo: bool) -> float:
-	var r := rocket_position.length()
-	var energy := velocity.length_squared() * 0.5 - G * EARTH_MASS / r
-	if energy >= 0:
+	var body := _nearest_body_state(rocket_position)
+	var relative_position: Vector2 = rocket_position - body.position
+	var relative_velocity: Vector2 = velocity - body.velocity
+	var orbit := FlightComputer.orbital_state(relative_position, relative_velocity, G * float(body.mass))
+	if not bool(orbit.get("valid", false)):
 		return INF if apo else 0.0
-	var a := -G * EARTH_MASS / (2.0 * energy)
-	var h := rocket_position.x * velocity.y - rocket_position.y * velocity.x
-	var e := sqrt(maxf(0.0, 1.0 + 2.0 * energy * h * h / pow(G * EARTH_MASS, 2.0)))
-	return a * (1.0 + e if apo else 1.0 - e) - EARTH_RADIUS
+	var radius := float(orbit.get("apoapsis", INF) if apo else orbit.get("periapsis", 0.0))
+	return maxf(0.0, radius - float(body.radius)) if is_finite(radius) else INF
 
 func _visual_scale() -> float:
 	match world_scale:
