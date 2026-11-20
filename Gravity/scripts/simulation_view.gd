@@ -533,8 +533,6 @@ func _update_guidance(dt: float) -> void:
 					thrust_key_down = false
 					autopilot_phase = "COAST"
 				else:
-					var ascent_apoapsis: float = float(orbit.get("apoapsis", 0.0))
-					var ascent_apoapsis_fraction := clampf((ascent_apoapsis - float(guidance_body.radius)) / maxf(1.0, autopilot_target_altitude), 0.0, 1.0) if is_finite(ascent_apoapsis) else 0.0
 					var ascent_tangential_speed := absf(float(orbit.get("tangential_speed", 0.0)))
 					var ascent_speed_fraction := clampf(ascent_tangential_speed / 7800.0, 0.0, 1.0)
 					var ascent_altitude_fraction := clampf(altitude / 100000.0, 0.0, 1.0)
