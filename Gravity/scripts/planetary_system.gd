@@ -49,12 +49,12 @@ static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vect
 	var moon_pull := relative.normalized() * G * MOON_MASS / (relative_distance * relative_distance)
 	var earth_moon_pull := moon.normalized() * G * MOON_MASS / (MOON_ORBIT_RADIUS * MOON_ORBIT_RADIUS)
 	acceleration += moon_pull - earth_moon_pull
-	acceleration += _differential_body_gravity(position, time_seconds, Vector2.ZERO, SUN_MASS, _sun_relative_position(time_seconds))
+	acceleration += _differential_body_gravity(position, SUN_MASS, _sun_relative_position(time_seconds))
 	for planet in PLANETS:
 		if planet.name == "Earth":
 			continue
 		var planet_position := _planet_relative_position(planet, time_seconds)
-		acceleration += _differential_body_gravity(position, time_seconds, Vector2.ZERO, float(planet.mass), planet_position)
+		acceleration += _differential_body_gravity(position, float(planet.mass), planet_position)
 	return acceleration
 
 static func _sun_relative_position(time_seconds: float) -> Vector2:
@@ -69,7 +69,7 @@ static func _planet_relative_position(planet: Dictionary, time_seconds: float) -
 	var planet_position := Vector2(cos(angle), sin(angle)) * float(planet.semi_major_axis)
 	return planet_position - earth_position
 
-static func _differential_body_gravity(position: Vector2, time_seconds: float, unused: Vector2, body_mass: float, body_position: Vector2) -> Vector2:
+static func _differential_body_gravity(position: Vector2, body_mass: float, body_position: Vector2) -> Vector2:
 	var relative := body_position - position
 	var body_distance := maxf(relative.length(), 1.0e7)
 	var earth_distance := maxf(body_position.length(), 1.0e7)
