@@ -334,7 +334,9 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  BURN INCOMPLETE"
 				thrust_key_down = false
 		var autopilot_direction := prograde
-		if autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"]:
+		if autopilot_phase == "ASCENT":
+			autopilot_direction = radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
+		elif autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"]:
 			autopilot_direction = tangent * autopilot_transfer_direction
 		elif autopilot_phase == "TRANSFER_BURN":
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
