@@ -779,7 +779,7 @@ func load_save_data(data: Dictionary) -> void:
 	autopilot_target_mode = str(data.get("autopilot_target_mode", "ORBIT"))
 	autopilot_planet_index = int(data.get("autopilot_planet_index", -1))
 	autopilot_burn_remaining = float(data.get("autopilot_burn_remaining", 0.0))
-	autopilot_transfer_start_time = float(data.get("autopilot_transfer_start_time", -1.0))
+	autopilot_transfer_start_time = float(data.get("autopilot_transfer_start_time", sim_time if str(data.get("autopilot_phase", "IDLE")) == "TRANSFER_COAST" else -1.0))
 	autopilot_transfer_duration = float(data.get("autopilot_transfer_duration", 0.0))
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
 	autopilot_burn_direction = Vector2(float(data.get("autopilot_burn_direction_x", 0.0)), float(data.get("autopilot_burn_direction_y", 0.0)))
