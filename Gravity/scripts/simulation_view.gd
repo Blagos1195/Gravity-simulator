@@ -244,9 +244,9 @@ func _unhandled_input(event: InputEvent) -> void:
             KEY_X:
                 _separate_stage()
     elif event is InputEventMouseButton and event.pressed:
-        if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+        if not show_solar_system and event.button_index == MOUSE_BUTTON_WHEEL_UP:
             camera_zoom = minf(0.0003, camera_zoom * 1.15)
-        elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+        elif not show_solar_system and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
             camera_zoom = maxf(0.000008, camera_zoom / 1.15)
 
 func _draw() -> void:
@@ -309,7 +309,7 @@ func _draw() -> void:
         for point in predicted_path:
             prediction_points.append(rocket_screen + (point - rocket_position) * camera_zoom * world_scale_factor)
         draw_polyline(prediction_points, Color(1.0, 0.72, 0.22, 0.85), 2.0)
-    _draw_rocket(rocket_screen + Vector2.UP.rotated(rotation_angle) * 14.0, object_scale)
+    _draw_rocket(rocket_screen + Vector2.UP.rotated(rotation_angle) * 14.0 * object_scale, object_scale)
     if show_vectors:
         var velocity_end := rocket_screen + velocity.normalized() * 65.0
         draw_line(rocket_screen, velocity_end, Color(0.25, 0.9, 0.55), 2.0)
@@ -355,7 +355,10 @@ func _calculate_predicted_trajectory() -> void:
         var stack_mass := UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL if predicted_stage == 0 else 0.0
         var burn := minf(predicted_fuel, stage_flow * throttle * dt)
         var mass := maxf(1.0, active_dry + stack_mass + predicted_fuel - burn * 0.5)
-        var predicted_thrust := _engine_thrust(altitude) * throttle
+        var vacuum_fraction := clampf(altitude / 100000.0, 0.0, 1.0)
+        var sea_level_thrust := FIRST_STAGE_THRUST if predicted_stage == 0 else UPPER_STAGE_THRUST
+        var vacuum_thrust := FIRST_STAGE_VACUUM_THRUST if predicted_stage == 0 else UPPER_STAGE_VACUUM_THRUST
+        var predicted_thrust := lerpf(sea_level_thrust, vacuum_thrust, vacuum_fraction) * throttle
         var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
         var acceleration := PlanetarySystem.gravity_acceleration(position, sim_time + i * dt)
         if throttle > 0.0 and predicted_fuel > 0.0:
