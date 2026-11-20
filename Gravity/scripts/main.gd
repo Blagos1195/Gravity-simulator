@@ -143,11 +143,11 @@ func _show_vehicle_editor() -> void:
 		stage_title.add_theme_font_size_override("font_size", 20)
 		stage_title.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 		fields.add_child(stage_title)
-		_add_design_field(fields, stage_index, "dry_mass", "Dry mass (kg)", 100.0, 100000.0, 100.0)
-		_add_design_field(fields, stage_index, "fuel_capacity", "Propellant capacity (kg)", 100.0, 1000000.0, 1000.0)
-		_add_design_field(fields, stage_index, "thrust", "Sea-level thrust (N)", 10000.0, 50000000.0, 100000.0)
-		_add_design_field(fields, stage_index, "vacuum_thrust", "Vacuum thrust (N)", 10000.0, 60000000.0, 100000.0)
-		_add_design_field(fields, stage_index, "flow", "Fuel flow per engine (kg/s)", 1.0, 20000.0, 10.0)
+		_add_design_field(fields, stage_index, "dry_mass", "Dry mass (kg)", 500.0, 200000.0, 100.0)
+		_add_design_field(fields, stage_index, "fuel_capacity", "Propellant capacity (kg)", 500.0, 1000000.0, 1000.0)
+		_add_design_field(fields, stage_index, "thrust", "Sea-level thrust (N)", 100000.0, 20000000.0, 100000.0)
+		_add_design_field(fields, stage_index, "vacuum_thrust", "Vacuum thrust (N)", 100000.0, 22000000.0, 100000.0)
+		_add_design_field(fields, stage_index, "flow", "Fuel flow per engine (kg/s)", 20.0, 8000.0, 10.0)
 		_add_design_field(fields, stage_index, "engine_count", "Engine count", 1.0, 8.0, 1.0)
 	var payload_panel := PanelContainer.new()
 	payload_panel.custom_minimum_size.x = 230
@@ -208,7 +208,7 @@ func _add_rocket_stage() -> void:
 		"fuel_capacity": 80000.0,
 		"thrust": 1200000.0,
 		"vacuum_thrust": 1500000.0,
-		"flow": 300.0,
+		"flow": 380.0,
 		"engine_count": 1
 	})
 	_show_vehicle_editor()
