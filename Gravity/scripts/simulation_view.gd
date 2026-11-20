@@ -64,6 +64,9 @@ var predicted_path: Array[Vector2] = []
 var prediction_timer := 0.0
 var thrust_key_down := false
 var throttle_cutoff_key_down := false
+var landed := true
+var crashed := false
+var landed_body_name := "Earth"
 
 func set_rocket_design(design: Dictionary) -> void:
 	rocket_stages = (design.get("stages", []) as Array).duplicate(true)
