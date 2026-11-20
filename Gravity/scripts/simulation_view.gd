@@ -245,6 +245,8 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: 
 			"altitude": earth_altitude,
 			"density": earth_density,
 			"temperature": PlanetarySystem.atmospheric_temperature(earth_altitude),
+			"gas_constant": 287.05287,
+			"gamma": 1.4,
 			"relative_velocity": current_velocity - Vector2(-position.y, position.x) * EARTH_ROTATION_RATE
 		}
 	for body in PlanetarySystem.PLANETS:
