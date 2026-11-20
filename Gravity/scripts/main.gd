@@ -206,9 +206,9 @@ func _add_rocket_stage() -> void:
 		"name": "STAGE %02d" % (stages.size() + 1),
 		"dry_mass": 3000.0,
 		"fuel_capacity": 80000.0,
-		"thrust": 1200000.0,
-		"vacuum_thrust": 1500000.0,
-		"flow": 380.0,
+		"thrust": 200000.0,
+		"vacuum_thrust": 250000.0,
+		"flow": 63.3,
 		"engine_count": 1
 	})
 	_show_vehicle_editor()
