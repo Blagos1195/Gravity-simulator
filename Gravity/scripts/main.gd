@@ -418,6 +418,9 @@ func _load_game() -> void:
 		world_scale = parsed.get("world_scale", world_scale)
 		career_enabled = parsed.get("career_enabled", career_enabled)
 		sim.load_save_data(parsed)
+		var saved_design: Variant = parsed.get("rocket_design", null)
+		if saved_design is Dictionary:
+			rocket_design = saved_design
 		if status_label:
 			status_label.text = "LOADED  •  SLOT %02d" % save_slot
 
