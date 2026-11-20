@@ -193,7 +193,7 @@ func _build_flight_hud() -> void:
 
 	var bottom := Label.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_left = 20
+	bottom.offset_left = 350
 	bottom.offset_right = -20
 	bottom.offset_top = -58
 	bottom.offset_bottom = -8
