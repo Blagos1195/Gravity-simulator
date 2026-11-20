@@ -347,8 +347,7 @@ func _draw_hud() -> void:
     var current_mass := active_dry_mass + upper_stack_mass + fuel
     var engine_flow := FIRST_STAGE_FLOW if stage_index == 0 else UPPER_STAGE_FLOW
     var thrust_to_weight := current_thrust / (current_mass * local_gravity)
-    var effective_exhaust_velocity := current_thrust / engine_flow
-    var remaining_delta_v := effective_exhaust_velocity * log(maxf(1.0, current_mass) / maxf(1.0, active_dry_mass + upper_stack_mass))
+    var remaining_delta_v := _remaining_ideal_delta_v(current_mass)
     var lines := [
         "ALTITUDE       %s" % _format_distance(altitude),
         "VELOCITY       %s" % _format_speed(orbital_speed),
@@ -372,6 +371,14 @@ func _draw_hud() -> void:
         draw_string(ThemeDB.fallback_font, Vector2(32, size.y - 338 + i * 23), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.68, 0.82, 0.94))
     draw_string(ThemeDB.fallback_font, Vector2(315, size.y - 28), status_message, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.35, 0.85, 0.75))
     draw_string(ThemeDB.fallback_font, Vector2(size.x - 280, size.y - 28), realism.to_upper() + "  /  " + world_scale.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.48, 0.68, 0.84))
+
+func _remaining_ideal_delta_v(current_mass: float) -> float:
+    if stage_index == 0:
+        var first_stage_end_mass := UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL + FIRST_STAGE_DRY_MASS
+        var first_stage_delta_v := FIRST_STAGE_VACUUM_THRUST / FIRST_STAGE_FLOW * log(maxf(1.0, current_mass) / first_stage_end_mass)
+        var upper_stage_delta_v := UPPER_STAGE_VACUUM_THRUST / UPPER_STAGE_FLOW * log((UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL) / UPPER_STAGE_DRY_MASS)
+        return first_stage_delta_v + upper_stage_delta_v
+    return UPPER_STAGE_VACUUM_THRUST / UPPER_STAGE_FLOW * log(maxf(1.0, UPPER_STAGE_DRY_MASS + fuel) / UPPER_STAGE_DRY_MASS)
 
 func _apsis(apo: bool) -> float:
     var r := rocket_position.length()
