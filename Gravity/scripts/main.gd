@@ -432,10 +432,10 @@ func _show_flight_computer() -> void:
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_theme_constant_override("separation", 12)
-	root.add_theme_constant_override("margin_left", 18)
-	root.add_theme_constant_override("margin_right", 18)
-	root.add_theme_constant_override("margin_top", 18)
-	root.add_theme_constant_override("margin_bottom", 18)
+	root.offset_left = 18
+	root.offset_right = -18
+	root.offset_top = 18
+	root.offset_bottom = -18
 	window.add_child(root)
 	var heading := Label.new()
 	heading.text = "ORBITAL FLIGHT COMPUTER"
