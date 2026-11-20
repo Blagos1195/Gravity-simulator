@@ -328,6 +328,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				show_vectors = not show_vectors
 			KEY_H:
 				guidance_enabled = not guidance_enabled
+				if not guidance_enabled:
+					autopilot_enabled = false
+					thrust_key_down = false
 			KEY_Q:
 				gimbal_angle = clampf(gimbal_angle - deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
 			KEY_E:
