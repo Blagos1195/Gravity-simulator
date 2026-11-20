@@ -19,6 +19,18 @@ const LIFT_AREA := 1.8
 const DRAG_COEFFICIENT := 0.45
 const EARTH_ROTATION_RATE := 7.2921159e-5
 
+var first_stage_dry_mass := FIRST_STAGE_DRY_MASS
+var upper_stage_dry_mass := UPPER_STAGE_DRY_MASS
+var first_stage_fuel_capacity := FIRST_STAGE_FUEL
+var upper_stage_fuel_capacity := UPPER_STAGE_FUEL
+var first_stage_thrust := FIRST_STAGE_THRUST
+var first_stage_vacuum_thrust := FIRST_STAGE_VACUUM_THRUST
+var upper_stage_thrust := UPPER_STAGE_THRUST
+var upper_stage_vacuum_thrust := UPPER_STAGE_VACUUM_THRUST
+var first_stage_flow := FIRST_STAGE_FLOW
+var upper_stage_flow := UPPER_STAGE_FLOW
+var payload_mass := 500.0
+
 var realism := "Realistic"
 var world_scale := "Compressed"
 var career_enabled := false
@@ -28,7 +40,7 @@ var time_warp := 1.0
 var rocket_position := Vector2(0, -EARTH_RADIUS - 2.0)
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
-var fuel := FIRST_STAGE_FUEL
+var fuel := first_stage_fuel_capacity
 var stage_index := 0
 var discarded_stage_mass := 0.0
 var throttle := 0.0
@@ -53,6 +65,25 @@ var predicted_path: Array[Vector2] = []
 var prediction_timer := 0.0
 var thrust_key_down := false
 var throttle_cutoff_key_down := false
+
+func set_rocket_design(design: Dictionary) -> void:
+	var stages: Array = design.get("stages", [])
+	if stages.size() != 2:
+		return
+	var first: Dictionary = stages[0]
+	var upper: Dictionary = stages[1]
+	first_stage_dry_mass = float(first.get("dry_mass", FIRST_STAGE_DRY_MASS))
+	upper_stage_dry_mass = float(upper.get("dry_mass", UPPER_STAGE_DRY_MASS))
+	first_stage_fuel_capacity = float(first.get("fuel_capacity", FIRST_STAGE_FUEL))
+	upper_stage_fuel_capacity = float(upper.get("fuel_capacity", UPPER_STAGE_FUEL))
+	first_stage_thrust = float(first.get("thrust", FIRST_STAGE_THRUST))
+	first_stage_vacuum_thrust = float(first.get("vacuum_thrust", FIRST_STAGE_VACUUM_THRUST))
+	upper_stage_thrust = float(upper.get("thrust", UPPER_STAGE_THRUST))
+	upper_stage_vacuum_thrust = float(upper.get("vacuum_thrust", UPPER_STAGE_VACUUM_THRUST))
+	first_stage_flow = float(first.get("flow", FIRST_STAGE_FLOW))
+	upper_stage_flow = float(upper.get("flow", UPPER_STAGE_FLOW))
+	payload_mass = float(design.get("payload_mass", 500.0))
+	fuel = first_stage_fuel_capacity
 
 func _ready() -> void:
     var rng := RandomNumberGenerator.new()
@@ -97,12 +128,12 @@ func _physics_step(dt: float) -> void:
         _update_guidance(dt)
 
     throttle = 1.0 if thrust_key_down and fuel > 0.0 else 0.0
-    var engine_flow := FIRST_STAGE_FLOW if stage_index == 0 else UPPER_STAGE_FLOW
+    var engine_flow := first_stage_flow if stage_index == 0 else upper_stage_flow
     var fuel_used := minf(fuel, engine_flow * throttle * dt)
     var average_fuel := fuel - fuel_used * 0.5
-    var upper_stack_mass := UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL if stage_index == 0 else 0.0
-    var active_dry_mass := FIRST_STAGE_DRY_MASS if stage_index == 0 else UPPER_STAGE_DRY_MASS
-    var mass := active_dry_mass + upper_stack_mass + average_fuel
+    var upper_stack_mass := upper_stage_dry_mass + upper_stage_fuel_capacity if stage_index == 0 else 0.0
+    var active_dry_mass := first_stage_dry_mass if stage_index == 0 else upper_stage_dry_mass
+    var mass := active_dry_mass + upper_stack_mass + payload_mass + average_fuel
     var thrust := _engine_thrust(maxf(0.0, altitude)) * throttle
     var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
     var thrust_acceleration := thrust_direction * (thrust / maxf(1.0, mass))
@@ -144,8 +175,8 @@ func _adaptive_step_size() -> float:
 func _engine_thrust(altitude: float) -> float:
     var vacuum_fraction := clampf(altitude / 100000.0, 0.0, 1.0)
     if stage_index == 0:
-        return lerpf(FIRST_STAGE_THRUST, FIRST_STAGE_VACUUM_THRUST, vacuum_fraction)
-    return lerpf(UPPER_STAGE_THRUST, UPPER_STAGE_VACUUM_THRUST, vacuum_fraction)
+        return lerpf(first_stage_thrust, first_stage_vacuum_thrust, vacuum_fraction)
+    return lerpf(upper_stage_thrust, upper_stage_vacuum_thrust, vacuum_fraction)
 
 func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float) -> Vector2:
     if realism not in ["Realistic", "Hardcore"]:
@@ -181,9 +212,9 @@ func _update_heating(dt: float, altitude: float, speed: float) -> void:
 func _separate_stage() -> void:
     if stage_index != 0:
         return
-    discarded_stage_mass += FIRST_STAGE_DRY_MASS
+    discarded_stage_mass += first_stage_dry_mass
     stage_index = 1
-    fuel = UPPER_STAGE_FUEL
+    fuel = upper_stage_fuel_capacity
 
 func _update_guidance(dt: float) -> void:
     var radial := rocket_position.normalized()
@@ -351,14 +382,14 @@ func _calculate_predicted_trajectory() -> void:
     var dt := 5.0
     for i in range(360):
         var altitude := maxf(0.0, position.length() - EARTH_RADIUS)
-        var stage_flow := FIRST_STAGE_FLOW if predicted_stage == 0 else UPPER_STAGE_FLOW
-        var active_dry := FIRST_STAGE_DRY_MASS if predicted_stage == 0 else UPPER_STAGE_DRY_MASS
-        var stack_mass := UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL if predicted_stage == 0 else 0.0
+        var stage_flow := first_stage_flow if predicted_stage == 0 else upper_stage_flow
+        var active_dry := first_stage_dry_mass if predicted_stage == 0 else upper_stage_dry_mass
+        var stack_mass := upper_stage_dry_mass + upper_stage_fuel_capacity if predicted_stage == 0 else 0.0
         var burn := minf(predicted_fuel, stage_flow * throttle * dt)
-        var mass := maxf(1.0, active_dry + stack_mass + predicted_fuel - burn * 0.5)
+        var mass := maxf(1.0, active_dry + stack_mass + payload_mass + predicted_fuel - burn * 0.5)
         var vacuum_fraction := clampf(altitude / 100000.0, 0.0, 1.0)
-        var sea_level_thrust := FIRST_STAGE_THRUST if predicted_stage == 0 else UPPER_STAGE_THRUST
-        var vacuum_thrust := FIRST_STAGE_VACUUM_THRUST if predicted_stage == 0 else UPPER_STAGE_VACUUM_THRUST
+        var sea_level_thrust := first_stage_thrust if predicted_stage == 0 else upper_stage_thrust
+        var vacuum_thrust := first_stage_vacuum_thrust if predicted_stage == 0 else upper_stage_vacuum_thrust
         var predicted_thrust := lerpf(sea_level_thrust, vacuum_thrust, vacuum_fraction) * throttle
         if guidance_enabled:
             var radial := position.normalized()
@@ -378,7 +409,7 @@ func _calculate_predicted_trajectory() -> void:
         predicted_fuel = maxf(0.0, predicted_fuel - burn)
         if predicted_fuel <= 0.0 and predicted_stage == 0:
             predicted_stage = 1
-            predicted_fuel = UPPER_STAGE_FUEL
+            predicted_fuel = upper_stage_fuel_capacity
         predicted_path.append(position)
         if position.length() < EARTH_RADIUS:
             break
@@ -436,15 +467,15 @@ func _draw_hud() -> void:
     var apoapsis := _apsis(true)
     var local_gravity := G * EARTH_MASS / pow(rocket_position.length(), 2.0)
     var current_thrust := _engine_thrust(altitude)
-    var active_dry_mass := FIRST_STAGE_DRY_MASS if stage_index == 0 else UPPER_STAGE_DRY_MASS
-    var upper_stack_mass := UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL if stage_index == 0 else 0.0
-    var current_mass := active_dry_mass + upper_stack_mass + fuel
+    var active_dry_mass := first_stage_dry_mass if stage_index == 0 else upper_stage_dry_mass
+    var upper_stack_mass := upper_stage_dry_mass + upper_stage_fuel_capacity if stage_index == 0 else 0.0
+    var current_mass := active_dry_mass + upper_stack_mass + payload_mass + fuel
     var thrust_to_weight := current_thrust / (current_mass * local_gravity)
     var remaining_delta_v := _remaining_ideal_delta_v(current_mass)
     var lines := [
         "ALTITUDE       %s" % _format_distance(altitude),
         "VELOCITY       %s" % _format_speed(orbital_speed),
-        "FUEL           %s%%" % str(roundi(100.0 * fuel / (FIRST_STAGE_FUEL if stage_index == 0 else UPPER_STAGE_FUEL))),
+        "FUEL           %s%%" % str(roundi(100.0 * fuel / (first_stage_fuel_capacity if stage_index == 0 else upper_stage_fuel_capacity))),
         "THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
         "THRUST / WEIGHT %.2f" % thrust_to_weight,
         "IDEAL ΔV EST.  %.2f km/s" % (remaining_delta_v / 1000.0),
@@ -468,11 +499,11 @@ func _draw_hud() -> void:
 
 func _remaining_ideal_delta_v(current_mass: float) -> float:
     if stage_index == 0:
-        var first_stage_end_mass := UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL + FIRST_STAGE_DRY_MASS
-        var first_stage_delta_v := FIRST_STAGE_VACUUM_THRUST / FIRST_STAGE_FLOW * log(maxf(1.0, current_mass) / first_stage_end_mass)
-        var upper_stage_delta_v := UPPER_STAGE_VACUUM_THRUST / UPPER_STAGE_FLOW * log((UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL) / UPPER_STAGE_DRY_MASS)
+        var first_stage_end_mass := upper_stage_dry_mass + upper_stage_fuel_capacity + first_stage_dry_mass + payload_mass
+        var first_stage_delta_v := first_stage_vacuum_thrust / first_stage_flow * log(maxf(1.0, current_mass) / first_stage_end_mass)
+        var upper_stage_delta_v := upper_stage_vacuum_thrust / upper_stage_flow * log((upper_stage_dry_mass + upper_stage_fuel_capacity + payload_mass) / (upper_stage_dry_mass + payload_mass))
         return first_stage_delta_v + upper_stage_delta_v
-    return UPPER_STAGE_VACUUM_THRUST / UPPER_STAGE_FLOW * log(maxf(1.0, UPPER_STAGE_DRY_MASS + fuel) / UPPER_STAGE_DRY_MASS)
+    return upper_stage_vacuum_thrust / upper_stage_flow * log(maxf(1.0, upper_stage_dry_mass + payload_mass + fuel) / (upper_stage_dry_mass + payload_mass))
 
 func _apsis(apo: bool) -> float:
     var r := rocket_position.length()
@@ -533,7 +564,7 @@ func load_save_data(data: Dictionary) -> void:
     velocity = Vector2(float(v[0]), float(v[1]))
     rotation_angle = float(data.get("rotation_angle", 0.0))
     stage_index = int(data.get("stage_index", 0))
-    fuel = float(data.get("fuel", FIRST_STAGE_FUEL))
+    fuel = float(data.get("fuel", first_stage_fuel_capacity))
     discarded_stage_mass = float(data.get("discarded_stage_mass", 0.0))
     gimbal_angle = float(data.get("gimbal_angle", 0.0))
     guidance_enabled = bool(data.get("guidance_enabled", false))
