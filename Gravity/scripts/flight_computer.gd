@@ -306,6 +306,13 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
+		var step_size := flight_duration / float(integration_steps)
+		var gravity_states: Array[Dictionary] = []
+		var target_states: Array[Dictionary] = []
+		for step_index in range(integration_steps + 1):
+			var sample_time := start_time + float(step_index) * step_size
+			gravity_states.append(PlanetarySystem.gravity_body_states(sample_time))
+			target_states.append(_simulated_target_state(target_index, sample_time))
 		for direction_index in range(direction_count):
 			var angle := TAU * float(direction_index) / float(direction_count)
 			var burn_direction := Vector2(cos(angle), sin(angle))
@@ -313,20 +320,18 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 				var departure_delta_v: float = float(magnitude_value)
 				var position := start_position
 				var velocity := start_velocity + burn_direction * departure_delta_v
-				var step_size := flight_duration / float(integration_steps)
 				var closest_distance := INF
 				var closest_relative_position := Vector2.ZERO
 				var closest_relative_velocity := Vector2.ZERO
 				var closest_time := flight_duration
 				for step_index in range(integration_steps):
-					var current_time := start_time + float(step_index) * step_size
-					var initial_acceleration := PlanetarySystem.gravity_acceleration(position, current_time)
+					var initial_acceleration := PlanetarySystem.gravity_acceleration_from_states(position, gravity_states[step_index])
 					var half_velocity := velocity + initial_acceleration * (step_size * 0.5)
 					var next_position := position + half_velocity * step_size
-					var final_acceleration := PlanetarySystem.gravity_acceleration(next_position, current_time + step_size)
+					var final_acceleration := PlanetarySystem.gravity_acceleration_from_states(next_position, gravity_states[step_index + 1])
 					velocity = half_velocity + final_acceleration * (step_size * 0.5)
 					position = next_position
-					var target_state := _simulated_target_state(target_index, current_time + step_size)
+					var target_state: Dictionary = target_states[step_index + 1]
 					var target_position: Vector2 = target_state.get("position", Vector2.ZERO)
 					var target_velocity: Vector2 = target_state.get("velocity", Vector2.ZERO)
 					var relative_position: Vector2 = position - target_position
