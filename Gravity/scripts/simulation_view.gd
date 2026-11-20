@@ -207,7 +207,7 @@ func _adaptive_step_size() -> float:
 	var altitude := maxf(0.0, float(body.distance) - float(body.radius))
 	var gravity := G * float(body.mass) / (radius * radius)
 	var orbital_limit := 0.015 * sqrt(radius / maxf(0.001, gravity))
-	var speed := (velocity - body.velocity).length()
+	var speed: float = (velocity - body.velocity).length()
 	var deep_space := altitude > 1.0e8
 	var maximum_step := 30.0 if deep_space else 0.25
 	var travel_limit := 250.0 / maxf(100.0, speed) if altitude < 150000.0 else (1000000.0 / maxf(100.0, speed) if deep_space else 0.25)
