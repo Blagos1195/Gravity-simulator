@@ -98,12 +98,15 @@ func _process(delta: float) -> void:
 	if not paused and not crashed:
 		var effective_warp := minf(time_warp, 100.0) if rocket_position.length() < EARTH_RADIUS + 1.0e8 else time_warp
 		var remaining := effective_warp * delta
-		var iterations := 0
-		while remaining > 0.000001 and iterations < 20000:
-			var step_delta := minf(remaining, _adaptive_step_size())
-			_physics_step(step_delta)
-			remaining -= step_delta
-			iterations += 1
+		if landed and not thrust_key_down:
+			_physics_step(remaining)
+		else:
+			var iterations := 0
+			while remaining > 0.000001 and iterations < 20000:
+				var step_delta := minf(remaining, _adaptive_step_size())
+				_physics_step(step_delta)
+				remaining -= step_delta
+				iterations += 1
 	if show_predicted_trajectory:
 		prediction_timer += delta
 		if prediction_timer >= 0.35:
@@ -128,11 +131,11 @@ func _physics_step(dt: float) -> void:
 			landed = false
 			status_message = "LAUNCHING FROM %s" % landed_body_name.to_upper()
 		else:
+			sim_time = end_time
 			var surface_state := _surface_body_state(landed_body_name)
 			var normal: Vector2 = (rocket_position - surface_state.position).normalized()
 			rocket_position = surface_state.position + normal * (float(surface_state.radius) + 0.5)
 			velocity = surface_state.velocity + Vector2(-normal.y, normal.x) * float(surface_state.radius) * float(surface_state.rotation_rate)
-			sim_time = end_time
 			throttle = 0.0
 			return
 	if crashed:
