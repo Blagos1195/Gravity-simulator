@@ -124,11 +124,16 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		if vacuum_isp < sea_isp or vacuum_isp - sea_isp > 120.0:
 			errors.append("Stage %d has an unrealistic sea-level/vacuum efficiency difference." % (i + 1))
 		var ignition_mass := stage_ignition_mass(design, i)
-		var thrust_to_weight := sea_thrust * engines / maxf(1.0, ignition_mass * G0) if i == 0 else vacuum_thrust * engines / maxf(1.0, ignition_mass * G0)
+		var ignition_thrust := sea_thrust if i == 0 else vacuum_thrust
+		var thrust_to_weight := ignition_thrust * engines / maxf(1.0, ignition_mass * G0)
+		var burnout_mass := ignition_mass - fuel
+		var burnout_twr := ignition_thrust * engines / maxf(1.0, burnout_mass * G0)
 		if i == 0 and (thrust_to_weight < 1.1 or thrust_to_weight > 2.5):
 			errors.append("First-stage pad TWR must be between 1.10 and 2.50.")
 		elif i > 0 and (thrust_to_weight < 0.08 or thrust_to_weight > 4.0):
 			errors.append("Stage %d ignition TWR must be between 0.08 and 4.00." % (i + 1))
+		if burnout_twr > 8.0:
+			errors.append("Stage %d burnout acceleration is too high; reduce thrust or increase dry mass." % (i + 1))
 	if total_mass > 0.0 and stages.size() >= MIN_STAGES:
 		var delta_v := total_delta_v(design)
 		if delta_v < MIN_TOTAL_DELTA_V:
