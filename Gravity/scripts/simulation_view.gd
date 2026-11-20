@@ -238,21 +238,24 @@ func _draw_hud() -> void:
     var orbital_speed := velocity.length()
     var periapsis := _apsis(false)
     var apoapsis := _apsis(true)
+    var local_gravity := G * EARTH_MASS / pow(rocket_position.length(), 2.0)
+    var thrust_to_weight := ENGINE_THRUST / ((ROCKET_DRY_MASS + fuel) * local_gravity)
     var lines := [
         "ALTITUDE       %s" % _format_distance(altitude),
         "VELOCITY       %s" % _format_speed(orbital_speed),
         "FUEL           %s%%" % str(roundi(100.0 * fuel / FUEL_CAPACITY)),
         "THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
+        "THRUST / WEIGHT %.2f" % thrust_to_weight,
         "PERIAPSIS      %s" % _format_distance(periapsis),
         "APOAPSIS       %s" % _format_distance(apoapsis),
         "MISSION TIME   %s" % _format_time(sim_time),
         "TIME WARP      x%s" % str(snappedf(time_warp, 0.01))
     ]
-    var box := Rect2(Vector2(18, size.y - 226), Vector2(270, 205))
+    var box := Rect2(Vector2(18, size.y - 249), Vector2(270, 228))
     draw_rect(box, Color(0.015, 0.035, 0.065, 0.86), true)
     draw_rect(box, Color(0.18, 0.42, 0.6, 0.7), false, 1.0)
     for i in range(lines.size()):
-        draw_string(ThemeDB.fallback_font, Vector2(32, size.y - 200 + i * 23), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.68, 0.82, 0.94))
+        draw_string(ThemeDB.fallback_font, Vector2(32, size.y - 222 + i * 23), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.68, 0.82, 0.94))
     draw_string(ThemeDB.fallback_font, Vector2(315, size.y - 28), status_message, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.35, 0.85, 0.75))
     draw_string(ThemeDB.fallback_font, Vector2(size.x - 280, size.y - 28), realism.to_upper() + "  /  " + world_scale.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.48, 0.68, 0.84))
 
@@ -303,13 +306,14 @@ func get_save_data() -> Dictionary:
 
 func load_save_data(data: Dictionary) -> void:
     sim_time = float(data.get("sim_time", 0.0))
-    var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 180000.0])
-    var v: Array = data.get("velocity", [7600.0, 0.0])
+    var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 2.0])
+    var v: Array = data.get("velocity", [0.0, 0.0])
     rocket_position = Vector2(float(p[0]), float(p[1]))
     velocity = Vector2(float(v[0]), float(v[1]))
     rotation_angle = float(data.get("rotation_angle", 0.0))
     fuel = float(data.get("fuel", FUEL_CAPACITY))
     throttle = float(data.get("throttle", 0.0))
+    thrust_key_down = false
     time_warp = float(data.get("time_warp", 1.0))
     paused = bool(data.get("paused", false))
     trail.clear()
