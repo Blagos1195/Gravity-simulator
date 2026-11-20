@@ -534,9 +534,11 @@ func _update_guidance(dt: float) -> void:
 					autopilot_phase = "COAST"
 				else:
 					var ascent_tangential_speed := absf(float(orbit.get("tangential_speed", 0.0)))
-					var ascent_speed_fraction := clampf(ascent_tangential_speed / 7800.0, 0.0, 1.0)
-					var ascent_altitude_fraction := clampf(altitude / 100000.0, 0.0, 1.0)
-					pitch_above_horizon = lerpf(90.0, 2.0, maxf(ascent_altitude_fraction, ascent_speed_fraction))
+					var ascent_speed_fraction := clampf(ascent_tangential_speed / 7600.0, 0.0, 1.0)
+					var ascent_altitude_fraction := clampf((altitude - 1500.0) / 60000.0, 0.0, 1.0)
+					var altitude_pitch := lerpf(85.0, 2.0, ascent_altitude_fraction)
+					var speed_pitch := lerpf(85.0, 2.0, ascent_speed_fraction)
+					pitch_above_horizon = minf(altitude_pitch, speed_pitch)
 					thrust_key_down = fuel > 0.0
 			"COAST":
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
