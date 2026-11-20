@@ -156,15 +156,15 @@ static func departure_wait_time(target_index: int, current_time: float, parking_
 	if target_index == -1:
 		if parking_position.length() <= EARTH_RADIUS:
 			return 0.0
-		var transfer := hohmann_transfer(parking_position.length(), EARTH_RADIUS + MOON_ORBIT_RADIUS)
-		var moon_rate := TAU / (27.321661 * 86400.0)
+		var lunar_window_transfer := hohmann_transfer(parking_position.length(), EARTH_RADIUS + MOON_ORBIT_RADIUS)
+		var lunar_rate := TAU / (27.321661 * 86400.0)
 		var parking_rate := sqrt(EARTH_MU / pow(parking_position.length(), 3.0))
-		var current_phase := wrapf(moon_rate * current_time - parking_position.angle(), -PI, PI)
-		var desired_phase := wrapf(PI - moon_rate * float(transfer.get("transfer_time", 0.0)), -PI, PI)
-		var relative_rate := moon_rate - parking_rate
-		var phase_difference := wrapf(desired_phase - current_phase, -PI, PI)
-		var wait := phase_difference / relative_rate
-		return fposmod(wait, TAU / absf(relative_rate))
+		var lunar_current_phase := wrapf(lunar_rate * current_time - parking_position.angle(), -PI, PI)
+		var lunar_desired_phase := wrapf(PI - lunar_rate * float(lunar_window_transfer.get("transfer_time", 0.0)), -PI, PI)
+		var lunar_relative_rate := lunar_rate - parking_rate
+		var lunar_phase_difference := wrapf(lunar_desired_phase - lunar_current_phase, -PI, PI)
+		var lunar_wait := lunar_phase_difference / lunar_relative_rate
+		return fposmod(lunar_wait, TAU / absf(lunar_relative_rate))
 	if target_index < 0 or target_index >= PLANET_TARGETS.size():
 		return 0.0
 	var target: Dictionary = PLANET_TARGETS[target_index]
@@ -176,8 +176,8 @@ static func departure_wait_time(target_index: int, current_time: float, parking_
 	var earth_angle := earth_rate * current_time
 	var target_angle := target_rate * current_time
 	var current_phase := wrapf(target_angle - earth_angle, -PI, PI)
-	var transfer := interplanetary_transfer(target_index)
-	var desired_phase := float(transfer.get("phase_angle", 0.0))
+	var planetary_window_transfer := interplanetary_transfer(target_index)
+	var desired_phase := float(planetary_window_transfer.get("phase_angle", 0.0))
 	var phase_difference := wrapf(desired_phase - current_phase, -PI, PI)
 	var wait := phase_difference / relative_rate
 	var synodic_period := TAU / absf(relative_rate)
