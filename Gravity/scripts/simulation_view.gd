@@ -432,6 +432,9 @@ func _nearest_body_state(position: Vector2) -> Dictionary:
 		if candidate_distance < nearest_distance:
 			nearest = candidate
 			nearest_distance = candidate_distance
+	if nearest_distance > float(nearest.soi):
+		nearest = _surface_body_state("Earth")
+		nearest_distance = position.length()
 	nearest["distance"] = nearest_distance
 	return nearest
 
