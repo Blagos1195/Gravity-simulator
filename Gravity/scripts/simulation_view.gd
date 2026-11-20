@@ -463,7 +463,7 @@ func _handle_body_contact() -> void:
 		if not bool(body.solid):
 			crashed = true
 			status_message = "LOST IN %s  •  ATMOSPHERIC LIMIT REACHED" % str(body.name).to_upper()
-		elif relative_speed <= 35.0 and throttle < 0.1:
+		elif relative_speed <= 35.0:
 			landed = true
 			crashed = false
 			landed_body_name = str(body.name)
