@@ -715,6 +715,8 @@ func _show_flight_computer() -> void:
 		sim.autopilot_target_mode = "LAND"
 		sim.autopilot_planet_index = planet_index
 		sim.autopilot_phase = "LANDING_DESCENT"
+		sim.autopilot_burn_remaining = 0.0
+		sim.autopilot_burn_direction = Vector2.ZERO
 		sim.autopilot_throttle = 0.0
 		sim.guidance_enabled = true
 		sim.thrust_key_down = false
@@ -727,8 +729,9 @@ func _show_flight_computer() -> void:
 	root.add_child(cancel)
 	var update_report := func() -> void:
 		var selected_id: int = target.get_selected_id()
-		landing.disabled = selected_id > 0
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
+		landing.disabled = selected_id > 0 or sim.crashed
+		autopilot.disabled = str(current_body.name) != "Earth" or sim.crashed
 		var current_position: Vector2 = sim.rocket_position - current_body.position
 		var current_velocity: Vector2 = sim.velocity - current_body.velocity
 		var state := FlightComputer.orbital_state(current_position, current_velocity, FlightComputer.G * float(current_body.mass))
@@ -750,8 +753,8 @@ func _show_flight_computer() -> void:
 				mission_valid = false
 				text_lines.append("Earth-orbit targets can only be planned from the Earth system.")
 			var target_radius := FlightComputer.EARTH_RADIUS + float(selected_id)
-			var circular := FlightComputer.circularisation_burn(sim.rocket_position, sim.velocity)
-			var orbit_origin_radius := maxf(FlightComputer.EARTH_RADIUS + 100000.0, sim.rocket_position.length())
+			var circular := FlightComputer.circularisation_burn(current_position, current_velocity, true, FlightComputer.G * float(current_body.mass))
+			var orbit_origin_radius := maxf(float(current_body.radius) + 100000.0, current_position.length())
 			var orbit_transfer := FlightComputer.hohmann_transfer(orbit_origin_radius, target_radius)
 			var orbit_departure_direction := "PROGRADE" if target_radius > orbit_origin_radius else "RETROGRADE"
 			text_lines.append("TARGET ORBIT")
@@ -790,7 +793,7 @@ func _show_flight_computer() -> void:
 				mission_valid = false
 				text_lines.append("ERROR: No valid transfer solution is available for this destination.")
 			text_lines.append("")
-			text_lines.append("Estimates assume circular coplanar orbits and patched-conic transfers. Autopilot captures into a circular orbit at closest approach; landing is not yet implemented.")
+			text_lines.append("Estimates assume circular coplanar orbits and patched-conic transfers. Autopilot captures into a circular orbit at closest approach. Powered landing guidance is available from a stable orbit around solid bodies.")
 		text_lines.append("")
 		text_lines.append("VEHICLE FUEL FEASIBILITY")
 		text_lines.append("Remaining ideal vehicle Δv: %.2f km/s" % (remaining_delta_v / 1000.0))
