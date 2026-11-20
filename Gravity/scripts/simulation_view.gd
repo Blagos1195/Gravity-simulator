@@ -860,26 +860,30 @@ func _draw_grid(center: Vector2) -> void:
 		draw_line(Vector2(0, py), Vector2(size.x, py), Color(0.18, 0.28, 0.4, 0.12), 1.0)
 
 func _draw_orbit(rocket_screen: Vector2, earth_screen: Vector2, radius_px: float, factor: float) -> void:
-	var r := rocket_position.length()
-	var speed_sq := velocity.length_squared()
-	var specific_energy := speed_sq * 0.5 - G * EARTH_MASS / r
-	if specific_energy >= 0:
+	var body := _nearest_body_state(rocket_position)
+	var relative_position: Vector2 = rocket_position - body.position
+	var relative_velocity: Vector2 = velocity - body.velocity
+	var mu := G * float(body.mass)
+	var radius := relative_position.length()
+	var speed_squared := relative_velocity.length_squared()
+	var specific_energy := speed_squared * 0.5 - mu / radius
+	if specific_energy >= 0.0:
 		return
-	var semi_major := -G * EARTH_MASS / (2.0 * specific_energy)
-	var angular_momentum := rocket_position.x * velocity.y - rocket_position.y * velocity.x
-	var eccentricity_sq := maxf(0.0, 1.0 + 2.0 * specific_energy * angular_momentum * angular_momentum / pow(G * EARTH_MASS, 2.0))
+	var semi_major := -mu / (2.0 * specific_energy)
+	var angular_momentum := relative_position.cross(relative_velocity)
+	var eccentricity_sq := maxf(0.0, 1.0 + 2.0 * specific_energy * angular_momentum * angular_momentum / (mu * mu))
 	var eccentricity := sqrt(eccentricity_sq)
 	var periapsis := semi_major * (1.0 - eccentricity)
 	var apoapsis := semi_major * (1.0 + eccentricity)
-	if periapsis <= EARTH_RADIUS:
+	if periapsis <= float(body.radius):
 		return
 	var points := PackedVector2Array()
-	var direction := atan2(rocket_position.y, rocket_position.x)
+	var direction := atan2(relative_position.y, relative_position.x)
 	for i in range(121):
 		var theta := TAU * float(i) / 120.0
-		var radius := semi_major * (1.0 - eccentricity * eccentricity) / (1.0 + eccentricity * cos(theta))
-		var local := Vector2(cos(theta + direction), sin(theta + direction)) * radius
-		points.append(rocket_screen + (local - rocket_position) * camera_zoom * factor)
+		var orbit_radius := semi_major * (1.0 - eccentricity * eccentricity) / (1.0 + eccentricity * cos(theta))
+		var local := Vector2(cos(theta + direction), sin(theta + direction)) * orbit_radius
+		points.append(rocket_screen + (local - relative_position) * camera_zoom * factor)
 	draw_polyline(points, Color(0.2, 0.75, 1.0, 0.5), 1.5)
 
 func _draw_rocket(p: Vector2, object_scale: float) -> void:
@@ -940,7 +944,7 @@ func _draw_hud() -> void:
 		lines.append("TARGET RANGE   %s" % _format_distance(target_range))
 		lines.append("TARGET SPEED   %s" % _format_speed(target_relative_speed))
 		lines.append("AUTOPILOT      %s" % autopilot_phase.replace("_", " "))
-	var hud_height := 415.0 + maxf(0.0, float(lines.size() - 18) * 23.0)
+	var hud_height := 421.0 + maxf(0.0, float(lines.size() - 18) * 23.0)
 	var box := Rect2(Vector2(18.0 * ui_scale, size.y - (hud_height + 20.0) * ui_scale), Vector2(310.0 * ui_scale, hud_height * ui_scale))
 	draw_rect(box, Color(0.015, 0.035, 0.065, 0.86), true)
 	draw_rect(box, Color(0.18, 0.42, 0.6, 0.7), false, 1.0)
