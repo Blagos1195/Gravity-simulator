@@ -58,12 +58,42 @@ static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vect
 		if planet.name == "Earth":
 			continue
 		var planet_position := _planet_relative_position(planet, time_seconds)
-		acceleration += _differential_body_gravity(position, float(planet.mass), planet_position)
+		acceleration += _differential_body_gravity(position, float(planet.mass), planet_position, float(planet.radius))
 	return acceleration
 
 static func _sun_relative_position(time_seconds: float) -> Vector2:
 	var angle := TAU * time_seconds / EARTH_ORBIT_PERIOD
 	return Vector2(cos(angle), sin(angle)) * -ASTRONOMICAL_UNIT
+
+static func planet_position_relative_to_earth(planet_name: String, time_seconds: float) -> Vector2:
+	var planet := _find_planet(planet_name)
+	if planet.is_empty() or planet_name == "Earth":
+		return Vector2.ZERO
+	return _planet_relative_position(planet, time_seconds)
+
+static func planet_velocity_relative_to_earth(planet_name: String, time_seconds: float) -> Vector2:
+	var planet := _find_planet(planet_name)
+	if planet.is_empty() or planet_name == "Earth":
+		return Vector2.ZERO
+	var earth_rate := TAU / EARTH_ORBIT_PERIOD
+	var planet_rate := TAU / (float(planet.orbital_period) * 86400.0)
+	var earth_angle := earth_rate * time_seconds
+	var planet_angle := planet_rate * time_seconds
+	var earth_velocity := Vector2(-sin(earth_angle), cos(earth_angle)) * (TAU * ASTRONOMICAL_UNIT / EARTH_ORBIT_PERIOD)
+	var planet_velocity := Vector2(-sin(planet_angle), cos(planet_angle)) * (TAU * float(planet.semi_major_axis) / (float(planet.orbital_period) * 86400.0))
+	return planet_velocity - earth_velocity
+
+static func planet_soi_radius(planet_name: String) -> float:
+	var planet := _find_planet(planet_name)
+	if planet.is_empty():
+		return 0.0
+	return float(planet.semi_major_axis) * pow(float(planet.mass) / (3.0 * SUN_MASS), 0.4)
+
+static func _find_planet(planet_name: String) -> Dictionary:
+	for planet in PLANETS:
+		if str(planet.name) == planet_name:
+			return planet
+	return {}
 
 static func _planet_relative_position(planet: Dictionary, time_seconds: float) -> Vector2:
 	var earth_angle := TAU * time_seconds / EARTH_ORBIT_PERIOD
@@ -73,9 +103,9 @@ static func _planet_relative_position(planet: Dictionary, time_seconds: float) -
 	var planet_position := Vector2(cos(angle), sin(angle)) * float(planet.semi_major_axis)
 	return planet_position - earth_position
 
-static func _differential_body_gravity(position: Vector2, body_mass: float, body_position: Vector2) -> Vector2:
+static func _differential_body_gravity(position: Vector2, body_mass: float, body_position: Vector2, body_radius: float = 1.0e7) -> Vector2:
 	var relative := body_position - position
-	var body_distance := maxf(relative.length(), 1.0e7)
+	var body_distance := maxf(relative.length(), body_radius)
 	var earth_distance := maxf(body_position.length(), 1.0e7)
 	return relative.normalized() * G * body_mass / (body_distance * body_distance) - body_position.normalized() * G * body_mass / (earth_distance * earth_distance)
 
