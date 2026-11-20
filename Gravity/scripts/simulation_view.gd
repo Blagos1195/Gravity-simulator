@@ -42,6 +42,7 @@ var heat_shield_temperature := 290.0
 var peak_heat_flux_mw := 0.0
 var mach_number := 0.0
 var dynamic_pressure_pa := 0.0
+var max_dynamic_pressure_pa := 0.0
 var camera_zoom := 0.000045
 var solar_map_zoom := 1.0
 var camera_offset := Vector2.ZERO
@@ -233,13 +234,19 @@ func _update_flight_environment() -> void:
 	var temperature := PlanetarySystem.atmospheric_temperature(altitude)
 	mach_number = relative_speed / sqrt(1.4 * 287.05287 * temperature)
 	dynamic_pressure_pa = 0.5 * density * relative_speed * relative_speed
+	max_dynamic_pressure_pa = maxf(max_dynamic_pressure_pa, dynamic_pressure_pa)
 
 func _update_heating(dt: float, altitude: float, speed: float) -> void:
+	if realism == "Arcade":
+		heat_flux_mw = 0.0
+		return
 	var heat_flux_w := 0.0
 	if altitude < PlanetarySystem.ATMOSPHERE_HEIGHT:
 		var density := PlanetarySystem.atmospheric_density(altitude)
 		var nose_radius := 0.5
 		heat_flux_w = 1.83e-4 * sqrt(maxf(0.0, density) / nose_radius) * pow(speed, 3.0)
+	if realism == "Standard":
+		heat_flux_w *= 0.65
 	heat_flux_mw = heat_flux_w / 1000000.0
 	peak_heat_flux_mw = maxf(peak_heat_flux_mw, heat_flux_mw)
 	var absorbed_flux := heat_flux_w * (0.22 if realism == "Hardcore" else 0.15)
@@ -633,6 +640,7 @@ func _draw_hud() -> void:
 		"STAGE          %d / %d" % [stage_index + 1, rocket_stages.size()],
 		"MACH NUMBER    %.2f" % mach_number,
 		"DYNA PRESSURE  %.1f kPa" % (dynamic_pressure_pa / 1000.0),
+		"MAX-Q          %.1f kPa" % (max_dynamic_pressure_pa / 1000.0),
 		"HEAT FLUX      %.2f MW/m²" % heat_flux_mw,
 		"SHIELD TEMP    %.0f K" % heat_shield_temperature,
 		"PEAK HEATING   %.2f MW/m²" % peak_heat_flux_mw,
@@ -726,6 +734,7 @@ func get_save_data() -> Dictionary:
 		"autopilot_phase": autopilot_phase,
 		"heat_shield_temperature": heat_shield_temperature,
 		"peak_heat_flux_mw": peak_heat_flux_mw,
+		"max_dynamic_pressure_pa": max_dynamic_pressure_pa,
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
@@ -758,6 +767,7 @@ func load_save_data(data: Dictionary) -> void:
 	autopilot_phase = str(data.get("autopilot_phase", "IDLE"))
 	heat_shield_temperature = float(data.get("heat_shield_temperature", 290.0))
 	peak_heat_flux_mw = float(data.get("peak_heat_flux_mw", 0.0))
+	max_dynamic_pressure_pa = float(data.get("max_dynamic_pressure_pa", 0.0))
 	throttle = float(data.get("throttle", 0.0))
 	thrust_key_down = false
 	time_warp = float(data.get("time_warp", 1.0))
