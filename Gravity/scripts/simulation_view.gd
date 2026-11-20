@@ -571,7 +571,7 @@ func _update_guidance(dt: float) -> void:
 				var destination_distance := rocket_position.distance_to(destination_state.position)
 				var encounter_radius := float(destination_state.soi)
 				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1F DAYS REMAINING" % [str(destination_state.name).to_upper(), transfer_remaining / 86400.0]
-				if transfer_elapsed >= autopilot_transfer_duration * 0.75 and destination_distance <= encounter_radius:
+				if destination_distance <= encounter_radius:
 					autopilot_phase = "ARRIVAL_APPROACH"
 				elif transfer_elapsed > autopilot_transfer_duration * 1.5:
 					autopilot_phase = "ARRIVAL_PENDING"
