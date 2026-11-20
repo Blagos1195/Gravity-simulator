@@ -114,27 +114,32 @@ func _show_vehicle_editor() -> void:
 	heading.add_theme_color_override("font_color", Color(0.78, 0.9, 1.0))
 	root.add_child(heading)
 	var subtitle := Label.new()
-	subtitle.text = "CONFIGURE YOUR TWO-STAGE LAUNCH VEHICLE"
+	subtitle.text = "CONFIGURE A MULTI-STAGE LAUNCH VEHICLE  •  2–8 STAGES"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_color_override("font_color", Color(0.35, 0.66, 0.82))
 	root.add_child(subtitle)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(scroll)
-	var columns := HBoxContainer.new()
+	var columns := VBoxContainer.new()
 	columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	columns.add_theme_constant_override("separation", 24)
 	scroll.add_child(columns)
-	for stage_index in range(2):
+	var stage_actions := HBoxContainer.new()
+	stage_actions.add_theme_constant_override("separation", 10)
+	columns.add_child(stage_actions)
+	_add_button(stage_actions, "ADD STAGE", _add_rocket_stage)
+	_add_button(stage_actions, "REMOVE LAST STAGE", _remove_rocket_stage)
+	for stage_index in range(rocket_design["stages"].size()):
 		var panel := PanelContainer.new()
 		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		columns.add_child(panel)
 		var fields := VBoxContainer.new()
-		fields.add_theme_constant_override("separation", 10)
+		fields.add_theme_constant_override("separation", 8)
 		panel.add_child(fields)
 		var stage: Dictionary = rocket_design["stages"][stage_index]
 		var stage_title := Label.new()
-		stage_title.text = "FIRST STAGE" if stage_index == 0 else "UPPER STAGE"
+		stage_title.text = "STAGE %02d" % (stage_index + 1)
 		stage_title.add_theme_font_size_override("font_size", 20)
 		stage_title.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 		fields.add_child(stage_title)
@@ -146,6 +151,7 @@ func _show_vehicle_editor() -> void:
 		_add_design_field(fields, stage_index, "engine_count", "Engine count", 1.0, 8.0, 1.0)
 	var payload_panel := PanelContainer.new()
 	payload_panel.custom_minimum_size.x = 230
+	payload_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	columns.add_child(payload_panel)
 	var payload_fields := VBoxContainer.new()
 	payload_panel.add_child(payload_fields)
@@ -191,6 +197,28 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "SAVE DESIGN", _save_rocket_design)
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _build_menu)
+
+func _add_rocket_stage() -> void:
+	var stages: Array = rocket_design["stages"]
+	if stages.size() >= 8:
+		return
+	stages.append({
+		"name": "STAGE %02d" % (stages.size() + 1),
+		"dry_mass": 3000.0,
+		"fuel_capacity": 80000.0,
+		"thrust": 1200000.0,
+		"vacuum_thrust": 1500000.0,
+		"flow": 300.0,
+		"engine_count": 1
+	})
+	_show_vehicle_editor()
+
+func _remove_rocket_stage() -> void:
+	var stages: Array = rocket_design["stages"]
+	if stages.size() <= 2:
+		return
+	stages.pop_back()
+	_show_vehicle_editor()
 
 func _add_design_field(parent: VBoxContainer, stage_index: int, key: String, label_text: String, minimum: float, maximum: float, step: float) -> void:
 	var label := Label.new()
@@ -452,34 +480,25 @@ class RocketPreview:
 	var design: Dictionary = {}
 	func _draw() -> void:
 		var stages: Array = design.get("stages", [])
-		if stages.size() != 2:
+		if stages.is_empty():
 			return
 		var center_x := size.x * 0.5
-		var top := 18.0
+		var top := 14.0
 		var width := minf(48.0, size.x * 0.24)
-		var payload_height := 34.0
-		var upper_height := 92.0
-		var first_height := 112.0
-		var payload_points := PackedVector2Array([
+		var stage_height := minf(48.0, (size.y - 65.0) / float(maxi(1, stages.size())))
+		var payload_height := 25.0
+		draw_colored_polygon(PackedVector2Array([
 			Vector2(center_x, top),
 			Vector2(center_x - width * 0.5, top + payload_height),
 			Vector2(center_x + width * 0.5, top + payload_height)
-		])
-		draw_colored_polygon(payload_points, Color(0.75, 0.84, 0.94))
-		var upper_y := top + payload_height
-		draw_rect(Rect2(center_x - width * 0.5, upper_y, width, upper_height), Color(0.36, 0.62, 0.78))
-		draw_rect(Rect2(center_x - width * 0.5, upper_y + upper_height * 0.62, width, upper_height * 0.28), Color(0.92, 0.65, 0.22))
-		var first_y := upper_y + upper_height
-		draw_rect(Rect2(center_x - width * 0.62, first_y, width * 1.24, first_height), Color(0.48, 0.58, 0.68))
-		draw_rect(Rect2(center_x - width * 0.62, first_y + first_height * 0.65, width * 1.24, first_height * 0.25), Color(0.92, 0.65, 0.22))
-		var fin_y := first_y + first_height - 25.0
-		draw_colored_polygon(PackedVector2Array([Vector2(center_x - width * 0.62, fin_y), Vector2(center_x - width, fin_y + 25.0), Vector2(center_x - width * 0.62, fin_y + 25.0)]), Color(0.65, 0.72, 0.82))
-		draw_colored_polygon(PackedVector2Array([Vector2(center_x + width * 0.62, fin_y), Vector2(center_x + width, fin_y + 25.0), Vector2(center_x + width * 0.62, fin_y + 25.0)]), Color(0.65, 0.72, 0.82))
-		var engine_count := int(stages[0].get("engine_count", 1))
-		var engine_spacing := width * 1.1 / float(engine_count)
-		for engine_index in range(engine_count):
-			var engine_x := center_x + (float(engine_index) - float(engine_count - 1) * 0.5) * engine_spacing
-			draw_colored_polygon(PackedVector2Array([Vector2(engine_x - 5.0, first_y + first_height), Vector2(engine_x, first_y + first_height + 18.0), Vector2(engine_x + 5.0, first_y + first_height)]), Color(0.42, 0.48, 0.56))
+		]), Color(0.75, 0.84, 0.94))
+		var y := top + payload_height
+		for i in range(stages.size() - 1, -1, -1):
+			var stage_width := width * (1.0 + float(i) * 0.08)
+			draw_rect(Rect2(center_x - stage_width * 0.5, y, stage_width, stage_height), Color(0.36 + float(i) * 0.025, 0.62, 0.78))
+			draw_rect(Rect2(center_x - stage_width * 0.5, y + stage_height * 0.68, stage_width, stage_height * 0.2), Color(0.92, 0.65, 0.22))
+			y += stage_height
+
 		draw_string(ThemeDB.fallback_font, Vector2(12, size.y - 8), str(design.get("name", "CUSTOM VEHICLE")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.65, 0.8, 0.92))
 
 class Starfield:
