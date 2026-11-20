@@ -5,6 +5,18 @@ const G := 6.67430e-11
 const EARTH_MU := 3.986004418e14
 const EARTH_RADIUS := 6.371e6
 const MOON_ORBIT_RADIUS := 3.844e8
+const SUN_MU := 1.32712440018e20
+const EARTH_ORBIT_RADIUS := 1.495978707e11
+const EARTH_ORBIT_PERIOD := 365.256363004 * 86400.0
+const PLANET_TARGETS := [
+	{"name": "Mercury", "radius": 5.7909e10, "period_days": 87.969},
+	{"name": "Venus", "radius": 1.0821e11, "period_days": 224.701},
+	{"name": "Mars", "radius": 2.2794e11, "period_days": 686.980},
+	{"name": "Jupiter", "radius": 7.7857e11, "period_days": 4332.59},
+	{"name": "Saturn", "radius": 1.4335e12, "period_days": 10759.22},
+	{"name": "Uranus", "radius": 2.8725e12, "period_days": 30688.5},
+	{"name": "Neptune", "radius": 4.4951e12, "period_days": 60182.0}
+]
 
 static func orbital_state(position: Vector2, velocity: Vector2, mu: float = EARTH_MU) -> Dictionary:
 	var radius := position.length()
@@ -73,6 +85,54 @@ static func hohmann_transfer(origin_radius: float, target_radius: float, mu: flo
 		"arrival_delta_v": second_burn,
 		"total_delta_v": first_burn + second_burn,
 		"transfer_time": transfer_time,
+		"transfer_semi_major_axis": transfer_axis
+	}
+
+static func interplanetary_transfer(target_index: int, parking_altitude: float = 200000.0) -> Dictionary:
+	if target_index == -1:
+		var lunar := hohmann_transfer(EARTH_RADIUS + parking_altitude, EARTH_RADIUS + MOON_ORBIT_RADIUS)
+		if not bool(lunar.get("valid", false)):
+			return {"valid": false}
+		return {
+			"valid": true,
+			"name": "Moon",
+			"departure_delta_v": float(lunar.departure_delta_v),
+			"arrival_delta_v": float(lunar.arrival_delta_v),
+			"total_delta_v": float(lunar.total_delta_v),
+			"transfer_time": float(lunar.transfer_time),
+			"direction": 1.0,
+			"phase_angle": 0.0,
+			"arrival_excess_speed": 0.0
+		}
+	if target_index < 0 or target_index >= PLANET_TARGETS.size():
+		return {"valid": false}
+	var target: Dictionary = PLANET_TARGETS[target_index]
+	var target_radius := float(target.radius)
+	var transfer_axis := (EARTH_ORBIT_RADIUS + target_radius) * 0.5
+	var earth_speed := sqrt(SUN_MU / EARTH_ORBIT_RADIUS)
+	var target_speed := sqrt(SUN_MU / target_radius)
+	var transfer_departure_speed := sqrt(SUN_MU * (2.0 / EARTH_ORBIT_RADIUS - 1.0 / transfer_axis))
+	var transfer_arrival_speed := sqrt(SUN_MU * (2.0 / target_radius - 1.0 / transfer_axis))
+	var departure_excess := absf(transfer_departure_speed - earth_speed)
+	var arrival_excess := absf(target_speed - transfer_arrival_speed)
+	var parking_radius := EARTH_RADIUS + maxf(70000.0, parking_altitude)
+	var parking_speed := circular_orbit_speed(parking_radius)
+	var escape_speed := sqrt(departure_excess * departure_excess + 2.0 * EARTH_MU / parking_radius)
+	var injection_delta_v := escape_speed - parking_speed
+	var transfer_time := PI * sqrt(pow(transfer_axis, 3.0) / SUN_MU)
+	var target_mean_motion := TAU / (float(target.period_days) * 86400.0)
+	var phase_angle := wrapf(PI - target_mean_motion * transfer_time, -PI, PI)
+	return {
+		"valid": true,
+		"name": str(target.name),
+		"departure_delta_v": injection_delta_v,
+		"arrival_delta_v": arrival_excess,
+		"total_delta_v": injection_delta_v + arrival_excess,
+		"transfer_time": transfer_time,
+		"departure_excess_speed": departure_excess,
+		"arrival_excess_speed": arrival_excess,
+		"direction": 1.0 if transfer_departure_speed >= earth_speed else -1.0,
+		"phase_angle": phase_angle,
 		"transfer_semi_major_axis": transfer_axis
 	}
 
