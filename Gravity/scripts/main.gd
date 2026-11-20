@@ -806,11 +806,12 @@ func _show_flight_computer() -> void:
 			text_lines.append("Hohmann orbit-change estimate: %.0f m/s Δv" % float(orbit_transfer.get("total_delta_v", 0.0)))
 			text_lines.append("Transfer time: %.1f minutes" % (float(orbit_transfer.get("transfer_time", 0.0)) / 60.0))
 			required_delta_v = float(orbit_transfer.get("total_delta_v", 0.0)) if in_orbit else 9400.0 + float(orbit_transfer.get("total_delta_v", 0.0))
-		elif selected_id > 0 or selected_id <= 0:
+		else:
 			var destination_index := -2 if selected_id > 0 else (-1 if selected_id == -1 else -selected_id - 2)
+			var destination_name := "Earth" if destination_index == -2 else "Moon" if destination_index == -1 else str(FlightComputer.PLANET_TARGETS[destination_index].get("name", "Unknown"))
 			var stable_departure_state := bool(state.get("bound", false)) and float(state.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0
 			text_lines.append("SIMULATED TRANSFER")
-			text_lines.append("Destination: %s" % sim._autopilot_target_body_name())
+			text_lines.append("Destination: %s" % destination_name)
 			if sim.landed or (current_altitude < 120000.0 and not stable_departure_state):
 				mission_valid = false
 				text_lines.append("A stable departure orbit is required before the transfer search can run.")
