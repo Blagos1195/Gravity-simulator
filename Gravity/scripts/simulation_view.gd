@@ -318,7 +318,7 @@ func _update_guidance(dt: float) -> void:
 				var burn_direction := tangent * autopilot_transfer_direction
 				var burn_rotation := burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0
+				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, burn_rotation)) < deg_to_rad(1.0)
 				if fuel <= 0.0:
 					autopilot_phase = "FAILED"
 			"TRANSFER_COAST":
