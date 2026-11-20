@@ -36,6 +36,7 @@ var autopilot_burn_remaining := 0.0
 var autopilot_transfer_start_time := -1.0
 var autopilot_transfer_duration := 0.0
 var autopilot_transfer_direction := 1.0
+var autopilot_arrival_burn_vector := Vector2.ZERO
 var autopilot_burn_direction := Vector2.ZERO
 var autopilot_complete := false
 var autopilot_phase := "IDLE"
@@ -127,7 +128,7 @@ func _physics_step(dt: float) -> void:
 			velocity -= normal * inward_speed
 	if guidance_enabled:
 		_update_guidance(dt)
-	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_PENDING", "COMPLETE", "FAILED"]:
+	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "COMPLETE", "FAILED"]:
 		thrust_key_down = false
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
@@ -142,12 +143,23 @@ func _physics_step(dt: float) -> void:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
 	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var thrust_impulse := thrust_direction * thrust_delta_v
-	if autopilot_enabled and autopilot_phase == "TRANSFER_BURN" and thrust_delta_v > 0.0:
+	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"] and thrust_delta_v > 0.0:
 		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
 		if autopilot_burn_remaining <= 1.0:
 			thrust_key_down = false
-			autopilot_transfer_start_time = sim_time
-			autopilot_phase = "TRANSFER_COAST"
+			if autopilot_phase == "TRANSFER_BURN":
+				autopilot_transfer_start_time = sim_time
+				autopilot_phase = "TRANSFER_COAST"
+			else:
+				var arrival_state := _autopilot_target_state()
+				var arrival_position: Vector2 = rocket_position - arrival_state.position
+				var arrival_velocity: Vector2 = velocity - arrival_state.velocity
+				var arrival_orbit := FlightComputer.orbital_state(arrival_position, arrival_velocity, G * float(arrival_state.mass))
+				if bool(arrival_orbit.get("bound", false)) and float(arrival_orbit.get("periapsis", 0.0)) > float(arrival_state.radius) + 50000.0:
+					autopilot_phase = "COMPLETE"
+					autopilot_complete = true
+				else:
+					autopilot_phase = "FAILED"
 	var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, start_time)
 	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
@@ -277,6 +289,62 @@ func _separate_stage() -> void:
 	fuel = float(_active_stage_data().get("fuel_capacity", 0.0))
 	thrust_key_down = false
 
+func _autopilot_target_body_name() -> String:
+	if autopilot_planet_index == -1:
+		return "Moon"
+	if autopilot_planet_index >= 0 and autopilot_planet_index < FlightComputer.PLANET_TARGETS.size():
+		return str(FlightComputer.PLANET_TARGETS[autopilot_planet_index].get("name", ""))
+	return ""
+
+func _autopilot_target_state() -> Dictionary:
+	var body_name := _autopilot_target_body_name()
+	if body_name == "Moon":
+		return {
+			"name": "Moon",
+			"position": PlanetarySystem.moon_position(sim_time),
+			"velocity": PlanetarySystem.moon_velocity(sim_time),
+			"mass": PlanetarySystem.MOON_MASS,
+			"radius": PlanetarySystem.MOON_RADIUS,
+			"soi": PlanetarySystem.moon_soi_radius()
+		}
+	for body in PlanetarySystem.PLANETS:
+		if str(body.name) == body_name:
+			return {
+				"name": body_name,
+				"position": PlanetarySystem.planet_position_relative_to_earth(body_name, sim_time),
+				"velocity": PlanetarySystem.planet_velocity_relative_to_earth(body_name, sim_time),
+				"mass": float(body.mass),
+				"radius": float(body.radius),
+				"soi": PlanetarySystem.planet_soi_radius(body_name)
+			}
+	return {}
+
+func _begin_arrival_capture(target_state: Dictionary) -> void:
+	var relative_position: Vector2 = rocket_position - target_state.position
+	var relative_velocity: Vector2 = velocity - target_state.velocity
+	var radius := relative_position.length()
+	var mu := G * float(target_state.mass)
+	var safe_radius := float(target_state.radius) + 100000.0
+	if radius <= safe_radius:
+		autopilot_phase = "FAILED"
+		status_message = "ARRIVAL FAILED  •  TRAJECTORY INTERSECTS THE BODY"
+		return
+	var angular_momentum := relative_position.cross(relative_velocity)
+	var tangent := Vector2(-relative_position.y, relative_position.x).normalized()
+	var direction := 1.0 if angular_momentum >= 0.0 else -1.0
+	var desired_apoapsis := maxf(radius * 2.0, safe_radius + 200000.0)
+	var semi_major_axis := (radius + desired_apoapsis) * 0.5
+	var desired_speed := sqrt(mu * (2.0 / radius - 1.0 / semi_major_axis))
+	var desired_velocity := tangent * direction * desired_speed
+	autopilot_arrival_burn_vector = desired_velocity - relative_velocity
+	autopilot_burn_direction = autopilot_arrival_burn_vector.normalized()
+	autopilot_burn_remaining = autopilot_arrival_burn_vector.length()
+	if autopilot_burn_remaining < 1.0:
+		autopilot_phase = "COMPLETE"
+		autopilot_complete = true
+	else:
+		autopilot_phase = "ARRIVAL_CAPTURE_BURN"
+
 func _update_guidance(dt: float) -> void:
 	var radial := rocket_position.normalized()
 	var altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
@@ -358,12 +426,31 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = false
 				var transfer_elapsed := maxf(0.0, sim_time - autopilot_transfer_start_time)
 				var transfer_remaining := maxf(0.0, autopilot_transfer_duration - transfer_elapsed)
-				var destination_name := "MOON" if autopilot_planet_index == -1 else str(FlightComputer.PLANET_TARGETS[autopilot_planet_index].get("name", "UNKNOWN"))
-				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1F DAYS REMAINING" % [destination_name, transfer_remaining / 86400.0]
-				if autopilot_transfer_start_time >= 0.0 and transfer_remaining <= 0.0:
-					autopilot_phase = "ARRIVAL_PENDING"
+				var destination_state := _autopilot_target_state()
+				var destination_distance := rocket_position.distance_to(destination_state.position)
+				var encounter_radius := float(destination_state.soi)
+				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1F DAYS REMAINING" % [str(destination_state.name).to_upper(), transfer_remaining / 86400.0]
+				if transfer_elapsed >= autopilot_transfer_duration * 0.75 and destination_distance <= encounter_radius:
+					autopilot_phase = "ARRIVAL_APPROACH"
+				"ARRIVAL_APPROACH":
+					thrust_key_down = false
+					var destination_state := _autopilot_target_state()
+					var relative_position: Vector2 = rocket_position - destination_state.position
+					var relative_velocity: Vector2 = velocity - destination_state.velocity
+					var arrival_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, G * float(destination_state.mass))
+					var radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
+					status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0F KM" % [str(destination_state.name).to_upper(), (relative_position.length() - float(destination_state.radius)) / 1000.0]
+					if radial_speed >= -10.0:
+						_begin_arrival_capture(destination_state)
+			"ARRIVAL_CAPTURE_BURN":
+					status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0F M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
+					var burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
+					rotation_angle = lerp_angle(rotation_angle, burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
+					thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, burn_rotation)) < deg_to_rad(1.0)
+					if fuel <= 0.0:
+						autopilot_phase = "FAILED"
 			"ARRIVAL_PENDING":
-				status_message = "TRANSFER TIME ELAPSED  •  ARRIVAL TARGETING NOT YET IMPLEMENTED"
+				status_message = "ARRIVAL WINDOW MISSED  •  TARGET OUTSIDE CAPTURE REGION"
 				thrust_key_down = false
 			"COMPLETE":
 				status_message = "AUTOPILOT  •  TARGET ORBIT ACHIEVED"
@@ -377,7 +464,7 @@ func _update_guidance(dt: float) -> void:
 			autopilot_direction = radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
 		elif autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"]:
 			autopilot_direction = tangent * autopilot_transfer_direction
-		elif autopilot_phase == "TRANSFER_BURN":
+		elif autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"]:
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 		var target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
 		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
@@ -754,6 +841,8 @@ func get_save_data() -> Dictionary:
 		"autopilot_transfer_start_time": autopilot_transfer_start_time,
 		"autopilot_transfer_duration": autopilot_transfer_duration,
 		"autopilot_transfer_direction": autopilot_transfer_direction,
+		"autopilot_arrival_burn_x": autopilot_arrival_burn_vector.x,
+		"autopilot_arrival_burn_y": autopilot_arrival_burn_vector.y,
 		"autopilot_burn_direction_x": autopilot_burn_direction.x,
 		"autopilot_burn_direction_y": autopilot_burn_direction.y,
 		"autopilot_complete": autopilot_complete,
@@ -790,6 +879,7 @@ func load_save_data(data: Dictionary) -> void:
 	autopilot_transfer_start_time = float(data.get("autopilot_transfer_start_time", sim_time if str(data.get("autopilot_phase", "IDLE")) == "TRANSFER_COAST" else -1.0))
 	autopilot_transfer_duration = float(data.get("autopilot_transfer_duration", 0.0))
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
+	autopilot_arrival_burn_vector = Vector2(float(data.get("autopilot_arrival_burn_x", 0.0)), float(data.get("autopilot_arrival_burn_y", 0.0)))
 	autopilot_burn_direction = Vector2(float(data.get("autopilot_burn_direction_x", 0.0)), float(data.get("autopilot_burn_direction_y", 0.0)))
 	autopilot_complete = bool(data.get("autopilot_complete", false))
 	autopilot_phase = str(data.get("autopilot_phase", "IDLE"))
