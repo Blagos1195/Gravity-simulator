@@ -248,6 +248,7 @@ func _update_guidance(dt: float) -> void:
 		var prograde := velocity.normalized() if velocity.length() > 1.0 else tangent
 		match autopilot_phase:
 			"ASCENT":
+				status_message = "AUTOPILOT  •  ASCENT TO %.0f KM" % (autopilot_target_altitude / 1000.0)
 				if bool(orbit.get("bound", false)) and float(orbit.get("apoapsis", 0.0)) >= target_radius:
 					thrust_key_down = false
 					autopilot_phase = "COAST"
@@ -258,11 +259,13 @@ func _update_guidance(dt: float) -> void:
 					pitch_above_horizon = lerpf(90.0, 2.0, clampf(maxf(altitude / maxf(1.0, autopilot_target_altitude), apoapsis_fraction * 0.92, speed_fraction * 0.9), 0.0, 1.0))
 					thrust_key_down = fuel > 0.0
 			"COAST":
+				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
 				thrust_key_down = false
 				if float(orbit.get("radial_speed", 0.0)) <= 5.0 and altitude > 70000.0:
 					autopilot_phase = "CIRCULARISE"
 					thrust_key_down = true
 			"CIRCULARISE":
+				status_message = "AUTOPILOT  •  ORBITAL CIRCULARISATION"
 				var desired_speed := FlightComputer.circular_orbit_speed(rocket_position.length())
 				var tangential_speed := float(orbit.get("tangential_speed", 0.0))
 				var radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
@@ -273,6 +276,7 @@ func _update_guidance(dt: float) -> void:
 				else:
 					thrust_key_down = fuel > 0.0
 			"COMPLETE":
+				status_message = "AUTOPILOT  •  TARGET ORBIT ACHIEVED"
 				thrust_key_down = false
 				autopilot_complete = true
 		var target_rotation := prograde.angle() - Vector2.UP.angle()
