@@ -14,6 +14,10 @@ const ATMOSPHERE_SCALE_HEIGHT := 8500.0
 const ASTRONOMICAL_UNIT := 1.4960e11
 const SUN_MASS := 1.98847e30
 const EARTH_ORBIT_PERIOD := 365.256 * 86400.0
+const ATMOSPHERE_BASE_ALTITUDES := [0.0, 11000.0, 20000.0, 32000.0, 47000.0, 51000.0, 71000.0, 84852.0]
+const ATMOSPHERE_BASE_TEMPERATURES := [288.15, 216.65, 216.65, 228.65, 270.65, 270.65, 214.65, 186.946]
+const ATMOSPHERE_LAPSE_RATES := [-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0028, -0.002, 0.0]
+const ATMOSPHERE_BASE_PRESSURES := [101325.0, 22632.1, 5474.89, 868.019, 110.906, 66.9389, 3.95642, 0.3734]
 
 const PLANETS := [
 	{"name": "Mercury", "mass": 3.3011e23, "radius": 2.4397e6, "semi_major_axis": 5.7909e10, "orbital_period": 87.969},
@@ -75,43 +79,42 @@ static func _differential_body_gravity(position: Vector2, body_mass: float, body
 	var earth_distance := maxf(body_position.length(), 1.0e7)
 	return relative.normalized() * G * body_mass / (body_distance * body_distance) - body_position.normalized() * G * body_mass / (earth_distance * earth_distance)
 
+static func atmospheric_temperature(altitude: float) -> float:
+	var h := clampf(altitude, 0.0, ATMOSPHERE_HEIGHT)
+	if h <= 11000.0:
+		return 288.15 - 0.0065 * h
+	if h <= 20000.0:
+		return 216.65
+	if h <= 32000.0:
+		return 216.65 + 0.001 * (h - 20000.0)
+	if h <= 47000.0:
+		return 228.65 + 0.0028 * (h - 32000.0)
+	if h <= 51000.0:
+		return 270.65
+	if h <= 71000.0:
+		return 270.65 - 0.0028 * (h - 51000.0)
+	if h <= 84852.0:
+		return 214.65 - 0.002 * (h - 71000.0)
+	return 186.946
+
 static func atmospheric_pressure(altitude: float) -> float:
 	var h := clampf(altitude, 0.0, ATMOSPHERE_HEIGHT)
-	var heights: Array[float] = [0.0, 11000.0, 20000.0, 32000.0, 47000.0, 51000.0, 71000.0, 84852.0]
-	var temperatures: Array[float] = [288.15, 216.65, 216.65, 228.65, 270.65, 270.65, 214.65, 186.946]
-	var lapse_rates: Array[float] = [-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0028, -0.002, 0.0]
-	var pressures: Array[float] = [101325.0, 22632.1, 5474.89, 868.019, 110.906, 66.9389, 3.95642, 0.3734]
 	var layer := 0
-	for i in range(heights.size() - 1):
-		if h >= heights[i + 1]:
+	for i in range(ATMOSPHERE_BASE_ALTITUDES.size() - 1):
+		if h >= ATMOSPHERE_BASE_ALTITUDES[i + 1]:
 			layer = i + 1
 		else:
 			break
-	var base_height: float = heights[layer]
-	var base_temperature: float = temperatures[layer]
-	var lapse: float = lapse_rates[layer]
+	var base_height: float = ATMOSPHERE_BASE_ALTITUDES[layer]
+	var base_temperature: float = ATMOSPHERE_BASE_TEMPERATURES[layer]
+	var lapse: float = ATMOSPHERE_LAPSE_RATES[layer]
 	var delta_height := h - base_height
 	if absf(lapse) < 0.0000001:
-		return pressures[layer] * exp(-9.80665 * delta_height / (287.05287 * base_temperature))
+		return ATMOSPHERE_BASE_PRESSURES[layer] * exp(-9.80665 * delta_height / (287.05287 * base_temperature))
 	var temperature := base_temperature + lapse * delta_height
-	return pressures[layer] * pow(temperature / base_temperature, -9.80665 / (lapse * 287.05287))
+	return ATMOSPHERE_BASE_PRESSURES[layer] * pow(temperature / base_temperature, -9.80665 / (lapse * 287.05287))
 
 static func atmospheric_density(altitude: float) -> float:
 	if altitude >= ATMOSPHERE_HEIGHT:
 		return 0.0
-	var h := maxf(0.0, altitude)
-	var pressure := atmospheric_pressure(h)
-	var temperature := 288.15 - 0.0065 * minf(h, 11000.0)
-	if h > 11000.0:
-		temperature = 216.65
-		if h > 20000.0:
-			temperature += 0.001 * minf(h - 20000.0, 12000.0)
-		if h > 32000.0:
-			temperature += 0.0028 * minf(h - 32000.0, 15000.0)
-		if h > 47000.0:
-			temperature = 270.65
-		if h > 51000.0:
-			temperature -= 0.0028 * minf(h - 51000.0, 20000.0)
-		if h > 71000.0:
-			temperature -= 0.002 * minf(h - 71000.0, 13852.0)
-	return pressure / (287.05287 * maxf(150.0, temperature))
+	return atmospheric_pressure(altitude) / (287.05287 * atmospheric_temperature(altitude))
