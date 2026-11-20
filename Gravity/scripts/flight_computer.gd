@@ -78,7 +78,7 @@ static func hohmann_transfer(origin_radius: float, target_radius: float, mu: flo
 	var origin_speed := sqrt(mu / origin_radius)
 	var target_speed := sqrt(mu / target_radius)
 	var transfer_origin_speed := sqrt(mu * (2.0 / origin_radius - 1.0 / transfer_axis))
-	var transfer_target_speed := sqrt(mu * (2.0 / target_radius - 1.0 / planet_transfer_axis))
+	var transfer_target_speed := sqrt(mu * (2.0 / target_radius - 1.0 / transfer_axis))
 	var first_burn := absf(transfer_origin_speed - origin_speed)
 	var second_burn := absf(target_speed - transfer_target_speed)
 	var transfer_time := PI * sqrt(pow(transfer_axis, 3.0) / mu)
@@ -88,7 +88,7 @@ static func hohmann_transfer(origin_radius: float, target_radius: float, mu: flo
 		"arrival_delta_v": second_burn,
 		"total_delta_v": first_burn + second_burn,
 		"transfer_time": transfer_time,
-		"transfer_semi_major_axis": planet_transfer_axis
+		"transfer_semi_major_axis": transfer_axis
 	}
 
 static func interplanetary_transfer(target_index: int, parking_altitude: float = 200000.0) -> Dictionary:
@@ -123,7 +123,7 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 	var earth_speed := sqrt(SUN_MU / EARTH_ORBIT_RADIUS)
 	var target_speed := sqrt(SUN_MU / target_radius)
 	var transfer_departure_speed := sqrt(SUN_MU * (2.0 / EARTH_ORBIT_RADIUS - 1.0 / planet_transfer_axis))
-	var transfer_arrival_speed := sqrt(SUN_MU * (2.0 / target_radius - 1.0 / transfer_axis))
+	var transfer_arrival_speed := sqrt(SUN_MU * (2.0 / target_radius - 1.0 / planet_transfer_axis))
 	var departure_excess := absf(transfer_departure_speed - earth_speed)
 	var arrival_excess := absf(target_speed - transfer_arrival_speed)
 	var target_parking_radius := float(target.planet_radius) + 200000.0
@@ -149,7 +149,7 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 		"arrival_excess_speed": arrival_excess,
 		"direction": 1.0 if transfer_departure_speed >= earth_speed else -1.0,
 		"phase_angle": phase_angle,
-		"transfer_semi_major_axis": transfer_axis
+		"transfer_semi_major_axis": planet_transfer_axis
 	}
 
 static func departure_wait_time(target_index: int, current_time: float, parking_position: Vector2 = Vector2.ZERO) -> float:
