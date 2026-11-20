@@ -2,6 +2,7 @@ extends SceneTree
 
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
+const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
 	var radius := FlightComputer.EARTH_RADIUS + 200000.0
@@ -52,6 +53,18 @@ func _initialize() -> void:
 	assert(PlanetarySystem.planetary_atmosphere_density("Jupiter", 0.0) > 0.1)
 	assert(PlanetarySystem.planetary_atmosphere_density("Mercury", 0.0) == 0.0)
 	assert(PlanetarySystem.planetary_atmosphere_density("Mars", 200000.0) == 0.0)
+	var simulation := SimulationView.new()
+	simulation.sim_time = 86400.0 * 100.0
+	var mars_surface_position_for_view := mars_position + Vector2(3.3895e6 + 150000.0, 0.0)
+	var mars_local_body: Dictionary = simulation._nearest_body_state(mars_surface_position_for_view)
+	assert(str(mars_local_body.get("name", "")) == "Mars")
+	assert(absf(float(mars_local_body.get("distance", 0.0)) - (3.3895e6 + 150000.0)) < 1.0)
+	var moon_surface_position := PlanetarySystem.moon_position(simulation.sim_time) + Vector2(PlanetarySystem.MOON_RADIUS + 100000.0, 0.0)
+	var moon_local_body: Dictionary = simulation._nearest_body_state(moon_surface_position)
+	assert(str(moon_local_body.get("name", "")) == "Moon")
+	var earth_local_body: Dictionary = simulation._nearest_body_state(Vector2(0.0, -FlightComputer.EARTH_RADIUS - 2.0))
+	assert(str(earth_local_body.get("name", "")) == "Earth")
+
 	var mars_surface_position := mars_position + Vector2(3.3895e6, 0.0)
 	var mars_surface_gravity := PlanetarySystem.gravity_acceleration(mars_surface_position, 86400.0 * 100.0)
 	assert(mars_surface_gravity.length() > 1.0)
