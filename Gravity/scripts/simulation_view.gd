@@ -230,7 +230,7 @@ func _adaptive_step_size() -> float:
 	if autopilot_enabled and autopilot_phase in ["TRANSFER_COAST", "ARRIVAL_APPROACH"]:
 		var destination_state := _autopilot_target_state()
 		var relative_distance := rocket_position.distance_to(destination_state.position)
-		var relative_speed := (velocity - destination_state.velocity).length()
+		var relative_speed: float = (velocity - Vector2(destination_state.velocity)).length()
 		if relative_speed > 1.0:
 			step_limit = minf(step_limit, 0.02 * relative_distance / relative_speed)
 	return step_limit
@@ -782,7 +782,7 @@ func _draw() -> void:
 
 	var destination := _nearest_body_state(rocket_position)
 	if str(destination.name) not in ["Earth", "Moon"] and float(destination.distance) < float(destination.soi):
-		var destination_screen := rocket_screen + (destination.position - rocket_position) * altitude_visual_scale
+		var destination_screen: Vector2 = rocket_screen + (Vector2(destination.position) - rocket_position) * altitude_visual_scale
 		var destination_radius := clampf(float(destination.radius) * altitude_visual_scale, 3.0, 72.0)
 		if destination_screen.x > -destination_radius - 30.0 and destination_screen.x < size.x + destination_radius + 30.0 and destination_screen.y > -destination_radius - 30.0 and destination_screen.y < size.y + destination_radius + 30.0:
 			var destination_color := Color(0.82, 0.38, 0.25)
