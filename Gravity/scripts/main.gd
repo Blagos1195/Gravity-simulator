@@ -13,6 +13,7 @@ var career_enabled := false
 var save_slot := 1
 var sim
 var autosave_elapsed := 0.0
+var autosave_enabled := true
 var status_label: Label
 var menu_root: VBoxContainer
 var settings_root: VBoxContainer
@@ -30,7 +31,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if mode == "flight":
 		autosave_elapsed += delta
-		if autosave_elapsed >= AUTOSAVE_INTERVAL:
+		if autosave_enabled and autosave_elapsed >= AUTOSAVE_INTERVAL:
 			autosave_elapsed = 0.0
 			_save_game(true)
 
@@ -79,8 +80,10 @@ func _build_menu() -> void:
 	menu_root.add_child(subtitle)
 	_add_spacer(menu_root, 18)
 
-	_add_button(menu_root, "START FLIGHT", _start_flight)
-	_add_button(menu_root, "VEHICLE ASSEMBLY", _show_vehicle_editor)
+	if _latest_save_slot() > 0:
+		_add_button(menu_root, "CONTINUE", _continue_game)
+	_add_button(menu_root, "NEW GAME", _show_new_game_setup)
+	_add_button(menu_root, "GAME LOAD", _show_game_load)
 	_add_button(menu_root, "SETTINGS", _show_settings)
 	_add_button(menu_root, "QUIT", _quit_game)
 
@@ -197,7 +200,7 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "LOAD DESIGN", _load_rocket_design)
 	_add_button(actions, "SAVE DESIGN", _save_rocket_design)
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
-	_add_button(actions, "BACK", _build_menu)
+	_add_button(actions, "BACK", _show_new_game_setup)
 
 func _add_rocket_stage() -> void:
 	var stages: Array = rocket_design["stages"]
@@ -300,9 +303,127 @@ func _launch_designed_vehicle() -> void:
 		return
 	_start_flight()
 
+func _show_new_game_setup() -> void:
+	for child in get_children():
+		child.queue_free()
+	mode = "new_game_setup"
+	var bg := ColorRect.new()
+	bg.color = Color(0.012, 0.018, 0.035)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(center)
+	var root := VBoxContainer.new()
+	root.custom_minimum_size = Vector2(560, 0)
+	root.add_theme_constant_override("separation", 12)
+	center.add_child(root)
+	var heading := Label.new()
+	heading.text = "NEW GAME SETUP"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 32)
+	heading.add_theme_color_override("font_color", Color(0.78, 0.9, 1.0))
+	root.add_child(heading)
+	_add_setting_label(root, "PHYSICS PRESET")
+	var physics := OptionButton.new()
+	for option in ["Arcade", "Standard", "Realistic", "Hardcore"]:
+		physics.add_item(option)
+	physics.select(["Arcade", "Standard", "Realistic", "Hardcore"].find(realism))
+	physics.item_selected.connect(func(index: int): realism = physics.get_item_text(index))
+	root.add_child(physics)
+	_add_setting_label(root, "SOLAR SYSTEM SCALE")
+	var scale := OptionButton.new()
+	for option in ["Compressed", "Balanced", "Realistic distances"]:
+		scale.add_item(option)
+	scale.select(["Compressed", "Balanced", "Realistic distances"].find(world_scale))
+	scale.item_selected.connect(func(index: int): world_scale = scale.get_item_text(index))
+	root.add_child(scale)
+	_add_setting_label(root, "GAME MODE")
+	var career := CheckButton.new()
+	career.text = "Enable career progression"
+	career.button_pressed = career_enabled
+	career.toggled.connect(func(value: bool): career_enabled = value)
+	root.add_child(career)
+	var note := Label.new()
+	note.text = "These choices apply to this new save. You can change supported simulation options during play."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
+	root.add_child(note)
+	_add_button(root, "CONTINUE TO ROCKET BUILDER", func():
+		rocket_design = RocketDesign.create_default()
+		_show_vehicle_editor()
+	)
+	_add_button(root, "BACK", _build_menu)
+
+func _save_exists(slot: int) -> bool:
+	return FileAccess.file_exists("%s/slot_%02d.json" % [SAVE_DIR, slot])
+
+func _latest_save_slot() -> int:
+	var latest_slot := 0
+	var latest_time := -1
+	for slot in range(1, 9):
+		var path := "%s/slot_%02d.json" % [SAVE_DIR, slot]
+		if not FileAccess.file_exists(path):
+			continue
+		var modified := FileAccess.get_modified_time(path)
+		if modified > latest_time:
+			latest_time = modified
+			latest_slot = slot
+	return latest_slot
+
+func _continue_game() -> void:
+	save_slot = _latest_save_slot()
+	if save_slot <= 0:
+		_build_menu()
+		return
+	_start_flight()
+	_load_game()
+
+func _show_game_load() -> void:
+	for child in get_children():
+		child.queue_free()
+	mode = "load_menu"
+	var bg := ColorRect.new()
+	bg.color = Color(0.012, 0.018, 0.035)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(center)
+	var root := VBoxContainer.new()
+	root.custom_minimum_size = Vector2(500, 0)
+	root.add_theme_constant_override("separation", 12)
+	center.add_child(root)
+	var heading := Label.new()
+	heading.text = "LOAD GAME"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 32)
+	root.add_child(heading)
+	for slot in range(1, 9):
+		var path := "%s/slot_%02d.json" % [SAVE_DIR, slot]
+		var label := "SLOT %02d  •  EMPTY" % slot
+		if FileAccess.file_exists(path):
+			var file := FileAccess.open(path, FileAccess.READ)
+			if file:
+				var parsed: Variant = JSON.parse_string(file.get_as_text())
+				file.close()
+				if parsed is Dictionary:
+					label = "SLOT %02d  •  %s  •  %s" % [slot, str(parsed.get("realism", "Unknown")), str(parsed.get("world_scale", "Unknown"))]
+			_add_button(root, label, func():
+				save_slot = slot
+				_start_flight()
+				_load_game()
+			)
+		else:
+			var empty_label := Label.new()
+			empty_label.text = label
+			root.add_child(empty_label)
+	_add_button(root, "BACK", _build_menu)
+
 func _show_settings() -> void:
 	for child in get_children():
 		child.queue_free()
+	mode = "settings"
 	var bg := ColorRect.new()
 	bg.color = Color(0.012, 0.018, 0.035)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -314,36 +435,28 @@ func _show_settings() -> void:
 	settings_root.custom_minimum_size = Vector2(520, 0)
 	settings_root.add_theme_constant_override("separation", 14)
 	center.add_child(settings_root)
-
 	var heading := Label.new()
-	heading.text = "SIMULATION SETTINGS"
+	heading.text = "GAME SETTINGS"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 30)
 	settings_root.add_child(heading)
-
-	_add_setting_label(settings_root, "PHYSICS REALISM")
-	var physics := OptionButton.new()
-	for option in ["Arcade", "Standard", "Realistic", "Hardcore"]:
-		physics.add_item(option)
-	physics.select(["Arcade", "Standard", "Realistic", "Hardcore"].find(realism))
-	physics.item_selected.connect(func(index: int): realism = physics.get_item_text(index))
-	settings_root.add_child(physics)
-
-	_add_setting_label(settings_root, "SOLAR SYSTEM SCALE")
-	var scale := OptionButton.new()
-	for option in ["Compressed", "Balanced", "Realistic distances"]:
-		scale.add_item(option)
-	scale.select(["Compressed", "Balanced", "Realistic distances"].find(world_scale))
-	scale.item_selected.connect(func(index: int): world_scale = scale.get_item_text(index))
-	settings_root.add_child(scale)
-
-	_add_setting_label(settings_root, "CAREER PROGRESSION")
-	var career := CheckButton.new()
-	career.text = "Enable optional career progression"
-	career.button_pressed = career_enabled
-	career.toggled.connect(func(value: bool): career_enabled = value)
-	settings_root.add_child(career)
-
+	var fullscreen := CheckButton.new()
+	fullscreen.text = "Fullscreen"
+	fullscreen.button_pressed = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+	fullscreen.toggled.connect(func(enabled: bool):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if enabled else DisplayServer.WINDOW_MODE_WINDOWED)
+	)
+	settings_root.add_child(fullscreen)
+	var autosave := CheckButton.new()
+	autosave.text = "Automatic saving every 60 seconds"
+	autosave.button_pressed = autosave_enabled
+	autosave.toggled.connect(func(enabled: bool): autosave_enabled = enabled)
+	settings_root.add_child(autosave)
+	var controls_note := Label.new()
+	controls_note.text = "Control remapping and audio settings will live here. Physics, universe scale and career are selected when creating a new game."
+	controls_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	controls_note.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
+	settings_root.add_child(controls_note)
 	_add_button(settings_root, "BACK", _build_menu)
 
 func _start_flight() -> void:
