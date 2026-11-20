@@ -136,7 +136,19 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 		"transfer_semi_major_axis": transfer_axis
 	}
 
-static func departure_wait_time(target_index: int, current_time: float) -> float:
+static func departure_wait_time(target_index: int, current_time: float, parking_position: Vector2 = Vector2.ZERO) -> float:
+	if target_index == -1:
+		if parking_position.length() <= EARTH_RADIUS:
+			return 0.0
+		var transfer := hohmann_transfer(parking_position.length(), EARTH_RADIUS + MOON_ORBIT_RADIUS)
+		var moon_rate := TAU / (27.321661 * 86400.0)
+		var parking_rate := sqrt(EARTH_MU / pow(parking_position.length(), 3.0))
+		var current_phase := wrapf(moon_rate * current_time - parking_position.angle(), -PI, PI)
+		var desired_phase := wrapf(PI - moon_rate * float(transfer.get("transfer_time", 0.0)), -PI, PI)
+		var relative_rate := moon_rate - parking_rate
+		var phase_difference := wrapf(desired_phase - current_phase, -PI, PI)
+		var wait := phase_difference / relative_rate
+		return fposmod(wait, TAU / absf(relative_rate))
 	if target_index < 0 or target_index >= PLANET_TARGETS.size():
 		return 0.0
 	var target: Dictionary = PLANET_TARGETS[target_index]
