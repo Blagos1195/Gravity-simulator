@@ -463,12 +463,17 @@ func _show_flight_computer() -> void:
 	target.add_item("Uranus", -7)
 	target.add_item("Neptune", -8)
 	root.add_child(target)
+	var report_scroll := ScrollContainer.new()
+	report_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	report_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	report_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(report_scroll)
 	var report := RichTextLabel.new()
 	report.bbcode_enabled = false
 	report.fit_content = true
-	report.scroll_active = true
-	report.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(report)
+	report.scroll_active = false
+	report.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	report_scroll.add_child(report)
 	var calculate := Button.new()
 	calculate.text = "CALCULATE FLIGHT PLAN"
 	root.add_child(calculate)
