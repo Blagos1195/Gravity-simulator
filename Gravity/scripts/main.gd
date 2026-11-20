@@ -522,18 +522,25 @@ func _show_game_load() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
-	var root := VBoxContainer.new()
-	root.custom_minimum_size = Vector2(500, 0)
-	root.add_theme_constant_override("separation", 12)
-	center.add_child(root)
+	var layout := VBoxContainer.new()
+	layout.custom_minimum_size = Vector2(620, 0)
+	layout.add_theme_constant_override("separation", 12)
+	center.add_child(layout)
 	var heading := Label.new()
 	heading.text = "LOAD GAME"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 32)
-	root.add_child(heading)
+	layout.add_child(heading)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(620, 560)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(scroll)
+	var root := VBoxContainer.new()
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 7)
+	scroll.add_child(root)
 	for slot in range(1, 9):
 		var path := "%s/slot_%02d.json" % [SAVE_DIR, slot]
-		var label := "SLOT %02d  •  EMPTY" % slot
 		if FileAccess.file_exists(path):
 			var file := FileAccess.open(path, FileAccess.READ)
 			var parsed: Variant = null
@@ -541,7 +548,7 @@ func _show_game_load() -> void:
 				parsed = JSON.parse_string(file.get_as_text())
 				file.close()
 			if parsed is Dictionary:
-				label = "SLOT %02d  •  %s  •  %s" % [slot, str(parsed.get("realism", "Unknown")), str(parsed.get("world_scale", "Unknown"))]
+				var label := "SLOT %02d  •  %s  •  %s" % [slot, str(parsed.get("realism", "Unknown")), str(parsed.get("world_scale", "Unknown"))]
 				_add_button(root, label, _load_menu_slot.bind(slot))
 			else:
 				var corrupt_label := Label.new()
@@ -549,9 +556,14 @@ func _show_game_load() -> void:
 				root.add_child(corrupt_label)
 		else:
 			var empty_label := Label.new()
-			empty_label.text = label
+			empty_label.text = "SLOT %02d  •  EMPTY" % slot
 			root.add_child(empty_label)
-	_add_button(root, "BACK", _build_menu)
+		var history_paths: Array[String] = _autosave_history_paths(slot)
+		for history_path in history_paths:
+			var history_time: int = FileAccess.get_modified_time(history_path)
+			var history_label := "     ↳ AUTOSAVE  •  %s" % Time.get_datetime_string_from_unix_time(history_time, true)
+			_add_button(root, history_label, _load_menu_path.bind(slot, history_path))
+	_add_button(layout, "BACK", _build_menu)
 
 func _show_settings() -> void:
 	for child in get_children():
@@ -986,6 +998,24 @@ func _confirm_menu() -> void:
 	_save_game(true)
 	_build_menu()
 
+func _autosave_history_paths(slot: int) -> Array[String]:
+	var directory := "%s/history/slot_%02d" % [SAVE_DIR, slot]
+	var paths: Array[String] = []
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(directory)):
+		return paths
+	for filename in DirAccess.get_files_at(directory):
+		if filename.begins_with("auto_") and filename.ends_with(".json"):
+			paths.append(directory.path_join(filename))
+	paths.sort_custom(func(a: String, b: String) -> bool:
+		return FileAccess.get_modified_time(a) > FileAccess.get_modified_time(b)
+	)
+	return paths
+
+func _prune_autosave_history(slot: int, keep_count: int = 10) -> void:
+	var paths: Array[String] = _autosave_history_paths(slot)
+	for i in range(keep_count, paths.size()):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(paths[i]))
+
 func _save_game(automatic: bool) -> void:
 	if not sim:
 		return
@@ -996,6 +1026,17 @@ func _save_game(automatic: bool) -> void:
 	data["career_enabled"] = career_enabled
 	data["slot"] = save_slot
 
+	if automatic:
+		var history_directory := "%s/history/slot_%02d" % [SAVE_DIR, save_slot]
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(history_directory))
+		var history_name := "auto_%d_%d.json" % [int(Time.get_unix_time_from_system()), Time.get_ticks_usec()]
+		var history_path := history_directory.path_join(history_name)
+		var history_file := FileAccess.open(history_path, FileAccess.WRITE)
+		if history_file:
+			history_file.store_string(JSON.stringify(data, "\t"))
+			history_file.close()
+			_prune_autosave_history(save_slot)
+
 	var path := "%s/slot_%02d.json" % [SAVE_DIR, save_slot]
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file:
@@ -1004,11 +1045,19 @@ func _save_game(automatic: bool) -> void:
 		if status_label:
 			status_label.text = ("AUTOSAVED" if automatic else "SAVED") + "  •  SLOT %02d" % save_slot
 
+func _load_menu_path(slot: int, path: String) -> void:
+	save_slot = slot
+	_start_flight()
+	_load_game_from_path(path)
+
 func _load_game() -> void:
 	var path := "%s/slot_%02d.json" % [SAVE_DIR, save_slot]
+	_load_game_from_path(path)
+
+func _load_game_from_path(path: String) -> void:
 	if not FileAccess.file_exists(path):
 		if status_label:
-			status_label.text = "NO SAVE FOUND IN SLOT %02d" % save_slot
+			status_label.text = "SAVE NOT FOUND"
 		return
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
