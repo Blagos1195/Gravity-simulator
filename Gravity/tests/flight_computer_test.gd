@@ -52,6 +52,9 @@ func _initialize() -> void:
 	assert(PlanetarySystem.planetary_atmosphere_density("Jupiter", 0.0) > 0.1)
 	assert(PlanetarySystem.planetary_atmosphere_density("Mercury", 0.0) == 0.0)
 	assert(PlanetarySystem.planetary_atmosphere_density("Mars", 200000.0) == 0.0)
+	var mars_surface_position := mars_position + Vector2(3.3895e6, 0.0)
+	var mars_surface_gravity := PlanetarySystem.gravity_acceleration(mars_surface_position, 86400.0 * 100.0)
+	assert(mars_surface_gravity.length() > 1.0)
 
 	var mars_mu := FlightComputer.G * 6.4171e23
 	var arrival_position := Vector2(1.0e7, 0.0)
