@@ -41,7 +41,7 @@ const PRESET_DESIGNS := {
 		"stages": [
 			{"name": "BOOSTER", "dry_mass": 3500.0, "fuel_capacity": 35000.0, "thrust": 750000.0, "vacuum_thrust": 850000.0, "flow": 250.0, "engine_count": 1},
 			{"name": "UPPER STAGE", "dry_mass": 1200.0, "fuel_capacity": 9000.0, "thrust": 180000.0, "vacuum_thrust": 220000.0, "flow": 65.0, "engine_count": 1},
-			{"name": "ORBITAL KICK STAGE", "dry_mass": 500.0, "fuel_capacity": 3500.0, "thrust": 70000.0, "vacuum_thrust": 85000.0, "flow": 24.0, "engine_count": 1}
+			{"name": "ORBITAL KICK STAGE", "dry_mass": 500.0, "fuel_capacity": 3500.0, "thrust": 45000.0, "vacuum_thrust": 50000.0, "flow": 14.0, "engine_count": 1}
 		]
 	},
 	"LEO_CARGO": {
