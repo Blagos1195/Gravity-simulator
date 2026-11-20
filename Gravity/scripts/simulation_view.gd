@@ -288,23 +288,29 @@ func _update_guidance(dt: float) -> void:
 					thrust_key_down = false
 					if autopilot_target_mode == "PLANET":
 						var transfer := FlightComputer.interplanetary_transfer(autopilot_planet_index, altitude)
-					if bool(transfer.get("valid", false)):
-						autopilot_burn_remaining = float(transfer.get("departure_delta_v", 0.0))
-						autopilot_transfer_direction = float(transfer.get("direction", 1.0))
-						var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
-						autopilot_phase = "TRANSFER_BURN" if wait_time <= 1.0 else "WAIT_WINDOW"
+						if bool(transfer.get("valid", false)):
+							autopilot_burn_remaining = float(transfer.get("departure_delta_v", 0.0))
+							autopilot_transfer_direction = float(transfer.get("direction", 1.0))
+							var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
+							autopilot_phase = "TRANSFER_BURN" if wait_time <= 1.0 else "WAIT_WINDOW"
+						else:
+							autopilot_phase = "FAILED"
 					else:
-						autopilot_phase = "FAILED"
-				else:
-					autopilot_phase = "COMPLETE"
-					autopilot_complete = true
+						autopilot_phase = "COMPLETE"
+						autopilot_complete = true
 				else:
 					thrust_key_down = fuel > 0.0
 			"WAIT_WINDOW":
-				var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time)
+				var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
 				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1F DAYS" % (wait_time / 86400.0)
 				thrust_key_down = false
-				if wait_time <= 1.0:
+				if wait_time <= 3600.0:
+					autopilot_phase = "ALIGN_DEPARTURE"
+			"ALIGN_DEPARTURE":
+				status_message = "AUTOPILOT  •  ALIGNING DEPARTURE ORBIT"
+				thrust_key_down = false
+				var desired_radial := FlightComputer.departure_periapsis_direction(autopilot_planet_index, sim_time, rocket_position.length())
+				if desired_radial.length_squared() > 0.5 and rocket_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)):
 					autopilot_phase = "TRANSFER_BURN"
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0F M/S" % autopilot_burn_remaining
@@ -325,7 +331,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  BURN INCOMPLETE"
 				thrust_key_down = false
 		var target_direction := prograde
-		if autopilot_phase in ["TRANSFER_BURN", "WAIT_WINDOW"]:
+		if autopilot_phase in ["TRANSFER_BURN", "WAIT_WINDOW", "ALIGN_DEPARTURE"]:
 			target_direction = tangent * autopilot_transfer_direction
 		var target_rotation := target_direction.angle() - Vector2.UP.angle()
 		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
