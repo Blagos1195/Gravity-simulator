@@ -50,5 +50,21 @@ func _initialize() -> void:
 	var moon_departure_direction := FlightComputer.departure_periapsis_direction(-1, 0.0, radius)
 	assert(absf(moon_departure_direction.length() - 1.0) < 0.000001)
 
+
+	var sample_design := {
+		"payload_mass": 1000.0,
+		"stages": [
+			{"dry_mass": 1000.0, "fuel_capacity": 9000.0, "vacuum_thrust": 100000.0, "flow": 10.0},
+			{"dry_mass": 500.0, "fuel_capacity": 4000.0, "vacuum_thrust": 50000.0, "flow": 5.0}
+		]
+	}
+	var full_vehicle_delta_v := FlightComputer.available_delta_v(sample_design)
+	var partial_vehicle_delta_v := FlightComputer.available_delta_v(sample_design, 0, 4500.0)
+	var upper_stage_delta_v := FlightComputer.available_delta_v(sample_design, 1, 4000.0)
+	assert(full_vehicle_delta_v > partial_vehicle_delta_v)
+	assert(partial_vehicle_delta_v > 0.0)
+	assert(upper_stage_delta_v > 0.0)
+	assert(upper_stage_delta_v < full_vehicle_delta_v)
+
 	print("Flight computer orbital calculation tests passed.")
 	quit()
