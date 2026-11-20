@@ -161,7 +161,7 @@ func _draw() -> void:
             trail_points.append(view_center + (p_world - rocket_position) * camera_zoom * world_scale_factor + (rocket_screen - view_center))
         draw_polyline(trail_points, Color(0.2, 0.85, 0.95, 0.7), 2.0)
 
-    _draw_rocket(rocket_screen)
+    _draw_rocket(rocket_screen + Vector2.UP.rotated(rotation_angle) * 14.0)
     if show_vectors:
         var velocity_end := rocket_screen + velocity.normalized() * 65.0
         draw_line(rocket_screen, velocity_end, Color(0.25, 0.9, 0.55), 2.0)
