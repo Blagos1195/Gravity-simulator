@@ -29,6 +29,9 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Atmospheric heat-flux and radiative heat-shield temperature telemetry
 - Differential gravity from the Moon, Sun and other planets
 - Optional gravity-turn guidance assist
+- Orbital flight computer with osculating orbit elements, circularisation burns and Hohmann transfer estimates
+- Target-orbit autopilot with ascent, coast-to-apoapsis and circularisation phases
+- Manual override and saved autopilot target/phase
 - Remaining ideal vehicle delta-v and thrust-to-weight telemetry
 - Orbital trajectory, periapsis, apoapsis and thrust-to-weight readouts
 - Adjustable time warp
@@ -55,10 +58,11 @@ A procedural 2D spaceflight simulator built with Godot 4.
 
 ## Development checks
 
-Run the rocket design calculation tests from the project directory:
+Run the calculation tests from the project directory:
 
 ```powershell
 godot --headless --path . --script res://tests/rocket_design_test.gd
+godot --headless --path . --script res://tests/flight_computer_test.gd
 ```
 
 ## Controls
@@ -71,7 +75,7 @@ godot --headless --path . --script res://tests/rocket_design_test.gd
 | Q / E | Adjust engine gimbal |
 | A / Left | Rotate left |
 | D / Right | Rotate right |
-| H | Toggle gravity-turn guidance assist |
+| H | Toggle guidance / disengage autopilot |
 | Space | Pause / resume |
 | + / - | Increase / decrease time warp |
 | Mouse wheel | Zoom flight view or solar-system map |
