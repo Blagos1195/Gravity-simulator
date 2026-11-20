@@ -160,7 +160,7 @@ func _adaptive_step_size() -> float:
 	var active := _active_stage_data()
 	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and fuel > 0.0 else 0.0
 	var thrust_limit := 0.08 * maxf(100.0, speed) / engine_acceleration if engine_acceleration > 0.01 else 0.25
-	return clampf(minf(0.25, orbital_limit, travel_limit, drag_limit, thrust_limit), 0.0005, 0.25)
+	return clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, 0.25)
 
 func _engine_thrust(altitude: float) -> float:
 	var active := _active_stage_data()
@@ -190,15 +190,17 @@ func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mas
 	return -direction * (drag_force / maxf(1.0, mass)) + lift_direction * (lift_force / maxf(1.0, mass))
 
 func _update_heating(dt: float, altitude: float, speed: float) -> void:
-	if altitude >= PlanetarySystem.ATMOSPHERE_HEIGHT:
-		heat_flux_mw = 0.0
-	else:
+	var heat_flux_w := 0.0
+	if altitude < PlanetarySystem.ATMOSPHERE_HEIGHT:
 		var density := PlanetarySystem.atmospheric_density(altitude)
-		heat_flux_mw = 1.83e-4 * sqrt(maxf(0.0, density)) * pow(speed, 3.0) / 1000000.0
+		var nose_radius := 0.5
+		heat_flux_w = 1.83e-4 * sqrt(maxf(0.0, density) / nose_radius) * pow(speed, 3.0)
+	heat_flux_mw = heat_flux_w / 1000000.0
 	peak_heat_flux_mw = maxf(peak_heat_flux_mw, heat_flux_mw)
-	var heating_rate := heat_flux_mw * 0.018
-	var cooling_rate := maxf(0.0, heat_shield_temperature - 290.0) * 0.0008
-	heat_shield_temperature = maxf(290.0, heat_shield_temperature + (heating_rate - cooling_rate) * dt)
+	var absorbed_flux := heat_flux_w * 0.15
+	var radiated_flux := 0.82 * 5.670374419e-8 * (pow(heat_shield_temperature, 4.0) - pow(290.0, 4.0))
+	var temperature_rate := (absorbed_flux - radiated_flux) / 60000.0
+	heat_shield_temperature = maxf(290.0, heat_shield_temperature + temperature_rate * dt)
 
 func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
