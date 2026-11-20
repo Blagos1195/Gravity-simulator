@@ -77,10 +77,10 @@ static func _differential_body_gravity(position: Vector2, body_mass: float, body
 
 static func atmospheric_pressure(altitude: float) -> float:
 	var h := clampf(altitude, 0.0, ATMOSPHERE_HEIGHT)
-	const heights := [0.0, 11000.0, 20000.0, 32000.0, 47000.0, 51000.0, 71000.0, 84852.0]
-	const temperatures := [288.15, 216.65, 216.65, 228.65, 270.65, 270.65, 214.65, 186.946]
-	const lapse_rates := [-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0028, -0.002, 0.0]
-	const pressures := [101325.0, 22632.1, 5474.89, 868.019, 110.906, 66.9389, 3.95642, 0.3734]
+	var heights: Array[float] = [0.0, 11000.0, 20000.0, 32000.0, 47000.0, 51000.0, 71000.0, 84852.0]
+	var temperatures: Array[float] = [288.15, 216.65, 216.65, 228.65, 270.65, 270.65, 214.65, 186.946]
+	var lapse_rates: Array[float] = [-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0028, -0.002, 0.0]
+	var pressures: Array[float] = [101325.0, 22632.1, 5474.89, 868.019, 110.906, 66.9389, 3.95642, 0.3734]
 	var layer := 0
 	for i in range(heights.size() - 1):
 		if h >= heights[i + 1]:
