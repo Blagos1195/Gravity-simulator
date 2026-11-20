@@ -9,9 +9,10 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Centralised planetary data for all eight planets
 - Time-dependent circular Moon orbit and lunar gravity
 - Exponential Earth atmosphere model
-- Basic rocket thrust and propellant consumption
+- Surface launch pad with keyboard-controlled thrust and throttle cutoff
+- Rocket thrust, propellant consumption and thrust-to-weight telemetry
 - Approximate atmospheric drag in Realistic and Hardcore modes
-- Orbital trajectory and apsis readouts
+- Orbital trajectory, periapsis, apoapsis and thrust-to-weight readouts
 - Adjustable time warp
 - Compressed, balanced and realistic-distance display scales
 - Physics presets
