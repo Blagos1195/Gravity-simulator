@@ -286,7 +286,8 @@ func _update_guidance(dt: float) -> void:
 					if bool(transfer.get("valid", false)):
 						autopilot_burn_remaining = float(transfer.get("departure_delta_v", 0.0))
 						autopilot_transfer_direction = float(transfer.get("direction", 1.0))
-						autopilot_phase = "TRANSFER_BURN"
+						var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time)
+						autopilot_phase = "TRANSFER_BURN" if wait_time <= 1.0 else "WAIT_WINDOW"
 					else:
 						autopilot_phase = "FAILED"
 				else:
@@ -294,8 +295,14 @@ func _update_guidance(dt: float) -> void:
 					autopilot_complete = true
 				else:
 					thrust_key_down = fuel > 0.0
+			"WAIT_WINDOW":
+				var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time)
+				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1F DAYS" % (wait_time / 86400.0)
+				thrust_key_down = false
+				if wait_time <= 1.0:
+					autopilot_phase = "TRANSFER_BURN"
 			"TRANSFER_BURN":
-				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
+				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0F M/S" % autopilot_burn_remaining
 				var burn_direction := tangent * autopilot_transfer_direction
 				var burn_rotation := burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
@@ -313,7 +320,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  BURN INCOMPLETE"
 				thrust_key_down = false
 		var target_direction := prograde
-		if autopilot_phase == "TRANSFER_BURN":
+		if autopilot_phase in ["TRANSFER_BURN", "WAIT_WINDOW"]:
 			target_direction = tangent * autopilot_transfer_direction
 		var target_rotation := target_direction.angle() - Vector2.UP.angle()
 		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
