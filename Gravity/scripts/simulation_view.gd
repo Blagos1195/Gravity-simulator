@@ -47,6 +47,10 @@ var orbit_path: Array[Vector2] = []
 var show_orbit := true
 var show_grid := true
 var show_vectors := true
+var show_solar_system := false
+var show_predicted_trajectory := false
+var predicted_path: Array[Vector2] = []
+var prediction_timer := 0.0
 var thrust_key_down := false
 var throttle_cutoff_key_down := false
 
@@ -66,6 +70,11 @@ func _process(delta: float) -> void:
             _physics_step(step_delta)
             remaining -= step_delta
             iterations += 1
+    if show_predicted_trajectory:
+        prediction_timer += delta
+        if prediction_timer >= 0.35:
+            prediction_timer = 0.0
+            _calculate_predicted_trajectory()
     trail_timer += delta
     if trail_timer >= 0.12:
         trail_timer = 0.0
@@ -216,6 +225,12 @@ func _unhandled_input(event: InputEvent) -> void:
                 time_warp = maxf(0.25, time_warp / 2.0)
             KEY_O:
                 show_orbit = not show_orbit
+            KEY_P:
+                show_predicted_trajectory = not show_predicted_trajectory
+                if show_predicted_trajectory:
+                    _calculate_predicted_trajectory()
+            KEY_M:
+                show_solar_system = not show_solar_system
             KEY_G:
                 show_grid = not show_grid
             KEY_V:
@@ -249,6 +264,11 @@ func _draw() -> void:
         var p := view_center + star * 0.035
         draw_circle(p, 1.0, Color(0.55, 0.7, 0.9, 0.5))
 
+    if show_solar_system:
+        _draw_solar_system(view_center)
+        _draw_hud()
+        return
+
     if show_grid:
         _draw_grid(view_center)
 
@@ -257,10 +277,12 @@ func _draw() -> void:
     draw_arc(earth_screen, radius_px, 0, TAU, 120, Color(0.28, 0.64, 0.95), 2.0)
     draw_arc(earth_screen, radius_px * 0.76, -0.4, 2.4, 48, Color(0.18, 0.43, 0.48, 0.45), 2.0)
     draw_arc(earth_screen, radius_px * 0.53, 2.2, 5.4, 48, Color(0.18, 0.43, 0.48, 0.35), 2.0)
-    var pad_width := 34.0
-    var pad_y := earth_screen.y - radius_px - 2.0
+    var object_scale := clampf(camera_zoom * world_scale_factor / 0.000045, 0.3, 2.5)
+    var pad_width := clampf(34.0 * object_scale, 9.0, 85.0)
+    var pad_height := clampf(7.0 * object_scale, 3.0, 18.0)
+    var pad_y := earth_screen.y - radius_px - 2.0 * object_scale
     draw_line(Vector2(earth_screen.x - pad_width, pad_y), Vector2(earth_screen.x + pad_width, pad_y), Color(0.65, 0.72, 0.82), 3.0)
-    draw_line(Vector2(earth_screen.x - 20.0, pad_y), Vector2(earth_screen.x - 20.0, pad_y + 7.0), Color(0.65, 0.72, 0.82), 2.0)
+    draw_line(Vector2(earth_screen.x - 20.0, pad_y), Vector2(earth_screen.x - 20.0, pad_y + pad_height), Color(0.65, 0.72, 0.82), 2.0)
     draw_line(Vector2(earth_screen.x + 20.0, pad_y), Vector2(earth_screen.x + 20.0, pad_y + 7.0), Color(0.65, 0.72, 0.82), 2.0)
     draw_string(ThemeDB.fallback_font, earth_screen + Vector2(radius_px + 12, 4), "EARTH", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.78, 1.0))
 
@@ -282,13 +304,72 @@ func _draw() -> void:
             trail_points.append(view_center + (p_world - rocket_position) * camera_zoom * world_scale_factor + (rocket_screen - view_center))
         draw_polyline(trail_points, Color(0.2, 0.85, 0.95, 0.7), 2.0)
 
-    _draw_rocket(rocket_screen + Vector2.UP.rotated(rotation_angle) * 14.0)
+    if show_predicted_trajectory and predicted_path.size() > 1:
+        var prediction_points := PackedVector2Array()
+        for point in predicted_path:
+            prediction_points.append(rocket_screen + (point - rocket_position) * camera_zoom * world_scale_factor)
+        draw_polyline(prediction_points, Color(1.0, 0.72, 0.22, 0.85), 2.0)
+    _draw_rocket(rocket_screen + Vector2.UP.rotated(rotation_angle) * 14.0, object_scale)
     if show_vectors:
         var velocity_end := rocket_screen + velocity.normalized() * 65.0
         draw_line(rocket_screen, velocity_end, Color(0.25, 0.9, 0.55), 2.0)
         draw_string(ThemeDB.fallback_font, velocity_end + Vector2(6, 0), "V", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.25, 0.9, 0.55))
 
     _draw_hud()
+
+func _draw_solar_system(center: Vector2) -> void:
+    var map_scale := minf(size.x, size.y) * 0.43 / 4.4951e12
+    draw_circle(center, 5.0, Color(1.0, 0.78, 0.28))
+    draw_string(ThemeDB.fallback_font, center + Vector2(10, 4), "SUN", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.82, 0.48))
+    for planet in PlanetarySystem.PLANETS:
+        var orbit_radius := float(planet.semi_major_axis) * map_scale
+        draw_arc(center, orbit_radius, 0.0, TAU, 180, Color(0.28, 0.43, 0.58, 0.42), 1.0)
+        var period := float(planet.orbital_period) * 86400.0
+        var angle := TAU * sim_time / period
+        var planet_position := center + Vector2(cos(angle), sin(angle)) * orbit_radius
+        var planet_radius := clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
+        var planet_color := Color(0.32, 0.62, 0.88)
+        if planet.name == "Earth":
+            planet_color = Color(0.22, 0.68, 1.0)
+        elif planet.name == "Mars":
+            planet_color = Color(0.88, 0.39, 0.24)
+        elif planet.name == "Jupiter":
+            planet_color = Color(0.82, 0.66, 0.48)
+        elif planet.name == "Saturn":
+            planet_color = Color(0.82, 0.75, 0.53)
+        draw_circle(planet_position, planet_radius, planet_color)
+        draw_string(ThemeDB.fallback_font, planet_position + Vector2(planet_radius + 5.0, 4.0), str(planet.name).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.72, 0.82, 0.92))
+    draw_string(ThemeDB.fallback_font, Vector2(24, size.y - 420), "SOLAR SYSTEM OVERVIEW  •  ALL PLANETARY ORBITS", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
+
+func _calculate_predicted_trajectory() -> void:
+    predicted_path.clear()
+    var position := rocket_position
+    var predicted_velocity := velocity
+    var predicted_fuel := fuel
+    var predicted_stage := stage_index
+    var dt := 5.0
+    for i in range(360):
+        var altitude := maxf(0.0, position.length() - EARTH_RADIUS)
+        var stage_flow := FIRST_STAGE_FLOW if predicted_stage == 0 else UPPER_STAGE_FLOW
+        var active_dry := FIRST_STAGE_DRY_MASS if predicted_stage == 0 else UPPER_STAGE_DRY_MASS
+        var stack_mass := UPPER_STAGE_DRY_MASS + UPPER_STAGE_FUEL if predicted_stage == 0 else 0.0
+        var burn := minf(predicted_fuel, stage_flow * throttle * dt)
+        var mass := maxf(1.0, active_dry + stack_mass + predicted_fuel - burn * 0.5)
+        var predicted_thrust := _engine_thrust(altitude) * throttle
+        var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
+        var acceleration := PlanetarySystem.gravity_acceleration(position, sim_time + i * dt)
+        if throttle > 0.0 and predicted_fuel > 0.0:
+            acceleration += thrust_direction * predicted_thrust / mass
+        acceleration += _aerodynamic_acceleration(position, predicted_velocity, mass)
+        predicted_velocity += acceleration * dt
+        position += predicted_velocity * dt
+        predicted_fuel = maxf(0.0, predicted_fuel - burn)
+        if predicted_fuel <= 0.0 and predicted_stage == 0:
+            predicted_stage = 1
+            predicted_fuel = UPPER_STAGE_FUEL
+        predicted_path.append(position)
+        if position.length() < EARTH_RADIUS:
+            break
 
 func _draw_grid(center: Vector2) -> void:
     var spacing := 80.0
@@ -322,18 +403,18 @@ func _draw_orbit(rocket_screen: Vector2, earth_screen: Vector2, radius_px: float
         points.append(rocket_screen + (local - rocket_position) * camera_zoom * factor)
     draw_polyline(points, Color(0.2, 0.75, 1.0, 0.5), 1.5)
 
-func _draw_rocket(p: Vector2) -> void:
+func _draw_rocket(p: Vector2, object_scale: float) -> void:
     var forward := Vector2.UP.rotated(rotation_angle)
     var side := Vector2.RIGHT.rotated(rotation_angle)
-    var tip := p + forward * 17.0
-    var left := p - forward * 12.0 - side * 6.0
-    var right := p - forward * 12.0 + side * 6.0
+    var tip := p + forward * 17.0 * object_scale
+    var left := p - forward * 12.0 * object_scale - side * 6.0 * object_scale
+    var right := p - forward * 12.0 * object_scale + side * 6.0 * object_scale
     draw_colored_polygon(PackedVector2Array([tip, left, right]), Color(0.82, 0.88, 0.94))
     draw_line(left, right, Color(0.25, 0.55, 0.78), 1.5)
     if throttle > 0.0 and fuel > 0.0:
-        var flame_base := p - forward * 12.0
-        var flame_tip := p - forward * (28.0 + randf_range(0, 8))
-        draw_colored_polygon(PackedVector2Array([flame_base - side * 3, flame_tip, flame_base + side * 3]), Color(1.0, 0.48, 0.12, 0.9))
+        var flame_base := p - forward * 12.0 * object_scale
+        var flame_tip := p - forward * (28.0 + randf_range(0, 8)) * object_scale
+        draw_colored_polygon(PackedVector2Array([flame_base - side * 3 * object_scale, flame_tip, flame_base + side * 3 * object_scale]), Color(1.0, 0.48, 0.12, 0.9))
 
 func _draw_hud() -> void:
     var altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
