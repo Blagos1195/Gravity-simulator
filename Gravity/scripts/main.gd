@@ -677,8 +677,8 @@ func _build_flight_hud() -> void:
 func _show_flight_computer() -> void:
 	var window := Window.new()
 	window.title = "FLIGHT COMPUTER"
-	window.size = Vector2i(500, 650)
-	window.min_size = Vector2i(440, 560)
+	window.size = Vector2i(520, 720)
+	window.min_size = Vector2i(460, 600)
 	window.unresizable = false
 	window.close_requested.connect(window.queue_free)
 	add_child(window)
@@ -696,11 +696,14 @@ func _show_flight_computer() -> void:
 	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 	root.add_child(heading)
 	var description := Label.new()
-	description.text = "Choose an orbit or destination. The computer compares remaining vehicle delta-v with an estimated mission budget, including a 10% reserve, and reports departure and arrival manoeuvres."
+	description.text = "Choose a destination and tune the trajectory search between fuel use and travel time. The reserve setting controls how much vehicle delta-v the planner is allowed to spend."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
+	var calculate_simulated_transfer := false
+	var refresh_report: Callable = Callable()
 	var priority_label := Label.new()
-	priority_label.text = "TRAJECTORY PRIORITY  •  BALANCED"
+	var initial_priority_percent := roundi(sim.autopilot_speed_priority * 100.0)
+	priority_label.text = "TRAJECTORY PRIORITY  •  " + ("FUEL" if initial_priority_percent < 35 else "SPEED" if initial_priority_percent > 65 else "BALANCED") + "  (%d%% SPEED)" % initial_priority_percent
 	root.add_child(priority_label)
 	var priority_slider := HSlider.new()
 	priority_slider.min_value = 0.0
@@ -711,6 +714,9 @@ func _show_flight_computer() -> void:
 	priority_slider.value_changed.connect(func(value: float):
 		sim.autopilot_speed_priority = value / 100.0
 		priority_label.text = "TRAJECTORY PRIORITY  •  " + ("FUEL" if value < 35.0 else "SPEED" if value > 65.0 else "BALANCED") + "  (%d%% SPEED)" % roundi(value)
+		calculate_simulated_transfer = false
+		if refresh_report.is_valid():
+			refresh_report.call()
 	)
 	root.add_child(priority_slider)
 	var safety_label := Label.new()
@@ -727,6 +733,9 @@ func _show_flight_computer() -> void:
 	safety.select(safety_index)
 	safety.item_selected.connect(func(index: int):
 		sim.autopilot_safety_margin = float(safety.get_item_id(index)) / 100.0
+		calculate_simulated_transfer = false
+		if refresh_report.is_valid():
+			refresh_report.call()
 	)
 	root.add_child(safety)
 	var target_label := Label.new()
@@ -802,7 +811,6 @@ func _show_flight_computer() -> void:
 	cancel.text = "CLOSE"
 	cancel.pressed.connect(window.queue_free)
 	root.add_child(cancel)
-	var calculate_simulated_transfer := false
 	var update_report := func() -> void:
 		var selected_id: int = target.get_selected_id()
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
@@ -885,6 +893,7 @@ func _show_flight_computer() -> void:
 			text_lines.append("STATUS: INSUFFICIENT DELTA-V")
 		text_lines.append("Ideal rocket-equation estimate only. Real ascent, steering and correction losses can make a nominal pass fail.")
 		report.text = "\n".join(text_lines)
+	refresh_report = func(): update_report.call()
 	calculate.pressed.connect(func():
 		calculate_simulated_transfer = true
 		update_report.call()
