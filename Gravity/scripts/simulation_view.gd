@@ -506,15 +506,15 @@ func _update_guidance(dt: float) -> void:
 		var prograde := guidance_velocity.normalized() if guidance_velocity.length() > 1.0 else tangent
 		match autopilot_phase:
 			"ASCENT":
-				status_message = "AUTOPILOT  •  ASCENT TO %.0f KM" % (autopilot_target_altitude / 1000.0)
+				status_message = "AUTOPILOT  •  ASCENT TO %.0F KM" % (autopilot_target_altitude / 1000.0)
 				if bool(orbit.get("bound", false)) and float(orbit.get("apoapsis", 0.0)) >= target_radius:
 					thrust_key_down = false
 					autopilot_phase = "COAST"
 				else:
-					var apoapsis: float = float(orbit.get("apoapsis", 0.0))
-					var apoapsis_fraction := clampf((apoapsis - EARTH_RADIUS) / maxf(1.0, autopilot_target_altitude), 0.0, 1.0) if is_finite(apoapsis) else 0.0
-					var speed_fraction := clampf(guidance_velocity.length() / 7800.0, 0.0, 1.0)
-					pitch_above_horizon = lerpf(90.0, 2.0, clampf(maxf(maxf(altitude / maxf(1.0, autopilot_target_altitude), apoapsis_fraction * 0.92), speed_fraction * 0.9), 0.0, 1.0))
+					var ascent_apoapsis: float = float(orbit.get("apoapsis", 0.0))
+					var ascent_apoapsis_fraction := clampf((ascent_apoapsis - float(guidance_body.radius)) / maxf(1.0, autopilot_target_altitude), 0.0, 1.0) if is_finite(ascent_apoapsis) else 0.0
+					var ascent_speed_fraction := clampf(guidance_velocity.length() / 7800.0, 0.0, 1.0)
+					pitch_above_horizon = lerpf(90.0, 2.0, clampf(maxf(maxf(altitude / maxf(1.0, autopilot_target_altitude), ascent_apoapsis_fraction * 0.92), ascent_speed_fraction * 0.9), 0.0, 1.0))
 					thrust_key_down = fuel > 0.0
 			"COAST":
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
@@ -524,23 +524,23 @@ func _update_guidance(dt: float) -> void:
 					thrust_key_down = true
 			"CIRCULARISE":
 				status_message = "AUTOPILOT  •  ORBITAL CIRCULARISATION"
-				var desired_speed := FlightComputer.circular_orbit_speed(guidance_position.length(), G * float(guidance_body.mass))
-				var tangential_speed := float(orbit.get("tangential_speed", 0.0))
-				var radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
-				var speed_error := desired_speed - tangential_speed
-				autopilot_transfer_direction = 1.0 if speed_error >= 0.0 else -1.0
+				var circular_desired_speed := FlightComputer.circular_orbit_speed(guidance_position.length(), G * float(guidance_body.mass))
+				var circular_tangential_speed := float(orbit.get("tangential_speed", 0.0))
+				var circular_radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
+				var circular_speed_error := circular_desired_speed - circular_tangential_speed
+				autopilot_transfer_direction = 1.0 if circular_speed_error >= 0.0 else -1.0
 				var circular_burn_direction := tangent * autopilot_transfer_direction
 				var circular_burn_rotation := circular_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				if absf(speed_error) <= 2.0 and radial_speed < 100.0:
+				if absf(circular_speed_error) <= 2.0 and circular_radial_speed < 100.0:
 					thrust_key_down = false
 					if autopilot_target_mode == "PLANET":
-						var transfer := FlightComputer.interplanetary_transfer(autopilot_planet_index, altitude)
-						if bool(transfer.get("valid", false)):
-							autopilot_burn_remaining = float(transfer.get("departure_delta_v", 0.0))
-							autopilot_transfer_duration = float(transfer.get("transfer_time", 0.0))
+						var departure_transfer := FlightComputer.interplanetary_transfer(autopilot_planet_index, altitude)
+						if bool(departure_transfer.get("valid", false)):
+							autopilot_burn_remaining = float(departure_transfer.get("departure_delta_v", 0.0))
+							autopilot_transfer_duration = float(departure_transfer.get("transfer_time", 0.0))
 							autopilot_transfer_start_time = -1.0
-							autopilot_transfer_direction = float(transfer.get("direction", 1.0))
+							autopilot_transfer_direction = float(departure_transfer.get("direction", 1.0))
 							var initial_window_wait := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
 							autopilot_phase = "ALIGN_DEPARTURE" if initial_window_wait <= 3600.0 else "WAIT_WINDOW"
 						else:
@@ -565,60 +565,60 @@ func _update_guidance(dt: float) -> void:
 					autopilot_phase = "TRANSFER_BURN"
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0F M/S" % autopilot_burn_remaining
-				var burn_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
-				var burn_rotation := burn_direction.angle() - Vector2.UP.angle()
-				rotation_angle = lerp_angle(rotation_angle, burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, burn_rotation)) < deg_to_rad(1.0)
+				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
+				var injection_rotation := injection_direction.angle() - Vector2.UP.angle()
+				rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
 				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 			"TRANSFER_COAST":
 				thrust_key_down = false
 				var transfer_elapsed := maxf(0.0, sim_time - autopilot_transfer_start_time)
 				var transfer_remaining := maxf(0.0, autopilot_transfer_duration - transfer_elapsed)
-				var destination_state := _autopilot_target_state()
-				var destination_distance := rocket_position.distance_to(destination_state.position)
-				var encounter_radius := float(destination_state.soi)
-				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1F DAYS REMAINING" % [str(destination_state.name).to_upper(), transfer_remaining / 86400.0]
+				var transfer_destination_state := _autopilot_target_state()
+				var destination_distance := rocket_position.distance_to(transfer_destination_state.position)
+				var encounter_radius := float(transfer_destination_state.soi)
+				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1F DAYS REMAINING" % [str(transfer_destination_state.name).to_upper(), transfer_remaining / 86400.0]
 				if destination_distance <= encounter_radius:
 					autopilot_phase = "ARRIVAL_APPROACH"
 				elif transfer_elapsed > autopilot_transfer_duration * 1.5:
 					autopilot_phase = "ARRIVAL_PENDING"
 			"ARRIVAL_APPROACH":
 				thrust_key_down = false
-				var destination_state := _autopilot_target_state()
-				var relative_position: Vector2 = rocket_position - destination_state.position
-				var relative_velocity: Vector2 = velocity - destination_state.velocity
-				var arrival_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, G * float(destination_state.mass))
-				var radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
-				status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0F KM" % [str(destination_state.name).to_upper(), (relative_position.length() - float(destination_state.radius)) / 1000.0]
-				if radial_speed >= -10.0:
-					_begin_arrival_capture(destination_state)
+				var approach_target_state := _autopilot_target_state()
+				var approach_relative_position: Vector2 = rocket_position - approach_target_state.position
+				var approach_relative_velocity: Vector2 = velocity - approach_target_state.velocity
+				var arrival_orbit := FlightComputer.orbital_state(approach_relative_position, approach_relative_velocity, G * float(approach_target_state.mass))
+				var approach_radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
+				status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0F KM" % [str(approach_target_state.name).to_upper(), (approach_relative_position.length() - float(approach_target_state.radius)) / 1000.0]
+				if approach_radial_speed >= -10.0:
+					_begin_arrival_capture(approach_target_state)
 			"ARRIVAL_CAPTURE_BURN":
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0F M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
-				var burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-				rotation_angle = lerp_angle(rotation_angle, burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, burn_rotation)) < deg_to_rad(1.0)
+				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
+				rotation_angle = lerp_angle(rotation_angle, capture_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
 				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 			"LANDING_DESCENT":
-				var destination_state := _autopilot_target_state()
-				var relative_position: Vector2 = rocket_position - destination_state.position
-				var relative_velocity: Vector2 = velocity - destination_state.velocity
-				var distance := relative_position.length()
-				var landing_altitude := distance - float(destination_state.radius)
-				var up := relative_position.normalized()
-				var landing_tangent := Vector2(-up.y, up.x)
-				var gravity := G * float(destination_state.mass) / (distance * distance)
-				var radial_speed := relative_velocity.dot(up)
-				var tangential_speed := relative_velocity.dot(landing_tangent)
-				var target_descent_speed := -maxf(1.5, minf(60.0, sqrt(2.0 * gravity * maxf(0.0, landing_altitude - 2.0))))
-				var radial_acceleration := maxf(0.0, gravity + (target_descent_speed - radial_speed) / 15.0)
-				var tangential_acceleration := -tangential_speed / 180.0
-				var required_acceleration := up * radial_acceleration + landing_tangent * tangential_acceleration
-				var available_acceleration := _engine_thrust(landing_altitude) / maxf(1.0, _current_vehicle_mass())
-				autopilot_throttle = clampf(required_acceleration.length() / maxf(0.01, available_acceleration), 0.0, 1.0)
+				var landing_target_state := _autopilot_target_state()
+				var landing_relative_position: Vector2 = rocket_position - landing_target_state.position
+				var landing_relative_velocity: Vector2 = velocity - landing_target_state.velocity
+				var landing_distance := landing_relative_position.length()
+				var landing_altitude := landing_distance - float(landing_target_state.radius)
+				var landing_up := landing_relative_position.normalized()
+				var landing_tangent := Vector2(-landing_up.y, landing_up.x)
+				var landing_gravity := G * float(landing_target_state.mass) / (landing_distance * landing_distance)
+				var landing_radial_speed := landing_relative_velocity.dot(landing_up)
+				var landing_tangential_speed := landing_relative_velocity.dot(landing_tangent)
+				var landing_target_descent_speed := -maxf(1.5, minf(60.0, sqrt(2.0 * landing_gravity * maxf(0.0, landing_altitude - 2.0))))
+				var landing_radial_acceleration := maxf(0.0, landing_gravity + (landing_target_descent_speed - landing_radial_speed) / 15.0)
+				var landing_tangential_acceleration := -landing_tangential_speed / 180.0
+				var landing_required_acceleration := landing_up * landing_radial_acceleration + landing_tangent * landing_tangential_acceleration
+				var landing_available_acceleration := _engine_thrust(landing_altitude) / maxf(1.0, _current_vehicle_mass())
+				autopilot_throttle = clampf(landing_required_acceleration.length() / maxf(0.01, landing_available_acceleration), 0.0, 1.0)
 				thrust_key_down = autopilot_throttle > 0.001
-				status_message = "LANDING GUIDANCE  •  %s  •  ALT %.1F KM  •  V/S %.1F M/S" % [str(destination_state.name).to_upper(), landing_altitude / 1000.0, radial_speed]
+				status_message = "LANDING GUIDANCE  •  %s  •  ALT %.1F KM  •  V/S %.1F M/S" % [str(landing_target_state.name).to_upper(), landing_altitude / 1000.0, landing_radial_speed]
 				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 					thrust_key_down = false
@@ -640,28 +640,28 @@ func _update_guidance(dt: float) -> void:
 		elif autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"]:
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 		elif autopilot_phase == "LANDING_DESCENT":
-			var destination_state := _autopilot_target_state()
-			var relative_position: Vector2 = rocket_position - destination_state.position
-			var relative_velocity: Vector2 = velocity - destination_state.velocity
-			var up := relative_position.normalized()
-			var landing_tangent := Vector2(-up.y, up.x)
-			var gravity := G * float(destination_state.mass) / pow(relative_position.length(), 2.0)
-			var radial_speed := relative_velocity.dot(up)
-			var tangential_speed := relative_velocity.dot(landing_tangent)
-			var landing_altitude := relative_position.length() - float(destination_state.radius)
-			var target_descent_speed := -maxf(1.5, minf(60.0, sqrt(2.0 * gravity * maxf(0.0, landing_altitude - 2.0))))
-			var radial_acceleration := maxf(0.0, gravity + (target_descent_speed - radial_speed) / 15.0)
-			var tangential_acceleration := -tangential_speed / 180.0
-			var landing_direction := up * radial_acceleration + landing_tangent * tangential_acceleration
-			autopilot_direction = landing_direction.normalized() if landing_direction.length_squared() > 0.001 else up
-		var target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
-		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
+			var landing_direction_state := _autopilot_target_state()
+			var landing_direction_position: Vector2 = rocket_position - landing_direction_state.position
+			var landing_direction_velocity: Vector2 = velocity - landing_direction_state.velocity
+			var landing_direction_up := landing_direction_position.normalized()
+			var landing_direction_tangent := Vector2(-landing_direction_up.y, landing_direction_up.x)
+			var landing_direction_gravity := G * float(landing_direction_state.mass) / pow(landing_direction_position.length(), 2.0)
+			var landing_direction_radial_speed := landing_direction_velocity.dot(landing_direction_up)
+			var landing_direction_tangential_speed := landing_direction_velocity.dot(landing_direction_tangent)
+			var landing_direction_altitude := landing_direction_position.length() - float(landing_direction_state.radius)
+			var landing_direction_target_speed := -maxf(1.5, minf(60.0, sqrt(2.0 * landing_direction_gravity * maxf(0.0, landing_direction_altitude - 2.0))))
+			var landing_direction_radial_acceleration := maxf(0.0, landing_direction_gravity + (landing_direction_target_speed - landing_direction_radial_speed) / 15.0)
+			var landing_direction_tangential_acceleration := -landing_direction_tangential_speed / 180.0
+			var landing_direction_vector := landing_direction_up * landing_direction_radial_acceleration + landing_direction_tangent * landing_direction_tangential_acceleration
+			autopilot_direction = landing_direction_vector.normalized() if landing_direction_vector.length_squared() > 0.001 else landing_direction_up
+		var autopilot_target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
+		rotation_angle = lerp_angle(rotation_angle, autopilot_target_rotation, clampf(dt * 0.8, 0.0, 1.0))
 		return
 	elif guidance_velocity.length() > 1500.0:
 		pitch_above_horizon = minf(pitch_above_horizon, 12.0)
-	var target_direction := radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
-	var target_rotation := target_direction.angle() - Vector2.UP.angle()
-	rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.08, 0.0, 1.0))
+	var manual_target_direction := radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
+	var manual_target_rotation := manual_target_direction.angle() - Vector2.UP.angle()
+	rotation_angle = lerp_angle(rotation_angle, manual_target_rotation, clampf(dt * 0.08, 0.0, 1.0))
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
