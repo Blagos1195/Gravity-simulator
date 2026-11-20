@@ -167,6 +167,26 @@ static func departure_wait_time(target_index: int, current_time: float, parking_
 	var synodic_period := TAU / absf(relative_rate)
 	return fposmod(wait, synodic_period)
 
+static func departure_periapsis_direction(target_index: int, current_time: float, parking_radius: float) -> Vector2:
+	if target_index == -1:
+		var transfer := hohmann_transfer(parking_radius, EARTH_RADIUS + MOON_ORBIT_RADIUS)
+		var moon_rate := TAU / (27.321661 * 86400.0)
+		var arrival_angle := moon_rate * (current_time + float(transfer.get("transfer_time", 0.0)))
+		return -Vector2(cos(arrival_angle), sin(arrival_angle))
+	if target_index < 0 or target_index >= PLANET_TARGETS.size():
+		return Vector2.ZERO
+	var transfer_data := interplanetary_transfer(target_index, parking_radius - EARTH_RADIUS)
+	var direction_sign := float(transfer_data.get("direction", 1.0))
+	var excess_speed := float(transfer_data.get("departure_excess_speed", 0.0))
+	var eccentricity := 1.0 + parking_radius * excess_speed * excess_speed / EARTH_MU
+	var bend_angle := atan(1.0 / sqrt(maxf(0.000001, eccentricity * eccentricity - 1.0)))
+	var earth_rate := TAU / EARTH_ORBIT_PERIOD
+	var earth_angle := earth_rate * current_time
+	var earth_tangent := Vector2(-sin(earth_angle), cos(earth_angle))
+	var asymptote_direction := earth_tangent * direction_sign
+	var periapsis_tangent := asymptote_direction.rotated(direction_sign * bend_angle)
+	return periapsis_tangent.rotated(-direction_sign * PI * 0.5).normalized()
+
 static func target_orbit_report(position: Vector2, velocity: Vector2, altitude: float) -> Dictionary:
 	var target_radius := EARTH_RADIUS + maxf(0.0, altitude)
 	var state := orbital_state(position, velocity)
