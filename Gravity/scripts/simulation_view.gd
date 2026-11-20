@@ -749,8 +749,9 @@ func _draw() -> void:
 	var rocket_screen := view_center
 	var radial_direction := rocket_position.normalized()
 	var altitude_for_view := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
+	var altitude_display := altitude_for_view * (1.0 + 7.0 * exp(-altitude_for_view / 100000.0))
 	var altitude_visual_scale := camera_zoom * world_scale_factor
-	var earth_screen := view_center - radial_direction * (radius_px + altitude_for_view * altitude_visual_scale)
+	var earth_screen := view_center - radial_direction * (radius_px + altitude_display * altitude_visual_scale)
 	camera_offset = rocket_position
 
 	for star in star_points:
