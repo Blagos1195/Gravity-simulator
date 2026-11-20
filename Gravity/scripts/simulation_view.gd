@@ -18,7 +18,6 @@ const DRAG_AREA := 0.45
 const LIFT_AREA := 1.8
 const DRAG_COEFFICIENT := 0.45
 const EARTH_ROTATION_RATE := 7.2921159e-5
-const MAX_HEAT_FLUX := 18.0
 
 var realism := "Realistic"
 var world_scale := "Compressed"
@@ -128,8 +127,8 @@ func _physics_step(dt: float) -> void:
 func _adaptive_step_size() -> float:
     var altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
     var gravity := G * EARTH_MASS / pow(rocket_position.length(), 2.0)
-    var dynamic_limit := 0.08 * sqrt(maxf(1.0, altitude + 1000.0) / maxf(0.1, gravity))
-    var atmosphere_limit := 5000.0 / maxf(100.0, velocity.length()) if altitude < PlanetarySystem.ATMOSPHERE_HEIGHT else 0.25
+    var dynamic_limit := 0.02 * sqrt(maxf(1.0, altitude + 100.0) / maxf(0.1, gravity))
+    var atmosphere_limit := 1000.0 / maxf(100.0, velocity.length()) if altitude < PlanetarySystem.ATMOSPHERE_HEIGHT else 0.25
     return clampf(minf(dynamic_limit, atmosphere_limit), 0.002, 0.25)
 
 func _engine_thrust(altitude: float) -> float:
@@ -358,17 +357,18 @@ func _draw_hud() -> void:
         "STAGE          %d / 2" % (stage_index + 1),
         "HEAT FLUX      %.2f MW/m²" % heat_flux_mw,
         "SHIELD TEMP    %.0f K" % heat_shield_temperature,
+        "PEAK HEATING   %.2f MW/m²" % peak_heat_flux_mw,
         "GUIDANCE       %s" % ("AUTO" if guidance_enabled else "MANUAL"),
         "PERIAPSIS      %s" % _format_distance(periapsis),
         "APOAPSIS       %s" % _format_distance(apoapsis),
         "MISSION TIME   %s" % _format_time(sim_time),
         "TIME WARP      x%s" % str(snappedf(time_warp, 0.01))
     ]
-    var box := Rect2(Vector2(18, size.y - 365), Vector2(310, 344))
+    var box := Rect2(Vector2(18, size.y - 388), Vector2(310, 367))
     draw_rect(box, Color(0.015, 0.035, 0.065, 0.86), true)
     draw_rect(box, Color(0.18, 0.42, 0.6, 0.7), false, 1.0)
     for i in range(lines.size()):
-        draw_string(ThemeDB.fallback_font, Vector2(32, size.y - 338 + i * 23), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.68, 0.82, 0.94))
+        draw_string(ThemeDB.fallback_font, Vector2(32, size.y - 361 + i * 23), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.68, 0.82, 0.94))
     draw_string(ThemeDB.fallback_font, Vector2(315, size.y - 28), status_message, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.35, 0.85, 0.75))
     draw_string(ThemeDB.fallback_font, Vector2(size.x - 280, size.y - 28), realism.to_upper() + "  /  " + world_scale.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.48, 0.68, 0.84))
 
