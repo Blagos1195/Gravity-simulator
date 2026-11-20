@@ -20,6 +20,7 @@ var scale_factor := 1.0
 var rocket_design: Dictionary = RocketDesign.create_default()
 var design_stats_label: Label
 var design_error_label: Label
+var design_preview: Control
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
@@ -165,6 +166,10 @@ func _show_vehicle_editor() -> void:
 		_update_design_stats()
 	)
 	payload_fields.add_child(payload)
+	design_preview = RocketPreview.new()
+	design_preview.design = rocket_design
+	design_preview.custom_minimum_size = Vector2(210, 280)
+	payload_fields.add_child(design_preview)
 	design_stats_label = Label.new()
 	design_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	payload_fields.add_child(design_stats_label)
@@ -213,6 +218,9 @@ func _update_design_stats() -> void:
 	var initial_twr := float(first["thrust"]) / maxf(1.0, total_mass * 9.81)
 	design_stats_label.text = "INITIAL MASS\n%.1f tonnes\n\nIDEAL ΔV\n%.2f km/s\n\nPAD TWR\n%.2f" % [total_mass / 1000.0, delta_v / 1000.0, initial_twr]
 	design_error_label.text = "\n".join(errors) if not errors.is_empty() else "DESIGN VALID"
+	if is_instance_valid(design_preview):
+		design_preview.design = rocket_design
+		design_preview.queue_redraw()
 
 func _save_rocket_design() -> void:
 	var file := FileAccess.open("user://rocket_design.json", FileAccess.WRITE)
@@ -434,6 +442,37 @@ func _add_spacer(parent: Node, amount: float) -> void:
 
 func _quit_game() -> void:
 	get_tree().quit()
+
+class RocketPreview:
+	extends Control
+	var design: Dictionary = {}
+	func _draw() -> void:
+		var stages: Array = design.get("stages", [])
+		if stages.size() != 2:
+			return
+		var center_x := size.x * 0.5
+		var top := 18.0
+		var width := minf(48.0, size.x * 0.24)
+		var payload_height := 34.0
+		var upper_height := 92.0
+		var first_height := 112.0
+		var payload_points := PackedVector2Array([
+			Vector2(center_x, top),
+			Vector2(center_x - width * 0.5, top + payload_height),
+			Vector2(center_x + width * 0.5, top + payload_height)
+		])
+		draw_colored_polygon(payload_points, Color(0.75, 0.84, 0.94))
+		var upper_y := top + payload_height
+		draw_rect(Rect2(center_x - width * 0.5, upper_y, width, upper_height), Color(0.36, 0.62, 0.78))
+		draw_rect(Rect2(center_x - width * 0.5, upper_y + upper_height * 0.62, width, upper_height * 0.28), Color(0.92, 0.65, 0.22))
+		var first_y := upper_y + upper_height
+		draw_rect(Rect2(center_x - width * 0.62, first_y, width * 1.24, first_height), Color(0.48, 0.58, 0.68))
+		draw_rect(Rect2(center_x - width * 0.62, first_y + first_height * 0.65, width * 1.24, first_height * 0.25), Color(0.92, 0.65, 0.22))
+		var fin_y := first_y + first_height - 25.0
+		draw_colored_polygon(PackedVector2Array([Vector2(center_x - width * 0.62, fin_y), Vector2(center_x - width, fin_y + 25.0), Vector2(center_x - width * 0.62, fin_y + 25.0)]), Color(0.65, 0.72, 0.82))
+		draw_colored_polygon(PackedVector2Array([Vector2(center_x + width * 0.62, fin_y), Vector2(center_x + width, fin_y + 25.0), Vector2(center_x + width * 0.62, fin_y + 25.0)]), Color(0.65, 0.72, 0.82))
+		draw_colored_polygon(PackedVector2Array([Vector2(center_x - 12.0, first_y + first_height), Vector2(center_x, first_y + first_height + 22.0), Vector2(center_x + 12.0, first_y + first_height)]), Color(0.42, 0.48, 0.56))
+		draw_string(ThemeDB.fallback_font, Vector2(12, size.y - 8), str(design.get("name", "CUSTOM VEHICLE")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.65, 0.8, 0.92))
 
 class Starfield:
 	extends Control
