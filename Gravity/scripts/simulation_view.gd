@@ -76,9 +76,11 @@ func _physics_step(dt: float) -> void:
         var consumed := minf(fuel, FUEL_FLOW * throttle * dt)
         fuel -= consumed
 
-    var acceleration := gravity + thrust_accel
-    velocity += acceleration * dt
+    var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time - dt)
+    velocity += (initial_gravity + thrust_accel) * (0.5 * dt)
     rocket_position += velocity * dt
+    var final_gravity := PlanetarySystem.gravity_acceleration(rocket_position, sim_time)
+    velocity += (final_gravity + thrust_accel) * (0.5 * dt)
 
     if realism in ["Realistic", "Hardcore"]:
         var altitude := r - EARTH_RADIUS
