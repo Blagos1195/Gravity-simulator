@@ -270,7 +270,7 @@ func _draw_hud() -> void:
         "FUEL           %s%%" % str(roundi(100.0 * fuel / FUEL_CAPACITY)),
         "THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
         "THRUST / WEIGHT %.2f" % thrust_to_weight,
-        "AVAILABLE ΔV   %.2f km/s" % (remaining_delta_v / 1000.0),
+        "IDEAL ΔV EST.  %.2f km/s" % (remaining_delta_v / 1000.0),
         "PERIAPSIS      %s" % _format_distance(periapsis),
         "APOAPSIS       %s" % _format_distance(apoapsis),
         "MISSION TIME   %s" % _format_time(sim_time),
