@@ -24,15 +24,16 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Adaptive substepping based on orbital timescale, atmospheric travel distance, drag, thrust and exact propellant depletion
 - Sutton–Graves stagnation-point heating estimate and radiative heat-shield temperature response
 - Earth rotation inherited at launch and rotating-atmosphere-relative aerodynamics
-- Mach-dependent atmospheric drag and approximate angle-of-attack lift in Realistic and Hardcore modes
-- Live Mach number and dynamic-pressure telemetry
+- Arcade, Standard, Realistic and Hardcore presets with progressively more atmospheric forces, lift and heating
+- Live Mach number, dynamic-pressure and peak Max-Q telemetry
 - Atmospheric heat-flux and radiative heat-shield temperature telemetry
 - Differential gravity from the Moon, Sun and other planets
 - Optional gravity-turn guidance assist
 - Orbital flight computer with osculating orbit elements, circularisation burns, lunar transfers and heliocentric Hohmann estimates
 - Destination planner for the Moon and all seven other planets, including ideal departure phase, transfer-window timing, hyperbolic departure orientation and capture delta-v estimates
 - Orbit autopilot with ascent, coast-to-apoapsis and prograde/retrograde circularisation
-- Destination autopilot with parking-orbit insertion, transfer-window waiting, hyperbolic departure alignment and calculated injection burn
+- Destination autopilot with parking-orbit insertion, transfer-window waiting, hyperbolic departure alignment, calculated injection burn and transfer-time countdown
+- Deep-space adaptive integration with up to 1,000,000× time warp while retaining fine steps near Earth
 - Manual engine controls disengage autopilot; saved flight state preserves the selected target, departure burn vector and guidance phase
 - Remaining ideal vehicle delta-v and thrust-to-weight telemetry
 - Orbital trajectory, periapsis, apoapsis and thrust-to-weight readouts
