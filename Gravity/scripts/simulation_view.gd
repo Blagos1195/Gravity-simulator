@@ -641,7 +641,11 @@ func _draw_hud() -> void:
 	draw_rect(box, Color(0.18, 0.42, 0.6, 0.7), false, 1.0)
 	for i in range(lines.size()):
 		draw_string(ThemeDB.fallback_font, Vector2(32.0 * ui_scale, size.y - 408.0 * ui_scale + i * 23.0 * ui_scale), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(13.0 * ui_scale)), Color(0.68, 0.82, 0.94))
-	draw_string(ThemeDB.fallback_font, Vector2(315.0 * ui_scale, size.y - 28.0 * ui_scale), status_message, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(13.0 * ui_scale)), Color(0.35, 0.85, 0.75))
+	var status_width := minf(size.x - 420.0 * ui_scale, 760.0 * ui_scale)
+	var status_rect := Rect2(Vector2((size.x - status_width) * 0.5, 18.0 * ui_scale), Vector2(status_width, 34.0 * ui_scale))
+	draw_rect(status_rect, Color(0.015, 0.035, 0.065, 0.88), true)
+	draw_rect(status_rect, Color(0.18, 0.42, 0.6, 0.75), false, 1.0)
+	draw_string(ThemeDB.fallback_font, Vector2(status_rect.position.x + 8.0 * ui_scale, status_rect.position.y + 23.0 * ui_scale), status_message, HORIZONTAL_ALIGNMENT_CENTER, status_width - 16.0 * ui_scale, maxi(10, roundi(14.0 * ui_scale)), Color(0.35, 0.9, 0.78))
 	draw_string(ThemeDB.fallback_font, Vector2(size.x - 280.0 * ui_scale, size.y - 28.0 * ui_scale), realism.to_upper() + "  /  " + world_scale.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(12.0 * ui_scale)), Color(0.48, 0.68, 0.84))
 
 func _remaining_ideal_delta_v(current_mass: float) -> float:
