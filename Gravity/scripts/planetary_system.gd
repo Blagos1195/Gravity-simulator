@@ -10,7 +10,7 @@ const MOON_ORBIT_ECCENTRICITY := 0.0549
 const MOON_ORBIT_PERIOD := 27.321661 * 86400.0
 const MOON_ORBITAL_SPEED := TAU * MOON_ORBIT_RADIUS / MOON_ORBIT_PERIOD
 const EARTH_ECCENTRICITY := 0.0167
-const EARTH_PERIHELION_LONGITUDE := deg_to_rad(102.9)
+const EARTH_PERIHELION_LONGITUDE := 1.795943
 const ATMOSPHERE_HEIGHT := 120000.0
 const SEA_LEVEL_DENSITY := 1.225
 const ATMOSPHERE_SCALE_HEIGHT := 8500.0
@@ -23,14 +23,14 @@ const ATMOSPHERE_LAPSE_RATES := [-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0028, -0.0
 const ATMOSPHERE_BASE_PRESSURES := [101325.0, 22632.1, 5474.89, 868.019, 110.906, 66.9389, 3.95642, 0.3734]
 
 const PLANETS := [
-	{"name": "Mercury", "mass": 3.3011e23, "radius": 2.4397e6, "semi_major_axis": 5.7909e10, "orbital_period": 87.969, "eccentricity": 0.2056, "perihelion": deg_to_rad(77.5)},
-	{"name": "Venus", "mass": 4.8675e24, "radius": 6.0518e6, "semi_major_axis": 1.0821e11, "orbital_period": 224.701, "eccentricity": 0.0068, "perihelion": deg_to_rad(131.6)},
+	{"name": "Mercury", "mass": 3.3011e23, "radius": 2.4397e6, "semi_major_axis": 5.7909e10, "orbital_period": 87.969, "eccentricity": 0.2056, "perihelion": 1.352630},
+	{"name": "Venus", "mass": 4.8675e24, "radius": 6.0518e6, "semi_major_axis": 1.0821e11, "orbital_period": 224.701, "eccentricity": 0.0068, "perihelion": 2.296853},
 	{"name": "Earth", "mass": EARTH_MASS, "radius": EARTH_RADIUS, "semi_major_axis": ASTRONOMICAL_UNIT, "orbital_period": 365.256, "eccentricity": EARTH_ECCENTRICITY, "perihelion": EARTH_PERIHELION_LONGITUDE},
-	{"name": "Mars", "mass": 6.4171e23, "radius": 3.3895e6, "semi_major_axis": 2.2794e11, "orbital_period": 686.980, "eccentricity": 0.0934, "perihelion": deg_to_rad(336.0)},
-	{"name": "Jupiter", "mass": 1.8982e27, "radius": 6.9911e7, "semi_major_axis": 7.7857e11, "orbital_period": 4332.59, "eccentricity": 0.0489, "perihelion": deg_to_rad(14.7)},
-	{"name": "Saturn", "mass": 5.6834e26, "radius": 5.8232e7, "semi_major_axis": 1.4335e12, "orbital_period": 10759.22, "eccentricity": 0.0565, "perihelion": deg_to_rad(92.4)},
-	{"name": "Uranus", "mass": 8.6810e25, "radius": 2.5362e7, "semi_major_axis": 2.8725e12, "orbital_period": 30688.5, "eccentricity": 0.0463, "perihelion": deg_to_rad(170.9)},
-	{"name": "Neptune", "mass": 1.0241e26, "radius": 2.4622e7, "semi_major_axis": 4.4951e12, "orbital_period": 60182.0, "eccentricity": 0.0095, "perihelion": deg_to_rad(44.9)}
+	{"name": "Mars", "mass": 6.4171e23, "radius": 3.3895e6, "semi_major_axis": 2.2794e11, "orbital_period": 686.980, "eccentricity": 0.0934, "perihelion": 5.864306},
+	{"name": "Jupiter", "mass": 1.8982e27, "radius": 6.9911e7, "semi_major_axis": 7.7857e11, "orbital_period": 4332.59, "eccentricity": 0.0489, "perihelion": 0.256563},
+	{"name": "Saturn", "mass": 5.6834e26, "radius": 5.8232e7, "semi_major_axis": 1.4335e12, "orbital_period": 10759.22, "eccentricity": 0.0565, "perihelion": 1.612684},
+	{"name": "Uranus", "mass": 8.6810e25, "radius": 2.5362e7, "semi_major_axis": 2.8725e12, "orbital_period": 30688.5, "eccentricity": 0.0463, "perihelion": 2.982111},
+	{"name": "Neptune", "mass": 1.0241e26, "radius": 2.4622e7, "semi_major_axis": 4.4951e12, "orbital_period": 60182.0, "eccentricity": 0.0095, "perihelion": 0.783907}
 ]
 
 static func get_planet_catalog() -> Array[Dictionary]:
