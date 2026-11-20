@@ -151,3 +151,54 @@ static func atmospheric_density(altitude: float) -> float:
 	if altitude >= ATMOSPHERE_HEIGHT:
 		return 0.0
 	return atmospheric_pressure(altitude) / (287.05287 * atmospheric_temperature(altitude))
+
+static func planetary_atmosphere_density(planet_name: String, altitude: float) -> float:
+	var surface_density := 0.0
+	var scale_height := 1.0
+	var atmosphere_height := 0.0
+	match planet_name:
+		"Venus":
+			surface_density = 65.0
+			scale_height = 15900.0
+			atmosphere_height = 250000.0
+		"Mars":
+			surface_density = 0.020
+			scale_height = 11100.0
+			atmosphere_height = 125000.0
+		"Jupiter":
+			surface_density = 0.16
+			scale_height = 27000.0
+			atmosphere_height = 1000000.0
+		"Saturn":
+			surface_density = 0.19
+			scale_height = 60000.0
+			atmosphere_height = 1500000.0
+		"Uranus":
+			surface_density = 0.42
+			scale_height = 50000.0
+			atmosphere_height = 1000000.0
+		"Neptune":
+			surface_density = 0.45
+			scale_height = 60000.0
+			atmosphere_height = 1500000.0
+	if surface_density <= 0.0 or altitude >= atmosphere_height:
+		return 0.0
+	return surface_density * exp(-maxf(0.0, altitude) / scale_height)
+
+static func planetary_rotation_rate(planet_name: String) -> float:
+	match planet_name:
+		"Mercury":
+			return 1.2400e-6
+		"Venus":
+			return -2.9924e-7
+		"Mars":
+			return 7.0882e-5
+		"Jupiter":
+			return 1.7585e-4
+		"Saturn":
+			return 1.6379e-4
+		"Uranus":
+			return -1.0124e-4
+		"Neptune":
+			return 1.0834e-4
+	return 0.0
