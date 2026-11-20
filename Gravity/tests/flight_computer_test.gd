@@ -20,5 +20,18 @@ func _initialize() -> void:
 	assert(float(transfer.get("total_delta_v", 0.0)) > 0.0)
 	assert(float(transfer.get("transfer_time", 0.0)) > 0.0)
 
+	var mars_transfer := FlightComputer.interplanetary_transfer(2, 200000.0)
+	assert(bool(mars_transfer.get("valid", false)))
+	assert(float(mars_transfer.get("departure_delta_v", 0.0)) > 0.0)
+	assert(float(mars_transfer.get("arrival_delta_v", 0.0)) > 0.0)
+	assert(float(mars_transfer.get("transfer_time", 0.0)) > 100.0 * 86400.0)
+	var departure_wait := FlightComputer.departure_wait_time(2, 0.0)
+	assert(departure_wait >= 0.0)
+	assert(departure_wait < 900.0 * 86400.0)
+
+	var moon_transfer := FlightComputer.interplanetary_transfer(-1, 200000.0)
+	assert(bool(moon_transfer.get("valid", false)))
+	assert(float(moon_transfer.get("departure_delta_v", 0.0)) > 0.0)
+
 	print("Flight computer orbital calculation tests passed.")
 	quit()
