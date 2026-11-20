@@ -11,7 +11,8 @@ const DEFAULT_DESIGN := {
 			"fuel_capacity": 300000.0,
 			"thrust": 7500000.0,
 			"vacuum_thrust": 9000000.0,
-			"flow": 2058.0
+			"flow": 2058.0,
+			"engine_count": 1
 		},
 		{
 			"name": "UPPER STAGE",
@@ -19,7 +20,8 @@ const DEFAULT_DESIGN := {
 			"fuel_capacity": 80000.0,
 			"thrust": 1200000.0,
 			"vacuum_thrust": 1500000.0,
-			"flow": 300.0
+			"flow": 300.0,
+			"engine_count": 1
 		}
 	]
 }
@@ -42,7 +44,9 @@ static func total_delta_v(design: Dictionary) -> float:
 		var dry_mass := float(stage.get("dry_mass", 0.0))
 		var fuel := float(stage.get("fuel_capacity", 0.0))
 		var thrust := float(stage.get("vacuum_thrust", 0.0))
-		var flow := float(stage.get("flow", 0.0))
+		var engine_count := float(stage.get("engine_count", 1))
+		var flow := float(stage.get("flow", 0.0)) * engine_count
+		thrust *= engine_count
 		var upper_mass := float(design.get("payload_mass", 0.0))
 		for j in range(i + 1, stages.size()):
 			upper_mass += float(stages[j].get("dry_mass", 0.0)) + float(stages[j].get("fuel_capacity", 0.0))
@@ -69,4 +73,6 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 			errors.append("Stage %d needs positive engine thrust." % (i + 1))
 		if float(stage.get("flow", 0.0)) <= 0.0:
 			errors.append("Stage %d needs positive fuel flow." % (i + 1))
+		if int(stage.get("engine_count", 1)) < 1 or int(stage.get("engine_count", 1)) > 8:
+			errors.append("Stage %d must have between 1 and 8 engines." % (i + 1))
 	return errors
