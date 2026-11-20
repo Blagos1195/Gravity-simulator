@@ -152,7 +152,7 @@ func _build_menu() -> void:
 
 	if _latest_save_slot() > 0:
 		_add_button(menu_root, "CONTINUE", _continue_game)
-	_add_button(menu_root, "NEW GAME", _show_new_game_setup)
+	_add_button(menu_root, "NEW GAME", _begin_new_game)
 	_add_button(menu_root, "GAME LOAD", _show_game_load)
 	_add_button(menu_root, "SETTINGS", _show_settings)
 	_add_button(menu_root, "QUIT", _quit_game)
@@ -373,6 +373,10 @@ func _launch_designed_vehicle() -> void:
 		return
 	_start_flight()
 
+func _begin_new_game() -> void:
+	rocket_design = RocketDesign.create_default()
+	_show_new_game_setup()
+
 func _show_new_game_setup() -> void:
 	for child in get_children():
 		child.queue_free()
@@ -419,10 +423,7 @@ func _show_new_game_setup() -> void:
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
 	root.add_child(note)
-	_add_button(root, "CONTINUE TO ROCKET BUILDER", func():
-		rocket_design = RocketDesign.create_default()
-		_show_vehicle_editor()
-	)
+	_add_button(root, "CONTINUE TO ROCKET BUILDER", _show_vehicle_editor)
 	_add_button(root, "BACK", _build_menu)
 
 func _save_exists(slot: int) -> bool:
