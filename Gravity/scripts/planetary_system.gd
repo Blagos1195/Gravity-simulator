@@ -75,7 +75,43 @@ static func _differential_body_gravity(position: Vector2, body_mass: float, body
 	var earth_distance := maxf(body_position.length(), 1.0e7)
 	return relative.normalized() * G * body_mass / (body_distance * body_distance) - body_position.normalized() * G * body_mass / (earth_distance * earth_distance)
 
+static func atmospheric_pressure(altitude: float) -> float:
+	var h := clampf(altitude, 0.0, ATMOSPHERE_HEIGHT)
+	const heights := [0.0, 11000.0, 20000.0, 32000.0, 47000.0, 51000.0, 71000.0, 84852.0]
+	const temperatures := [288.15, 216.65, 216.65, 228.65, 270.65, 270.65, 214.65, 186.946]
+	const lapse_rates := [-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0028, -0.002, 0.0]
+	const pressures := [101325.0, 22632.1, 5474.89, 868.019, 110.906, 66.9389, 3.95642, 0.3734]
+	var layer := 0
+	for i in range(heights.size() - 1):
+		if h >= heights[i + 1]:
+			layer = i + 1
+		else:
+			break
+	var base_height: float = heights[layer]
+	var base_temperature: float = temperatures[layer]
+	var lapse: float = lapse_rates[layer]
+	var delta_height := h - base_height
+	if absf(lapse) < 0.0000001:
+		return pressures[layer] * exp(-9.80665 * delta_height / (287.05287 * base_temperature))
+	var temperature := base_temperature + lapse * delta_height
+	return pressures[layer] * pow(temperature / base_temperature, -9.80665 / (lapse * 287.05287))
+
 static func atmospheric_density(altitude: float) -> float:
 	if altitude >= ATMOSPHERE_HEIGHT:
 		return 0.0
-	return SEA_LEVEL_DENSITY * exp(-maxf(0.0, altitude) / ATMOSPHERE_SCALE_HEIGHT)
+	var h := maxf(0.0, altitude)
+	var pressure := atmospheric_pressure(h)
+	var temperature := 288.15 - 0.0065 * minf(h, 11000.0)
+	if h > 11000.0:
+		temperature = 216.65
+		if h > 20000.0:
+			temperature += 0.001 * minf(h - 20000.0, 12000.0)
+		if h > 32000.0:
+			temperature += 0.0028 * minf(h - 32000.0, 15000.0)
+		if h > 47000.0:
+			temperature = 270.65
+		if h > 51000.0:
+			temperature -= 0.0028 * minf(h - 51000.0, 20000.0)
+		if h > 71000.0:
+			temperature -= 0.002 * minf(h - 71000.0, 13852.0)
+	return pressure / (287.05287 * maxf(150.0, temperature))
