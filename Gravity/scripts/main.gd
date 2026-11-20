@@ -927,7 +927,7 @@ func _show_flight_computer() -> void:
 		else:
 			var best: Dictionary = windows.best
 			var destination := "Moon" if destination_index == -1 else str(FlightComputer.PLANET_TARGETS[destination_index].get("name", "Unknown"))
-			report.text = "LAUNCH WINDOW SEARCH: %s\nDates sampled: %d\nBest sampled departure: in %d days\nDeparture Δv: %.0f m/s\nCapture Δv: %.0f m/s\nTotal Δv: %.0f m/s\nTransfer time: %.1f days\n\nThis is the best of the sampled dates and burn candidates, not a guaranteed global optimum. Use CALCULATE FLIGHT PLAN at the selected date for a higher-resolution search." % [destination, int(windows.dates_checked), int(best.departure_wait_days), float(best.departure_delta_v), float(best.capture_delta_v), float(best.total_delta_v), float(best.transfer_time) / 86400.0]
+			report.text = "LAUNCH WINDOW SEARCH: %s\nDates sampled: %d\nBest refined departure: in %.1f days\nDeparture Δv: %.0f m/s\nCapture Δv: %.0f m/s\nTotal Δv: %.0f m/s\nTransfer time: %.1f days\n\nThis is the best of the sampled dates and burn candidates, not a guaranteed global optimum. Use CALCULATE FLIGHT PLAN at the selected date for a higher-resolution search." % [destination, int(windows.dates_checked), float(best.departure_wait_days), float(best.departure_delta_v), float(best.capture_delta_v), float(best.total_delta_v), float(best.transfer_time) / 86400.0]
 	)
 	target.item_selected.connect(func(_index: int):
 		calculate_simulated_transfer = false
