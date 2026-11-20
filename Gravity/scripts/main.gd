@@ -131,6 +131,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _build_menu() -> void:
 	mode = "menu"
+	rebinding_action = ""
+	rebinding_button = null
 	for child in get_children():
 		child.queue_free()
 	var bg := ColorRect.new()
