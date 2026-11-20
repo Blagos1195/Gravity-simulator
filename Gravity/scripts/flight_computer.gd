@@ -286,7 +286,7 @@ static func _simulated_target_state(target_index: int, time_seconds: float) -> D
 	}
 
 
-static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0) -> Dictionary:
+static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false) -> Dictionary:
 	if target_index < -2 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Invalid target or no remaining manoeuvre capability."}
 	var initial_target := _simulated_target_state(target_index, start_time)
@@ -296,9 +296,9 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
 	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index <= -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
-	var magnitudes := [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.25, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v * 0.8, maximum_delta_v]
-	var direction_count := 24
-	var integration_steps := 480
+	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.25, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v * 0.8, maximum_delta_v]
+	var direction_count := 12 if coarse_search else 24
+	var integration_steps := 240 if coarse_search else 480
 	var best_score := INF
 	var best_plan: Dictionary = {}
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
@@ -373,6 +373,38 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 			"search_candidates": direction_count * magnitudes.size() * durations.size()
 		}
 	return best_plan
+
+
+static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 45) -> Dictionary:
+	if target_index < -1 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
+		return {"valid": false, "reason": "Select the Moon or a planet and provide a positive manoeuvre budget."}
+	var radius := start_position.length()
+	if radius < EARTH_RADIUS + 70000.0:
+		return {"valid": false, "reason": "A stable Earth departure orbit is required."}
+	var mu := G * PlanetarySystem.EARTH_MASS
+	var orbital_rate := sqrt(mu / pow(radius, 3.0))
+	var windows: Array[Dictionary] = []
+	var best_total := INF
+	var best_window: Dictionary = {}
+	var samples := maxi(2, int(ceil(float(scan_days) / float(interval_days))) + 1)
+	for sample_index in range(samples):
+		var wait_days := mini(scan_days, sample_index * interval_days)
+		var wait_seconds := float(wait_days) * 86400.0
+		var rotation := orbital_rate * wait_seconds
+		var future_position := start_position.rotated(rotation)
+		var future_velocity := start_velocity.rotated(rotation)
+		var plan := simulated_transfer_search(future_position, future_velocity, start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true)
+		if not bool(plan.get("valid", false)):
+			continue
+		plan["departure_wait_days"] = wait_days
+		plan["departure_time_seconds"] = start_time + wait_seconds
+		windows.append(plan)
+		if float(plan.get("total_delta_v", INF)) < best_total:
+			best_total = float(plan.total_delta_v)
+			best_window = plan
+	if best_window.is_empty():
+		return {"valid": false, "reason": "No sampled departure date produced a feasible simulated transfer.", "dates_checked": samples}
+	return {"valid": true, "best": best_window, "windows": windows, "dates_checked": samples}
 
 static func target_orbit_report(position: Vector2, velocity: Vector2, altitude: float) -> Dictionary:
 	var target_radius := EARTH_RADIUS + maxf(0.0, altitude)
