@@ -292,8 +292,8 @@ func _update_guidance(dt: float) -> void:
 						if bool(transfer.get("valid", false)):
 							autopilot_burn_remaining = float(transfer.get("departure_delta_v", 0.0))
 							autopilot_transfer_direction = float(transfer.get("direction", 1.0))
-							var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
-							autopilot_phase = "ALIGN_DEPARTURE" if wait_time <= 3600.0 else "WAIT_WINDOW"
+							var initial_window_wait := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
+							autopilot_phase = "ALIGN_DEPARTURE" if initial_window_wait <= 3600.0 else "WAIT_WINDOW"
 						else:
 							autopilot_phase = "FAILED"
 					else:
@@ -302,10 +302,10 @@ func _update_guidance(dt: float) -> void:
 				else:
 					thrust_key_down = fuel > 0.0
 			"WAIT_WINDOW":
-				var wait_time := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
-				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1F DAYS" % (wait_time / 86400.0)
+				var remaining_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
+				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1F DAYS" % (remaining_window / 86400.0)
 				thrust_key_down = false
-				if wait_time <= 3600.0:
+				if remaining_window <= 3600.0:
 					autopilot_phase = "ALIGN_DEPARTURE"
 			"ALIGN_DEPARTURE":
 				status_message = "AUTOPILOT  •  ALIGNING DEPARTURE ORBIT"
@@ -331,10 +331,10 @@ func _update_guidance(dt: float) -> void:
 			"FAILED":
 				status_message = "AUTOPILOT  •  BURN INCOMPLETE"
 				thrust_key_down = false
-		var target_direction := prograde
+		var autopilot_direction := prograde
 		if autopilot_phase in ["TRANSFER_BURN", "WAIT_WINDOW", "ALIGN_DEPARTURE"]:
-			target_direction = tangent * autopilot_transfer_direction
-		var target_rotation := target_direction.angle() - Vector2.UP.angle()
+			autopilot_direction = tangent * autopilot_transfer_direction
+		var target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
 		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 0.8, 0.0, 1.0))
 		return
 	elif velocity.length() > 1500.0:
