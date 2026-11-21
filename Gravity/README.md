@@ -7,6 +7,7 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Procedural starfield and vector-drawn spacecraft
 - Earth-relative Newtonian flight dynamics evaluated in a heliocentric inertial gravity frame, including differential solar, lunar and planetary perturbations
 - Time-dependent Keplerian planetary ephemerides for all eight planets, with position-consistent velocity estimates
+- Double-precision rocket and ephemeris coordinates for local gravity, atmosphere, encounter and trajectory calculations
 - Time-dependent circular Moon orbit and lunar gravity
 - Layered standard-atmosphere pressure and temperature model through 120 km
 - Vehicle assembly screen with 2–8 configurable stages and payload mass
