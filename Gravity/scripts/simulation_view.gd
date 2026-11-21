@@ -42,6 +42,8 @@ var autopilot_safety_margin := 0.10
 var autopilot_transfer_direction := 1.0
 var autopilot_arrival_burn_vector := Vector2.ZERO
 var autopilot_burn_direction := Vector2.ZERO
+var autopilot_route_nodes: Array[Dictionary] = []
+var autopilot_route_node_index := 0
 var autopilot_complete := false
 var autopilot_phase := "IDLE"
 var heat_flux_mw := 0.0
@@ -155,7 +157,7 @@ func _physics_step(dt: float) -> void:
 	var altitude := rocket_position.length() - EARTH_RADIUS
 	if guidance_enabled:
 		_update_guidance(dt)
-	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "COMPLETE", "FAILED"]:
+	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "ROUTE_COAST", "COMPLETE", "FAILED"]:
 		thrust_key_down = false
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
@@ -187,6 +189,15 @@ func _physics_step(dt: float) -> void:
 					autopilot_complete = true
 				else:
 					autopilot_phase = "FAILED"
+			elif autopilot_phase == "ROUTE_BURN":
+				autopilot_route_node_index += 1
+				if autopilot_route_node_index < autopilot_route_nodes.size():
+					autopilot_phase = "ROUTE_COAST"
+					status_message = "AUTOPILOT  •  COASTING TO NEXT MANOEUVRE"
+				else:
+					autopilot_phase = "COMPLETE"
+					autopilot_complete = true
+					status_message = "AUTOPILOT  •  ROUTE COMPLETE"
 			else:
 				autopilot_phase = "COMPLETE"
 				autopilot_complete = true
@@ -230,13 +241,18 @@ func _adaptive_step_size() -> float:
 	var burnout_limit := fuel / total_flow if thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
 	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, maximum_step)
 	var step_limit := minf(physics_limit, burnout_limit)
-	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN"] and autopilot_burn_remaining > 0.0 and total_flow > 0.0:
+	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and autopilot_burn_remaining > 0.0 and total_flow > 0.0:
 		var current_mass := maxf(1.0, _current_vehicle_mass())
 		var current_thrust := _engine_thrust(altitude)
 		var effective_exhaust_velocity := current_thrust / total_flow
 		if effective_exhaust_velocity > 0.0:
 			var required_propellant := current_mass * (1.0 - exp(-autopilot_burn_remaining / effective_exhaust_velocity))
 			step_limit = minf(step_limit, required_propellant / total_flow)
+	if autopilot_enabled and autopilot_phase == "ROUTE_COAST" and autopilot_route_node_index < autopilot_route_nodes.size():
+		var next_node: Dictionary = autopilot_route_nodes[autopilot_route_node_index]
+		var time_until_node: float = maxf(0.0, float(next_node.get("time", sim_time)) - sim_time)
+		if time_until_node > 0.0:
+			step_limit = minf(step_limit, time_until_node)
 	if autopilot_enabled and autopilot_phase in ["TRANSFER_COAST", "ARRIVAL_APPROACH"]:
 		var destination_state := _autopilot_target_state()
 		var relative_distance := rocket_position.distance_to(destination_state.position)
@@ -612,6 +628,34 @@ func _update_guidance(dt: float) -> void:
 				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
+				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
+					autopilot_phase = "FAILED"
+			"ROUTE_COAST":
+				thrust_key_down = false
+				if autopilot_route_node_index >= autopilot_route_nodes.size():
+					autopilot_phase = "COMPLETE"
+					autopilot_complete = true
+				else:
+					var route_node: Dictionary = autopilot_route_nodes[autopilot_route_node_index]
+					var node_time: float = float(route_node.get("time", sim_time))
+					status_message = "AUTOPILOT  •  COAST TO NODE %d  •  T+ %.1F MIN" % [autopilot_route_node_index + 1, maxf(0.0, node_time - sim_time) / 60.0]
+					if sim_time >= node_time:
+						var route_radial: Vector2 = guidance_position.normalized()
+						var route_tangent := Vector2(-route_radial.y, route_radial.x)
+						if guidance_position.cross(guidance_velocity) < 0.0:
+							route_tangent = -route_tangent
+						var route_burn_vector: Vector2 = route_tangent * float(route_node.get("prograde", 0.0)) + route_radial * float(route_node.get("radial", 0.0))
+						if route_burn_vector.length() < 0.1:
+							autopilot_route_node_index += 1
+						else:
+							autopilot_burn_direction = route_burn_vector.normalized()
+							autopilot_burn_remaining = route_burn_vector.length()
+							autopilot_phase = "ROUTE_BURN"
+			"ROUTE_BURN":
+				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0F M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
+				var route_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
+				rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
 				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 			"TRANSFER_BURN":
@@ -1192,6 +1236,8 @@ func get_save_data() -> Dictionary:
 		"landed_body_name": landed_body_name,
 		"autopilot_burn_direction_x": autopilot_burn_direction.x,
 		"autopilot_burn_direction_y": autopilot_burn_direction.y,
+		"autopilot_route_nodes": autopilot_route_nodes.duplicate(true),
+		"autopilot_route_node_index": autopilot_route_node_index,
 		"autopilot_complete": autopilot_complete,
 		"autopilot_phase": autopilot_phase,
 		"heat_shield_temperature": heat_shield_temperature,
@@ -1234,6 +1280,13 @@ func load_save_data(data: Dictionary) -> void:
 	crashed = bool(data.get("crashed", false))
 	landed_body_name = str(data.get("landed_body_name", "Earth"))
 	autopilot_burn_direction = Vector2(float(data.get("autopilot_burn_direction_x", 0.0)), float(data.get("autopilot_burn_direction_y", 0.0)))
+	autopilot_route_nodes.clear()
+	var saved_route_nodes: Variant = data.get("autopilot_route_nodes", [])
+	if saved_route_nodes is Array:
+		for saved_node in saved_route_nodes:
+			if saved_node is Dictionary:
+				autopilot_route_nodes.append(saved_node.duplicate(true))
+	autopilot_route_node_index = clampi(int(data.get("autopilot_route_node_index", 0)), 0, autopilot_route_nodes.size())
 	autopilot_complete = bool(data.get("autopilot_complete", false))
 	autopilot_phase = str(data.get("autopilot_phase", "IDLE"))
 	heat_shield_temperature = float(data.get("heat_shield_temperature", 290.0))
