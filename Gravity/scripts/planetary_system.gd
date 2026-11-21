@@ -106,10 +106,20 @@ static func moon_state(time_seconds: float) -> Dictionary:
 	var eccentric_rate := MOON_MEAN_MOTION / (1.0 - MOON_ORBIT_ECCENTRICITY * cos(eccentric_anomaly))
 	var vx := -MOON_ORBIT_RADIUS * sin(eccentric_anomaly) * eccentric_rate
 	var vy := MOON_ORBIT_RADIUS * root * cos(eccentric_anomaly) * eccentric_rate
-	var orbital_position := Vector2(x, y)
-	var position := orbital_position.rotated(perihelion)
-	var velocity := Vector2(vx, vy).rotated(perihelion) + Vector2(-position.y, position.x) * MOON_PERIHELION_RATE
-	return {"position": position, "velocity": velocity}
+	var perihelion_cos := cos(perihelion)
+	var perihelion_sin := sin(perihelion)
+	var position_x := x * perihelion_cos - y * perihelion_sin
+	var position_y := x * perihelion_sin + y * perihelion_cos
+	var velocity_x := vx * perihelion_cos - vy * perihelion_sin - position_y * MOON_PERIHELION_RATE
+	var velocity_y := vx * perihelion_sin + vy * perihelion_cos + position_x * MOON_PERIHELION_RATE
+	var position_components := PackedFloat64Array([position_x, position_y])
+	var velocity_components := PackedFloat64Array([velocity_x, velocity_y])
+	return {
+		"position": Vector2(position_x, position_y),
+		"position_components": position_components,
+		"velocity": Vector2(velocity_x, velocity_y),
+		"velocity_components": velocity_components
+	}
 
 static func moon_position(time_seconds: float) -> Vector2:
 	return moon_state(time_seconds).position
@@ -120,16 +130,16 @@ static func moon_velocity(time_seconds: float) -> Vector2:
 static func gravity_body_states(time_seconds: float) -> Dictionary:
 	var barycentre_state := _planet_heliocentric_state(PLANETS[2], time_seconds)
 	var moon_state_value := moon_state(time_seconds)
-	var moon_position_value: Vector2 = moon_state_value.position
-	var moon_velocity_value: Vector2 = moon_state_value.velocity
+	var moon_position_components: PackedFloat64Array = moon_state_value.position_components
+	var moon_velocity_components: PackedFloat64Array = moon_state_value.velocity_components
+	var moon_position_value := Vector2(moon_position_components[0], moon_position_components[1])
+	var moon_velocity_value := Vector2(moon_velocity_components[0], moon_velocity_components[1])
 	var earth_moon_ratio: float = MOON_MASS / (EARTH_MASS + MOON_MASS)
 	var earth_state := _earth_heliocentric_state(time_seconds)
 	var earth_position: Vector2 = earth_state.position
 	var earth_velocity: Vector2 = earth_state.velocity
 	var earth_position_components: PackedFloat64Array = earth_state.position_components
 	var earth_velocity_components: PackedFloat64Array = earth_state.velocity_components
-	var moon_position_components := PackedFloat64Array([moon_position_value.x, moon_position_value.y])
-	var moon_velocity_components := PackedFloat64Array([moon_velocity_value.x, moon_velocity_value.y])
 	var bodies: Array[Dictionary] = [
 		{"name": "Sun", "mass": SUN_MASS, "position": -earth_position, "position_components": PackedFloat64Array([-earth_position_components[0], -earth_position_components[1]]), "velocity": -earth_velocity, "velocity_components": PackedFloat64Array([-earth_velocity_components[0], -earth_velocity_components[1]]), "radius": 6.957e8},
 		{"name": "Moon", "mass": MOON_MASS, "position": moon_position_value, "position_components": moon_position_components, "velocity": moon_velocity_value, "velocity_components": moon_velocity_components, "radius": MOON_RADIUS}
@@ -249,16 +259,17 @@ static func _sun_relative_position(time_seconds: float) -> Vector2:
 
 static func _earth_heliocentric_state(time_seconds: float) -> Dictionary:
 	var barycentre := _planet_heliocentric_state(PLANETS[2], time_seconds)
-	var moon_position_value := moon_position(time_seconds)
-	var moon_velocity_value := moon_velocity(time_seconds)
+	var moon_state_value := moon_state(time_seconds)
+	var moon_position_components: PackedFloat64Array = moon_state_value.position_components
+	var moon_velocity_components: PackedFloat64Array = moon_state_value.velocity_components
 	var earth_moon_ratio := MOON_MASS / (EARTH_MASS + MOON_MASS)
 	var position_components := PackedFloat64Array([
-		barycentre.position_components[0] - moon_position_value.x * earth_moon_ratio,
-		barycentre.position_components[1] - moon_position_value.y * earth_moon_ratio
+		barycentre.position_components[0] - moon_position_components[0] * earth_moon_ratio,
+		barycentre.position_components[1] - moon_position_components[1] * earth_moon_ratio
 	])
 	var velocity_components := PackedFloat64Array([
-		barycentre.velocity_components[0] - moon_velocity_value.x * earth_moon_ratio,
-		barycentre.velocity_components[1] - moon_velocity_value.y * earth_moon_ratio
+		barycentre.velocity_components[0] - moon_velocity_components[0] * earth_moon_ratio,
+		barycentre.velocity_components[1] - moon_velocity_components[1] * earth_moon_ratio
 	])
 	return {
 		"position": Vector2(position_components[0], position_components[1]),
