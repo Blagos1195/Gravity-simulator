@@ -16,8 +16,12 @@ func _initialize() -> void:
 	assert(absf(float(state.get("apoapsis", 0.0)) - radius) < 1.0)
 	assert(absf(float(state.get("periapsis", 0.0)) - radius) < 1.0)
 
-	var burn := FlightComputer.circularisation_burn(Vector2(radius, 0.0), Vector2(0.0, circular_speed * 0.9))
+	var burn := FlightComputer.circularisation_burn(Vector2(radius, 0.0), Vector2(120.0, circular_speed * 0.9))
 	assert(float(burn.get("delta_v", 0.0)) > 0.0)
+	var corrected_orbit := FlightComputer.orbital_state(Vector2(radius, 0.0), Vector2(120.0, circular_speed * 0.9) + Vector2(burn.get("burn_vector", Vector2.ZERO)))
+	assert(bool(corrected_orbit.get("bound", false)))
+	assert(absf(float(corrected_orbit.get("eccentricity", 1.0))) < 0.000001)
+	assert(float(corrected_orbit.get("periapsis", 0.0)) > FlightComputer.EARTH_RADIUS + 70000.0)
 	assert(FlightComputer._segment_intersects_circle(Vector2(-10.0, 0.0), Vector2(10.0, 0.0), Vector2.ZERO, 2.0))
 	assert(FlightComputer._segment_intersects_circle(Vector2(0.0, 0.0), Vector2(0.0, 0.0), Vector2.ZERO, 2.0))
 	assert(not FlightComputer._segment_intersects_circle(Vector2(-10.0, 3.0), Vector2(10.0, 3.0), Vector2.ZERO, 2.0))
