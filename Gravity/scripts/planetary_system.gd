@@ -57,7 +57,7 @@ static func _solve_kepler(mean_anomaly: float, eccentricity: float) -> float:
 			break
 	return eccentric
 
-static func _planet_position_at_century(planet: Dictionary, centuries: float) -> Vector2:
+static func _planet_position_components_at_century(planet: Dictionary, centuries: float) -> PackedFloat64Array:
 	var a := (float(planet.a) + float(planet.adot) * centuries) * ASTRONOMICAL_UNIT
 	var eccentricity := float(planet.e) + float(planet.edot) * centuries
 	var inclination := deg_to_rad(float(planet.i) + float(planet.idot) * centuries)
@@ -71,17 +71,29 @@ static func _planet_position_at_century(planet: Dictionary, centuries: float) ->
 	var argument := perihelion - node
 	var x := (cos(argument) * cos(node) - sin(argument) * sin(node) * cos(inclination)) * x_orbit + (-sin(argument) * cos(node) - cos(argument) * sin(node) * cos(inclination)) * y_orbit
 	var y := (cos(argument) * sin(node) + sin(argument) * cos(node) * cos(inclination)) * x_orbit + (-sin(argument) * sin(node) + cos(argument) * cos(node) * cos(inclination)) * y_orbit
-	return Vector2(x, y)
+	return PackedFloat64Array([x, y])
+
+static func _planet_position_at_century(planet: Dictionary, centuries: float) -> Vector2:
+	var components := _planet_position_components_at_century(planet, centuries)
+	return Vector2(components[0], components[1])
 
 static func _planet_heliocentric_state(planet: Dictionary, time_seconds: float) -> Dictionary:
 	var centuries := _ephemeris_centuries(time_seconds)
 	var step_seconds := minf(float(planet.orbital_period) * 86400.0 * 0.001, 86400.0)
 	var step_centuries := step_seconds / (86400.0 * J2000_CENTURY_DAYS)
-	var position := _planet_position_at_century(planet, centuries)
-	var previous_position := _planet_position_at_century(planet, centuries - step_centuries)
-	var next_position := _planet_position_at_century(planet, centuries + step_centuries)
-	var velocity := (next_position - previous_position) / (2.0 * step_seconds)
-	return {"position": position, "velocity": velocity}
+	var position_components := _planet_position_components_at_century(planet, centuries)
+	var previous_components := _planet_position_components_at_century(planet, centuries - step_centuries)
+	var next_components := _planet_position_components_at_century(planet, centuries + step_centuries)
+	var velocity_components := PackedFloat64Array([
+		(next_components[0] - previous_components[0]) / (2.0 * step_seconds),
+		(next_components[1] - previous_components[1]) / (2.0 * step_seconds)
+	])
+	return {
+		"position": Vector2(position_components[0], position_components[1]),
+		"position_components": position_components,
+		"velocity": Vector2(velocity_components[0], velocity_components[1]),
+		"velocity_components": velocity_components
+	}
 
 static func moon_state(time_seconds: float) -> Dictionary:
 	var days_since_j2000 := EPHEMERIS_EPOCH_JD - J2000_JD + time_seconds / 86400.0
@@ -188,10 +200,22 @@ static func _sun_relative_position(time_seconds: float) -> Vector2:
 
 static func _earth_heliocentric_state(time_seconds: float) -> Dictionary:
 	var barycentre := _planet_heliocentric_state(PLANETS[2], time_seconds)
+	var moon_position_value := moon_position(time_seconds)
+	var moon_velocity_value := moon_velocity(time_seconds)
 	var earth_moon_ratio := MOON_MASS / (EARTH_MASS + MOON_MASS)
+	var position_components := PackedFloat64Array([
+		barycentre.position_components[0] - moon_position_value.x * earth_moon_ratio,
+		barycentre.position_components[1] - moon_position_value.y * earth_moon_ratio
+	])
+	var velocity_components := PackedFloat64Array([
+		barycentre.velocity_components[0] - moon_velocity_value.x * earth_moon_ratio,
+		barycentre.velocity_components[1] - moon_velocity_value.y * earth_moon_ratio
+	])
 	return {
-		"position": barycentre.position - moon_position(time_seconds) * earth_moon_ratio,
-		"velocity": barycentre.velocity - moon_velocity(time_seconds) * earth_moon_ratio
+		"position": Vector2(position_components[0], position_components[1]),
+		"position_components": position_components,
+		"velocity": Vector2(velocity_components[0], velocity_components[1]),
+		"velocity_components": velocity_components
 	}
 
 static func planet_position_relative_to_earth(planet_name: String, time_seconds: float) -> Vector2:
@@ -223,10 +247,17 @@ static func _find_planet(planet_name: String) -> Dictionary:
 			return planet
 	return {}
 
+static func _planet_relative_position_components(planet: Dictionary, time_seconds: float) -> PackedFloat64Array:
+	var earth_state := _earth_heliocentric_state(time_seconds)
+	var planet_state := _planet_heliocentric_state(planet, time_seconds)
+	return PackedFloat64Array([
+		planet_state.position_components[0] - earth_state.position_components[0],
+		planet_state.position_components[1] - earth_state.position_components[1]
+	])
+
 static func _planet_relative_position(planet: Dictionary, time_seconds: float) -> Vector2:
-	var earth_position: Vector2 = _earth_heliocentric_state(time_seconds).position
-	var planet_position: Vector2 = _planet_heliocentric_state(planet, time_seconds).position
-	return planet_position - earth_position
+	var components := _planet_relative_position_components(planet, time_seconds)
+	return Vector2(components[0], components[1])
 
 static func _differential_body_gravity(position: Vector2, body_mass: float, body_position: Vector2, body_radius: float = 1.0e7) -> Vector2:
 	var relative := body_position - position
