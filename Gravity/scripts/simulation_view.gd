@@ -550,23 +550,45 @@ func _surface_body_state(body_name: String) -> Dictionary:
 		if str(body.get("name", "")) == body_name:
 			return body.duplicate()
 	return {}
-func _nearest_body_state(position: Vector2) -> Dictionary:
+func _body_position_components(body: Dictionary) -> PackedFloat64Array:
+	var body_position: Vector2 = body.get("position", Vector2.ZERO)
+	return body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+
+func _relative_position_to_body(body: Dictionary, position_components: PackedFloat64Array = PackedFloat64Array()) -> Vector2:
+	var components := rocket_position_precise if position_components.size() < 2 else position_components
+	var body_components := _body_position_components(body)
+	return Vector2(components[0] - body_components[0], components[1] - body_components[1])
+
+func _set_rocket_position_relative_to_body(body: Dictionary, relative_position: Vector2) -> void:
+	var body_components := _body_position_components(body)
+	_set_rocket_position_components(body_components[0] + relative_position.x, body_components[1] + relative_position.y)
+
+func _nearest_body_state(position: Vector2, position_components: PackedFloat64Array = PackedFloat64Array()) -> Dictionary:
 	var states: Dictionary = _ephemeris_states_at(sim_time)
+	var components := position_components
+	if components.size() < 2:
+		components = rocket_position_precise if position == rocket_position else PackedFloat64Array([position.x, position.y])
 	var nearest: Dictionary = {}
 	var nearest_distance: float = INF
 	for body in states.get("surface_bodies", []):
 		var candidate: Dictionary = body.duplicate()
-		var candidate_distance: float = position.distance_to(Vector2(candidate.get("position", Vector2.ZERO)))
+		var body_components := _body_position_components(candidate)
+		var delta_x: float = components[0] - body_components[0]
+		var delta_y: float = components[1] - body_components[1]
+		var candidate_distance := sqrt(delta_x * delta_x + delta_y * delta_y)
 		if candidate_distance < nearest_distance:
 			nearest = candidate
 			nearest_distance = candidate_distance
+			nearest["relative_position"] = Vector2(delta_x, delta_y)
 	if nearest.is_empty():
 		return {}
 	if nearest_distance > float(nearest.get("soi", 0.0)):
 		nearest = _surface_body_state("Earth")
-		nearest_distance = position.length()
+		nearest_distance = sqrt(components[0] * components[0] + components[1] * components[1])
+		nearest["relative_position"] = Vector2(components[0], components[1])
 	nearest["distance"] = nearest_distance
 	return nearest
+
 func _handle_body_contact() -> void:
 	var bodies: Array[Dictionary] = [
 		_surface_body_state("Earth"),
