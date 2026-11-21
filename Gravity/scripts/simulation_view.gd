@@ -474,7 +474,7 @@ func _begin_arrival_capture(target_state: Dictionary) -> void:
 		autopilot_phase = "ARRIVAL_CAPTURE_BURN"
 
 func _ephemeris_states_at(time_seconds: float) -> Dictionary:
-	if ephemeris_cache.is_empty() or time_seconds < ephemeris_cache_time or time_seconds - ephemeris_cache_time >= 10.0:
+	if ephemeris_cache.is_empty() or time_seconds < ephemeris_cache_time or time_seconds - ephemeris_cache_time >= 0.5:
 		ephemeris_cache = PlanetarySystem.gravity_body_states(time_seconds)
 		ephemeris_cache_time = time_seconds
 		ephemeris_output_cache.clear()
