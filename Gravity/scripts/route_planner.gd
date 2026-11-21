@@ -312,7 +312,7 @@ func _append_integrated_path(path: PackedVector2Array, position: Vector2, veloci
 		sample_velocity = half_velocity + second_acceleration * step * 0.5
 		sample_position = next_position
 		path.append(sample_position)
-	return [path, sample_position, sample_velocity]
+	return {"path": path, "position": sample_position, "velocity": sample_velocity}
 
 func _build_prediction_paths() -> void:
 	var current_path := PackedVector2Array()
@@ -325,8 +325,8 @@ func _build_prediction_paths() -> void:
 		if semi_major_axis > 0.0:
 			orbit_duration = TAU * sqrt(pow(semi_major_axis, 3.0) / gravitational_parameter)
 	orbit_duration = clampf(orbit_duration, 60.0, 30.0 * 86400.0)
-	var current_result: Array = _append_integrated_path(current_path, relative_position, relative_velocity, orbit_duration, 180)
-	current_path = current_result[0]
+	var current_result: Dictionary = _append_integrated_path(current_path, relative_position, relative_velocity, orbit_duration, 180)
+	current_path = current_result.get("path", PackedVector2Array())
 	var plan_position: Vector2 = relative_position
 	var plan_velocity: Vector2 = relative_velocity
 	var elapsed := 0.0
@@ -338,9 +338,9 @@ func _build_prediction_paths() -> void:
 			var coast_steps: int = mini(3000 - integrated_steps, maxi(1, int(ceil(coast_duration / 120.0))))
 			if coast_steps <= 0:
 				break
-			var coast_result: Array = _append_integrated_path(planned_path, plan_position, plan_velocity, coast_duration, coast_steps)
-			plan_position = coast_result[1]
-			plan_velocity = coast_result[2]
+			var coast_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, coast_duration, coast_steps)
+			plan_position = coast_result.get("position", plan_position)
+			plan_velocity = coast_result.get("velocity", plan_velocity)
 			integrated_steps += coast_steps
 		var radial: Vector2 = plan_position.normalized()
 		var tangent := Vector2(-radial.y, radial.x)
@@ -357,7 +357,7 @@ func _build_prediction_paths() -> void:
 			final_duration = TAU * sqrt(pow(final_axis, 3.0) / gravitational_parameter)
 	final_duration = clampf(final_duration, 60.0, 30.0 * 86400.0)
 	var remaining_steps: int = maxi(1, 3000 - integrated_steps)
-	var final_result: Array = _append_integrated_path(planned_path, plan_position, plan_velocity, final_duration, remaining_steps)
+	var final_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, final_duration, remaining_steps)
 	orbit_plot.set_paths(current_path, planned_path, markers, float(current_body.get("radius", 0.0)), relative_position)
 	if not nodes.is_empty():
 		var periapsis_altitude: float = (float(final_orbit.get("periapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0
