@@ -30,3 +30,5 @@ jobs:
         run: godot --headless --path Gravity --script res://tests/rocket_design_test.gd --quit-after 1
       - name: Test flight computer calculations
         run: godot --headless --path Gravity --script res://tests/flight_computer_test.gd --quit-after 1
+      - name: Test long-duration orbital stability
+        run: godot --headless --path Gravity --script res://tests/orbital_stability_test.gd --quit-after 1
