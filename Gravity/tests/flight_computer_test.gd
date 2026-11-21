@@ -243,6 +243,7 @@ func _initialize() -> void:
 	cached_simulation.autopilot_phase = "IDLE"
 	cached_simulation.autopilot_burn_remaining = 0.0
 	cached_simulation.time_warp = 1000.0
+	cached_simulation.landed = false
 	cached_simulation.sim_time = 0.0
 	cached_simulation._process(0.016)
 	assert(cached_simulation.sim_time >= 15.9)
