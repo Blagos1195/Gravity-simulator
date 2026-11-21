@@ -17,6 +17,7 @@ var relative_position := Vector2.ZERO
 var relative_velocity := Vector2.ZERO
 var gravitational_parameter := 0.0
 var available_delta_v := 0.0
+var initial_available_delta_v := 0.0
 var nodes: Array[Dictionary] = []
 var selected_node_index := -1
 var loading_node := false
@@ -109,6 +110,9 @@ class OrbitPlot extends Control:
 func configure(simulation_node: Control, design: Dictionary) -> void:
 	simulation = simulation_node
 	rocket_design = design.duplicate(true)
+	var initial_stages: Array = rocket_design.get("stages", [])
+	if not initial_stages.is_empty():
+		initial_available_delta_v = FlightComputer.available_delta_v(rocket_design, 0, float(initial_stages[0].get("fuel_capacity", 0.0)))
 	title = "FLIGHT COMPUTER  •  ORBITAL ROUTE PLANNER"
 	size = Vector2i(980, 820)
 	min_size = Vector2i(760, 650)
@@ -489,9 +493,11 @@ func _update_manoeuvre() -> void:
 		if Vector2(float(node.get("prograde", 0.0)), float(node.get("radial", 0.0))).length() < 0.1:
 			valid_nodes = false
 	autopilot_button.disabled = landed_state or crashed_state or not valid_nodes or total_planned_delta_v > available_delta_v
-	burn_report.text = "PLANNED NODES: %d   •   TOTAL ΔV: %.1f m/s   •   AVAILABLE ΔV: %.1f m/s   •   %s" % [
+	var delta_v_used := maxf(0.0, initial_available_delta_v - available_delta_v)
+	burn_report.text = "PLANNED NODES: %d   •   PLANNED ΔV: %.1f m/s   •   USED: %.1f m/s   •   REMAINING: %.1f m/s   •   %s" % [
 		nodes.size(),
 		total_planned_delta_v,
+		delta_v_used,
 		available_delta_v,
 		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
 	]
