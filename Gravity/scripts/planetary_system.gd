@@ -229,9 +229,12 @@ static func planet_velocity_relative_to_earth(planet_name: String, time_seconds:
 	var planet := _find_planet(planet_name)
 	if planet.is_empty() or planet_name == "Earth":
 		return Vector2.ZERO
-	var earth_velocity: Vector2 = _earth_heliocentric_state(time_seconds).velocity
-	var planet_velocity: Vector2 = _planet_heliocentric_state(planet, time_seconds).velocity
-	return planet_velocity - earth_velocity
+	var earth_state := _earth_heliocentric_state(time_seconds)
+	var planet_state := _planet_heliocentric_state(planet, time_seconds)
+	return Vector2(
+		planet_state.velocity_components[0] - earth_state.velocity_components[0],
+		planet_state.velocity_components[1] - earth_state.velocity_components[1]
+	)
 
 static func moon_soi_radius() -> float:
 	return MOON_ORBIT_RADIUS * pow(MOON_MASS / (3.0 * EARTH_MASS), 1.0 / 3.0)
