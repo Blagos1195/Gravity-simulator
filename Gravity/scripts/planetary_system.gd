@@ -75,7 +75,7 @@ static func _planet_position_at_century(planet: Dictionary, centuries: float) ->
 
 static func _planet_heliocentric_state(planet: Dictionary, time_seconds: float) -> Dictionary:
 	var centuries := _ephemeris_centuries(time_seconds)
-	var step_seconds := 30.0
+	var step_seconds := minf(float(planet.orbital_period) * 86400.0 * 0.001, 86400.0)
 	var step_centuries := step_seconds / (86400.0 * J2000_CENTURY_DAYS)
 	var position := _planet_position_at_century(planet, centuries)
 	var previous_position := _planet_position_at_century(planet, centuries - step_centuries)
