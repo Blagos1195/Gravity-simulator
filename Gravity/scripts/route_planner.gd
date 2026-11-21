@@ -328,7 +328,10 @@ func _refresh_state() -> void:
 	relative_position = rocket_position - body_position
 	relative_velocity = rocket_velocity - body_velocity
 	gravitational_parameter = FlightComputer.G * float(current_body.get("mass", 0.0))
-	_update_manoeuvre()
+	if has_route_target:
+		_calculate_route()
+	else:
+		_update_manoeuvre()
 
 func _add_node() -> void:
 	if not is_instance_valid(simulation):
@@ -415,8 +418,8 @@ func _solve_lambert(start_position: Vector2, finish_position: Vector2, duration:
 	if absf(1.0 - cosine) < 0.000001 or absf(sine) < 0.000001:
 		return {"valid": false, "reason": "Destination is too close to a zero- or half-turn geometry."}
 	var parameter_a := sine * sqrt(radius_start * radius_end / (1.0 - cosine))
-	if parameter_a <= 0.0:
-		return {"valid": false, "reason": "The selected destination requires the unsupported long-way transfer direction."}
+	if absf(parameter_a) < 0.000001:
+		return {"valid": false, "reason": "Transfer geometry is singular."}
 	var target_time := sqrt(gravitational_parameter) * duration
 	var lower := -39.0
 	var upper := 39.0
@@ -676,7 +679,7 @@ func _update_manoeuvre() -> void:
 	_build_prediction_paths()
 	var landed_state: bool = bool(simulation.get("landed"))
 	var crashed_state: bool = bool(simulation.get("crashed"))
-	var valid_nodes: bool = not nodes.is_empty()
+	var valid_nodes: bool = not nodes.is_empty() and (not has_route_target or is_finite(route_delta_v))
 	for node in nodes:
 		if Vector2(float(node.get("prograde", 0.0)), float(node.get("radial", 0.0))).length() < 0.1:
 			valid_nodes = false
@@ -688,8 +691,13 @@ func _update_manoeuvre() -> void:
 		"NO SOLUTION" if not is_finite(route_delta_v) else "%.1f m/s" % route_delta_v if has_route_target else "N/A",
 		delta_v_used,
 		available_delta_v,
-		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
+		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "NO VALID ROUTE SOLUTION" if has_route_target and not is_finite(route_delta_v) else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
 	]
+	if is_instance_valid(route_report):
+		if has_route_target:
+			route_report.text = "%s   •   FLIGHT TIME %.2f HOURS   •   TARGET ALTITUDE %.1f km" % [route_status, route_duration / 3600.0, (route_target.length() - float(current_body.get("radius", 0.0))) / 1000.0]
+		else:
+			route_report.text = route_status
 
 func _send_to_autopilot() -> void:
 	if not is_instance_valid(simulation) or autopilot_button.disabled:
