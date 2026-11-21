@@ -3,6 +3,7 @@ extends Control
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
+const RoutePlanner = preload("res://scripts/route_planner.gd")
 const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
 
@@ -663,6 +664,7 @@ func _build_flight_hud() -> void:
 	right.add_child(slot_picker)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
+	_add_button(right, "AUTOPILOT", _show_autopilot_panel)
 	_add_button(right, "FLIGHT COMPUTER", _show_flight_computer)
 	_add_button(right, "PREDICTED PATH  [P]", func():
 		sim.show_predicted_trajectory = not sim.show_predicted_trajectory
@@ -725,9 +727,9 @@ func _show_autosave_history() -> void:
 	_add_button(layout, "CLOSE", func(): window.queue_free())
 	window.popup_centered()
 
-func _show_flight_computer() -> void:
+func _show_autopilot_panel() -> void:
 	var window := Window.new()
-	window.title = "FLIGHT COMPUTER"
+	window.title = "AUTOPILOT CONTROL"
 	window.size = Vector2i(520, 720)
 	window.min_size = Vector2i(460, 600)
 	window.unresizable = false
@@ -742,12 +744,12 @@ func _show_flight_computer() -> void:
 	root.offset_bottom = -18
 	window.add_child(root)
 	var heading := Label.new()
-	heading.text = "ORBITAL FLIGHT COMPUTER"
+	heading.text = "AUTOPILOT CONTROL"
 	heading.add_theme_font_size_override("font_size", 22)
 	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 	root.add_child(heading)
 	var description := Label.new()
-	description.text = "Choose a destination and tune the trajectory search between fuel use and travel time. The reserve setting controls how much vehicle delta-v the planner is allowed to spend."
+	description.text = "Choose a destination, configure automatic guidance and monitor fuel margins. Manual route design is available in the Flight Computer."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 	var calculate_simulated_transfer := false
@@ -1026,6 +1028,12 @@ func _show_flight_computer() -> void:
 	)
 	update_report.call()
 	window.popup_centered()
+
+func _show_flight_computer() -> void:
+	var planner = RoutePlanner.new()
+	add_child(planner)
+	planner.configure(sim, rocket_design)
+	planner.popup_centered()
 
 func _pause_simulation() -> void:
 	if sim:
