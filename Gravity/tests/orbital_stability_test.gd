@@ -2,6 +2,7 @@ extends SceneTree
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
+const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 
 func _initialize() -> void:
@@ -18,7 +19,7 @@ func _initialize() -> void:
 func _validate_orbit(orbit_name: String, altitude: float) -> void:
 	var radius: float = FlightComputer.EARTH_RADIUS + altitude
 	var speed: float = FlightComputer.circular_orbit_speed(radius)
-	var period: float = TAU * sqrt(radius * radius * radius / (FlightComputer.G * FlightComputer.EARTH_MASS))
+	var period: float = TAU * sqrt(radius * radius * radius / (FlightComputer.G * PlanetarySystem.EARTH_MASS))
 	var simulation: Variant = SimulationView.new()
 	simulation.set_rocket_design(RocketDesign.create_default())
 	simulation.realism = "Arcade"
