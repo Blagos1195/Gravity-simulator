@@ -28,12 +28,12 @@ func _validate_leo_autopilot_mission() -> void:
 	var elapsed := 0.0
 	var iterations := 0
 	while elapsed < 2400.0 and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
-		var step: float = minf(simulation._adaptive_step_size(), 0.1)
+		var step: float = simulation._adaptive_step_size()
 		assert(step > 0.000001)
 		simulation._physics_step(step)
 		elapsed += step
 		iterations += 1
-		assert(iterations < 100000)
+		assert(iterations < 30000)
 	assert(not simulation.crashed)
 	assert(simulation.autopilot_complete)
 	assert(simulation.autopilot_phase == "COMPLETE")
