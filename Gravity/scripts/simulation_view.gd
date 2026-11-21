@@ -19,6 +19,9 @@ var career_enabled := false
 var paused := false
 var sim_time := 0.0
 var time_warp := 1.0
+var simulation_time_backlog := 0.0
+var ephemeris_cache_time := -INF
+var ephemeris_cache: Dictionary = {}
 var rocket_position := Vector2(0, -EARTH_RADIUS - 2.0)
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
@@ -105,18 +108,21 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not paused and not crashed:
 		var current_body := _nearest_body_state(rocket_position)
-		var near_body := float(current_body.distance) < float(current_body.soi)
-		var effective_warp := minf(time_warp, 100.0) if near_body else time_warp
-		var remaining := effective_warp * delta
-		if landed and not thrust_key_down:
-			_physics_step(remaining)
-		else:
-			var iterations := 0
-			while remaining > 0.000001 and iterations < 20000:
-				var step_delta := minf(remaining, _adaptive_step_size())
-				_physics_step(step_delta)
-				remaining -= step_delta
-				iterations += 1
+		var altitude: float = maxf(0.0, float(current_body.distance) - float(current_body.radius))
+		var near_atmosphere: bool = float(current_body.distance) < float(current_body.soi) and altitude < 80000.0
+		var effective_warp: float = minf(time_warp, 100.0) if near_atmosphere else time_warp
+		simulation_time_backlog += effective_warp * delta
+		var iterations := 0
+		var maximum_iterations := 4000
+		while simulation_time_backlog > 0.000001 and iterations < maximum_iterations:
+			var step_delta: float = minf(simulation_time_backlog, _adaptive_step_size())
+			if step_delta <= 0.000001:
+				break
+			_physics_step(step_delta)
+			simulation_time_backlog = maxf(0.0, simulation_time_backlog - step_delta)
+			iterations += 1
+	else:
+		simulation_time_backlog = 0.0
 	if show_predicted_trajectory:
 		prediction_timer += delta
 		if prediction_timer >= 0.35:
@@ -166,7 +172,7 @@ func _physics_step(dt: float) -> void:
 	var mass_before := maxf(1.0, _current_vehicle_mass())
 	var mass_after := maxf(1.0, mass_before - fuel_used)
 	var mass_mid := (mass_before + mass_after) * 0.5
-	var thrust_force := _engine_thrust(maxf(0.0, altitude)) * throttle
+	var thrust_force: float = _engine_thrust(maxf(0.0, altitude)) * throttle if throttle > 0.0 else 0.0
 	var thrust_delta_v := 0.0
 	if fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
@@ -202,18 +208,20 @@ func _physics_step(dt: float) -> void:
 				autopilot_phase = "COMPLETE"
 				autopilot_complete = true
 				status_message = "AUTOPILOT  •  MANOEUVRE BURN COMPLETE"
-	var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, start_time)
+	var gravity_states: Dictionary = _ephemeris_states_at(start_time + dt * 0.5)
+	var initial_gravity: Vector2 = PlanetarySystem.gravity_acceleration_from_states(rocket_position, gravity_states)
 	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid, start_time)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	var next_position := rocket_position + half_velocity * dt
-	var final_gravity := PlanetarySystem.gravity_acceleration(next_position, end_time)
+	var final_gravity: Vector2 = PlanetarySystem.gravity_acceleration_from_states(next_position, gravity_states)
 	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, end_time)
 	velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	rocket_position = next_position
 	sim_time = end_time
 	fuel = maxf(0.0, fuel - fuel_used)
-	_update_flight_environment()
-	_update_heating(dt)
+	var final_atmosphere: Dictionary = _atmosphere_at(rocket_position, velocity, end_time)
+	_update_flight_environment(final_atmosphere)
+	_update_heating(dt, final_atmosphere)
 	if fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
 	_handle_body_contact()
@@ -223,15 +231,17 @@ func _physics_step(dt: float) -> void:
 
 func _adaptive_step_size() -> float:
 	var body := _nearest_body_state(rocket_position)
-	var radius := maxf(float(body.radius), float(body.distance))
-	var altitude := maxf(0.0, float(body.distance) - float(body.radius))
-	var gravity := G * float(body.mass) / (radius * radius)
-	var orbital_limit := 0.015 * sqrt(radius / maxf(0.001, gravity))
-	var speed: float = (velocity - body.velocity).length()
-	var deep_space := altitude > 1.0e8
-	var maximum_step := 30.0 if deep_space else (1.0 if altitude > 80000.0 else 0.25)
-	var travel_distance_limit := 2500.0 if altitude > 80000.0 else 250.0
-	var travel_limit := travel_distance_limit / maxf(100.0, speed) if not deep_space else 1000000.0 / maxf(100.0, speed)
+	var radius: float = maxf(float(body.radius), float(body.distance))
+	var altitude: float = maxf(0.0, float(body.distance) - float(body.radius))
+	var gravity: float = G * float(body.mass) / (radius * radius)
+	var orbital_limit: float = 0.015 * sqrt(radius / maxf(0.001, gravity))
+	var speed: float = (velocity - Vector2(body.velocity)).length()
+	var deep_space: bool = altitude > 1.0e8
+	var maximum_step: float = 1800.0 if deep_space else (180.0 if altitude > 80000.0 else 0.25)
+	var travel_distance_limit: float = maxf(100000.0, radius * 0.01) if altitude > 80000.0 else 250.0
+	if deep_space:
+		travel_distance_limit = maxf(50000000.0, radius * 0.01)
+	var travel_limit: float = travel_distance_limit / maxf(100.0, speed)
 	var drag_acceleration := _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass())).length()
 	var drag_limit := 0.08 * speed / drag_acceleration if drag_acceleration > 0.01 else maximum_step
 	var active := _active_stage_data()
@@ -286,20 +296,21 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: 
 		}
 	if position.length() < 1.0e8:
 		return best
-	for body in PlanetarySystem.PLANETS:
-		var body_name := str(body.name)
+	var ephemeris: Dictionary = _ephemeris_states_at(sample_time)
+	for body in ephemeris.get("surface_bodies", []):
+		var body_name: String = str(body.get("name", ""))
 		if body_name == "Earth":
 			continue
-		var body_position := PlanetarySystem.planet_position_relative_to_earth(body_name, sample_time)
-		var relative_position := position - body_position
-		var body_altitude := relative_position.length() - float(body.radius)
-		var density := PlanetarySystem.planetary_atmosphere_density(body_name, body_altitude)
-		if density <= float(best.density):
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_velocity: Vector2 = body.get("velocity", Vector2.ZERO)
+		var relative_position: Vector2 = position - body_position
+		var body_altitude: float = relative_position.length() - float(body.get("radius", 0.0))
+		var density: float = PlanetarySystem.planetary_atmosphere_density(body_name, body_altitude)
+		if density <= float(best.get("density", 0.0)):
 			continue
-		var body_velocity := PlanetarySystem.planet_velocity_relative_to_earth(body_name, sample_time)
-		var atmospheric_rotation := Vector2(-relative_position.y, relative_position.x) * PlanetarySystem.planetary_rotation_rate(body_name)
-		var gas_constant := 188.9 if body_name in ["Venus", "Mars"] else 3500.0
-		var gamma := 1.3 if body_name in ["Venus", "Mars"] else 1.4
+		var atmospheric_rotation: Vector2 = Vector2(-relative_position.y, relative_position.x) * float(body.get("rotation_rate", 0.0))
+		var gas_constant: float = 188.9 if body_name in ["Venus", "Mars"] else 3500.0
+		var gamma: float = 1.3 if body_name in ["Venus", "Mars"] else 1.4
 		best = {
 			"body_name": body_name,
 			"altitude": body_altitude,
@@ -346,8 +357,7 @@ func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mas
 	var lift_direction := Vector2(-direction.y, direction.x)
 	return -direction * (drag_force / maxf(1.0, mass)) + lift_direction * (lift_force / maxf(1.0, mass))
 
-func _update_flight_environment() -> void:
-	var atmosphere := _atmosphere_at(rocket_position, velocity)
+func _update_flight_environment(atmosphere: Dictionary) -> void:
 	var density := float(atmosphere.density)
 	if density <= 0.0:
 		mach_number = 0.0
@@ -360,11 +370,10 @@ func _update_flight_environment() -> void:
 	dynamic_pressure_pa = 0.5 * density * relative_speed * relative_speed
 	max_dynamic_pressure_pa = maxf(max_dynamic_pressure_pa, dynamic_pressure_pa)
 
-func _update_heating(dt: float) -> void:
+func _update_heating(dt: float, atmosphere: Dictionary) -> void:
 	if realism == "Arcade":
 		heat_flux_mw = 0.0
 		return
-	var atmosphere := _atmosphere_at(rocket_position, velocity)
 	var density := float(atmosphere.density)
 	var relative_velocity: Vector2 = atmosphere.relative_velocity
 	var heat_flux_w := 0.0
@@ -447,47 +456,48 @@ func _begin_arrival_capture(target_state: Dictionary) -> void:
 	else:
 		autopilot_phase = "ARRIVAL_CAPTURE_BURN"
 
-func _surface_body_state(body_name: String) -> Dictionary:
-	if body_name == "Earth":
-		return {"name": "Earth", "position": Vector2.ZERO, "velocity": Vector2.ZERO, "radius": EARTH_RADIUS, "rotation_rate": EARTH_ROTATION_RATE, "mass": EARTH_MASS, "solid": true, "soi": 9.25e8}
-	if body_name == "Moon":
-		return {"name": "Moon", "position": PlanetarySystem.moon_position(sim_time), "velocity": PlanetarySystem.moon_velocity(sim_time), "radius": PlanetarySystem.MOON_RADIUS, "rotation_rate": TAU / PlanetarySystem.MOON_ROTATION_PERIOD, "mass": PlanetarySystem.MOON_MASS, "solid": true, "soi": PlanetarySystem.moon_soi_radius()}
-	for body in PlanetarySystem.PLANETS:
-		if str(body.name) == body_name:
-			return {
-				"name": body_name,
-				"position": PlanetarySystem.planet_position_relative_to_earth(body_name, sim_time),
-				"velocity": PlanetarySystem.planet_velocity_relative_to_earth(body_name, sim_time),
-				"radius": float(body.radius),
-				"rotation_rate": PlanetarySystem.planetary_rotation_rate(body_name),
-				"mass": float(body.mass),
-				"solid": body_name in ["Mercury", "Venus", "Earth", "Mars"],
-				"soi": PlanetarySystem.planet_soi_radius(body_name)
-			}
-	return {}
+func _ephemeris_states_at(time_seconds: float) -> Dictionary:
+	if ephemeris_cache.is_empty() or time_seconds < ephemeris_cache_time or time_seconds - ephemeris_cache_time >= 10.0:
+		ephemeris_cache = PlanetarySystem.gravity_body_states(time_seconds)
+		ephemeris_cache_time = time_seconds
+	var offset: float = time_seconds - ephemeris_cache_time
+	if absf(offset) < 0.000001:
+		return ephemeris_cache
+	var adjusted_bodies: Array[Dictionary] = []
+	for body in ephemeris_cache.get("bodies", []):
+		var adjusted: Dictionary = body.duplicate()
+		adjusted["position"] = Vector2(body.get("position", Vector2.ZERO)) + Vector2(body.get("velocity", Vector2.ZERO)) * offset
+		adjusted_bodies.append(adjusted)
+	var adjusted_surface: Array[Dictionary] = []
+	for body in ephemeris_cache.get("surface_bodies", []):
+		var adjusted: Dictionary = body.duplicate()
+		adjusted["position"] = Vector2(body.get("position", Vector2.ZERO)) + Vector2(body.get("velocity", Vector2.ZERO)) * offset
+		adjusted_surface.append(adjusted)
+	return {"bodies": adjusted_bodies, "surface_bodies": adjusted_surface}
 
+func _surface_body_state(body_name: String) -> Dictionary:
+	var states: Dictionary = _ephemeris_states_at(sim_time)
+	for body in states.get("surface_bodies", []):
+		if str(body.get("name", "")) == body_name:
+			return body.duplicate()
+	return {}
 func _nearest_body_state(position: Vector2) -> Dictionary:
-	var nearest: Dictionary = _surface_body_state("Earth")
-	var nearest_distance := position.distance_to(nearest.position)
-	var moon := _surface_body_state("Moon")
-	var moon_distance := position.distance_to(moon.position)
-	if moon_distance < nearest_distance:
-		nearest = moon
-		nearest_distance = moon_distance
-	for body in PlanetarySystem.PLANETS:
-		if str(body.name) == "Earth":
-			continue
-		var candidate := _surface_body_state(str(body.name))
-		var candidate_distance := position.distance_to(candidate.position)
+	var states: Dictionary = _ephemeris_states_at(sim_time)
+	var nearest: Dictionary = {}
+	var nearest_distance: float = INF
+	for body in states.get("surface_bodies", []):
+		var candidate: Dictionary = body
+		var candidate_distance: float = position.distance_to(Vector2(candidate.get("position", Vector2.ZERO)))
 		if candidate_distance < nearest_distance:
 			nearest = candidate
 			nearest_distance = candidate_distance
-	if nearest_distance > float(nearest.soi):
+	if nearest.is_empty():
+		return {}
+	if nearest_distance > float(nearest.get("soi", 0.0)):
 		nearest = _surface_body_state("Earth")
 		nearest_distance = position.length()
 	nearest["distance"] = nearest_distance
 	return nearest
-
 func _handle_body_contact() -> void:
 	var bodies: Array[Dictionary] = [
 		_surface_body_state("Earth"),
