@@ -24,15 +24,26 @@ var selected_node_index := -1
 var loading_node := false
 var current_orbit_duration := 7200.0
 var refresh_elapsed := 0.0
+var route_target := Vector2.ZERO
+var has_route_target := false
+var route_duration := 3600.0
+var route_delta_v := 0.0
+var route_status := "NO DESTINATION SELECTED"
+var route_time_input: SpinBox
+var route_report: Label
 
 class OrbitPlot extends Control:
 	signal node_dragged(index: int, world_position: Vector2)
+	signal target_dragged(world_position: Vector2)
 	var body_radius := 0.0
 	var current_path := PackedVector2Array()
 	var planned_path := PackedVector2Array()
 	var node_positions := PackedVector2Array()
 	var rocket_position := Vector2.ZERO
 	var dragging_node := -1
+	var dragging_target := false
+	var target_position := Vector2.ZERO
+	var has_target := false
 	var plot_scale := 1.0
 	var plot_center := Vector2.ZERO
 
@@ -40,15 +51,27 @@ class OrbitPlot extends Control:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
 				dragging_node = _nearest_node(event.position)
+				dragging_target = dragging_node < 0
 				if dragging_node >= 0:
-					accept_event()
-			elif dragging_node >= 0:
-				node_dragged.emit(dragging_node, _screen_to_world(event.position))
-				dragging_node = -1
+					node_dragged.emit(dragging_node, _screen_to_world(event.position))
+				elif dragging_target:
+					target_dragged.emit(_screen_to_world(event.position))
 				accept_event()
-		elif event is InputEventMouseMotion and dragging_node >= 0:
-			node_dragged.emit(dragging_node, _screen_to_world(event.position))
-			accept_event()
+			else:
+				if dragging_node >= 0:
+					node_dragged.emit(dragging_node, _screen_to_world(event.position))
+				elif dragging_target:
+					target_dragged.emit(_screen_to_world(event.position))
+				dragging_node = -1
+				dragging_target = false
+				accept_event()
+		elif event is InputEventMouseMotion:
+			if dragging_node >= 0:
+				node_dragged.emit(dragging_node, _screen_to_world(event.position))
+				accept_event()
+			elif dragging_target:
+				target_dragged.emit(_screen_to_world(event.position))
+				accept_event()
 
 	func _screen_to_world(screen_position: Vector2) -> Vector2:
 		return Vector2((screen_position.x - plot_center.x) / plot_scale, -(screen_position.y - plot_center.y) / plot_scale)
@@ -58,6 +81,10 @@ class OrbitPlot extends Control:
 			return -1
 		var nearest_index := -1
 		var nearest_distance := 16.0 * 16.0
+		if has_target:
+			var target_screen: Vector2 = center + Vector2(target_position.x, -target_position.y) * plot_scale
+			draw_circle(target_screen, 8.0, Color(0.25, 0.78, 1.0))
+			draw_arc(target_screen, 12.0, 0.0, TAU, 48, Color(0.55, 0.88, 1.0), 1.8)
 		for index in range(node_positions.size()):
 			var screen_position := plot_center + Vector2(node_positions[index].x, -node_positions[index].y) * plot_scale
 			var distance: float = mouse_position.distance_squared_to(screen_position)
@@ -66,12 +93,14 @@ class OrbitPlot extends Control:
 				nearest_index = index
 		return nearest_index
 
-	func set_paths(current: PackedVector2Array, planned: PackedVector2Array, markers: PackedVector2Array, radius: float, initial_position: Vector2) -> void:
+	func set_paths(current: PackedVector2Array, planned: PackedVector2Array, markers: PackedVector2Array, radius: float, initial_position: Vector2, destination: Vector2, destination_enabled: bool) -> void:
 		current_path = current
 		planned_path = planned
 		node_positions = markers
 		body_radius = radius
 		rocket_position = initial_position
+		target_position = destination
+		has_target = destination_enabled
 		queue_redraw()
 
 	func _draw() -> void:
@@ -137,7 +166,7 @@ func _build_interface() -> void:
 	root.add_child(heading)
 
 	var description := Label.new()
-	description.text = "Drag the flight computer by its title bar. Drag an orange manoeuvre marker around the current orbit to choose its burn point; the computer calculates the circularisation ΔV automatically. Live progress refreshes continuously."
+	description.text = "Drag anywhere on the orbital map to set or move a destination. Choose a transfer time and the computer solves the two-body transfer, calculates departure ΔV and previews the route. Drag orange burn nodes to edit additional manoeuvres."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 
@@ -145,12 +174,36 @@ func _build_interface() -> void:
 	orbit_plot.custom_minimum_size = Vector2(0, 340)
 	orbit_plot.mouse_filter = Control.MOUSE_FILTER_STOP
 	orbit_plot.node_dragged.connect(_drag_node_to_orbit_position)
+	orbit_plot.target_dragged.connect(_set_route_target)
 	orbit_plot.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	orbit_plot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(orbit_plot)
 
+	var destination_row := HBoxContainer.new()
+	destination_row.add_theme_constant_override("separation", 8)
+	root.add_child(destination_row)
+	var duration_label := Label.new()
+	duration_label.text = "TRANSFER TIME (HOURS)"
+	duration_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	destination_row.add_child(duration_label)
+	route_time_input = SpinBox.new()
+	route_time_input.min_value = 0.1
+	route_time_input.max_value = 8760.0
+	route_time_input.step = 0.5
+	route_time_input.value = route_duration / 3600.0
+	route_time_input.custom_minimum_size.x = 110.0
+	route_time_input.value_changed.connect(_change_route_duration)
+	destination_row.add_child(route_time_input)
+	var clear_target_button := Button.new()
+	clear_target_button.text = "CLEAR DESTINATION"
+	clear_target_button.pressed.connect(_clear_route_target)
+	destination_row.add_child(clear_target_button)
+	route_report = Label.new()
+	route_report.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(route_report)
+
 	var legend := Label.new()
-	legend.text = "GREY  CURRENT ORBIT     GREEN  PLANNED ROUTE     ORANGE  MANOEUVRE NODES"
+	legend.text = "GREY  CURRENT ORBIT     GREEN  PREDICTED ROUTE     BLUE  DESTINATION     ORANGE  BURN NODES"
 	legend.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	legend.add_theme_font_size_override("font_size", 11)
 	root.add_child(legend)
@@ -294,6 +347,141 @@ func _remove_node() -> void:
 		return
 	nodes.remove_at(selected_node_index)
 	selected_node_index = mini(selected_node_index, nodes.size() - 1)
+	_rebuild_node_list()
+	_load_selected_node()
+	_update_manoeuvre()
+
+func _change_route_duration(hours: float) -> void:
+	route_duration = hours * 3600.0
+	if has_route_target:
+		_calculate_route()
+
+func _clear_route_target() -> void:
+	has_route_target = false
+	route_delta_v = 0.0
+	route_status = "NO DESTINATION SELECTED"
+	nodes.clear()
+	selected_node_index = -1
+	_rebuild_node_list()
+	_load_selected_node()
+	_update_manoeuvre()
+
+func _set_route_target(world_position: Vector2) -> void:
+	if gravitational_parameter <= 0.0 or relative_position.length() <= 1.0:
+		return
+	route_target = world_position
+	has_route_target = true
+	_calculate_route()
+
+func _stumpff_c(value: float) -> float:
+	if absf(value) < 0.0001:
+		return 0.5 - value / 24.0 + value * value / 720.0
+	if value > 0.0:
+		var root := sqrt(value)
+		return (1.0 - cos(root)) / value
+	var hyperbolic_root := sqrt(-value)
+	if hyperbolic_root > 50.0:
+		return INF
+	return (cosh(hyperbolic_root) - 1.0) / (-value)
+
+func _stumpff_s(value: float) -> float:
+	if absf(value) < 0.0001:
+		return 1.0 / 6.0 - value / 120.0 + value * value / 5040.0
+	if value > 0.0:
+		var root := sqrt(value)
+		return (root - sin(root)) / pow(root, 3.0)
+	var hyperbolic_root := sqrt(-value)
+	if hyperbolic_root > 50.0:
+		return INF
+	return (sinh(hyperbolic_root) - hyperbolic_root) / pow(hyperbolic_root, 3.0)
+
+func _lambert_time_function(z: float, radius_start: float, radius_end: float, parameter_a: float) -> float:
+	var c_value := _stumpff_c(z)
+	var s_value := _stumpff_s(z)
+	if not is_finite(c_value) or not is_finite(s_value) or c_value <= 0.0:
+		return INF
+	var y_value := radius_start + radius_end + parameter_a * (z * s_value - 1.0) / sqrt(c_value)
+	if y_value <= 0.0:
+		return INF
+	return pow(y_value / c_value, 1.5) * s_value + parameter_a * sqrt(y_value)
+
+func _solve_lambert(start_position: Vector2, finish_position: Vector2, duration: float) -> Dictionary:
+	var radius_start := start_position.length()
+	var radius_end := finish_position.length()
+	if radius_start <= 1.0 or radius_end <= 1.0 or duration <= 0.0:
+		return {"valid": false, "reason": "Invalid transfer geometry."}
+	var cosine := clampf(start_position.dot(finish_position) / (radius_start * radius_end), -1.0, 1.0)
+	var sine := start_position.cross(finish_position) / (radius_start * radius_end)
+	if absf(1.0 - cosine) < 0.000001 or absf(sine) < 0.000001:
+		return {"valid": false, "reason": "Destination is too close to a zero- or half-turn geometry."}
+	var parameter_a := sine * sqrt(radius_start * radius_end / (1.0 - cosine))
+	if parameter_a <= 0.0:
+		return {"valid": false, "reason": "The selected destination requires the unsupported long-way transfer direction."}
+	var target_time := sqrt(gravitational_parameter) * duration
+	var lower := -39.0
+	var upper := 39.0
+	var lower_value := _lambert_time_function(lower, radius_start, radius_end, parameter_a) - target_time
+	var upper_value := _lambert_time_function(upper, radius_start, radius_end, parameter_a) - target_time
+	if not is_finite(lower_value) or not is_finite(upper_value) or lower_value * upper_value > 0.0:
+		return {"valid": false, "reason": "No single-revolution transfer solution exists for that destination and time."}
+	for iteration in range(90):
+		var middle := (lower + upper) * 0.5
+		var middle_value := _lambert_time_function(middle, radius_start, radius_end, parameter_a) - target_time
+		if not is_finite(middle_value):
+			upper = middle
+			continue
+		if absf(middle_value) < 0.0001:
+			lower = middle
+			upper = middle
+			break
+		if lower_value * middle_value <= 0.0:
+			upper = middle
+			upper_value = middle_value
+		else:
+			lower = middle
+			lower_value = middle_value
+	var z_value := (lower + upper) * 0.5
+	var c_value := _stumpff_c(z_value)
+	var s_value := _stumpff_s(z_value)
+	var y_value := radius_start + radius_end + parameter_a * (z_value * s_value - 1.0) / sqrt(c_value)
+	if y_value <= 0.0:
+		return {"valid": false, "reason": "Transfer solution is geometrically invalid."}
+	var f_value := 1.0 - y_value / radius_start
+	var g_value := parameter_a * sqrt(y_value / gravitational_parameter)
+	var g_dot := 1.0 - y_value / radius_end
+	if absf(g_value) < 0.000001:
+		return {"valid": false, "reason": "Transfer time is singular for this geometry."}
+	var departure_velocity: Vector2 = (finish_position - f_value * start_position) / g_value
+	var arrival_velocity: Vector2 = (g_dot * finish_position - start_position) / g_value
+	return {"valid": true, "departure_velocity": departure_velocity, "arrival_velocity": arrival_velocity}
+
+func _calculate_route() -> void:
+	if not has_route_target or gravitational_parameter <= 0.0:
+		return
+	var solution := _solve_lambert(relative_position, route_target, route_duration)
+	if not bool(solution.get("valid", false)):
+		route_delta_v = INF
+		route_status = str(solution.get("reason", "No transfer solution."))
+		_update_manoeuvre()
+		return
+	var required_velocity: Vector2 = solution.departure_velocity
+	var required_delta_v: Vector2 = required_velocity - relative_velocity
+	var radial := relative_position.normalized()
+	var tangent := Vector2(-radial.y, radial.x)
+	if relative_position.cross(relative_velocity) < 0.0:
+		tangent = -tangent
+	route_delta_v = required_delta_v.length()
+	route_status = "TRANSFER SOLVED  •  ARRIVAL SPEED %.1f m/s" % Vector2(solution.arrival_velocity).length()
+	var route_node := {
+		"time_offset": 0.0,
+		"prograde": required_delta_v.dot(tangent),
+		"radial": required_delta_v.dot(radial)
+	}
+	if nodes.is_empty():
+		nodes.append(route_node)
+	else:
+		nodes[0] = route_node
+	selected_node_index = 0
 	_rebuild_node_list()
 	_load_selected_node()
 	_update_manoeuvre()
@@ -443,16 +631,16 @@ func _build_prediction_paths() -> void:
 		markers.append(plan_position)
 		elapsed = node_time
 	var final_orbit: Dictionary = FlightComputer.orbital_state(plan_position, plan_velocity, gravitational_parameter)
-	var final_duration: float = 7200.0
+	var final_duration: float = route_duration if has_route_target else 7200.0
 	if bool(final_orbit.get("bound", false)):
 		var final_axis: float = float(final_orbit.get("semi_major_axis", 0.0))
 		if final_axis > 0.0:
 			final_duration = TAU * sqrt(pow(final_axis, 3.0) / gravitational_parameter)
-	final_duration = clampf(final_duration, 60.0, 30.0 * 86400.0)
+	final_duration = route_duration if has_route_target else clampf(final_duration, 60.0, 30.0 * 86400.0)
 	var remaining_steps: int = 180
 	var final_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, final_duration, remaining_steps)
 	planned_path = final_result.get("path", planned_path)
-	orbit_plot.set_paths(current_path, planned_path, markers, float(current_body.get("radius", 0.0)), relative_position)
+	orbit_plot.set_paths(current_path, planned_path, markers, float(current_body.get("radius", 0.0)), relative_position, route_target, has_route_target)
 	if not nodes.is_empty():
 		var periapsis_altitude: float = (float(final_orbit.get("periapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0
 		var apoapsis_altitude: float = (float(final_orbit.get("apoapsis", INF)) - float(current_body.get("radius", 0.0))) / 1000.0
@@ -497,6 +685,7 @@ func _update_manoeuvre() -> void:
 	burn_report.text = "PLANNED NODES: %d   •   PLANNED ΔV: %.1f m/s   •   USED: %.1f m/s   •   REMAINING: %.1f m/s   •   %s" % [
 		nodes.size(),
 		total_planned_delta_v,
+		"NO SOLUTION" if not is_finite(route_delta_v) else "%.1f m/s" % route_delta_v if has_route_target else "N/A",
 		delta_v_used,
 		available_delta_v,
 		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
