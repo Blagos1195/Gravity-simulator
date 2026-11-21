@@ -455,7 +455,7 @@ func _autopilot_target_state() -> Dictionary:
 	return _surface_body_state(body_name)
 
 func _begin_arrival_capture(target_state: Dictionary) -> void:
-	var relative_position: Vector2 = rocket_position - target_state.position
+	var relative_position := _relative_position_to_body(target_state)
 	var relative_velocity: Vector2 = velocity - target_state.velocity
 	var capture := FlightComputer.arrival_capture_burn(relative_position, relative_velocity, G * float(target_state.mass), float(target_state.radius))
 	if not bool(capture.get("valid", false)):
@@ -602,8 +602,7 @@ func _handle_body_contact() -> void:
 		if str(body.name) != "Earth":
 			bodies.append(_surface_body_state(str(body.name)))
 	for body in bodies:
-		var body_position: Vector2 = body.position
-		var relative_position := rocket_position - body_position
+		var relative_position := _relative_position_to_body(body)
 		var body_radius := float(body.radius)
 		if relative_position.length() > body_radius + 0.5:
 			continue
@@ -611,7 +610,7 @@ func _handle_body_contact() -> void:
 		var body_velocity: Vector2 = body.velocity
 		var surface_velocity := body_velocity + Vector2(-relative_position.y, relative_position.x) * float(body.rotation_rate)
 		var relative_speed := (velocity - surface_velocity).length()
-		rocket_position = body_position + normal * (body_radius + 0.5)
+		_set_rocket_position_relative_to_body(body, normal * (body_radius + 0.5))
 		if not bool(body.solid):
 			crashed = true
 			status_message = "LOST IN %s  •  ATMOSPHERIC LIMIT REACHED" % str(body.name).to_upper()
@@ -636,8 +635,8 @@ func _handle_body_contact() -> void:
 		return
 
 func _update_guidance(dt: float) -> void:
-	var guidance_body := _nearest_body_state(rocket_position)
-	var guidance_position: Vector2 = rocket_position - guidance_body.position
+	var guidance_body := _nearest_body_state(rocket_position, rocket_position_precise)
+	var guidance_position: Vector2 = guidance_body.relative_position
 	var guidance_velocity: Vector2 = velocity - guidance_body.velocity
 	var radial := guidance_position.normalized()
 	var altitude := maxf(0.0, float(guidance_body.distance) - float(guidance_body.radius))
@@ -798,7 +797,7 @@ func _update_guidance(dt: float) -> void:
 			"ARRIVAL_APPROACH":
 				thrust_key_down = false
 				var approach_target_state := _autopilot_target_state()
-				var approach_relative_position: Vector2 = rocket_position - approach_target_state.position
+				var approach_relative_position := _relative_position_to_body(approach_target_state)
 				var approach_relative_velocity: Vector2 = velocity - approach_target_state.velocity
 				var arrival_orbit := FlightComputer.orbital_state(approach_relative_position, approach_relative_velocity, G * float(approach_target_state.mass))
 				var approach_radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
@@ -814,7 +813,7 @@ func _update_guidance(dt: float) -> void:
 					autopilot_phase = "FAILED"
 			"LANDING_DESCENT":
 				var landing_target_state := _autopilot_target_state()
-				var landing_relative_position: Vector2 = rocket_position - landing_target_state.position
+				var landing_relative_position := _relative_position_to_body(landing_target_state)
 				var landing_relative_velocity: Vector2 = velocity - landing_target_state.velocity
 				var landing_distance := landing_relative_position.length()
 				var landing_altitude := landing_distance - float(landing_target_state.radius)
@@ -855,7 +854,7 @@ func _update_guidance(dt: float) -> void:
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 		elif autopilot_phase == "LANDING_DESCENT":
 			var landing_direction_state := _autopilot_target_state()
-			var landing_direction_position: Vector2 = rocket_position - landing_direction_state.position
+			var landing_direction_position := _relative_position_to_body(landing_direction_state)
 			var landing_direction_velocity: Vector2 = velocity - landing_direction_state.velocity
 			var landing_direction_up := landing_direction_position.normalized()
 			var landing_direction_tangent := Vector2(-landing_direction_up.y, landing_direction_up.x)
