@@ -75,32 +75,13 @@ static func _planet_position_at_century(planet: Dictionary, centuries: float) ->
 
 static func _planet_heliocentric_state(planet: Dictionary, time_seconds: float) -> Dictionary:
 	var centuries := _ephemeris_centuries(time_seconds)
-	var a := (float(planet.a) + float(planet.adot) * centuries) * ASTRONOMICAL_UNIT
-	var eccentricity := float(planet.e) + float(planet.edot) * centuries
-	var inclination := deg_to_rad(float(planet.i) + float(planet.idot) * centuries)
-	var mean_longitude := deg_to_rad(float(planet.L) + float(planet.Ldot) * centuries)
-	var perihelion := deg_to_rad(float(planet.peri) + float(planet.peridot) * centuries)
-	var node := deg_to_rad(float(planet.node) + float(planet.nodedot) * centuries)
-	var mean_anomaly := wrapf(mean_longitude - perihelion, -PI, PI)
-	var eccentric_anomaly := _solve_kepler(mean_anomaly, eccentricity)
-	var root := sqrt(1.0 - eccentricity * eccentricity)
-	var x_orbit := a * (cos(eccentric_anomaly) - eccentricity)
-	var y_orbit := a * root * sin(eccentric_anomaly)
-	var mean_motion := deg_to_rad(float(planet.Ldot)) / (J2000_CENTURY_DAYS * 86400.0)
-	var eccentric_rate := mean_motion / (1.0 - eccentricity * cos(eccentric_anomaly))
-	var vx_orbit := -a * sin(eccentric_anomaly) * eccentric_rate
-	var vy_orbit := a * root * cos(eccentric_anomaly) * eccentric_rate
-	var argument := perihelion - node
-	var c_arg := cos(argument)
-	var s_arg := sin(argument)
-	var c_node := cos(node)
-	var s_node := sin(node)
-	var c_inc := cos(inclination)
-	var x := (c_arg * c_node - s_arg * s_node * c_inc) * x_orbit + (-s_arg * c_node - c_arg * s_node * c_inc) * y_orbit
-	var y := (c_arg * s_node + s_arg * c_node * c_inc) * x_orbit + (-s_arg * s_node + c_arg * c_node * c_inc) * y_orbit
-	var vx := (c_arg * c_node - s_arg * s_node * c_inc) * vx_orbit + (-s_arg * c_node - c_arg * s_node * c_inc) * vy_orbit
-	var vy := (c_arg * s_node + s_arg * c_node * c_inc) * vx_orbit + (-s_arg * s_node + c_arg * c_node * c_inc) * vy_orbit
-	return {"position": Vector2(x, y), "velocity": Vector2(vx, vy)}
+	var step_seconds := 30.0
+	var step_centuries := step_seconds / (86400.0 * J2000_CENTURY_DAYS)
+	var position := _planet_position_at_century(planet, centuries)
+	var previous_position := _planet_position_at_century(planet, centuries - step_centuries)
+	var next_position := _planet_position_at_century(planet, centuries + step_centuries)
+	var velocity := (next_position - previous_position) / (2.0 * step_seconds)
+	return {"position": position, "velocity": velocity}
 
 static func moon_state(time_seconds: float) -> Dictionary:
 	var days_since_j2000 := EPHEMERIS_EPOCH_JD - J2000_JD + time_seconds / 86400.0
