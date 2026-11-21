@@ -19,7 +19,13 @@ func _initialize() -> void:
 		{"body": "Mars", "altitude": 300000.0, "orbits": 1}
 	]
 	for orbit_case in local_orbit_cases:
-		if not _validate_local_orbit(str(orbit_case.body), float(orbit_case.altitude), int(orbit_case.orbits)):
+		var body_name := str(orbit_case.body)
+		var valid := _validate_local_orbit(body_name, float(orbit_case.altitude), int(orbit_case.orbits))
+		if body_name == "Moon":
+			var exact_valid := _validate_local_orbit(body_name, float(orbit_case.altitude), int(orbit_case.orbits), true)
+			if not valid or not exact_valid:
+				return
+		elif not valid:
 			return
 	print("Long-duration orbital stability tests passed.")
 	quit()
@@ -44,6 +50,8 @@ func _validate_orbit(orbit_name: String, altitude: float, orbit_count: int) -> b
 		if not _check(step > 0.000001, "%s produced a zero physics step" % orbit_name):
 			simulation.free()
 			return false
+		if force_exact_ephemeris:
+			simulation.ephemeris_cache_time = -INF
 		simulation._physics_step(step)
 		elapsed += step
 		step_count += 1
@@ -69,7 +77,7 @@ func _check(condition: bool, message: String) -> bool:
 	quit(1)
 	return false
 
-func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int) -> bool:
+func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int, force_exact_ephemeris: bool = false) -> bool:
 	var simulation: Variant = SimulationView.new()
 	simulation.set_rocket_design(RocketDesign.create_default())
 	simulation.realism = "Realistic"
@@ -118,7 +126,7 @@ func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int)
 			var checkpoint_position: Vector2 = checkpoint_body.relative_position
 			var checkpoint_velocity: Vector2 = simulation.velocity - Vector2(checkpoint_body.velocity)
 			var checkpoint_state: Dictionary = FlightComputer.orbital_state(checkpoint_position, checkpoint_velocity, mu)
-			print("%s orbit at %.0f%%: e=%.8f" % [body_name, next_checkpoint * 100.0, float(checkpoint_state.get("eccentricity", 1.0))])
+			print("%s %s ephemeris orbit at %.0f%%: e=%.8f" % [body_name, "exact" if force_exact_ephemeris else "cached", next_checkpoint * 100.0, float(checkpoint_state.get("eccentricity", 1.0))])
 			next_checkpoint += 0.25
 	var final_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var relative_position: Vector2 = final_body.relative_position
@@ -131,6 +139,6 @@ func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int)
 	var valid := _check(str(final_body.get("name", "")) == body_name, "%s spacecraft left its local reference body" % body_name)
 	valid = _check(bool(final_state.get("bound", false)), "%s local orbit became unbound" % body_name) and valid
 	valid = _check(altitude_error < altitude_tolerance, "%s local orbit altitude drifted by %.1f m" % [body_name, altitude_error]) and valid
-	valid = _check(float(final_state.get("eccentricity", 1.0)) < eccentricity_limit, "%s local orbit became eccentric (e=%.6f, limit=%.6f)" % [body_name, float(final_state.get("eccentricity", 1.0)), eccentricity_limit]) and valid
+	valid = _check(float(final_state.get("eccentricity", 1.0)) < eccentricity_limit, "%s %s local orbit became eccentric (e=%.6f, limit=%.6f)" % [body_name, "exact ephemeris" if force_exact_ephemeris else "cached ephemeris", float(final_state.get("eccentricity", 1.0)), eccentricity_limit]) and valid
 	simulation.free()
 	return valid
