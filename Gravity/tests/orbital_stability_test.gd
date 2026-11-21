@@ -24,7 +24,7 @@ func _validate_orbit(orbit_name: String, altitude: float, orbit_count: int) -> b
 	var duration: float = period * float(orbit_count)
 	var simulation: Variant = SimulationView.new()
 	simulation.set_rocket_design(RocketDesign.create_default())
-	simulation.realism = "Arcade"
+	simulation.realism = "Realistic"
 	simulation.landed = false
 	simulation.rocket_position = Vector2(0.0, -radius)
 	simulation.velocity = Vector2(speed, 0.0)
