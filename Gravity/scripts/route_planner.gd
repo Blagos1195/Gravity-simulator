@@ -14,6 +14,7 @@ var relative_position := Vector2.ZERO
 var relative_velocity := Vector2.ZERO
 var gravitational_parameter := 0.0
 var planned_burn_vector := Vector2.ZERO
+var available_delta_v := 0.0
 
 class OrbitPlot extends Control:
 	const FlightComputer = preload("res://scripts/flight_computer.gd")
@@ -233,28 +234,32 @@ func _update_manoeuvre() -> void:
 	orbit_plot.set_orbit(relative_position, relative_velocity, gravitational_parameter, planned_burn_vector, float(current_body.get("radius", 0.0)))
 	var current_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, gravitational_parameter)
 	var planned_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity + planned_burn_vector, gravitational_parameter)
+	var active_stage: int = int(simulation.get("stage_index"))
+	var remaining_fuel: float = float(simulation.get("fuel"))
+	available_delta_v = FlightComputer.available_delta_v(rocket_design, active_stage, remaining_fuel)
 	var current_periapsis: float = (float(current_orbit.get("periapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0
 	var current_apoapsis: float = (float(current_orbit.get("apoapsis", INF)) - float(current_body.get("radius", 0.0))) / 1000.0
 	var planned_periapsis: float = (float(planned_orbit.get("periapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0
 	var planned_apoapsis: float = (float(planned_orbit.get("apoapsis", INF)) - float(current_body.get("radius", 0.0))) / 1000.0
-	state_report.text = "BODY: %s    ALTITUDE: %.1f km    SPEED: %.0f m/s\nCURRENT ORBIT: Pe %.1f km  •  Ap %s\nPLANNED ORBIT: Pe %.1f km  •  Ap %s" % [
+	state_report.text = "BODY: %s    ALTITUDE: %.1f km    SPEED: %.0f m/s\nCURRENT ORBIT: Pe %.1f km  •  Ap %s\nPLANNED ORBIT: Pe %.1f km  •  Ap %s\nREMAINING VEHICLE ΔV: %.2f km/s" % [
 		str(current_body.get("name", "Unknown")),
 		(relative_position.length() - float(current_body.get("radius", 0.0))) / 1000.0,
 		relative_velocity.length(),
 		current_periapsis,
 		"UNBOUND" if not bool(current_orbit.get("bound", false)) else "%.1f km" % current_apoapsis,
 		planned_periapsis,
-		"UNBOUND" if not bool(planned_orbit.get("bound", false)) else "%.1f km" % planned_apoapsis
+		"UNBOUND" if not bool(planned_orbit.get("bound", false)) else "%.1f km" % planned_apoapsis,
+		available_delta_v / 1000.0
 	]
 	var burn_angle: float = rad_to_deg(atan2(radial_input.value, prograde_input.value))
 	burn_report.text = "TOTAL ΔV: %.1f m/s    •    BURN ROTATION FROM PROGRADE: %.1f°    •    %s" % [
 		planned_burn_vector.length(),
 		burn_angle,
-		"NO BURN SELECTED" if planned_burn_vector.length() < 0.1 else "READY TO PREVIEW OR EXECUTE"
+		"NO BURN SELECTED" if planned_burn_vector.length() < 0.1 else "EXCEEDS VEHICLE ΔV" if planned_burn_vector.length() > available_delta_v else "READY TO PREVIEW OR EXECUTE"
 	]
 
 func _send_to_autopilot() -> void:
-	if not is_instance_valid(simulation) or planned_burn_vector.length() < 0.1:
+	if not is_instance_valid(simulation) or planned_burn_vector.length() < 0.1 or planned_burn_vector.length() > available_delta_v:
 		return
 	simulation.set("autopilot_enabled", true)
 	simulation.set("autopilot_complete", false)
