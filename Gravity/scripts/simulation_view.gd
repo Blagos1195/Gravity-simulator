@@ -709,7 +709,7 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = false
 				var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
 				var available_transfer_delta_v := FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
-				var transfer_plan := FlightComputer.simulated_transfer_search(rocket_position, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority)
+				var transfer_plan := FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority)
 				if not bool(transfer_plan.get("valid", false)):
 					autopilot_phase = "FAILED"
 					status_message = "TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY"))
