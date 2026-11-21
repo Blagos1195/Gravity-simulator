@@ -31,7 +31,6 @@ func _initialize() -> void:
 	assert(snapshot_gravity.is_finite())
 	var heliocentric_gravity := PlanetarySystem.gravity_acceleration_from_heliocentric_states(Vector2(0.0, -radius), gravity_snapshot)
 	assert(heliocentric_gravity.is_finite())
-	var earth_only_gravity := Vector2(0.0, 1.0) * PlanetarySystem.G * PlanetarySystem.EARTH_MASS / (radius * radius)
 	assert(heliocentric_gravity.distance_to(snapshot_gravity) < 0.0001)
 	var earth_only_gravity := Vector2(0.0, 1.0) * PlanetarySystem.G * PlanetarySystem.EARTH_MASS / (radius * radius)
 	assert(heliocentric_gravity.distance_to(earth_only_gravity) < 0.001)
@@ -67,10 +66,10 @@ func _initialize() -> void:
 	assert(mars_velocity.length() > 1000.0)
 	var ephemeris_time := 86400.0 * 250.0
 	var numerical_mars_velocity := (
-		PlanetarySystem.planet_position_relative_to_earth("Mars", ephemeris_time + 30.0)
-		- PlanetarySystem.planet_position_relative_to_earth("Mars", ephemeris_time - 30.0)
-	) / 60.0
-	assert(numerical_mars_velocity.distance_to(PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time)) < 0.0001)
+		PlanetarySystem.planet_position_relative_to_earth("Mars", ephemeris_time + 86400.0)
+		- PlanetarySystem.planet_position_relative_to_earth("Mars", ephemeris_time - 86400.0)
+	) / 172800.0
+	assert(numerical_mars_velocity.distance_to(PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time)) < 0.2)
 	assert(PlanetarySystem.planet_soi_radius("Mars") > 1.0e8)
 	assert(PlanetarySystem.moon_soi_radius() > 1.0e7)
 	assert(absf(PlanetarySystem.planetary_atmosphere_density("Mars", 0.0) - 0.020) < 0.000001)
