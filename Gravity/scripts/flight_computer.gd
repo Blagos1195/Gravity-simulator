@@ -260,15 +260,18 @@ static func _simulated_target_state(target_index: int, time_seconds: float) -> D
 	if target_index == -2:
 		return {
 			"position": Vector2.ZERO,
+			"position_components": PackedFloat64Array([0.0, 0.0]),
 			"velocity": Vector2.ZERO,
 			"mass": PlanetarySystem.EARTH_MASS,
 			"radius": PlanetarySystem.EARTH_RADIUS,
 			"soi": 9.25e8
 		}
 	if target_index == -1:
+		var moon_state: Dictionary = PlanetarySystem.moon_state(time_seconds)
 		return {
-			"position": PlanetarySystem.moon_position(time_seconds),
-			"velocity": PlanetarySystem.moon_velocity(time_seconds),
+			"position": moon_state.position,
+			"position_components": moon_state.position_components,
+			"velocity": moon_state.velocity,
 			"mass": PlanetarySystem.MOON_MASS,
 			"radius": PlanetarySystem.MOON_RADIUS,
 			"soi": PlanetarySystem.moon_soi_radius()
@@ -277,8 +280,10 @@ static func _simulated_target_state(target_index: int, time_seconds: float) -> D
 		return {}
 	var target: Dictionary = PLANET_TARGETS[target_index]
 	var target_name := str(target.get("name", ""))
+	var position_components := PlanetarySystem.planet_position_relative_to_earth_components(target_name, time_seconds)
 	return {
-		"position": PlanetarySystem.planet_position_relative_to_earth(target_name, time_seconds),
+		"position": Vector2(position_components[0], position_components[1]),
+		"position_components": position_components,
 		"velocity": PlanetarySystem.planet_velocity_relative_to_earth(target_name, time_seconds),
 		"mass": float(target.get("mass", 0.0)),
 		"radius": float(target.get("planet_radius", 0.0)),
@@ -296,13 +301,36 @@ static func _segment_intersects_circle(start: Vector2, finish: Vector2, center: 
 	return closest.distance_squared_to(center) <= radius * radius
 
 
+static func _segment_intersects_circle_precise(start: PackedFloat64Array, finish: PackedFloat64Array, center: PackedFloat64Array, radius: float) -> bool:
+	if start.size() < 2 or finish.size() < 2 or center.size() < 2:
+		return false
+	var segment_x: float = finish[0] - start[0]
+	var segment_y: float = finish[1] - start[1]
+	var length_squared := segment_x * segment_x + segment_y * segment_y
+	var fraction := 0.0
+	if length_squared > 0.0:
+		fraction = clampf(((center[0] - start[0]) * segment_x + (center[1] - start[1]) * segment_y) / length_squared, 0.0, 1.0)
+	var closest_x := start[0] + segment_x * fraction
+	var closest_y := start[1] + segment_y * fraction
+	var offset_x := closest_x - center[0]
+	var offset_y := closest_y - center[1]
+	return offset_x * offset_x + offset_y * offset_y <= radius * radius
+
+
 static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false) -> Dictionary:
-	if target_index < -2 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
-		return {"valid": false, "reason": "Invalid target or no remaining manoeuvre capability."}
+	return simulated_transfer_search_precise(PackedFloat64Array([start_position.x, start_position.y]), start_velocity, start_time, target_index, maximum_delta_v, speed_priority, coarse_search)
+
+
+static func simulated_transfer_search_precise(start_position_components: PackedFloat64Array, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false) -> Dictionary:
+	if start_position_components.size() < 2 or target_index < -2 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
+		return {"valid": false, "reason": "Invalid target, position or manoeuvre capability."}
 	var initial_target := _simulated_target_state(target_index, start_time)
 	if initial_target.is_empty():
 		return {"valid": false, "reason": "Destination state unavailable."}
-	var initial_distance := start_position.distance_to(Vector2(initial_target.position))
+	var initial_target_components: PackedFloat64Array = initial_target.position_components
+	var initial_dx: float = start_position_components[0] - initial_target_components[0]
+	var initial_dy: float = start_position_components[1] - initial_target_components[1]
+	var initial_distance := sqrt(initial_dx * initial_dx + initial_dy * initial_dy)
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
 	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index <= -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
@@ -330,7 +358,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 			var burn_direction := Vector2(cos(angle), sin(angle))
 			for magnitude_value in magnitudes:
 				var departure_delta_v: float = float(magnitude_value)
-				var position := start_position
+				var position := start_position_components.duplicate()
 				var velocity := start_velocity + burn_direction * departure_delta_v
 				var closest_distance := INF
 				var closest_relative_position := Vector2.ZERO
@@ -338,33 +366,37 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 				var closest_time := flight_duration
 				var collided := false
 				for step_index in range(integration_steps):
-					var initial_acceleration := PlanetarySystem.gravity_acceleration_from_states(position, gravity_states[step_index])
+					var initial_acceleration := PlanetarySystem.gravity_acceleration_from_precise_states(position, gravity_states[step_index])
 					var half_velocity := velocity + initial_acceleration * (step_size * 0.5)
-					var next_position := position + half_velocity * step_size
-					var final_acceleration := PlanetarySystem.gravity_acceleration_from_states(next_position, gravity_states[step_index + 1])
+					var next_position := PackedFloat64Array([
+						position[0] + half_velocity.x * step_size,
+						position[1] + half_velocity.y * step_size
+					])
+					var final_acceleration := PlanetarySystem.gravity_acceleration_from_precise_states(next_position, gravity_states[step_index + 1])
 					velocity = half_velocity + final_acceleration * (step_size * 0.5)
+					var previous_position := position
 					position = next_position
-					if _segment_intersects_circle(position - half_velocity * step_size, position, Vector2.ZERO, EARTH_RADIUS):
+					if _segment_intersects_circle_precise(previous_position, position, PackedFloat64Array([0.0, 0.0]), EARTH_RADIUS):
 						collided = true
 						break
 					var bodies: Array = gravity_states[step_index + 1].get("bodies", [])
 					for body in bodies:
-						var body_position: Vector2 = body.position
-						var body_radius := float(body.radius)
-						if _segment_intersects_circle(position - half_velocity * step_size, position, body_position, body_radius):
+						var body_position: Vector2 = body.get("position", Vector2.ZERO)
+						var body_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+						if _segment_intersects_circle_precise(previous_position, position, body_components, float(body.get("radius", 0.0))):
 							collided = true
 							break
 					if collided:
 						break
 					var target_state: Dictionary = target_states[step_index + 1]
-					var target_position: Vector2 = target_state.get("position", Vector2.ZERO)
-					var target_velocity: Vector2 = target_state.get("velocity", Vector2.ZERO)
-					var relative_position: Vector2 = position - target_position
-					var distance_squared := relative_position.length_squared()
+					var target_position: PackedFloat64Array = target_state.position_components
+					var relative_x: float = position[0] - target_position[0]
+					var relative_y: float = position[1] - target_position[1]
+					var distance_squared := relative_x * relative_x + relative_y * relative_y
 					if distance_squared < closest_distance * closest_distance:
 						closest_distance = sqrt(distance_squared)
-						closest_relative_position = relative_position
-						closest_relative_velocity = velocity - target_velocity
+						closest_relative_position = Vector2(relative_x, relative_y)
+						closest_relative_velocity = velocity - Vector2(target_state.velocity)
 						closest_time = float(step_index + 1) * step_size
 				if collided:
 					continue
