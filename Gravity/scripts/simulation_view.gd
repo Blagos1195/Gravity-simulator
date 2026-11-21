@@ -35,10 +35,6 @@ var rocket_position: Vector2:
 		_rocket_position_display = value
 		rocket_position_precise = PackedFloat64Array([value.x, value.y])
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
-
-func _set_rocket_position_components(position_x: float, position_y: float) -> void:
-	rocket_position_precise = PackedFloat64Array([position_x, position_y])
-	_rocket_position_display = Vector2(position_x, position_y)
 var rotation_angle := 0.0
 var fuel := 300000.0
 var stage_index := 0
@@ -90,6 +86,10 @@ var throttle_cutoff_key_down := false
 var landed := true
 var crashed := false
 var landed_body_name := "Earth"
+
+func _set_rocket_position_components(position_x: float, position_y: float) -> void:
+	rocket_position_precise = PackedFloat64Array([position_x, position_y])
+	_rocket_position_display = Vector2(position_x, position_y)
 
 func set_rocket_design(design: Dictionary) -> void:
 	rocket_stages = (design.get("stages", []) as Array).duplicate(true)
