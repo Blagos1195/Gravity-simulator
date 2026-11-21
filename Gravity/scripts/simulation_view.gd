@@ -526,6 +526,25 @@ func _ephemeris_states_at(time_seconds: float) -> Dictionary:
 		adjusted["position_components"] = adjusted_components
 		adjusted["position"] = Vector2(adjusted_components[0], adjusted_components[1])
 		adjusted_heliocentric.append(adjusted)
+	var moon_state: Dictionary = PlanetarySystem.moon_state(time_seconds)
+	var moon_position_components: PackedFloat64Array = moon_state.position_components
+	var moon_velocity_components: PackedFloat64Array = moon_state.velocity_components
+	var moon_position := Vector2(moon_position_components[0], moon_position_components[1])
+	var moon_velocity := Vector2(moon_velocity_components[0], moon_velocity_components[1])
+	for i in range(adjusted_bodies.size()):
+		if str(adjusted_bodies[i].get("name", "")) == "Moon":
+			adjusted_bodies[i]["position"] = moon_position
+			adjusted_bodies[i]["position_components"] = moon_position_components
+			adjusted_bodies[i]["velocity"] = moon_velocity
+			adjusted_bodies[i]["velocity_components"] = moon_velocity_components
+			break
+	for i in range(adjusted_surface.size()):
+		if str(adjusted_surface[i].get("name", "")) == "Moon":
+			adjusted_surface[i]["position"] = moon_position
+			adjusted_surface[i]["position_components"] = moon_position_components
+			adjusted_surface[i]["velocity"] = moon_velocity
+			adjusted_surface[i]["velocity_components"] = moon_velocity_components
+			break
 	var earth_position_components: PackedFloat64Array = ephemeris_cache.get("earth_heliocentric_position_components", PackedFloat64Array([0.0, 0.0]))
 	var earth_velocity_components: PackedFloat64Array = ephemeris_cache.get("earth_heliocentric_velocity_components", PackedFloat64Array([0.0, 0.0]))
 	var adjusted_earth_components := PackedFloat64Array([
@@ -534,8 +553,22 @@ func _ephemeris_states_at(time_seconds: float) -> Dictionary:
 	])
 	var adjusted_earth_position := Vector2(adjusted_earth_components[0], adjusted_earth_components[1])
 	var adjusted_earth_velocity := Vector2(earth_velocity_components[0], earth_velocity_components[1])
-	var moon_velocity_components: PackedFloat64Array = ephemeris_cache.get("moon_heliocentric_velocity_components", PackedFloat64Array([0.0, 0.0]))
-	var adjusted_moon_velocity := Vector2(moon_velocity_components[0], moon_velocity_components[1])
+	var moon_heliocentric_components := PackedFloat64Array([
+		adjusted_earth_components[0] + moon_position_components[0],
+		adjusted_earth_components[1] + moon_position_components[1]
+	])
+	var moon_heliocentric_velocity_components := PackedFloat64Array([
+		earth_velocity_components[0] + moon_velocity_components[0],
+		earth_velocity_components[1] + moon_velocity_components[1]
+	])
+	for i in range(adjusted_heliocentric.size()):
+		if str(adjusted_heliocentric[i].get("name", "")) == "Moon":
+			adjusted_heliocentric[i]["position_components"] = moon_heliocentric_components
+			adjusted_heliocentric[i]["position"] = Vector2(moon_heliocentric_components[0], moon_heliocentric_components[1])
+			adjusted_heliocentric[i]["velocity_components"] = moon_heliocentric_velocity_components
+			adjusted_heliocentric[i]["velocity"] = Vector2(moon_heliocentric_velocity_components[0], moon_heliocentric_velocity_components[1])
+			break
+	var adjusted_moon_velocity := Vector2(moon_heliocentric_velocity_components[0], moon_heliocentric_velocity_components[1])
 	ephemeris_output_cache = {
 		"bodies": adjusted_bodies,
 		"surface_bodies": adjusted_surface,
@@ -545,7 +578,7 @@ func _ephemeris_states_at(time_seconds: float) -> Dictionary:
 		"earth_heliocentric_velocity": adjusted_earth_velocity,
 		"earth_heliocentric_velocity_components": earth_velocity_components,
 		"moon_heliocentric_velocity": adjusted_moon_velocity,
-		"moon_heliocentric_velocity_components": moon_velocity_components
+		"moon_heliocentric_velocity_components": moon_heliocentric_velocity_components
 	}
 	ephemeris_output_cache_time = time_seconds
 	return ephemeris_output_cache
