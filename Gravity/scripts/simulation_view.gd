@@ -214,11 +214,11 @@ func _physics_step(dt: float) -> void:
 				autopilot_complete = true
 				status_message = "AUTOPILOT  •  MANOEUVRE BURN COMPLETE"
 	var gravity_states: Dictionary = _ephemeris_states_at(start_time + dt * 0.5)
-	var initial_gravity: Vector2 = PlanetarySystem.gravity_acceleration_from_states(rocket_position, gravity_states)
+	var initial_gravity: Vector2 = PlanetarySystem.gravity_acceleration_from_heliocentric_states(rocket_position, gravity_states)
 	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid, start_time)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	var next_position := rocket_position + half_velocity * dt
-	var final_gravity: Vector2 = PlanetarySystem.gravity_acceleration_from_states(next_position, gravity_states)
+	var final_gravity: Vector2 = PlanetarySystem.gravity_acceleration_from_heliocentric_states(next_position, gravity_states)
 	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, end_time)
 	velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	rocket_position = next_position
@@ -239,13 +239,19 @@ func _adaptive_step_size() -> float:
 	var radius: float = maxf(float(body.radius), float(body.distance))
 	var altitude: float = maxf(0.0, float(body.distance) - float(body.radius))
 	var gravity: float = G * float(body.mass) / (radius * radius)
-	var orbital_limit: float = 0.015 * sqrt(radius / maxf(0.001, gravity))
-	var speed: float = (velocity - Vector2(body.velocity)).length()
+	var orbital_limit: float = 0.002 * sqrt(radius / maxf(0.001, gravity))
+	var relative_position: Vector2 = rocket_position - Vector2(body.position)
+	var relative_velocity: Vector2 = velocity - Vector2(body.velocity)
+	var local_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, G * float(body.mass))
+	var speed: float = relative_velocity.length()
 	var deep_space: bool = altitude > 1.0e8
 	var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(body.get("name", "Earth")))
 	var in_atmosphere: bool = altitude < atmosphere_height
 	var maximum_step: float = 0.25 if in_atmosphere else 1800.0
 	var travel_distance_limit: float = 250.0 if in_atmosphere else maxf(100000.0, radius * 0.01)
+	if bool(local_orbit.get("bound", false)) and not in_atmosphere:
+		maximum_step = minf(maximum_step, 0.5)
+		travel_distance_limit = minf(travel_distance_limit, maxf(1000.0, radius * 0.0005))
 	if deep_space:
 		travel_distance_limit = maxf(50000000.0, radius * 0.01)
 	var travel_limit: float = travel_distance_limit / maxf(100.0, speed)
@@ -465,7 +471,30 @@ func _ephemeris_states_at(time_seconds: float) -> Dictionary:
 		var adjusted: Dictionary = body.duplicate()
 		adjusted["position"] = Vector2(body.get("position", Vector2.ZERO)) + Vector2(body.get("velocity", Vector2.ZERO)) * offset
 		adjusted_surface.append(adjusted)
-	ephemeris_output_cache = {"bodies": adjusted_bodies, "surface_bodies": adjusted_surface}
+	var earth_velocity: Vector2 = ephemeris_cache.get("earth_heliocentric_velocity", Vector2.ZERO)
+	var adjusted_heliocentric: Array[Dictionary] = []
+	for body in ephemeris_cache.get("heliocentric_bodies", []):
+		var adjusted: Dictionary = body.duplicate()
+		var body_velocity: Vector2 = Vector2.ZERO
+		var body_name: String = str(body.get("name", ""))
+		if body_name == "Earth":
+			body_velocity = earth_velocity
+		elif body_name == "Moon":
+			body_velocity = Vector2(ephemeris_cache.get("moon_heliocentric_velocity", Vector2.ZERO))
+		else:
+			for relative_body in ephemeris_cache.get("bodies", []):
+				if str(relative_body.get("name", "")) == body_name:
+					body_velocity = Vector2(relative_body.get("velocity", Vector2.ZERO)) + earth_velocity
+					break
+		adjusted["position"] = Vector2(body.get("position", Vector2.ZERO)) + body_velocity * offset
+		adjusted_heliocentric.append(adjusted)
+	var adjusted_earth_position: Vector2 = Vector2(ephemeris_cache.get("earth_heliocentric_position", Vector2.ZERO)) + earth_velocity * offset
+	ephemeris_output_cache = {
+		"bodies": adjusted_bodies,
+		"surface_bodies": adjusted_surface,
+		"heliocentric_bodies": adjusted_heliocentric,
+		"earth_heliocentric_position": adjusted_earth_position
+	}
 	ephemeris_output_cache_time = time_seconds
 	return ephemeris_output_cache
 
