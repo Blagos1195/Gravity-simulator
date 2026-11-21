@@ -46,10 +46,19 @@ class OrbitPlot extends Control:
 	var has_target := false
 	var plot_scale := 1.0
 	var plot_center := Vector2.ZERO
+	var interaction_scale := 1.0
+	var interaction_center := Vector2.ZERO
+	var zoom_factor := 1.0
 
 	func _gui_input(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			zoom_factor = clampf(zoom_factor * (1.15 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.15), 0.25, 4.0)
+			queue_redraw()
+			accept_event()
+		elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
+				interaction_scale = plot_scale
+				interaction_center = plot_center
 				dragging_node = _nearest_node(event.position)
 				dragging_target = dragging_node < 0
 				if dragging_node >= 0:
@@ -74,7 +83,9 @@ class OrbitPlot extends Control:
 				accept_event()
 
 	func _screen_to_world(screen_position: Vector2) -> Vector2:
-		return Vector2((screen_position.x - plot_center.x) / plot_scale, -(screen_position.y - plot_center.y) / plot_scale)
+		var scale_value := interaction_scale if dragging_target or dragging_node >= 0 else plot_scale
+		var center_value := interaction_center if dragging_target or dragging_node >= 0 else plot_center
+		return Vector2((screen_position.x - center_value.x) / scale_value, -(screen_position.y - center_value.y) / scale_value)
 
 	func _nearest_node(mouse_position: Vector2) -> int:
 		if node_positions.is_empty() or plot_scale <= 0.0:
@@ -108,7 +119,7 @@ class OrbitPlot extends Control:
 		for point in planned_path:
 			extent = maxf(extent, point.length())
 		extent = maxf(1.0, extent * 1.08)
-		plot_scale = minf(size.x, size.y) * 0.46 / extent
+		plot_scale = minf(size.x, size.y) * 0.46 / extent * zoom_factor
 		plot_center = size * 0.5
 		var center: Vector2 = plot_center
 		var body_screen_radius: float = maxf(4.0, body_radius * plot_scale)
@@ -166,7 +177,7 @@ func _build_interface() -> void:
 	root.add_child(heading)
 
 	var description := Label.new()
-	description.text = "Drag anywhere on the orbital map to set or move a destination inside the current body's sphere of influence. Choose a transfer time up to 48 hours and the computer solves a local two-body Lambert transfer, calculates departure ΔV and previews the route. Drag orange burn nodes to edit additional manoeuvres. Atmospheres and third-body perturbations are not included in this preview."
+	description.text = "Drag anywhere on the orbital map to set or move a destination inside the current body's sphere of influence. Scroll to zoom. Choose a transfer time up to 48 hours and the computer solves a local two-body Lambert transfer, calculates departure ΔV and previews the route. Drag orange burn nodes to edit additional manoeuvres. Atmospheres and third-body perturbations are not included in this preview."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 
