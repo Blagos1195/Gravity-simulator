@@ -14,6 +14,7 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: chickensoft-games/setup-godot@v2
@@ -24,6 +25,6 @@ jobs:
       - name: Import and parse project
         run: godot --headless --path Gravity --editor --quit
       - name: Test rocket design validation
-        run: godot --headless --path Gravity --script res://tests/rocket_design_test.gd
+        run: godot --headless --path Gravity --script res://tests/rocket_design_test.gd --quit-after 1
       - name: Test flight computer calculations
-        run: godot --headless --path Gravity --script res://tests/flight_computer_test.gd
+        run: godot --headless --path Gravity --script res://tests/flight_computer_test.gd --quit-after 1
