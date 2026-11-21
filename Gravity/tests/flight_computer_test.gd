@@ -188,10 +188,11 @@ func _initialize() -> void:
 	route_sim.rotation_angle = PI * 0.5
 	route_sim.autopilot_enabled = true
 	route_sim.guidance_enabled = true
-	route_sim.autopilot_route_nodes = [
+	var route_nodes: Array[Dictionary] = [
 		{"time": 10.0, "prograde": 5.0, "radial": 0.0},
 		{"time": 20.0, "prograde": 5.0, "radial": 0.0}
 	]
+	route_sim.autopilot_route_nodes = route_nodes
 	route_sim.autopilot_phase = "ROUTE_COAST"
 	route_sim._update_guidance(0.01)
 	assert(route_sim.autopilot_phase == "ROUTE_COAST")
