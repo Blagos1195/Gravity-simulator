@@ -252,12 +252,12 @@ func _physics_step(dt: float) -> void:
 		status_message = "STAGE %d  •  ENGINE FIRING" % (stage_index + 1) if throttle > 0.0 else "PAD READY  •  W TO IGNITE" if final_altitude < 100.0 else "FLIGHT ACTIVE"
 
 func _adaptive_step_size() -> float:
-	var body := _nearest_body_state(rocket_position)
+	var body := _nearest_body_state(rocket_position, rocket_position_precise)
 	var radius: float = maxf(float(body.radius), float(body.distance))
 	var altitude: float = maxf(0.0, float(body.distance) - float(body.radius))
 	var gravity: float = G * float(body.mass) / (radius * radius)
 	var orbital_limit: float = 0.002 * sqrt(radius / maxf(0.001, gravity))
-	var relative_position: Vector2 = rocket_position - Vector2(body.position)
+	var relative_position: Vector2 = body.relative_position
 	var relative_velocity: Vector2 = velocity - Vector2(body.velocity)
 	var local_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, G * float(body.mass))
 	var speed: float = relative_velocity.length()
@@ -272,7 +272,7 @@ func _adaptive_step_size() -> float:
 	if deep_space:
 		travel_distance_limit = maxf(50000000.0, radius * 0.01)
 	var travel_limit: float = travel_distance_limit / maxf(100.0, speed)
-	var drag_acceleration := _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass())).length()
+	var drag_acceleration := _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass()), -1.0, rocket_position_precise).length()
 	var drag_limit := 0.08 * speed / drag_acceleration if drag_acceleration > 0.01 else maximum_step
 	var active := _active_stage_data()
 	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and fuel > 0.0 else 0.0
@@ -308,7 +308,7 @@ func _adaptive_step_size() -> float:
 			step_limit = minf(step_limit, 0.02 * relative_distance / relative_speed)
 	return step_limit
 
-func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: float = -1.0) -> Dictionary:
+func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: float = -1.0, position_components: PackedFloat64Array = PackedFloat64Array()) -> Dictionary:
 	var sample_time := sim_time if time_seconds < 0.0 else time_seconds
 	var best := {
 		"body_name": "",
@@ -319,7 +319,11 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: 
 		"gamma": 1.4,
 		"relative_velocity": Vector2.ZERO
 	}
-	var earth_altitude := position.length() - EARTH_RADIUS
+	var components := position_components
+	if components.size() < 2:
+		components = rocket_position_precise if position == rocket_position else PackedFloat64Array([position.x, position.y])
+	var position_radius := sqrt(components[0] * components[0] + components[1] * components[1])
+	var earth_altitude := position_radius - EARTH_RADIUS
 	var earth_density := PlanetarySystem.atmospheric_density(earth_altitude)
 	if earth_density > 0.0:
 		best = {
@@ -329,18 +333,18 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: 
 			"temperature": PlanetarySystem.atmospheric_temperature(earth_altitude),
 			"gas_constant": 287.05287,
 			"gamma": 1.4,
-			"relative_velocity": current_velocity - Vector2(-position.y, position.x) * EARTH_ROTATION_RATE
+			"relative_velocity": current_velocity - Vector2(-components[1], components[0]) * EARTH_ROTATION_RATE
 		}
-	if position.length() < 1.0e8:
+	if position_radius < 1.0e8:
 		return best
 	var ephemeris: Dictionary = _ephemeris_states_at(sample_time)
 	for body in ephemeris.get("surface_bodies", []):
 		var body_name: String = str(body.get("name", ""))
 		if body_name == "Earth":
 			continue
-		var body_position: Vector2 = body.get("position", Vector2.ZERO)
 		var body_velocity: Vector2 = body.get("velocity", Vector2.ZERO)
-		var relative_position: Vector2 = position - body_position
+		var body_components := _body_position_components(body)
+		var relative_position := Vector2(components[0] - body_components[0], components[1] - body_components[1])
 		var body_altitude: float = relative_position.length() - float(body.get("radius", 0.0))
 		var density: float = PlanetarySystem.planetary_atmosphere_density(body_name, body_altitude)
 		if density <= float(best.get("density", 0.0)):
@@ -367,10 +371,10 @@ func _engine_thrust(altitude: float) -> float:
 	var vacuum_thrust := float(active.get("vacuum_thrust", 0.0))
 	return lerpf(vacuum_thrust, sea_level_thrust, clampf(ambient_pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1))
 
-func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float, time_seconds: float = -1.0) -> Vector2:
+func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float, time_seconds: float = -1.0, position_components: PackedFloat64Array = PackedFloat64Array()) -> Vector2:
 	if realism == "Arcade":
 		return Vector2.ZERO
-	var atmosphere := _atmosphere_at(position, current_velocity, time_seconds)
+	var atmosphere := _atmosphere_at(position, current_velocity, time_seconds, position_components)
 	var density := float(atmosphere.density)
 	var relative_velocity: Vector2 = atmosphere.relative_velocity
 	var relative_speed := relative_velocity.length()
