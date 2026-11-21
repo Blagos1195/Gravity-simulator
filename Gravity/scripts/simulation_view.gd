@@ -26,8 +26,19 @@ var ephemeris_cache_time := -INF
 var ephemeris_cache: Dictionary = {}
 var ephemeris_output_cache_time := -INF
 var ephemeris_output_cache: Dictionary = {}
-var rocket_position := Vector2(0, -EARTH_RADIUS - 2.0)
+var rocket_position_precise := PackedFloat64Array([0.0, -EARTH_RADIUS - 2.0])
+var _rocket_position_display := Vector2(0.0, -EARTH_RADIUS - 2.0)
+var rocket_position: Vector2:
+	get:
+		return _rocket_position_display
+	set(value):
+		_rocket_position_display = value
+		rocket_position_precise = PackedFloat64Array([value.x, value.y])
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
+
+func _set_rocket_position_components(position_x: float, position_y: float) -> void:
+	rocket_position_precise = PackedFloat64Array([position_x, position_y])
+	_rocket_position_display = Vector2(position_x, position_y)
 var rotation_angle := 0.0
 var fuel := 300000.0
 var stage_index := 0
