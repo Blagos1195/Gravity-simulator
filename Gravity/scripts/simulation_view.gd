@@ -267,6 +267,11 @@ func _adaptive_step_size() -> float:
 		if effective_exhaust_velocity > 0.0:
 			var required_propellant := current_mass * (1.0 - exp(-autopilot_burn_remaining / effective_exhaust_velocity))
 			step_limit = minf(step_limit, required_propellant / total_flow)
+	if autopilot_enabled and autopilot_phase == "COAST":
+		var coast_orbit: Dictionary = FlightComputer.orbital_state(rocket_position - Vector2(body.position), velocity - Vector2(body.velocity), G * float(body.mass))
+		var coast_radial_speed: float = absf(float(coast_orbit.get("radial_speed", 0.0)))
+		if bool(coast_orbit.get("bound", false)) and coast_radial_speed < 500.0 and float(coast_orbit.get("apoapsis", 0.0)) >= float(body.radius) + autopilot_target_altitude * 0.95:
+			step_limit = minf(step_limit, 0.25)
 	if autopilot_enabled and autopilot_phase == "ROUTE_COAST" and autopilot_route_node_index < autopilot_route_nodes.size():
 		var next_node: Dictionary = autopilot_route_nodes[autopilot_route_node_index]
 		var time_until_node: float = maxf(0.0, float(next_node.get("time", sim_time)) - sim_time)
@@ -569,7 +574,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
 				thrust_key_down = false
 				var coast_radial_speed: float = float(orbit.get("radial_speed", 0.0))
-				if coast_radial_speed <= 30.0 and altitude > 70000.0:
+				if absf(coast_radial_speed) <= 1.0 and altitude > 70000.0:
 					autopilot_phase = "CIRCULARISE"
 			"CIRCULARISE":
 				status_message = "AUTOPILOT  •  ORBITAL CIRCULARISATION"
@@ -578,13 +583,23 @@ func _update_guidance(dt: float) -> void:
 				autopilot_burn_direction = circular_burn_vector.normalized()
 				var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				var circular_alignment_error := absf(angle_difference(rotation_angle, circular_burn_rotation))
-				if not bool(circular_plan.get("valid", false)) or float(circular_plan.get("delta_v", INF)) <= 2.0:
+				var circularised_velocity: Vector2 = circular_plan.get("desired_velocity", guidance_velocity)
+				var circularised_orbit: Dictionary = FlightComputer.orbital_state(guidance_position, circularised_velocity, G * float(guidance_body.mass))
+				var safe_periapsis: float = float(guidance_body.radius) + 70000.0
+				var circularisation_complete: bool = bool(circular_plan.get("valid", false)) and float(circular_plan.get("delta_v", INF)) <= 0.1 and bool(circularised_orbit.get("bound", false)) and float(circularised_orbit.get("periapsis", 0.0)) > safe_periapsis
+				if not bool(circular_plan.get("valid", false)):
+					thrust_key_down = false
+					autopilot_phase = "FAILED"
+					status_message = "ORBIT INSERTION FAILED  •  INVALID ORBIT STATE"
+				elif circularisation_complete:
 					thrust_key_down = false
 					if autopilot_target_mode == "PLANET" or (autopilot_planet_index == -2 and str(guidance_body.name) != "Earth"):
 						autopilot_phase = "PLAN_TRANSFER"
 					else:
 						autopilot_phase = "COMPLETE"
 						autopilot_complete = true
+				else:
+					thrust_key_down = fuel > 0.0 and circular_alignment_error < deg_to_rad(2.0)
 				else:
 					thrust_key_down = fuel > 0.0 and circular_alignment_error < deg_to_rad(2.0)
 
