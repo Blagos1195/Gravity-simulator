@@ -115,6 +115,8 @@ class OrbitPlot extends Control:
 		if size.x <= 0.0 or size.y <= 0.0 or current_path.is_empty():
 			return
 		var extent: float = maxf(rocket_position.length(), body_radius * 1.2)
+		if has_target:
+			extent = maxf(extent, target_position.length())
 		for point in current_path:
 			extent = maxf(extent, point.length())
 		for point in planned_path:
