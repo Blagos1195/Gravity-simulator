@@ -9,6 +9,8 @@ const EARTH_RADIUS := PlanetarySystem.EARTH_RADIUS
 const DRAG_AREA := 0.45
 const LIFT_AREA := 1.8
 const EARTH_ROTATION_RATE := 7.2921159e-5
+const MAX_PHYSICS_BUDGET_USEC := 6000
+const MAX_PHYSICS_STEPS_PER_FRAME := 4000
 
 var rocket_stages: Array = []
 var payload_mass := 500.0
@@ -116,8 +118,8 @@ func _process(delta: float) -> void:
 		var effective_warp: float = minf(time_warp, 100.0) if near_atmosphere else time_warp
 		simulation_time_backlog += effective_warp * delta
 		var iterations := 0
-		var maximum_iterations := 4000
-		while simulation_time_backlog > 0.000001 and iterations < maximum_iterations:
+		var physics_budget_start_usec: int = Time.get_ticks_usec()
+		while simulation_time_backlog > 0.000001 and iterations < MAX_PHYSICS_STEPS_PER_FRAME and Time.get_ticks_usec() - physics_budget_start_usec < MAX_PHYSICS_BUDGET_USEC:
 			var step_delta: float = minf(simulation_time_backlog, _adaptive_step_size())
 			if step_delta <= 0.000001:
 				break
