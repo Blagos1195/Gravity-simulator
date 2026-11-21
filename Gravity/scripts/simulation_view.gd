@@ -230,7 +230,7 @@ func _adaptive_step_size() -> float:
 	var burnout_limit := fuel / total_flow if thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
 	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, maximum_step)
 	var step_limit := minf(physics_limit, burnout_limit)
-	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"] and autopilot_burn_remaining > 0.0 and total_flow > 0.0:
+	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN"] and autopilot_burn_remaining > 0.0 and total_flow > 0.0:
 		var current_mass := maxf(1.0, _current_vehicle_mass())
 		var current_thrust := _engine_thrust(altitude)
 		var effective_exhaust_velocity := current_thrust / total_flow
