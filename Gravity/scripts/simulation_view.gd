@@ -464,36 +464,65 @@ func _ephemeris_states_at(time_seconds: float) -> Dictionary:
 	var adjusted_bodies: Array[Dictionary] = []
 	for body in ephemeris_cache.get("bodies", []):
 		var adjusted: Dictionary = body.duplicate()
-		adjusted["position"] = Vector2(body.get("position", Vector2.ZERO)) + Vector2(body.get("velocity", Vector2.ZERO)) * offset
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_velocity: Vector2 = body.get("velocity", Vector2.ZERO)
+		var position_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var velocity_components: PackedFloat64Array = body.get("velocity_components", PackedFloat64Array([body_velocity.x, body_velocity.y]))
+		var adjusted_components := PackedFloat64Array([
+			position_components[0] + velocity_components[0] * offset,
+			position_components[1] + velocity_components[1] * offset
+		])
+		adjusted["position_components"] = adjusted_components
+		adjusted["position"] = Vector2(adjusted_components[0], adjusted_components[1])
 		adjusted_bodies.append(adjusted)
 	var adjusted_surface: Array[Dictionary] = []
 	for body in ephemeris_cache.get("surface_bodies", []):
 		var adjusted: Dictionary = body.duplicate()
-		adjusted["position"] = Vector2(body.get("position", Vector2.ZERO)) + Vector2(body.get("velocity", Vector2.ZERO)) * offset
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_velocity: Vector2 = body.get("velocity", Vector2.ZERO)
+		var position_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var velocity_components: PackedFloat64Array = body.get("velocity_components", PackedFloat64Array([body_velocity.x, body_velocity.y]))
+		var adjusted_components := PackedFloat64Array([
+			position_components[0] + velocity_components[0] * offset,
+			position_components[1] + velocity_components[1] * offset
+		])
+		adjusted["position_components"] = adjusted_components
+		adjusted["position"] = Vector2(adjusted_components[0], adjusted_components[1])
 		adjusted_surface.append(adjusted)
-	var earth_velocity: Vector2 = ephemeris_cache.get("earth_heliocentric_velocity", Vector2.ZERO)
 	var adjusted_heliocentric: Array[Dictionary] = []
 	for body in ephemeris_cache.get("heliocentric_bodies", []):
 		var adjusted: Dictionary = body.duplicate()
-		var body_velocity: Vector2 = Vector2.ZERO
-		var body_name: String = str(body.get("name", ""))
-		if body_name == "Earth":
-			body_velocity = earth_velocity
-		elif body_name == "Moon":
-			body_velocity = Vector2(ephemeris_cache.get("moon_heliocentric_velocity", Vector2.ZERO))
-		else:
-			for relative_body in ephemeris_cache.get("bodies", []):
-				if str(relative_body.get("name", "")) == body_name:
-					body_velocity = Vector2(relative_body.get("velocity", Vector2.ZERO)) + earth_velocity
-					break
-		adjusted["position"] = Vector2(body.get("position", Vector2.ZERO)) + body_velocity * offset
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_velocity: Vector2 = body.get("velocity", Vector2.ZERO)
+		var position_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var velocity_components: PackedFloat64Array = body.get("velocity_components", PackedFloat64Array([body_velocity.x, body_velocity.y]))
+		var adjusted_components := PackedFloat64Array([
+			position_components[0] + velocity_components[0] * offset,
+			position_components[1] + velocity_components[1] * offset
+		])
+		adjusted["position_components"] = adjusted_components
+		adjusted["position"] = Vector2(adjusted_components[0], adjusted_components[1])
 		adjusted_heliocentric.append(adjusted)
-	var adjusted_earth_position: Vector2 = Vector2(ephemeris_cache.get("earth_heliocentric_position", Vector2.ZERO)) + earth_velocity * offset
+	var earth_position_components: PackedFloat64Array = ephemeris_cache.get("earth_heliocentric_position_components", PackedFloat64Array([0.0, 0.0]))
+	var earth_velocity_components: PackedFloat64Array = ephemeris_cache.get("earth_heliocentric_velocity_components", PackedFloat64Array([0.0, 0.0]))
+	var adjusted_earth_components := PackedFloat64Array([
+		earth_position_components[0] + earth_velocity_components[0] * offset,
+		earth_position_components[1] + earth_velocity_components[1] * offset
+	])
+	var adjusted_earth_position := Vector2(adjusted_earth_components[0], adjusted_earth_components[1])
+	var adjusted_earth_velocity := Vector2(earth_velocity_components[0], earth_velocity_components[1])
+	var moon_velocity_components: PackedFloat64Array = ephemeris_cache.get("moon_heliocentric_velocity_components", PackedFloat64Array([0.0, 0.0]))
+	var adjusted_moon_velocity := Vector2(moon_velocity_components[0], moon_velocity_components[1])
 	ephemeris_output_cache = {
 		"bodies": adjusted_bodies,
 		"surface_bodies": adjusted_surface,
 		"heliocentric_bodies": adjusted_heliocentric,
-		"earth_heliocentric_position": adjusted_earth_position
+		"earth_heliocentric_position": adjusted_earth_position,
+		"earth_heliocentric_position_components": adjusted_earth_components,
+		"earth_heliocentric_velocity": adjusted_earth_velocity,
+		"earth_heliocentric_velocity_components": earth_velocity_components,
+		"moon_heliocentric_velocity": adjusted_moon_velocity,
+		"moon_heliocentric_velocity_components": moon_velocity_components
 	}
 	ephemeris_output_cache_time = time_seconds
 	return ephemeris_output_cache
