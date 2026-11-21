@@ -421,11 +421,32 @@ func _solve_lambert(start_position: Vector2, finish_position: Vector2, duration:
 	if absf(parameter_a) < 0.000001:
 		return {"valid": false, "reason": "Transfer geometry is singular."}
 	var target_time := sqrt(gravitational_parameter) * duration
-	var lower := -39.0
-	var upper := 39.0
-	var lower_value := _lambert_time_function(lower, radius_start, radius_end, parameter_a) - target_time
-	var upper_value := _lambert_time_function(upper, radius_start, radius_end, parameter_a) - target_time
-	if not is_finite(lower_value) or not is_finite(upper_value) or lower_value * upper_value > 0.0:
+	var lower := 0.0
+	var upper := 0.0
+	var lower_value := _lambert_time_function(0.0, radius_start, radius_end, parameter_a) - target_time
+	var upper_value := lower_value
+	var bracket_found := false
+	var search_direction := 1.0 if lower_value < 0.0 else -1.0
+	var previous_z := 0.0
+	var previous_value := lower_value
+	for search_index in range(1, 391):
+		var candidate_z := search_direction * float(search_index) * 0.1
+		var candidate_value := _lambert_time_function(candidate_z, radius_start, radius_end, parameter_a) - target_time
+		if is_finite(candidate_value) and is_finite(previous_value) and previous_value * candidate_value <= 0.0:
+			lower = minf(previous_z, candidate_z)
+			upper = maxf(previous_z, candidate_z)
+			if lower == previous_z:
+				lower_value = previous_value
+				upper_value = candidate_value
+			else:
+				lower_value = candidate_value
+				upper_value = previous_value
+			bracket_found = true
+			break
+		if is_finite(candidate_value):
+			previous_z = candidate_z
+			previous_value = candidate_value
+	if not bracket_found:
 		return {"valid": false, "reason": "No single-revolution transfer solution exists for that destination and time."}
 	for iteration in range(90):
 		var middle := (lower + upper) * 0.5
