@@ -9,6 +9,9 @@ func _initialize() -> void:
 	assert(RocketDesign.total_delta_v(design) > 0.0)
 	var multi_engine := design.duplicate(true)
 	multi_engine["stages"][0]["engine_count"] = 3
+	multi_engine["stages"][0]["thrust"] = float(multi_engine["stages"][0]["thrust"]) / 3.0
+	multi_engine["stages"][0]["vacuum_thrust"] = float(multi_engine["stages"][0]["vacuum_thrust"]) / 3.0
+	multi_engine["stages"][0]["flow"] = float(multi_engine["stages"][0]["flow"]) / 3.0
 	assert(RocketDesign.validation_errors(multi_engine).is_empty())
 	assert(is_equal_approx(RocketDesign.total_delta_v(multi_engine), RocketDesign.total_delta_v(design)))
 	var heavier := design.duplicate(true)
