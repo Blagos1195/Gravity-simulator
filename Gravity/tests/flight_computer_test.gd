@@ -208,5 +208,27 @@ func _initialize() -> void:
 	route_planner_window.free()
 	planner_sim.free()
 
+	var moon_velocity_time := 86400.0 * 123.0
+	var analytical_moon_velocity: Vector2 = PlanetarySystem.moon_velocity(moon_velocity_time)
+	var numerical_moon_velocity: Vector2 = (PlanetarySystem.moon_position(moon_velocity_time + 1.0) - PlanetarySystem.moon_position(moon_velocity_time - 1.0)) / 2.0
+	assert(analytical_moon_velocity.distance_to(numerical_moon_velocity) < 0.001)
+	assert(gravity_snapshot.get("surface_bodies", []).size() == 9)
+	var cached_simulation: Variant = SimulationView.new()
+	var cached_moon: Dictionary = cached_simulation._surface_body_state("Moon")
+	var interpolated_states: Dictionary = cached_simulation._ephemeris_states_at(5.0)
+	var interpolated_moon: Dictionary = interpolated_states.get("surface_bodies", [])[1]
+	var expected_moon_position: Vector2 = cached_moon.position + cached_moon.velocity * 5.0
+	assert(Vector2(interpolated_moon.position).distance_to(expected_moon_position) < 0.001)
+	cached_simulation.set_rocket_design(RocketDesign.create_default())
+	cached_simulation.landed = false
+	cached_simulation.rocket_position = Vector2(0.0, -FlightComputer.EARTH_RADIUS - 200000.0)
+	cached_simulation.velocity = Vector2(7800.0, 0.0)
+	var orbital_step: float = cached_simulation._adaptive_step_size()
+	assert(orbital_step > 5.0 and orbital_step <= 180.0)
+	cached_simulation.rocket_position = Vector2(0.0, -FlightComputer.EARTH_RADIUS - 1000.0)
+	var atmospheric_step: float = cached_simulation._adaptive_step_size()
+	assert(atmospheric_step <= 0.25)
+	cached_simulation.free()
+
 	print("Flight computer orbital calculation tests passed.")
 	quit()
