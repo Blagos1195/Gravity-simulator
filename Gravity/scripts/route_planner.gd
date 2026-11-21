@@ -166,7 +166,7 @@ func _build_interface() -> void:
 	root.add_child(heading)
 
 	var description := Label.new()
-	description.text = "Drag anywhere on the orbital map to set or move a destination. Choose a transfer time and the computer solves the two-body transfer, calculates departure ΔV and previews the route. Drag orange burn nodes to edit additional manoeuvres."
+	description.text = "Drag anywhere on the orbital map to set or move a destination inside the current body's sphere of influence. Choose a transfer time and the computer solves a local two-body Lambert transfer, calculates departure ΔV and previews the route. Drag orange burn nodes to edit additional manoeuvres. Atmospheres and third-body perturbations are not included in this preview."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 
@@ -374,6 +374,18 @@ func _set_route_target(world_position: Vector2) -> void:
 		return
 	route_target = world_position
 	has_route_target = true
+	var body_radius := float(current_body.get("radius", 0.0))
+	var sphere_of_influence := float(current_body.get("soi", INF))
+	if route_target.length() <= body_radius:
+		route_delta_v = INF
+		route_status = "DESTINATION IS INSIDE THE BODY"
+		_update_manoeuvre()
+		return
+	if route_target.length() >= sphere_of_influence:
+		route_delta_v = INF
+		route_status = "DESTINATION IS OUTSIDE THIS BODY'S SPHERE OF INFLUENCE"
+		_update_manoeuvre()
+		return
 	_calculate_route()
 
 func _stumpff_c(value: float) -> float:
@@ -664,6 +676,13 @@ func _build_prediction_paths() -> void:
 	var remaining_steps: int = 180
 	var final_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, final_duration, remaining_steps)
 	planned_path = final_result.get("path", planned_path)
+	if has_route_target:
+		var body_radius := float(current_body.get("radius", 0.0))
+		for point in planned_path:
+			if point.length() <= body_radius:
+				route_delta_v = INF
+				route_status = "PREDICTED ROUTE INTERSECTS THE BODY"
+				break
 	orbit_plot.set_paths(current_path, planned_path, markers, float(current_body.get("radius", 0.0)), relative_position, route_target, has_route_target)
 	if not nodes.is_empty():
 		var periapsis_altitude: float = (float(final_orbit.get("periapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0
