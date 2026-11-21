@@ -160,7 +160,44 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 			"solid": planet_name in ["Mercury", "Venus", "Mars"],
 			"soi": float(planet.a) * ASTRONOMICAL_UNIT * pow(planet_mass / (3.0 * SUN_MASS), 1.0 / 3.0)
 		})
-	return {"bodies": bodies, "surface_bodies": surface_bodies}
+	var heliocentric_bodies: Array[Dictionary] = [
+		{"name": "Sun", "mass": SUN_MASS, "position": Vector2.ZERO, "radius": 6.957e8},
+		{"name": "Earth", "mass": EARTH_MASS, "position": earth_position, "radius": EARTH_RADIUS},
+		{"name": "Moon", "mass": MOON_MASS, "position": earth_position + moon_position_value, "radius": MOON_RADIUS}
+	]
+	for planet in PLANETS:
+		if str(planet.name) == "Earth":
+			continue
+		var planet_state: Dictionary = _planet_heliocentric_state(planet, time_seconds)
+		heliocentric_bodies.append({"name": str(planet.name), "mass": float(planet.mass), "position": Vector2(planet_state.position), "radius": float(planet.radius)})
+	return {
+		"bodies": bodies,
+		"surface_bodies": surface_bodies,
+		"heliocentric_bodies": heliocentric_bodies,
+		"earth_heliocentric_position": earth_position,
+		"earth_heliocentric_velocity": earth_velocity,
+		"moon_heliocentric_velocity": earth_velocity + moon_velocity_value
+	}
+
+static func gravity_acceleration_from_heliocentric_states(earth_relative_position: Vector2, body_states: Dictionary) -> Vector2:
+	var heliocentric_bodies: Array = body_states.get("heliocentric_bodies", [])
+	var earth_position: Vector2 = body_states.get("earth_heliocentric_position", Vector2.ZERO)
+	var rocket_heliocentric_position: Vector2 = earth_position + earth_relative_position
+	var rocket_acceleration := Vector2.ZERO
+	var earth_acceleration := Vector2.ZERO
+	for body_variant in heliocentric_bodies:
+		var body: Dictionary = body_variant
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_mass: float = float(body.get("mass", 0.0))
+		var body_radius: float = maxf(1.0, float(body.get("radius", 1.0)))
+		var rocket_offset: Vector2 = body_position - rocket_heliocentric_position
+		var rocket_distance: float = maxf(body_radius, rocket_offset.length())
+		if str(body.get("name", "")) != "Earth":
+			var earth_offset: Vector2 = body_position - earth_position
+			var earth_distance: float = maxf(body_radius, earth_offset.length())
+			earth_acceleration += earth_offset / earth_distance * (G * body_mass / (earth_distance * earth_distance))
+		rocket_acceleration += rocket_offset / rocket_distance * (G * body_mass / (rocket_distance * rocket_distance))
+	return rocket_acceleration - earth_acceleration
 
 static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vector2:
 	return gravity_acceleration_from_states(position, gravity_body_states(time_seconds))
