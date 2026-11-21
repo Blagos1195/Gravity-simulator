@@ -86,6 +86,7 @@ var throttle_cutoff_key_down := false
 var landed := true
 var crashed := false
 var landed_body_name := "Earth"
+var landed_surface_normal := Vector2.DOWN
 
 func _set_rocket_position_components(position_x: float, position_y: float) -> void:
 	rocket_position_precise = PackedFloat64Array([position_x, position_y])
@@ -158,7 +159,7 @@ func _physics_step(dt: float) -> void:
 	if landed:
 		if thrust_key_down and fuel > 0.0:
 			var surface_state := _surface_body_state(landed_body_name)
-			var normal := _relative_position_to_body(surface_state).normalized()
+			var normal := landed_surface_normal.normalized()
 			rotation_angle = normal.angle() - Vector2.UP.angle()
 			_set_rocket_position_relative_to_body(surface_state, normal * (float(surface_state.radius) + 5.0))
 			velocity = surface_state.velocity + Vector2(-normal.y, normal.x) * float(surface_state.radius) * float(surface_state.rotation_rate)
@@ -167,9 +168,9 @@ func _physics_step(dt: float) -> void:
 		else:
 			sim_time = end_time
 			var landed_surface_state := _surface_body_state(landed_body_name)
-			var landed_normal := _relative_position_to_body(landed_surface_state).normalized()
-			_set_rocket_position_relative_to_body(landed_surface_state, landed_normal * (float(landed_surface_state.radius) + 0.5))
-			velocity = landed_surface_state.velocity + Vector2(-landed_normal.y, landed_normal.x) * float(landed_surface_state.radius) * float(landed_surface_state.rotation_rate)
+			landed_surface_normal = landed_surface_normal.rotated(float(landed_surface_state.rotation_rate) * dt).normalized()
+			_set_rocket_position_relative_to_body(landed_surface_state, landed_surface_normal * (float(landed_surface_state.radius) + 0.5))
+			velocity = landed_surface_state.velocity + Vector2(-landed_surface_normal.y, landed_surface_normal.x) * float(landed_surface_state.radius) * float(landed_surface_state.rotation_rate)
 			throttle = 0.0
 			return
 	if crashed:
@@ -619,6 +620,7 @@ func _handle_body_contact() -> void:
 			landed = true
 			crashed = false
 			landed_body_name = str(body.name)
+			landed_surface_normal = normal
 			velocity = surface_velocity
 			status_message = "LANDED  •  %s" % landed_body_name.to_upper()
 		else:
@@ -1457,6 +1459,8 @@ func get_save_data() -> Dictionary:
 		"landed": landed,
 		"crashed": crashed,
 		"landed_body_name": landed_body_name,
+		"landed_surface_normal_x": landed_surface_normal.x,
+		"landed_surface_normal_y": landed_surface_normal.y,
 		"autopilot_burn_direction_x": autopilot_burn_direction.x,
 		"autopilot_burn_direction_y": autopilot_burn_direction.y,
 		"autopilot_route_nodes": autopilot_route_nodes.duplicate(true),
@@ -1503,6 +1507,7 @@ func load_save_data(data: Dictionary) -> void:
 	landed = bool(data.get("landed", false))
 	crashed = bool(data.get("crashed", false))
 	landed_body_name = str(data.get("landed_body_name", "Earth"))
+	landed_surface_normal = Vector2(float(data.get("landed_surface_normal_x", 0.0)), float(data.get("landed_surface_normal_y", -1.0))).normalized()
 	autopilot_burn_direction = Vector2(float(data.get("autopilot_burn_direction_x", 0.0)), float(data.get("autopilot_burn_direction_y", 0.0)))
 	autopilot_route_nodes.clear()
 	var saved_route_nodes: Variant = data.get("autopilot_route_nodes", [])
