@@ -90,19 +90,19 @@ func _initialize() -> void:
 	var earth_local_body: Dictionary = simulation._nearest_body_state(Vector2(0.0, -FlightComputer.EARTH_RADIUS - 2.0))
 	assert(str(earth_local_body.get("name", "")) == "Earth")
 
-	var mars_surface_state: Dictionary = simulation._surface_body_state("Mars")
-	simulation.rocket_position = mars_surface_state.position + Vector2(float(mars_surface_state.radius) + 0.1, 0.0)
-	simulation.velocity = mars_surface_state.velocity + Vector2(0.0, float(mars_surface_state.radius) * float(mars_surface_state.rotation_rate))
+	var earth_surface_state: Dictionary = simulation._surface_body_state("Earth")
+	simulation.rocket_position = Vector2(float(earth_surface_state.radius) + 0.1, 0.0)
+	simulation.velocity = Vector2(0.0, float(earth_surface_state.radius) * float(earth_surface_state.rotation_rate))
 	simulation.throttle = 0.0
 	simulation._handle_body_contact()
 	assert(simulation.landed)
-	assert(simulation.landed_body_name == "Mars")
+	assert(simulation.landed_body_name == "Earth")
 
 	var crash_sim: Variant = SimulationView.new()
 	crash_sim.sim_time = simulation.sim_time
-	var crash_body: Dictionary = crash_sim._surface_body_state("Mars")
-	crash_sim.rocket_position = crash_body.position + Vector2(float(crash_body.radius) + 0.1, 0.0)
-	crash_sim.velocity = crash_body.velocity + Vector2(1000.0, 0.0)
+	var crash_body: Dictionary = crash_sim._surface_body_state("Earth")
+	crash_sim.rocket_position = Vector2(float(crash_body.radius) + 0.1, 0.0)
+	crash_sim.velocity = Vector2(1000.0, 0.0)
 	crash_sim._handle_body_contact()
 	assert(crash_sim.crashed)
 	assert(not crash_sim.landed)
