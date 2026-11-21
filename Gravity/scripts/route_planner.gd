@@ -5,6 +5,7 @@ const FlightComputer = preload("res://scripts/flight_computer.gd")
 var simulation: Control
 var rocket_design: Dictionary = {}
 var orbit_plot: OrbitPlot
+var current_path := PackedVector2Array()
 var node_list: ItemList
 var time_input: SpinBox
 var prograde_input: SpinBox
@@ -27,7 +28,7 @@ var refresh_elapsed := 0.0
 class OrbitPlot extends Control:
 	signal node_dragged(index: int, world_position: Vector2)
 	var body_radius := 0.0
-	var current_path := PackedVector2Array()
+	current_path = PackedVector2Array()
 	var planned_path := PackedVector2Array()
 	var node_positions := PackedVector2Array()
 	var rocket_position := Vector2.ZERO
@@ -304,7 +305,7 @@ func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
 	var nearest_index := 0
 	var nearest_distance := INF
 	for point_index in range(current_path.size()):
-		var distance := current_path[point_index].distance_squared_to(world_position)
+		var distance: float = current_path[point_index].distance_squared_to(world_position)
 		if distance < nearest_distance:
 			nearest_distance = distance
 			nearest_index = point_index
@@ -313,14 +314,14 @@ func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
 	var step_time := current_orbit_duration / float(current_path.size() - 1)
 	var before_index := maxi(0, nearest_index - 1)
 	var after_index := mini(current_path.size() - 1, nearest_index + 1)
-	var burn_position := current_path[nearest_index]
-	var burn_velocity := (current_path[after_index] - current_path[before_index]) / maxf(0.001, float(after_index - before_index) * step_time)
-	var radial := burn_position.normalized()
+	var burn_position: Vector2 = current_path[nearest_index]
+	var burn_velocity: Vector2 = (current_path[after_index] - current_path[before_index]) / maxf(0.001, float(after_index - before_index) * step_time)
+	var radial: Vector2 = burn_position.normalized()
 	var tangent := Vector2(-radial.y, radial.x)
 	if burn_position.cross(burn_velocity) < 0.0:
 		tangent = -tangent
 	var circular_velocity := tangent * sqrt(gravitational_parameter / maxf(1.0, burn_position.length()))
-	var required_burn := circular_velocity - burn_velocity
+	var required_burn: Vector2 = circular_velocity - burn_velocity
 	var node: Dictionary = nodes[index]
 	node["time_offset"] = time_offset
 	node["prograde"] = required_burn.dot(tangent)
