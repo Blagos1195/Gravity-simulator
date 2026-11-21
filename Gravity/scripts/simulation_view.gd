@@ -995,7 +995,7 @@ func _draw_solar_label(label: String, anchor: Vector2, font_size: int, color: Co
 	for offset in offsets:
 		var candidate := Rect2(anchor + offset, label_size)
 		candidate.position.x = clampf(candidate.position.x, 8.0, maxf(8.0, size.x - label_size.x - 8.0))
-		candidate.position.y = clampf(candidate.position.y, 8.0, maxf(8.0, size.y - label_size.y - 8.0))
+		candidate.position.y = clampf(candidate.position.y, 8.0, maxf(8.0, size.y - label_size.y - 42.0))
 		var overlaps := false
 		for existing in occupied:
 			if candidate.intersects(existing):
@@ -1006,12 +1006,25 @@ func _draw_solar_label(label: String, anchor: Vector2, font_size: int, color: Co
 			found = true
 			break
 	if not found:
-		var column_x: float = size.x - label_size.x - 12.0
-		var column_y: float = 42.0
-		for existing in occupied:
-			if existing.position.x >= column_x - 2.0 and existing.position.y + existing.size.y >= column_y:
-				column_y = existing.position.y + existing.size.y + 5.0
-		chosen = Rect2(Vector2(column_x, minf(column_y, maxf(8.0, size.y - label_size.y - 8.0))), label_size)
+		var columns: Array[float] = [12.0, maxf(12.0, size.x - label_size.x - 12.0)]
+		var row_count: int = maxi(1, int((size.y - 60.0) / (label_size.y + 5.0)))
+		for row in range(row_count):
+			for column_x in columns:
+				var candidate_y: float = 42.0 + float(row) * (label_size.y + 5.0)
+				var candidate := Rect2(Vector2(column_x, candidate_y), label_size)
+				var overlaps := false
+				for existing in occupied:
+					if candidate.intersects(existing):
+						overlaps = true
+						break
+				if not overlaps:
+					chosen = candidate
+					found = true
+					break
+			if found:
+				break
+		if not found:
+			chosen = Rect2(Vector2(columns[1], maxf(42.0, size.y - label_size.y - 42.0)), label_size)
 	if chosen.position.distance_to(anchor) > 24.0:
 		draw_line(anchor, chosen.position + Vector2(0.0, label_size.y * 0.5), Color(color.r, color.g, color.b, 0.5), 1.0)
 	draw_rect(chosen, Color(0.025, 0.045, 0.075, 0.88), true)
