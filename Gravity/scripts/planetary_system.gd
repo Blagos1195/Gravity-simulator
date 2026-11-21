@@ -111,22 +111,64 @@ static func moon_position(time_seconds: float) -> Vector2:
 	var y := MOON_ORBIT_RADIUS * sqrt(1.0 - MOON_ORBIT_ECCENTRICITY * MOON_ORBIT_ECCENTRICITY) * sin(eccentric_anomaly)
 	return Vector2(x, y).rotated(perihelion)
 
+static func moon_state(time_seconds: float) -> Dictionary:
+	var days_since_j2000 := EPHEMERIS_EPOCH_JD - J2000_JD + time_seconds / 86400.0
+	var mean_anomaly := MOON_MEAN_ANOMALY_J2000 + MOON_MEAN_MOTION * days_since_j2000 * 86400.0
+	var perihelion := MOON_PERIHELION_J2000 + MOON_PERIHELION_RATE * days_since_j2000 * 86400.0
+	var eccentric_anomaly := _solve_kepler(mean_anomaly, MOON_ORBIT_ECCENTRICITY)
+	var root := sqrt(1.0 - MOON_ORBIT_ECCENTRICITY * MOON_ORBIT_ECCENTRICITY)
+	var x := MOON_ORBIT_RADIUS * (cos(eccentric_anomaly) - MOON_ORBIT_ECCENTRICITY)
+	var y := MOON_ORBIT_RADIUS * root * sin(eccentric_anomaly)
+	var eccentric_rate := MOON_MEAN_MOTION / (1.0 - MOON_ORBIT_ECCENTRICITY * cos(eccentric_anomaly))
+	var vx := -MOON_ORBIT_RADIUS * sin(eccentric_anomaly) * eccentric_rate
+	var vy := MOON_ORBIT_RADIUS * root * cos(eccentric_anomaly) * eccentric_rate
+	var orbital_position := Vector2(x, y)
+	var position := orbital_position.rotated(perihelion)
+	var velocity := Vector2(vx, vy).rotated(perihelion) + Vector2(-position.y, position.x) * MOON_PERIHELION_RATE
+	return {"position": position, "velocity": velocity}
+
+static func moon_position(time_seconds: float) -> Vector2:
+	return moon_state(time_seconds).position
+
 static func moon_velocity(time_seconds: float) -> Vector2:
-	return (moon_position(time_seconds + 30.0) - moon_position(time_seconds - 30.0)) / 60.0
+	return moon_state(time_seconds).velocity
 
 static func gravity_body_states(time_seconds: float) -> Dictionary:
 	var earth_state := _earth_heliocentric_state(time_seconds)
 	var earth_position: Vector2 = earth_state.position
+	var earth_velocity: Vector2 = earth_state.velocity
+	var moon_state_value := moon_state(time_seconds)
+	var moon_position_value: Vector2 = moon_state_value.position
+	var moon_velocity_value: Vector2 = moon_state_value.velocity
 	var bodies: Array[Dictionary] = [
-		{"mass": SUN_MASS, "position": -earth_position, "radius": 6.957e8},
-		{"mass": MOON_MASS, "position": moon_position(time_seconds), "radius": MOON_RADIUS}
+		{"name": "Sun", "mass": SUN_MASS, "position": -earth_position, "velocity": -earth_velocity, "radius": 6.957e8},
+		{"name": "Moon", "mass": MOON_MASS, "position": moon_position_value, "velocity": moon_velocity_value, "radius": MOON_RADIUS}
+	]
+	var surface_bodies: Array[Dictionary] = [
+		{"name": "Earth", "mass": EARTH_MASS, "position": Vector2.ZERO, "velocity": Vector2.ZERO, "radius": EARTH_RADIUS, "rotation_rate": 7.2921159e-5, "solid": true, "soi": 9.25e8},
+		{"name": "Moon", "mass": MOON_MASS, "position": moon_position_value, "velocity": moon_velocity_value, "radius": MOON_RADIUS, "rotation_rate": TAU / MOON_ROTATION_PERIOD, "solid": true, "soi": moon_soi_radius()}
 	]
 	for planet in PLANETS:
 		if planet.name == "Earth":
 			continue
 		var planet_state := _planet_heliocentric_state(planet, time_seconds)
-		bodies.append({"mass": float(planet.mass), "position": planet_state.position - earth_position, "radius": float(planet.radius)})
-	return {"bodies": bodies}
+		var relative_position: Vector2 = planet_state.position - earth_position
+		var relative_velocity: Vector2 = planet_state.velocity - earth_velocity
+		var planet_name := str(planet.name)
+		var planet_mass := float(planet.mass)
+		var planet_radius := float(planet.radius)
+		bodies.append({"name": planet_name, "mass": planet_mass, "position": relative_position, "velocity": relative_velocity, "radius": planet_radius})
+		surface_bodies.append({
+			"name": planet_name,
+			"mass": planet_mass,
+			"position": relative_position,
+			"velocity": relative_velocity,
+			"radius": planet_radius,
+			"rotation_rate": planetary_rotation_rate(planet_name),
+			"solid": planet_name in ["Mercury", "Venus", "Mars"],
+			"soi": float(planet.a) * ASTRONOMICAL_UNIT * pow(planet_mass / (3.0 * SUN_MASS), 1.0 / 3.0)
+		})
+	return {"bodies": bodies, "surface_bodies": surface_bodies}
 
 static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vector2:
 	return gravity_acceleration_from_states(position, gravity_body_states(time_seconds))
