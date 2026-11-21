@@ -37,6 +37,24 @@ func _initialize() -> void:
 	var heliocentric_gravity := PlanetarySystem.gravity_acceleration_from_heliocentric_states(Vector2(0.0, -radius), gravity_snapshot)
 	assert(heliocentric_gravity.is_finite())
 	assert(heliocentric_gravity.distance_to(snapshot_gravity) < 0.0001)
+	var mars_test_x := 2.2794e11
+	var mars_test_altitude := 150000.0
+	var mars_test_radius := 3.3895e6
+	var mars_test_distance := mars_test_radius + mars_test_altitude
+	var mars_test_position := PackedFloat64Array([mars_test_x + mars_test_distance, 0.0])
+	var mars_test_states := {
+		"bodies": [{
+			"name": "Mars",
+			"mass": 6.4171e23,
+			"position": Vector2(mars_test_x, 0.0),
+			"position_components": PackedFloat64Array([mars_test_x, 0.0]),
+			"radius": mars_test_radius
+		}]
+	}
+	var precise_mars_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(mars_test_position, mars_test_states)
+	var expected_mars_gravity := -PlanetarySystem.G * PlanetarySystem.EARTH_MASS / pow(mars_test_position[0], 2.0) - PlanetarySystem.G * 6.4171e23 / pow(mars_test_distance, 2.0) - PlanetarySystem.G * 6.4171e23 / pow(mars_test_x, 2.0)
+	assert(absf(precise_mars_gravity.x - expected_mars_gravity) < 0.000001)
+	assert(absf(precise_mars_gravity.y) < 0.000001)
 	var earth_only_gravity := Vector2(0.0, 1.0) * PlanetarySystem.G * PlanetarySystem.EARTH_MASS / (radius * radius)
 	assert(heliocentric_gravity.distance_to(earth_only_gravity) < 0.001)
 
