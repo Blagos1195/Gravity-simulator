@@ -375,7 +375,11 @@ func _remove_node() -> void:
 func _change_route_duration(hours: float) -> void:
 	route_duration = hours * 3600.0
 	if has_route_target:
-		_calculate_route()
+		if nodes.size() > 1:
+			_invalidate_route_solution()
+			_update_manoeuvre()
+		else:
+			_calculate_route()
 
 func _clear_route_target() -> void:
 	has_route_target = false
@@ -397,8 +401,12 @@ func _invalidate_route_solution() -> void:
 func _set_route_target(world_position: Vector2) -> void:
 	if gravitational_parameter <= 0.0 or relative_position.length() <= 1.0:
 		return
+	if not has_route_target or route_solution_dirty:
+		nodes.clear()
+		selected_node_index = -1
+		route_target = world_position
+		has_route_target = true
 	route_target = world_position
-	has_route_target = true
 	route_solution_dirty = false
 	var body_radius := float(current_body.get("radius", 0.0))
 	var sphere_of_influence := float(current_body.get("soi", INF))
