@@ -291,7 +291,7 @@ func _adaptive_step_size() -> float:
 			var required_propellant := current_mass * (1.0 - exp(-autopilot_burn_remaining / effective_exhaust_velocity))
 			step_limit = minf(step_limit, required_propellant / total_flow)
 	if autopilot_enabled and autopilot_phase == "COAST":
-		var coast_orbit: Dictionary = FlightComputer.orbital_state(rocket_position - Vector2(body.position), velocity - Vector2(body.velocity), G * float(body.mass))
+		var coast_orbit: Dictionary = FlightComputer.orbital_state(body.relative_position, velocity - Vector2(body.velocity), G * float(body.mass))
 		var coast_radial_speed: float = absf(float(coast_orbit.get("radial_speed", 0.0)))
 		if bool(coast_orbit.get("bound", false)) and coast_radial_speed < 500.0 and float(coast_orbit.get("apoapsis", 0.0)) >= float(body.radius) + autopilot_target_altitude * 0.95:
 			step_limit = minf(step_limit, 0.25)
@@ -302,7 +302,7 @@ func _adaptive_step_size() -> float:
 			step_limit = minf(step_limit, time_until_node)
 	if autopilot_enabled and autopilot_phase in ["TRANSFER_COAST", "ARRIVAL_APPROACH"]:
 		var destination_state := _autopilot_target_state()
-		var relative_distance := rocket_position.distance_to(destination_state.position)
+		var relative_distance := _relative_position_to_body(destination_state).length()
 		var relative_speed: float = (velocity - Vector2(destination_state.velocity)).length()
 		if relative_speed > 1.0:
 			step_limit = minf(step_limit, 0.02 * relative_distance / relative_speed)
@@ -731,8 +731,8 @@ func _update_guidance(dt: float) -> void:
 			"ALIGN_DEPARTURE":
 				status_message = "AUTOPILOT  •  ALIGNING DEPARTURE ORBIT"
 				thrust_key_down = false
-				var desired_radial := FlightComputer.departure_periapsis_direction(autopilot_planet_index, sim_time, rocket_position.length())
-				if desired_radial.length_squared() > 0.5 and rocket_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)):
+				var desired_radial := FlightComputer.departure_periapsis_direction(autopilot_planet_index, sim_time, guidance_position.length())
+				if desired_radial.length_squared() > 0.5 and guidance_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)):
 					autopilot_burn_direction = tangent * autopilot_transfer_direction
 					autopilot_phase = "TRANSFER_BURN"
 			"MANEUVER_BURN":
@@ -783,7 +783,7 @@ func _update_guidance(dt: float) -> void:
 				var transfer_elapsed := maxf(0.0, sim_time - autopilot_transfer_start_time)
 				var transfer_remaining := maxf(0.0, autopilot_transfer_duration - transfer_elapsed)
 				var transfer_destination_state := _autopilot_target_state()
-				var destination_distance := rocket_position.distance_to(transfer_destination_state.position)
+				var destination_distance := _relative_position_to_body(transfer_destination_state).length()
 				var encounter_radius := float(transfer_destination_state.soi)
 				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1f DAYS REMAINING" % [str(transfer_destination_state.name).to_upper(), transfer_remaining / 86400.0]
 				if destination_distance <= encounter_radius:
@@ -1264,7 +1264,7 @@ func _draw_grid(center: Vector2) -> void:
 
 func _draw_orbit(rocket_screen: Vector2, factor: float) -> void:
 	var body := _nearest_body_state(rocket_position)
-	var relative_position: Vector2 = rocket_position - body.position
+	var relative_position: Vector2 = body.relative_position
 	var relative_velocity: Vector2 = velocity - body.velocity
 	var mu := G * float(body.mass)
 	var radius := relative_position.length()
@@ -1305,7 +1305,7 @@ func _draw_rocket(p: Vector2, object_scale: float) -> void:
 func _draw_hud() -> void:
 	var ui_scale := clampf(minf(size.x / 1440.0, size.y / 900.0), 0.7, 1.0)
 	var local_body := _nearest_body_state(rocket_position)
-	var local_position: Vector2 = rocket_position - local_body.position
+	var local_position: Vector2 = local_body.relative_position
 	var local_velocity: Vector2 = velocity - local_body.velocity
 	var altitude := maxf(0.0, float(local_body.distance) - float(local_body.radius))
 	var orbital_speed := local_velocity.length()
@@ -1343,7 +1343,7 @@ func _draw_hud() -> void:
 	]
 	if autopilot_target_mode in ["PLANET", "LAND"] and autopilot_enabled:
 		var target_state: Dictionary = _autopilot_target_state()
-		var target_range: float = rocket_position.distance_to(target_state["position"])
+		var target_range: float = _relative_position_to_body(target_state).length()
 		var target_relative_speed: float = (velocity - target_state["velocity"]).length()
 		lines.append("TARGET RANGE   %s" % _format_distance(target_range))
 		lines.append("TARGET SPEED   %s" % _format_speed(target_relative_speed))
@@ -1379,7 +1379,7 @@ func _remaining_ideal_delta_v(current_mass: float) -> float:
 
 func _apsis(apo: bool) -> float:
 	var body := _nearest_body_state(rocket_position)
-	var relative_position: Vector2 = rocket_position - body.position
+	var relative_position: Vector2 = body.relative_position
 	var relative_velocity: Vector2 = velocity - body.velocity
 	var orbit := FlightComputer.orbital_state(relative_position, relative_velocity, G * float(body.mass))
 	if not bool(orbit.get("valid", false)):
