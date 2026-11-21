@@ -291,7 +291,7 @@ func _rebuild_node_list() -> void:
 	node_list.clear()
 	for index in range(nodes.size()):
 		var node: Dictionary = nodes[index]
-		node_list.add_item("NODE %d   T+ %.1F MIN   ΔV %.0F M/S" % [index + 1, float(node.get("time_offset", 0.0)) / 60.0, Vector2(float(node.get("prograde", 0.0)), float(node.get("radial", 0.0))).length()])
+		node_list.add_item("NODE %d   T+ %.1f MIN   ΔV %.0f M/S" % [index + 1, float(node.get("time_offset", 0.0)) / 60.0, Vector2(float(node.get("prograde", 0.0)), float(node.get("radial", 0.0))).length()])
 	if selected_node_index >= 0 and selected_node_index < nodes.size():
 		node_list.select(selected_node_index)
 
