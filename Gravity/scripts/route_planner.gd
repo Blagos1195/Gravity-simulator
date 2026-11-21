@@ -1,6 +1,7 @@
 extends Window
 
 const FlightComputer = preload("res://scripts/flight_computer.gd")
+const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 
 var simulation: Control
 var rocket_design: Dictionary = {}
@@ -32,6 +33,10 @@ var route_solution_dirty := false
 var route_status := "NO DESTINATION SELECTED"
 var route_time_input: SpinBox
 var route_report: Label
+var solve_route_button: Button
+var interface_scroll: ScrollContainer
+var node_editor: Control
+var add_node_button: Button
 
 class OrbitPlot extends Control:
 	signal node_dragged(index: int, world_position: Vector2)
@@ -168,14 +173,25 @@ func configure(simulation_node: Control, design: Dictionary) -> void:
 	_refresh_state()
 
 func _build_interface() -> void:
+	var window_layout := VBoxContainer.new()
+	window_layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	window_layout.offset_left = 12
+	window_layout.offset_right = -12
+	window_layout.offset_top = 10
+	window_layout.offset_bottom = -10
+	window_layout.add_theme_constant_override("separation", 6)
+	add_child(window_layout)
+
+	interface_scroll = ScrollContainer.new()
+	interface_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	interface_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	interface_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	window_layout.add_child(interface_scroll)
+
 	var root := VBoxContainer.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.offset_left = 16
-	root.offset_right = -16
-	root.offset_top = 14
-	root.offset_bottom = -14
 	root.add_theme_constant_override("separation", 7)
-	add_child(root)
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	interface_scroll.add_child(root)
 
 	var heading := Label.new()
 	heading.text = "ORBITAL ROUTE PLANNER"
@@ -184,12 +200,12 @@ func _build_interface() -> void:
 	root.add_child(heading)
 
 	var description := Label.new()
-	description.text = "Drag anywhere on the orbital map to set or move a destination inside the current body's sphere of influence. Scroll to zoom. Choose a transfer time up to 48 hours and the computer solves a local two-body Lambert transfer, calculates departure ΔV and previews the route. Drag orange burn nodes to edit additional manoeuvres. Atmospheres and third-body perturbations are not included in this preview."
+	description.text = "Click the map to choose a destination in the current body's sphere of influence. Add a burn node, select it, then edit its time and prograde/radial ΔV. SEND ROUTE stays below while you scroll. It is enabled when the spacecraft is in a safe orbit and the route fits the fuel budget."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 
 	orbit_plot = OrbitPlot.new()
-	orbit_plot.custom_minimum_size = Vector2(0, 340)
+	orbit_plot.custom_minimum_size = Vector2(0, 250)
 	orbit_plot.mouse_filter = Control.MOUSE_FILTER_STOP
 	orbit_plot.node_dragged.connect(_drag_node_to_orbit_position)
 	orbit_plot.target_dragged.connect(_set_route_target)
@@ -212,6 +228,10 @@ func _build_interface() -> void:
 	route_time_input.custom_minimum_size.x = 110.0
 	route_time_input.value_changed.connect(_change_route_duration)
 	destination_row.add_child(route_time_input)
+	solve_route_button = Button.new()
+	solve_route_button.text = "SOLVE TRANSFER"
+	solve_route_button.pressed.connect(_calculate_route)
+	destination_row.add_child(solve_route_button)
 	var clear_target_button := Button.new()
 	clear_target_button.text = "CLEAR DESTINATION"
 	clear_target_button.pressed.connect(_clear_route_target)
@@ -284,14 +304,11 @@ func _build_interface() -> void:
 	var node_actions := HBoxContainer.new()
 	node_actions.add_theme_constant_override("separation", 8)
 	node_controls.add_child(node_actions)
-	var add_button := Button.new()
-	add_button.text = "ADD NODE"
-	add_button.pressed.connect(_add_node)
-	node_actions.add_child(add_button)
 	var remove_button := Button.new()
-	remove_button.text = "REMOVE NODE"
+	remove_button.text = "REMOVE SELECTED NODE"
 	remove_button.pressed.connect(_remove_node)
 	node_actions.add_child(remove_button)
+	node_editor = node_row
 
 	burn_report = Label.new()
 	burn_report.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -299,7 +316,11 @@ func _build_interface() -> void:
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
-	root.add_child(actions)
+	window_layout.add_child(actions)
+	add_node_button = Button.new()
+	add_node_button.text = "ADD NODE"
+	add_node_button.pressed.connect(_add_node)
+	actions.add_child(add_node_button)
 	var refresh_button := Button.new()
 	refresh_button.text = "REFRESH ORBIT"
 	refresh_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -354,20 +375,27 @@ func _refresh_state() -> void:
 func _add_node() -> void:
 	if not is_instance_valid(simulation):
 		return
-	_invalidate_route_solution()
 	var next_time := 0.0
 	if not nodes.is_empty():
 		next_time = float(nodes[nodes.size() - 1].get("time_offset", 0.0)) + 30.0
+	if has_route_target:
+		next_time = maxf(next_time, route_duration + 30.0)
 	nodes.append({"time_offset": next_time, "prograde": 0.0, "radial": 0.0})
 	selected_node_index = nodes.size() - 1
 	_rebuild_node_list()
 	_load_selected_node()
 	_update_manoeuvre()
+	call_deferred("_focus_node_editor")
+
+func _focus_node_editor() -> void:
+	if is_instance_valid(interface_scroll) and is_instance_valid(node_editor):
+		interface_scroll.ensure_control_visible(node_editor)
 
 func _remove_node() -> void:
 	if selected_node_index < 0 or selected_node_index >= nodes.size():
 		return
-	_invalidate_route_solution()
+	if selected_node_index == 0:
+		_invalidate_route_solution()
 	nodes.remove_at(selected_node_index)
 	selected_node_index = mini(selected_node_index, nodes.size() - 1)
 	_rebuild_node_list()
@@ -562,7 +590,8 @@ func _calculate_route() -> void:
 func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
 	if index < 0 or index >= nodes.size() or current_path.size() < 2:
 		return
-	_invalidate_route_solution()
+	if index == 0:
+		_invalidate_route_solution()
 	var nearest_index := 0
 	var nearest_distance := INF
 	for point_index in range(current_path.size()):
@@ -624,7 +653,8 @@ func _load_selected_node() -> void:
 func _update_selected_node(_value: float = 0.0) -> void:
 	if loading_node or selected_node_index < 0 or selected_node_index >= nodes.size():
 		return
-	_invalidate_route_solution()
+	if selected_node_index == 0:
+		_invalidate_route_solution()
 	var node: Dictionary = nodes[selected_node_index]
 	node["time_offset"] = time_input.value * 60.0
 	node["prograde"] = prograde_input.value
@@ -764,7 +794,39 @@ func _update_manoeuvre() -> void:
 	for node in nodes:
 		if Vector2(float(node.get("prograde", 0.0)), float(node.get("radial", 0.0))).length() < 0.1:
 			valid_nodes = false
-	autopilot_button.disabled = landed_state or crashed_state or not valid_nodes or total_planned_delta_v > available_delta_v
+	var body_radius := float(current_body.get("radius", 0.0))
+	var safe_orbit_altitude := maxf(70000.0, PlanetarySystem.planetary_atmosphere_height(str(current_body.get("name", ""))) + 50000.0)
+	var current_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, gravitational_parameter)
+	var in_sphere_of_influence := float(current_body.get("distance", INF)) <= float(current_body.get("soi", 0.0))
+	var stable_orbit := in_sphere_of_influence and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) >= body_radius + safe_orbit_altitude
+	var maneuver_autopilot: bool = bool(simulation.get("autopilot_enabled")) and str(simulation.get("autopilot_target_mode")) == "MANEUVER"
+	var route_active: bool = maneuver_autopilot and str(simulation.get("autopilot_phase")) in ["ROUTE_COAST", "ROUTE_BURN"]
+	var route_complete: bool = maneuver_autopilot and str(simulation.get("autopilot_phase")) == "COMPLETE"
+	var exceeds_delta_v: bool = total_planned_delta_v > available_delta_v
+	var can_send := not landed_state and not crashed_state and stable_orbit and valid_nodes and not exceeds_delta_v and not route_active and not route_complete
+	autopilot_button.disabled = not can_send
+	autopilot_button.text = "ROUTE ACTIVE IN AUTOPILOT" if route_active else "ROUTE COMPLETE" if route_complete else "SEND ROUTE TO AUTOPILOT"
+	var send_block_reason := ""
+	if route_active:
+		send_block_reason = "A route is already running."
+	elif route_complete:
+		send_block_reason = "Disengage the completed autopilot route before sending another."
+	elif landed_state:
+		send_block_reason = "Launch and establish a safe orbit before executing manoeuvre nodes."
+	elif crashed_state:
+		send_block_reason = "The spacecraft has crashed."
+	elif not stable_orbit:
+		send_block_reason = "Establish a safe orbit before sending manoeuvre nodes."
+	elif has_route_target and route_solution_dirty:
+		send_block_reason = "Press SOLVE TRANSFER to recalculate the edited route."
+	elif has_route_target and not is_finite(route_delta_v):
+		send_block_reason = "Solve a valid transfer before sending this route."
+	elif not valid_nodes:
+		send_block_reason = "Add at least one non-zero burn node."
+	elif exceeds_delta_v:
+		send_block_reason = "Planned ΔV exceeds the remaining vehicle budget."
+	autopilot_button.tooltip_text = send_block_reason
+	solve_route_button.disabled = not has_route_target
 	var delta_v_used := 0.0 if bool(simulation.get("infinite_weightless_fuel")) else maxf(0.0, initial_available_delta_v - available_delta_v)
 	burn_report.text = "PLANNED NODES: %d   •   PLANNED ΔV: %.1f m/s   •   ROUTE ΔV: %s   •   USED: %.1f m/s   •   REMAINING: %s   •   %s" % [
 		nodes.size(),
@@ -772,7 +834,7 @@ func _update_manoeuvre() -> void:
 		"NO SOLUTION" if not is_finite(route_delta_v) else "%.1f m/s" % route_delta_v if has_route_target else "N/A",
 		delta_v_used,
 		"UNLIMITED" if bool(simulation.get("infinite_weightless_fuel")) else "%.1f m/s" % available_delta_v,
-		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "ROUTE NEEDS RECALCULATION" if has_route_target and route_solution_dirty else "NO VALID ROUTE SOLUTION" if has_route_target and not is_finite(route_delta_v) else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
+		"ROUTE ACTIVE IN AUTOPILOT" if route_active else "ROUTE COMPLETE" if route_complete else "LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "ESTABLISH A SAFE ORBIT BEFORE EXECUTING" if not stable_orbit else "ROUTE NEEDS RECALCULATION" if has_route_target and route_solution_dirty else "NO VALID ROUTE SOLUTION" if has_route_target and not is_finite(route_delta_v) else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if exceeds_delta_v else "READY TO SEND TO AUTOPILOT"
 	]
 	if is_instance_valid(route_report):
 		if has_route_target:
@@ -799,4 +861,4 @@ func _send_to_autopilot() -> void:
 	simulation.set("autopilot_phase", "ROUTE_COAST")
 	simulation.set("guidance_enabled", true)
 	simulation.set("thrust_key_down", false)
-	burn_report.text += "   •   ROUTE SENT TO AUTOPILOT"
+	_update_manoeuvre()

@@ -232,7 +232,10 @@ func _physics_step(dt: float) -> void:
 	var mass_before := maxf(1.0, _current_vehicle_mass())
 	var mass_after := mass_before if infinite_weightless_fuel else maxf(1.0, mass_before - fuel_used)
 	var mass_mid := (mass_before + mass_after) * 0.5
-	var thrust_force: float = _engine_thrust(maxf(0.0, altitude)) * throttle if throttle > 0.0 else 0.0
+	var initial_atmosphere: Dictionary = {}
+	if realism != "Arcade" or throttle > 0.0:
+		initial_atmosphere = _atmosphere_at(rocket_position, velocity, start_time, rocket_position_precise)
+	var thrust_force: float = _engine_thrust(maxf(0.0, altitude), initial_atmosphere) * throttle if throttle > 0.0 else 0.0
 	var thrust_delta_v := 0.0
 	if infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
 		thrust_delta_v = thrust_force / mass_before * dt
@@ -258,7 +261,7 @@ func _physics_step(dt: float) -> void:
 				if bool(arrival_orbit.get("bound", false)) and float(arrival_orbit.get("periapsis", 0.0)) > float(arrival_state.radius) + 50000.0:
 					autopilot_phase = "COAST_TO_TARGET"
 				else:
-					autopilot_phase = "FAILED"
+					_fail_autopilot("ARRIVAL BURN DID NOT PRODUCE A SAFE ORBIT")
 			elif autopilot_phase == "ROUTE_BURN":
 				autopilot_route_node_index += 1
 				if autopilot_route_node_index < autopilot_route_nodes.size():
@@ -275,7 +278,7 @@ func _physics_step(dt: float) -> void:
 	var initial_gravity_states: Dictionary = _ephemeris_states_at(start_time)
 	var final_gravity_states: Dictionary = _ephemeris_states_at(end_time)
 	var initial_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(rocket_position_precise, initial_gravity_states)
-	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid, start_time, rocket_position_precise)
+	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid, start_time, rocket_position_precise, initial_atmosphere)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	var next_position_components := PackedFloat64Array([
 		rocket_position_precise[0] + half_velocity.x * dt,
@@ -283,13 +286,14 @@ func _physics_step(dt: float) -> void:
 	])
 	var next_position := Vector2(next_position_components[0], next_position_components[1])
 	var final_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(next_position_components, final_gravity_states)
-	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, end_time, next_position_components)
+	var final_atmosphere: Dictionary = _atmosphere_at(next_position, half_velocity, end_time, next_position_components)
+	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, end_time, next_position_components, final_atmosphere)
 	velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
+	final_atmosphere["relative_velocity"] = Vector2(final_atmosphere.get("relative_velocity", Vector2.ZERO)) + velocity - half_velocity
 	_set_rocket_position_components(next_position_components[0], next_position_components[1])
 	sim_time = end_time
 	if not infinite_weightless_fuel:
 		fuel = maxf(0.0, fuel - fuel_used)
-	var final_atmosphere: Dictionary = _atmosphere_at(rocket_position, velocity, end_time, rocket_position_precise)
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
 	if not infinite_weightless_fuel and fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
@@ -373,14 +377,15 @@ func _adaptive_step_size() -> float:
 	var maximum_step: float = 0.25 if in_atmosphere else 1800.0
 	var travel_distance_limit: float = 250.0 if in_atmosphere else maxf(100000.0, radius * 0.01)
 	if bool(local_orbit.get("bound", false)) and not in_atmosphere:
-		maximum_step = minf(maximum_step, 0.5)
-		travel_distance_limit = minf(travel_distance_limit, maxf(1000.0, radius * 0.0005))
+		travel_distance_limit = minf(travel_distance_limit, maxf(1000.0, radius * 0.002))
 	if autopilot_enabled and autopilot_phase == "COAST_TO_TARGET":
-		maximum_step = minf(maximum_step, 0.25)
+		maximum_step = minf(maximum_step, 10.0)
 	if deep_space:
 		travel_distance_limit = maxf(50000000.0, radius * 0.01)
 	var travel_limit: float = travel_distance_limit / maxf(100.0, speed)
-	var drag_acceleration := _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass()), -1.0, rocket_position_precise).length()
+	var drag_acceleration := 0.0
+	if realism != "Arcade" and in_atmosphere:
+		drag_acceleration = _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass()), -1.0, rocket_position_precise).length()
 	var drag_limit := 0.08 * speed / drag_acceleration if drag_acceleration > 0.01 else maximum_step
 	var active := _active_stage_data()
 	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and (infinite_weightless_fuel or fuel > 0.0) else 0.0
@@ -408,7 +413,7 @@ func _adaptive_step_size() -> float:
 		var coast_radial_speed: float = absf(float(coast_orbit.get("radial_speed", 0.0)))
 		var coast_orbit_altitude := autopilot_target_altitude if str(body.get("name", "")) == _autopilot_target_body_name() and float(body.get("distance", INF)) <= float(body.get("soi", 0.0)) else 200000.0
 		if bool(coast_orbit.get("bound", false)) and coast_radial_speed < 500.0 and float(coast_orbit.get("apoapsis", 0.0)) >= float(body.radius) + coast_orbit_altitude * 0.95:
-			step_limit = minf(step_limit, 0.25)
+			step_limit = minf(step_limit, 10.0)
 	if autopilot_enabled and autopilot_phase == "ROUTE_COAST" and autopilot_route_node_index < autopilot_route_nodes.size():
 		var next_node: Dictionary = autopilot_route_nodes[autopilot_route_node_index]
 		var time_until_node: float = maxf(0.0, float(next_node.get("time", sim_time)) - sim_time)
@@ -475,18 +480,18 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: 
 		}
 	return best
 
-func _engine_thrust(altitude: float) -> float:
+func _engine_thrust(altitude: float, atmosphere_override: Dictionary = {}) -> float:
 	var active := _active_stage_data()
-	var atmosphere := _atmosphere_at(rocket_position, velocity)
+	var atmosphere := atmosphere_override if not atmosphere_override.is_empty() else _atmosphere_at(rocket_position, velocity)
 	var ambient_pressure_ratio := float(atmosphere.density) * float(atmosphere.gas_constant) * float(atmosphere.temperature) / 101325.0
 	var sea_level_thrust := float(active.get("thrust", 0.0))
 	var vacuum_thrust := float(active.get("vacuum_thrust", 0.0))
 	return lerpf(vacuum_thrust, sea_level_thrust, clampf(ambient_pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1))
 
-func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float, time_seconds: float = -1.0, position_components: PackedFloat64Array = PackedFloat64Array()) -> Vector2:
+func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mass: float, time_seconds: float = -1.0, position_components: PackedFloat64Array = PackedFloat64Array(), atmosphere_override: Dictionary = {}) -> Vector2:
 	if realism == "Arcade":
 		return Vector2.ZERO
-	var atmosphere := _atmosphere_at(position, current_velocity, time_seconds, position_components)
+	var atmosphere := atmosphere_override if not atmosphere_override.is_empty() else _atmosphere_at(position, current_velocity, time_seconds, position_components)
 	var density := float(atmosphere.density)
 	var relative_velocity: Vector2 = atmosphere.relative_velocity
 	var relative_speed := relative_velocity.length()
@@ -554,13 +559,7 @@ func _separate_stage() -> void:
 	thrust_key_down = false
 
 func _autopilot_target_body_name() -> String:
-	if autopilot_planet_index == -2:
-		return "Earth"
-	if autopilot_planet_index == -1:
-		return "Moon"
-	if autopilot_planet_index >= 0 and autopilot_planet_index < FlightComputer.PLANET_TARGETS.size():
-		return str(FlightComputer.PLANET_TARGETS[autopilot_planet_index].get("name", ""))
-	return ""
+	return FlightComputer.target_body_name(autopilot_planet_index)
 
 func _autopilot_target_state() -> Dictionary:
 	var body_name: String = _autopilot_target_body_name()
@@ -568,13 +567,17 @@ func _autopilot_target_state() -> Dictionary:
 		return {}
 	return _surface_body_state(body_name)
 
+func _fail_autopilot(reason: String) -> void:
+	autopilot_phase = "FAILED"
+	thrust_key_down = false
+	status_message = "AUTOPILOT FAILED  •  %s" % reason
+
 func _begin_arrival_capture(target_state: Dictionary) -> void:
 	var relative_position := _relative_position_to_body(target_state)
 	var relative_velocity: Vector2 = velocity - target_state.velocity
 	var capture := FlightComputer.arrival_capture_burn(relative_position, relative_velocity, G * float(target_state.mass), float(target_state.radius), autopilot_target_altitude)
 	if not bool(capture.get("valid", false)):
-		autopilot_phase = "FAILED"
-		status_message = "ARRIVAL FAILED  •  APPROACH CANNOT REACH SELECTED ORBIT"
+		_fail_autopilot("APPROACH CANNOT REACH SELECTED ORBIT")
 		return
 	autopilot_arrival_burn_vector = capture.burn_vector
 	autopilot_burn_direction = autopilot_arrival_burn_vector.normalized()
@@ -718,35 +721,43 @@ func _nearest_body_state(position: Vector2, position_components: PackedFloat64Ar
 	var components := position_components
 	if components.size() < 2:
 		components = rocket_position_precise if position == rocket_position else PackedFloat64Array([position.x, position.y])
-	var nearest: Dictionary = {}
-	var nearest_distance: float = INF
-	for body in states.get("surface_bodies", []):
-		var candidate: Dictionary = body.duplicate()
-		var body_components := _body_position_components(candidate)
+	var nearest_body: Dictionary = {}
+	var nearest_delta := Vector2.ZERO
+	var nearest_distance_squared: float = INF
+	for body_variant in states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
+		var body_components := _body_position_components(body)
 		var delta_x: float = components[0] - body_components[0]
 		var delta_y: float = components[1] - body_components[1]
-		var candidate_distance := sqrt(delta_x * delta_x + delta_y * delta_y)
-		if candidate_distance > float(candidate.get("soi", 0.0)):
+		var distance_squared := delta_x * delta_x + delta_y * delta_y
+		var soi := float(body.get("soi", 0.0))
+		if distance_squared > soi * soi:
 			continue
-		if candidate_distance < nearest_distance:
-			nearest = candidate
-			nearest_distance = candidate_distance
-			nearest["relative_position"] = Vector2(delta_x, delta_y)
-	if nearest.is_empty():
-		nearest = _surface_body_state("Earth")
-		nearest_distance = sqrt(components[0] * components[0] + components[1] * components[1])
-		nearest["relative_position"] = Vector2(components[0], components[1])
-	nearest["distance"] = nearest_distance
+		if distance_squared < nearest_distance_squared:
+			nearest_body = body
+			nearest_delta = Vector2(delta_x, delta_y)
+			nearest_distance_squared = distance_squared
+	if nearest_body.is_empty():
+		nearest_body = _surface_body_state("Earth")
+		nearest_delta = Vector2(components[0], components[1])
+		nearest_distance_squared = components[0] * components[0] + components[1] * components[1]
+	var nearest: Dictionary = nearest_body.duplicate()
+	nearest["relative_position"] = nearest_delta
+	nearest["distance"] = sqrt(nearest_distance_squared)
 	return nearest
 
 func _handle_body_contact() -> void:
 	var states: Dictionary = _ephemeris_states_at(sim_time)
 	for body_variant in states.get("surface_bodies", []):
 		var body: Dictionary = body_variant
-		var relative_position := _relative_position_to_body(body)
+		var body_components := _body_position_components(body)
+		var relative_x: float = rocket_position_precise[0] - body_components[0]
+		var relative_y: float = rocket_position_precise[1] - body_components[1]
 		var body_radius := float(body.radius)
-		if relative_position.length() > body_radius + 0.5:
+		var contact_distance := body_radius + 0.5
+		if relative_x * relative_x + relative_y * relative_y > contact_distance * contact_distance:
 			continue
+		var relative_position := Vector2(relative_x, relative_y)
 		var normal := relative_position.normalized()
 		var body_velocity: Vector2 = body.velocity
 		var surface_velocity := body_velocity + Vector2(-relative_position.y, relative_position.x) * float(body.rotation_rate)
@@ -844,15 +855,14 @@ func _update_guidance(dt: float) -> void:
 					autopilot_phase = "CIRCULARISE"
 					status_message = "AUTOPILOT  •  CORRECTING LOW PERIAPSIS"
 				else:
-					autopilot_phase = "FAILED"
-					status_message = "ORBIT TRANSFER FAILED  •  TARGET PERIAPSIS IS BELOW THE BODY"
+					_fail_autopilot("TARGET PERIAPSIS IS BELOW THE BODY")
 			"CIRCULARISE_BURN":
 				status_message = "AUTOPILOT  •  CIRCULARISING  %.0f M/S" % autopilot_burn_remaining
 				var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
-					autopilot_phase = "FAILED"
+					_fail_autopilot("OUT OF PROPELLANT DURING CIRCULARISATION")
 			"CIRCULARISE":
 				status_message = "AUTOPILOT  •  ORBITAL CIRCULARISATION"
 				var target_orbit_plan: Dictionary = FlightComputer.target_radius_burn(guidance_position, guidance_velocity, target_radius, G * float(guidance_body.mass))
@@ -864,8 +874,7 @@ func _update_guidance(dt: float) -> void:
 				var circularisation_complete: bool = bool(target_orbit_plan.get("valid", false)) and absf(guidance_position.length() - target_radius) < 500.0 and target_burn_delta_v <= 1.0 and bool(circularised_orbit.get("bound", false)) and float(circularised_orbit.get("periapsis", 0.0)) > safe_periapsis
 				if not bool(target_orbit_plan.get("valid", false)):
 					thrust_key_down = false
-					autopilot_phase = "FAILED"
-					status_message = "ORBIT INSERTION FAILED  •  INVALID ORBIT STATE"
+					_fail_autopilot("ORBIT INSERTION HAS AN INVALID STATE")
 				elif circularisation_complete:
 					thrust_key_down = false
 					if not destination_is_local:
@@ -889,8 +898,7 @@ func _update_guidance(dt: float) -> void:
 				var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
 				var transfer_plan := FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
 				if not bool(transfer_plan.get("valid", false)):
-					autopilot_phase = "FAILED"
-					status_message = "TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY"))
+					_fail_autopilot("TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY")))
 				else:
 					var planned_burn_direction: Vector2 = transfer_plan.get("departure_direction", Vector2.ZERO)
 					autopilot_burn_direction = planned_burn_direction.normalized()
@@ -922,7 +930,7 @@ func _update_guidance(dt: float) -> void:
 				rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
-					autopilot_phase = "FAILED"
+					_fail_autopilot("OUT OF PROPELLANT DURING MANOEUVRE")
 			"ROUTE_COAST":
 				thrust_key_down = false
 				if autopilot_route_node_index >= autopilot_route_nodes.size():
@@ -950,7 +958,7 @@ func _update_guidance(dt: float) -> void:
 				rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = propellant_available and autopilot_burn_remaining > 0.1 and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
-					autopilot_phase = "FAILED"
+					_fail_autopilot("OUT OF PROPELLANT DURING ROUTE BURN")
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
 				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
@@ -958,7 +966,7 @@ func _update_guidance(dt: float) -> void:
 				rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
-					autopilot_phase = "FAILED"
+					_fail_autopilot("OUT OF PROPELLANT DURING DEPARTURE BURN")
 			"TRANSFER_COAST":
 				thrust_key_down = false
 				var transfer_elapsed := maxf(0.0, sim_time - autopilot_transfer_start_time)
@@ -992,7 +1000,7 @@ func _update_guidance(dt: float) -> void:
 				rotation_angle = lerp_angle(rotation_angle, capture_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
-					autopilot_phase = "FAILED"
+					_fail_autopilot("OUT OF PROPELLANT DURING ARRIVAL CAPTURE")
 			"LANDING_DESCENT":
 				var landing_target_state := _autopilot_target_state()
 				var landing_relative_position := _relative_position_to_body(landing_target_state)
@@ -1013,8 +1021,7 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = autopilot_throttle > 0.001
 				status_message = "LANDING GUIDANCE  •  %s  •  ALT %.1f KM  •  V/S %.1f M/S" % [str(landing_target_state.name).to_upper(), landing_altitude / 1000.0, landing_radial_speed]
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
-					autopilot_phase = "FAILED"
-					thrust_key_down = false
+					_fail_autopilot("OUT OF PROPELLANT DURING LANDING")
 			"ARRIVAL_PENDING":
 				status_message = "ARRIVAL WINDOW MISSED  •  TARGET OUTSIDE CAPTURE REGION"
 				thrust_key_down = false
@@ -1023,7 +1030,6 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = false
 				autopilot_complete = true
 			"FAILED":
-				status_message = "LANDING ABORTED  •  INSUFFICIENT FUEL OR THRUST" if autopilot_target_mode == "LAND" else "AUTOPILOT  •  BURN INCOMPLETE"
 				thrust_key_down = false
 		var autopilot_direction := prograde
 		if autopilot_phase == "ASCENT":

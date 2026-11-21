@@ -844,10 +844,22 @@ func _show_autopilot_panel() -> void:
 	target_label.text = "DESTINATION BODY"
 	root.add_child(target_label)
 	var target := OptionButton.new()
-	target.add_item("Earth", -2)
-	target.add_item("Moon", -1)
+	var destination_target_indices: Array[int] = []
+	target.add_item("Earth", destination_target_indices.size())
+	destination_target_indices.append(-2)
+	target.add_item("Moon (Earth)", destination_target_indices.size())
+	destination_target_indices.append(-1)
 	for planet_index in range(FlightComputer.PLANET_TARGETS.size()):
-		target.add_item(str(FlightComputer.PLANET_TARGETS[planet_index].get("name", "Unknown")), planet_index)
+		target.add_item(str(FlightComputer.PLANET_TARGETS[planet_index].get("name", "Unknown")), destination_target_indices.size())
+		destination_target_indices.append(planet_index)
+	for satellite in FlightComputer.SATELLITE_TARGETS:
+		target.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), destination_target_indices.size())
+		destination_target_indices.append(int(satellite.get("id", -1)))
+	var selected_target_index := func() -> int:
+		var selected_item_id := target.get_selected_id()
+		if selected_item_id < 0 or selected_item_id >= destination_target_indices.size():
+			return -2
+		return destination_target_indices[selected_item_id]
 	target.select(0)
 	root.add_child(target)
 	var orbit_altitude_label := Label.new()
@@ -861,7 +873,7 @@ func _show_autopilot_panel() -> void:
 	orbit_altitude.suffix = " km"
 	root.add_child(orbit_altitude)
 	var update_orbit_altitude_limits := func():
-		var body_name := FlightComputer.target_body_name(target.get_selected_id())
+		var body_name := FlightComputer.target_body_name(selected_target_index.call())
 		var target_body: Dictionary = sim._surface_body_state(body_name)
 		var minimum_altitude_km: float = maxf(70.0, PlanetarySystem.planetary_atmosphere_height(body_name) / 1000.0 + 50.0)
 		var maximum_altitude_km: float = maxf(minimum_altitude_km, minf(50000.0, (float(target_body.get("soi", 0.0)) * 0.5 - float(target_body.get("radius", 0.0))) / 1000.0))
@@ -892,7 +904,7 @@ func _show_autopilot_panel() -> void:
 	var landing := Button.new()
 	landing.text = "ENGAGE POWERED LANDING"
 	landing.pressed.connect(func():
-		var selected_id: int = target.get_selected_id()
+		var selected_id: int = selected_target_index.call()
 		var planet_index := selected_id
 		var body_name := FlightComputer.target_body_name(planet_index)
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
@@ -926,7 +938,7 @@ func _show_autopilot_panel() -> void:
 	cancel.pressed.connect(window.queue_free)
 	root.add_child(cancel)
 	var update_report := func() -> void:
-		var selected_id: int = target.get_selected_id()
+		var selected_id: int = selected_target_index.call()
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
 		landing.disabled = sim.crashed
 		autopilot.disabled = sim.crashed
@@ -1027,7 +1039,7 @@ func _show_autopilot_panel() -> void:
 		update_report.call()
 	)
 	launch_windows_button.pressed.connect(func():
-		var destination_index: int = target.get_selected_id()
+		var destination_index: int = selected_target_index.call()
 		if destination_index == -2:
 			report.text += "\n\nLaunch-window scanning is only available for planetary transfers."
 			return
@@ -1061,7 +1073,7 @@ func _show_autopilot_panel() -> void:
 		update_report.call()
 	)
 	autopilot.pressed.connect(func():
-		var selected_id: int = target.get_selected_id()
+		var selected_id: int = selected_target_index.call()
 		sim.autopilot_enabled = true
 		sim.autopilot_complete = false
 		sim.autopilot_target_altitude = orbit_altitude.value * 1000.0

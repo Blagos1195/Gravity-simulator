@@ -37,6 +37,7 @@ static var ATMOSPHERE_BASE_ALTITUDES: Array = []
 static var ATMOSPHERE_BASE_TEMPERATURES: Array = []
 static var ATMOSPHERE_LAPSE_RATES: Array = []
 static var ATMOSPHERE_BASE_PRESSURES: Array = []
+static var ATMOSPHERE_BY_BODY_NAME: Dictionary = {}
 static var PLANETS: Array[Dictionary] = []
 static var SMALL_BODY_BELTS: Array[Dictionary] = []
 
@@ -80,6 +81,12 @@ static func _static_init() -> void:
 	for planet_variant in catalog.get("planets", []):
 		var planet: Dictionary = planet_variant.duplicate(true)
 		PLANETS.append(planet)
+		var planet_name := str(planet.get("name", ""))
+		ATMOSPHERE_BY_BODY_NAME[planet_name] = planet.get("atmosphere", {})
+		for satellite_variant in planet.get("satellites", []):
+			var satellite: Dictionary = satellite_variant
+			var satellite_name := "%s %s" % [planet_name, str(satellite.get("name", ""))]
+			ATMOSPHERE_BY_BODY_NAME[satellite_name] = satellite.get("atmosphere", {})
 		if str(planet.get("name", "")) == "Earth":
 			EARTH_MASS = float(planet.get("mass", EARTH_MASS))
 			EARTH_RADIUS = float(planet.get("radius", EARTH_RADIUS))
@@ -268,13 +275,11 @@ static func moon_velocity(time_seconds: float) -> Vector2:
 	return moon_state(time_seconds).velocity
 
 static func gravity_body_states(time_seconds: float) -> Dictionary:
-	var barycentre_state := _planet_heliocentric_state(_earth_planet_data(), time_seconds)
 	var moon_state_value := moon_state(time_seconds)
 	var moon_position_components: PackedFloat64Array = moon_state_value.position_components
 	var moon_velocity_components: PackedFloat64Array = moon_state_value.velocity_components
 	var moon_position_value := Vector2(moon_position_components[0], moon_position_components[1])
 	var moon_velocity_value := Vector2(moon_velocity_components[0], moon_velocity_components[1])
-	var earth_moon_ratio: float = MOON_MASS / (EARTH_MASS + MOON_MASS)
 	var earth_state := _earth_heliocentric_state(time_seconds)
 	var earth_position: Vector2 = earth_state.position
 	var earth_velocity: Vector2 = earth_state.velocity
@@ -288,11 +293,29 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 		{"name": "Earth", "mass": EARTH_MASS, "position": Vector2.ZERO, "position_components": PackedFloat64Array([0.0, 0.0]), "velocity": Vector2.ZERO, "velocity_components": PackedFloat64Array([0.0, 0.0]), "radius": EARTH_RADIUS, "rotation_rate": EARTH_ROTATION_RATE, "solid": true, "soi": EARTH_SOI_RADIUS},
 		{"name": "Moon", "mass": MOON_MASS, "position": moon_position_value, "position_components": moon_position_components, "velocity": moon_velocity_value, "velocity_components": moon_velocity_components, "radius": MOON_RADIUS, "rotation_rate": MOON_ROTATION_RATE, "solid": MOON_SOLID, "soi": moon_soi_radius()}
 	]
+	var moon_heliocentric_components := PackedFloat64Array([
+		earth_position_components[0] + moon_position_components[0],
+		earth_position_components[1] + moon_position_components[1]
+	])
+	var moon_heliocentric_velocity_components := PackedFloat64Array([
+		earth_velocity_components[0] + moon_velocity_components[0],
+		earth_velocity_components[1] + moon_velocity_components[1]
+	])
+	var heliocentric_bodies: Array[Dictionary] = [
+		{"name": "Sun", "mass": SUN_MASS, "position": Vector2.ZERO, "position_components": PackedFloat64Array([0.0, 0.0]), "velocity": Vector2.ZERO, "velocity_components": PackedFloat64Array([0.0, 0.0]), "radius": SUN_RADIUS},
+		{"name": "Earth", "mass": EARTH_MASS, "position": earth_position, "position_components": earth_position_components, "velocity": earth_velocity, "velocity_components": earth_velocity_components, "radius": EARTH_RADIUS},
+		{"name": "Moon", "mass": MOON_MASS, "position": earth_position + moon_position_value, "position_components": moon_heliocentric_components, "velocity": earth_velocity + moon_velocity_value, "velocity_components": moon_heliocentric_velocity_components, "radius": MOON_RADIUS}
+	]
 	for planet in PLANETS:
 		if planet.name == "Earth":
 			continue
 		var planet_state := _planet_heliocentric_state(planet, time_seconds)
-		var relative_components := _planet_relative_position_components(planet, time_seconds)
+		var planet_heliocentric_position: Vector2 = planet_state.position
+		var planet_heliocentric_velocity: Vector2 = planet_state.velocity
+		var relative_components := PackedFloat64Array([
+			planet_state.position_components[0] - earth_position_components[0],
+			planet_state.position_components[1] - earth_position_components[1]
+		])
 		var relative_position := Vector2(relative_components[0], relative_components[1])
 		var relative_velocity_components := PackedFloat64Array([
 			planet_state.velocity_components[0] - earth_velocity_components[0],
@@ -303,11 +326,22 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 		var planet_mass := float(planet.mass)
 		var planet_radius := float(planet.radius)
 		bodies.append({"name": planet_name, "mass": planet_mass, "position": relative_position, "position_components": relative_components, "velocity": relative_velocity, "velocity_components": relative_velocity_components, "radius": planet_radius})
+		heliocentric_bodies.append({
+			"name": planet_name,
+			"mass": planet_mass,
+			"position": planet_heliocentric_position,
+			"position_components": planet_state.position_components,
+			"velocity": planet_heliocentric_velocity,
+			"velocity_components": planet_state.velocity_components,
+			"radius": planet_radius
+		})
 		for satellite_variant in planet.get("satellites", []):
 			var satellite: Dictionary = satellite_variant
 			var satellite_orbit := _satellite_orbit_state(satellite, time_seconds)
 			var satellite_position: Vector2 = relative_position + satellite_orbit.position
 			var satellite_velocity: Vector2 = relative_velocity + satellite_orbit.velocity
+			var satellite_heliocentric_position: Vector2 = planet_heliocentric_position + satellite_orbit.position
+			var satellite_heliocentric_velocity: Vector2 = planet_heliocentric_velocity + satellite_orbit.velocity
 			var satellite_position_components := PackedFloat64Array([
 				relative_components[0] + satellite_orbit.position.x,
 				relative_components[1] + satellite_orbit.position.y
@@ -320,6 +354,14 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 			var satellite_mass := float(satellite.get("mass_kg", 0.0))
 			var satellite_radius := float(satellite.get("radius_m", 0.0))
 			var satellite_soi := maxf(satellite_radius * 1.1, float(satellite.get("semi_major_axis_m", 0.0)) * pow(satellite_mass / (3.0 * planet_mass), 1.0 / 3.0))
+			var satellite_heliocentric_position_components := PackedFloat64Array([
+				planet_state.position_components[0] + satellite_orbit.position.x,
+				planet_state.position_components[1] + satellite_orbit.position.y
+			])
+			var satellite_heliocentric_velocity_components := PackedFloat64Array([
+				planet_state.velocity_components[0] + satellite_orbit.velocity.x,
+				planet_state.velocity_components[1] + satellite_orbit.velocity.y
+			])
 			bodies.append({
 				"name": satellite_name,
 				"mass": satellite_mass,
@@ -341,6 +383,15 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 				"solid": bool(satellite.get("solid", true)),
 				"soi": satellite_soi
 			})
+			heliocentric_bodies.append({
+				"name": satellite_name,
+				"mass": satellite_mass,
+				"position": satellite_heliocentric_position,
+				"position_components": satellite_heliocentric_position_components,
+				"velocity": satellite_heliocentric_velocity,
+				"velocity_components": satellite_heliocentric_velocity_components,
+				"radius": satellite_radius
+			})
 		surface_bodies.append({
 			"name": planet_name,
 			"mass": planet_mass,
@@ -353,46 +404,6 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 			"solid": bool(planet.get("solid", false)),
 			"soi": float(planet.a) * ASTRONOMICAL_UNIT * pow(planet_mass / (3.0 * SUN_MASS), 1.0 / 3.0)
 		})
-	var moon_heliocentric_components := PackedFloat64Array([
-		earth_position_components[0] + moon_position_components[0],
-		earth_position_components[1] + moon_position_components[1]
-	])
-	var moon_heliocentric_velocity_components := PackedFloat64Array([
-		earth_velocity_components[0] + moon_velocity_components[0],
-		earth_velocity_components[1] + moon_velocity_components[1]
-	])
-	var heliocentric_bodies: Array[Dictionary] = [
-		{"name": "Sun", "mass": SUN_MASS, "position": Vector2.ZERO, "position_components": PackedFloat64Array([0.0, 0.0]), "velocity": Vector2.ZERO, "velocity_components": PackedFloat64Array([0.0, 0.0]), "radius": SUN_RADIUS},
-		{"name": "Earth", "mass": EARTH_MASS, "position": earth_position, "position_components": earth_position_components, "velocity": earth_velocity, "velocity_components": earth_velocity_components, "radius": EARTH_RADIUS},
-		{"name": "Moon", "mass": MOON_MASS, "position": earth_position + moon_position_value, "position_components": moon_heliocentric_components, "velocity": earth_velocity + moon_velocity_value, "velocity_components": moon_heliocentric_velocity_components, "radius": MOON_RADIUS}
-	]
-	for planet in PLANETS:
-		if str(planet.name) == "Earth":
-			continue
-		var planet_state: Dictionary = _planet_heliocentric_state(planet, time_seconds)
-		heliocentric_bodies.append({"name": str(planet.name), "mass": float(planet.mass), "position": Vector2(planet_state.position), "position_components": planet_state.position_components, "velocity": planet_state.velocity, "velocity_components": planet_state.velocity_components, "radius": float(planet.radius)})
-		for satellite_variant in planet.get("satellites", []):
-			var satellite: Dictionary = satellite_variant
-			var satellite_orbit := _satellite_orbit_state(satellite, time_seconds)
-			var satellite_position := planet_state.position + satellite_orbit.position
-			var satellite_velocity := planet_state.velocity + satellite_orbit.velocity
-			var satellite_position_components := PackedFloat64Array([
-				planet_state.position_components[0] + satellite_orbit.position.x,
-				planet_state.position_components[1] + satellite_orbit.position.y
-			])
-			var satellite_velocity_components := PackedFloat64Array([
-				planet_state.velocity_components[0] + satellite_orbit.velocity.x,
-				planet_state.velocity_components[1] + satellite_orbit.velocity.y
-			])
-			heliocentric_bodies.append({
-				"name": "%s %s" % [str(planet.name), str(satellite.get("name", "Moon"))],
-				"mass": float(satellite.get("mass_kg", 0.0)),
-				"position": satellite_position,
-				"position_components": satellite_position_components,
-				"velocity": satellite_velocity,
-				"velocity_components": satellite_velocity_components,
-				"radius": float(satellite.get("radius_m", 0.0))
-			})
 	return {
 		"bodies": bodies,
 		"surface_bodies": surface_bodies,
@@ -462,6 +473,7 @@ static func _earth_heliocentric_state(time_seconds: float) -> Dictionary:
 	var moon_state_value := moon_state(time_seconds)
 	var moon_position_components: PackedFloat64Array = moon_state_value.position_components
 	var moon_velocity_components: PackedFloat64Array = moon_state_value.velocity_components
+	var earth_moon_ratio: float = MOON_MASS / (EARTH_MASS + MOON_MASS)
 
 	var position_components := PackedFloat64Array([
 		barycentre.position_components[0] - moon_position_components[0] * earth_moon_ratio,
@@ -596,13 +608,8 @@ static func planetary_atmosphere_gamma(planet_name: String) -> float:
 	return float(_atmosphere_data(planet_name).get("gamma", 1.4))
 
 static func _atmosphere_data(body_name: String) -> Dictionary:
-	var planet := _planet_data(body_name)
-	if not planet.is_empty():
-		return planet.get("atmosphere", {})
-	var satellite := _satellite_data(body_name)
-	if not satellite.is_empty():
-		return satellite.get("atmosphere", {})
-	return {}
+	var atmosphere: Variant = ATMOSPHERE_BY_BODY_NAME.get(body_name, {})
+	return atmosphere if atmosphere is Dictionary else {}
 
 static func planetary_rotation_rate(planet_name: String) -> float:
 	return float(_planet_data(planet_name).get("rotation_rate_rad_s", 0.0))

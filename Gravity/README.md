@@ -32,9 +32,9 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Differential gravity from the Moon, Sun and other planets
 - Optional gravity-turn guidance assist
 - Orbital flight computer with osculating orbit elements, circularisation burns, lunar transfers and heliocentric Hohmann estimates
-- Destination planner for the Moon and all seven other planets, including ideal departure phase, transfer-window timing, hyperbolic departure orientation and capture delta-v estimates
+- Destination planner for the Moon, all seven other planets, and cataloged planetary moons, including transfer estimates and capture delta-v
 - Orbit autopilot with ascent, coast-to-apoapsis and prograde/retrograde circularisation
-- Destination autopilot selects any modeled planet or the Moon and a target orbit altitude; it can depart from the current body, search transfers, capture into an orbit reaching the requested altitude, then circularize there
+- Destination autopilot selects any modeled planet, the Moon, or a cataloged planetary moon and a target orbit altitude; it can depart from the current body, search transfers, capture into an orbit reaching the requested altitude, then circularize there
 - Destination-relative range and velocity telemetry, plus selected-planet rendering during interplanetary flight
 - Planetary Hill-sphere encounter radii and target-relative ephemeris/velocity calculations
 - Approximate Venus, Mars and gas-giant atmospheric density, temperature, rotation, drag, heating and engine-pressure effects
@@ -83,6 +83,10 @@ godot --headless --path . --script res://tests/rocket_design_test.gd
 godot --headless --path . --script res://tests/flight_computer_test.gd
 godot --headless --path . --script res://tests/orbital_stability_test.gd
 ```
+
+## Flight computer
+
+The Flight Computer plans local manoeuvres from a safe, bound orbit. Click inside the orbital plot to choose a destination within the current body's sphere of influence, then use **ADD NODE** to create a burn. Select the node and edit its time and prograde/radial ΔV; the planner previews the resulting trajectory. The node editor scrolls when the window is too small, while **ADD NODE** and **SEND ROUTE TO AUTOPILOT** stay accessible at the bottom. Sending is enabled when the spacecraft is in a safe orbit and the planned burns fit the remaining ΔV budget; hover over the disabled button for the specific reason. Use the main Autopilot panel to launch or plan transfers between planets and moons.
 
 ## Controls
 

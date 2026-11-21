@@ -14,7 +14,9 @@ static var SUN_MU := 1.32712440018e20
 static var EARTH_ORBIT_RADIUS := 1.495978707e11
 static var EARTH_ORBIT_PERIOD := 365.256363004 * 86400.0
 const INFINITE_FUEL_PLANNING_DELTA_V := 100000.0
+const SATELLITE_TARGET_INDEX_BASE := 1000
 static var PLANET_TARGETS: Array[Dictionary] = []
+static var SATELLITE_TARGETS: Array[Dictionary] = []
 
 static func _static_init() -> void:
 	G = PlanetarySystem.G
@@ -37,6 +39,37 @@ static func _static_init() -> void:
 			"mass": float(planet.get("mass", 0.0)),
 			"period_days": float(planet.get("orbital_period", 0.0))
 		})
+	for planet in PlanetarySystem.PLANETS:
+		var host_name := str(planet.get("name", ""))
+		if host_name == "Earth":
+			continue
+		var host_target_index := -1
+		for planet_index in range(PLANET_TARGETS.size()):
+			if str(PLANET_TARGETS[planet_index].get("name", "")) == host_name:
+				host_target_index = planet_index
+				break
+		for satellite_variant in planet.get("satellites", []):
+			var satellite: Dictionary = satellite_variant
+			var satellite_name := str(satellite.get("name", ""))
+			SATELLITE_TARGETS.append({
+				"id": SATELLITE_TARGET_INDEX_BASE + SATELLITE_TARGETS.size(),
+				"name": "%s %s" % [host_name, satellite_name],
+				"display_name": "%s (%s)" % [satellite_name, host_name],
+				"host_name": host_name,
+				"host_target_index": host_target_index
+			})
+
+static func _satellite_target_data(target_index: int) -> Dictionary:
+	var satellite_index := target_index - SATELLITE_TARGET_INDEX_BASE
+	if satellite_index < 0 or satellite_index >= SATELLITE_TARGETS.size():
+		return {}
+	return SATELLITE_TARGETS[satellite_index]
+
+static func _is_satellite_target(target_index: int) -> bool:
+	return not _satellite_target_data(target_index).is_empty()
+
+static func _is_valid_target_index(target_index: int) -> bool:
+	return target_index == -2 or target_index == -1 or (target_index >= 0 and target_index < PLANET_TARGETS.size()) or _is_satellite_target(target_index)
 
 static func target_body_name(target_index: int) -> String:
 	if target_index == -2:
@@ -45,6 +78,9 @@ static func target_body_name(target_index: int) -> String:
 		return "Moon"
 	if target_index >= 0 and target_index < PLANET_TARGETS.size():
 		return str(PLANET_TARGETS[target_index].get("name", ""))
+	var satellite: Dictionary = _satellite_target_data(target_index)
+	if not satellite.is_empty():
+		return str(satellite.get("name", ""))
 	return ""
 
 static func orbital_state(position: Vector2, velocity: Vector2, mu: float = -1.0) -> Dictionary:
@@ -213,6 +249,8 @@ static func interplanetary_transfer(target_index: int, parking_altitude: float =
 	}
 
 static func departure_wait_time(target_index: int, current_time: float, parking_position: Vector2 = Vector2.ZERO) -> float:
+	if _is_satellite_target(target_index):
+		target_index = int(_satellite_target_data(target_index).get("host_target_index", -1))
 	if target_index == -1:
 		if parking_position.length() <= EARTH_RADIUS:
 			return 0.0
@@ -244,6 +282,8 @@ static func departure_wait_time(target_index: int, current_time: float, parking_
 	return fposmod(wait, synodic_period)
 
 static func departure_periapsis_direction(target_index: int, current_time: float, parking_radius: float) -> Vector2:
+	if _is_satellite_target(target_index):
+		target_index = int(_satellite_target_data(target_index).get("host_target_index", -1))
 	if target_index == -1:
 		var transfer := hohmann_transfer(parking_radius, EARTH_RADIUS + MOON_ORBIT_RADIUS)
 		var moon_rate := TAU / (27.321661 * 86400.0)
@@ -319,39 +359,16 @@ static func available_delta_v(design: Dictionary, active_stage_index: int = 0, a
 	return delta_v
 
 
-static func _simulated_target_state(target_index: int, time_seconds: float) -> Dictionary:
-	if target_index == -2:
-		return {
-			"position": Vector2.ZERO,
-			"position_components": PackedFloat64Array([0.0, 0.0]),
-			"velocity": Vector2.ZERO,
-			"mass": PlanetarySystem.EARTH_MASS,
-			"radius": PlanetarySystem.EARTH_RADIUS,
-			"soi": 9.25e8
-		}
-	if target_index == -1:
-		var moon_state: Dictionary = PlanetarySystem.moon_state(time_seconds)
-		return {
-			"position": moon_state.position,
-			"position_components": moon_state.position_components,
-			"velocity": moon_state.velocity,
-			"mass": PlanetarySystem.MOON_MASS,
-			"radius": PlanetarySystem.MOON_RADIUS,
-			"soi": PlanetarySystem.moon_soi_radius()
-		}
-	if target_index < 0 or target_index >= PLANET_TARGETS.size():
+static func _simulated_target_state(target_index: int, time_seconds: float, body_states: Dictionary = {}) -> Dictionary:
+	if not _is_valid_target_index(target_index):
 		return {}
-	var target: Dictionary = PLANET_TARGETS[target_index]
-	var target_name := str(target.get("name", ""))
-	var position_components := PlanetarySystem.planet_position_relative_to_earth_components(target_name, time_seconds)
-	return {
-		"position": Vector2(position_components[0], position_components[1]),
-		"position_components": position_components,
-		"velocity": PlanetarySystem.planet_velocity_relative_to_earth(target_name, time_seconds),
-		"mass": float(target.get("mass", 0.0)),
-		"radius": float(target.get("planet_radius", 0.0)),
-		"soi": PlanetarySystem.planet_soi_radius(target_name)
-	}
+	var states := body_states if not body_states.is_empty() else PlanetarySystem.gravity_body_states(time_seconds)
+	var target_name := target_body_name(target_index)
+	for body_variant in states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
+		if str(body.get("name", "")) == target_name:
+			return body.duplicate()
+	return {}
 
 
 static func _segment_intersects_circle(start: Vector2, finish: Vector2, center: Vector2, radius: float) -> bool:
@@ -385,7 +402,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 
 
 static func simulated_transfer_search_precise(start_position_components: PackedFloat64Array, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false, target_orbit_altitude: float = 100000.0) -> Dictionary:
-	if start_position_components.size() < 2 or target_index < -2 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
+	if start_position_components.size() < 2 or not _is_valid_target_index(target_index) or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Invalid target, position or manoeuvre capability."}
 	var initial_target := _simulated_target_state(target_index, start_time)
 	if initial_target.is_empty():
@@ -414,8 +431,9 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 		var target_states: Array[Dictionary] = []
 		for step_index in range(integration_steps + 1):
 			var sample_time := start_time + float(step_index) * step_size
-			gravity_states.append(PlanetarySystem.gravity_body_states(sample_time))
-			target_states.append(_simulated_target_state(target_index, sample_time))
+			var sample_states: Dictionary = PlanetarySystem.gravity_body_states(sample_time)
+			gravity_states.append(sample_states)
+			target_states.append(_simulated_target_state(target_index, sample_time, sample_states))
 		for direction_index in range(direction_count):
 			var angle := TAU * float(direction_index) / float(direction_count)
 			var burn_direction := Vector2(cos(angle), sin(angle))
@@ -503,8 +521,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 
 
 static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 30, target_orbit_altitude: float = 100000.0) -> Dictionary:
-	if target_index < -1 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
-		return {"valid": false, "reason": "Select the Moon or a planet and provide a positive manoeuvre budget."}
+	if target_index == -2 or not _is_valid_target_index(target_index) or maximum_delta_v <= 0.0:
+		return {"valid": false, "reason": "Select a destination other than Earth and provide a positive manoeuvre budget."}
 	var radius := start_position.length()
 	if radius < EARTH_RADIUS + 70000.0:
 		return {"valid": false, "reason": "A stable Earth departure orbit is required."}

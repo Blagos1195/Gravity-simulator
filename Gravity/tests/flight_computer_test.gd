@@ -10,6 +10,14 @@ func _initialize() -> void:
 	assert(FlightComputer.target_body_name(-2) == "Earth")
 	assert(FlightComputer.target_body_name(-1) == "Moon")
 	assert(FlightComputer.target_body_name(0) == "Mercury")
+	assert(FlightComputer.target_body_name(1) == "Venus")
+	assert(not FlightComputer.SATELLITE_TARGETS.is_empty())
+	var first_satellite_target: Dictionary = FlightComputer.SATELLITE_TARGETS[0]
+	var first_satellite_id := int(first_satellite_target.get("id", -1))
+	assert(first_satellite_id >= FlightComputer.SATELLITE_TARGET_INDEX_BASE)
+	assert(FlightComputer.target_body_name(first_satellite_id) == str(first_satellite_target.get("name", "")))
+	var first_satellite_state := FlightComputer._simulated_target_state(first_satellite_id, 0.0)
+	assert(str(first_satellite_state.get("name", "")) == str(first_satellite_target.get("name", "")))
 	var radius := FlightComputer.EARTH_RADIUS + 200000.0
 	var circular_speed := FlightComputer.circular_orbit_speed(radius)
 	var state := FlightComputer.orbital_state(Vector2(radius, 0.0), Vector2(0.0, circular_speed))
@@ -325,18 +333,26 @@ func _initialize() -> void:
 	var route_planner_window: Window = RoutePlanner.new()
 	root.add_child(route_planner_window)
 	route_planner_window.configure(planner_sim, RocketDesign.create_default())
-	route_planner_window._add_node()
+	assert(route_planner_window.interface_scroll is ScrollContainer)
+	route_planner_window.add_node_button.emit_signal("pressed")
 	assert(route_planner_window.autopilot_button.disabled)
 	assert(route_planner_window.burn_report.text.contains("ADD A NON-ZERO BURN"))
+	planner_sim.landed = true
+	route_planner_window._update_manoeuvre()
+	assert(route_planner_window.autopilot_button.disabled)
+	assert(route_planner_window.autopilot_button.tooltip_text.contains("Launch"))
+	planner_sim.landed = false
 	route_planner_window.time_input.value = 30.0
 	route_planner_window.prograde_input.value = 5.0
 	route_planner_window._update_selected_node()
 	assert(not route_planner_window.autopilot_button.disabled)
 	assert(route_planner_window.nodes.size() == 1)
 	assert(route_planner_window.orbit_plot.planned_path.size() > 1)
-	route_planner_window._send_to_autopilot()
+	route_planner_window.autopilot_button.emit_signal("pressed")
 	assert(planner_sim.autopilot_phase == "ROUTE_COAST")
 	assert(planner_sim.autopilot_route_nodes.size() == 1)
+	assert(route_planner_window.autopilot_button.disabled)
+	assert(route_planner_window.autopilot_button.text == "ROUTE ACTIVE IN AUTOPILOT")
 	route_planner_window.free()
 	planner_sim.free()
 
