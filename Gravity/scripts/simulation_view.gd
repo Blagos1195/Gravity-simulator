@@ -1133,7 +1133,7 @@ func _draw_hud() -> void:
 		"PERIAPSIS      %s" % _format_distance(periapsis),
 		"APOAPSIS       %s" % _format_distance(apoapsis),
 		"MISSION TIME   %s" % _format_time(sim_time),
-		"TIME WARP      x%s" % str(snappedf(time_warp, 0.01))
+		"TIME WARP      x%s%s" % [str(snappedf(time_warp, 0.01)), "  •  CATCHING UP" if simulation_time_backlog > 1.0 else ""]
 	]
 	if autopilot_target_mode in ["PLANET", "LAND"] and autopilot_enabled:
 		var target_state: Dictionary = _autopilot_target_state()
