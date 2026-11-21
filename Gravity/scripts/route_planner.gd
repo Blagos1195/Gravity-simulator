@@ -255,11 +255,11 @@ func _update_manoeuvre() -> void:
 	burn_report.text = "TOTAL ΔV: %.1f m/s    •    BURN ROTATION FROM PROGRADE: %.1f°    •    %s" % [
 		planned_burn_vector.length(),
 		burn_angle,
-		"NO BURN SELECTED" if planned_burn_vector.length() < 0.1 else "EXCEEDS VEHICLE ΔV" if planned_burn_vector.length() > available_delta_v else "READY TO PREVIEW OR EXECUTE"
+		"NO BURN SELECTED" if planned_burn_vector.length() < 0.1 else "LAUNCH BEFORE EXECUTING" if bool(simulation.get("landed")) else "CRAFT CRASHED" if bool(simulation.get("crashed")) else "EXCEEDS VEHICLE ΔV" if planned_burn_vector.length() > available_delta_v else "READY TO PREVIEW OR EXECUTE"
 	]
 
 func _send_to_autopilot() -> void:
-	if not is_instance_valid(simulation) or planned_burn_vector.length() < 0.1 or planned_burn_vector.length() > available_delta_v:
+	if not is_instance_valid(simulation) or bool(simulation.get("landed")) or bool(simulation.get("crashed")) or planned_burn_vector.length() < 0.1 or planned_burn_vector.length() > available_delta_v:
 		return
 	simulation.set("autopilot_enabled", true)
 	simulation.set("autopilot_complete", false)
