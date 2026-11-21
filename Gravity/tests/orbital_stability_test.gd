@@ -50,8 +50,6 @@ func _validate_orbit(orbit_name: String, altitude: float, orbit_count: int) -> b
 		if not _check(step > 0.000001, "%s produced a zero physics step" % orbit_name):
 			simulation.free()
 			return false
-		if force_exact_ephemeris:
-			simulation.ephemeris_cache_time = -INF
 		simulation._physics_step(step)
 		elapsed += step
 		step_count += 1
@@ -112,6 +110,8 @@ func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int,
 		if not _check(step > 0.000001, "%s orbit produced a zero physics step" % body_name):
 			simulation.free()
 			return false
+		if force_exact_ephemeris:
+			simulation.ephemeris_cache_time = -INF
 		simulation._physics_step(step)
 		elapsed += step
 		step_count += 1
