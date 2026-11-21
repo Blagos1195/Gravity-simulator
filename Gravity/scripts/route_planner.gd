@@ -73,6 +73,7 @@ class OrbitPlot extends Control:
 					target_dragged.emit(_screen_to_world(event.position))
 				dragging_node = -1
 				dragging_target = false
+				queue_redraw()
 				accept_event()
 		elif event is InputEventMouseMotion:
 			if dragging_node >= 0:
@@ -119,7 +120,8 @@ class OrbitPlot extends Control:
 		for point in planned_path:
 			extent = maxf(extent, point.length())
 		extent = maxf(1.0, extent * 1.08)
-		plot_scale = minf(size.x, size.y) * 0.46 / extent * zoom_factor
+		var fitted_scale := minf(size.x, size.y) * 0.46 / extent * zoom_factor
+		plot_scale = interaction_scale if dragging_target or dragging_node >= 0 else fitted_scale
 		plot_center = size * 0.5
 		var center: Vector2 = plot_center
 		var body_screen_radius: float = maxf(4.0, body_radius * plot_scale)
