@@ -242,7 +242,7 @@ func _adaptive_step_size() -> float:
 	var deep_space: bool = altitude > 1.0e8
 	var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(body.get("name", "Earth")))
 	var in_atmosphere: bool = altitude < atmosphere_height
-	var maximum_step: float = 1800.0 if deep_space else (0.25 if in_atmosphere else 180.0)
+	var maximum_step: float = 0.25 if in_atmosphere else 1800.0
 	var travel_distance_limit: float = 250.0 if in_atmosphere else maxf(100000.0, radius * 0.01)
 	if deep_space:
 		travel_distance_limit = maxf(50000000.0, radius * 0.01)
@@ -256,6 +256,8 @@ func _adaptive_step_size() -> float:
 	var burnout_limit := fuel / total_flow if thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
 	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, maximum_step)
 	var step_limit := minf(physics_limit, burnout_limit)
+	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and not thrust_key_down:
+		step_limit = minf(step_limit, 0.1)
 	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and autopilot_burn_remaining > 0.0 and total_flow > 0.0:
 		var current_mass := maxf(1.0, _current_vehicle_mass())
 		var current_thrust := _engine_thrust(altitude)
