@@ -102,15 +102,6 @@ static func _planet_heliocentric_state(planet: Dictionary, time_seconds: float) 
 	var vy := (c_arg * s_node + s_arg * c_node * c_inc) * vx_orbit + (-s_arg * s_node + c_arg * c_node * c_inc) * vy_orbit
 	return {"position": Vector2(x, y), "velocity": Vector2(vx, vy)}
 
-static func moon_position(time_seconds: float) -> Vector2:
-	var days_since_j2000 := EPHEMERIS_EPOCH_JD - J2000_JD + time_seconds / 86400.0
-	var mean_anomaly := MOON_MEAN_ANOMALY_J2000 + MOON_MEAN_MOTION * days_since_j2000 * 86400.0
-	var perihelion := MOON_PERIHELION_J2000 + MOON_PERIHELION_RATE * days_since_j2000 * 86400.0
-	var eccentric_anomaly := _solve_kepler(mean_anomaly, MOON_ORBIT_ECCENTRICITY)
-	var x := MOON_ORBIT_RADIUS * (cos(eccentric_anomaly) - MOON_ORBIT_ECCENTRICITY)
-	var y := MOON_ORBIT_RADIUS * sqrt(1.0 - MOON_ORBIT_ECCENTRICITY * MOON_ORBIT_ECCENTRICITY) * sin(eccentric_anomaly)
-	return Vector2(x, y).rotated(perihelion)
-
 static func moon_state(time_seconds: float) -> Dictionary:
 	var days_since_j2000 := EPHEMERIS_EPOCH_JD - J2000_JD + time_seconds / 86400.0
 	var mean_anomaly := MOON_MEAN_ANOMALY_J2000 + MOON_MEAN_MOTION * days_since_j2000 * 86400.0
