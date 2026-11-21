@@ -27,6 +27,11 @@ func _initialize() -> void:
 	assert(not FlightComputer._segment_intersects_circle(Vector2(-10.0, 3.0), Vector2(10.0, 3.0), Vector2.ZERO, 2.0))
 	var gravity_snapshot := PlanetarySystem.gravity_body_states(0.0)
 	assert(gravity_snapshot.get("bodies", []).size() == 9)
+	for body in gravity_snapshot.get("surface_bodies", []):
+		assert(body.get("position_components", PackedFloat64Array()) is PackedFloat64Array)
+		assert(body.get("velocity_components", PackedFloat64Array()) is PackedFloat64Array)
+		assert(body.position_components.size() == 2)
+		assert(body.velocity_components.size() == 2)
 	var snapshot_gravity := PlanetarySystem.gravity_acceleration_from_states(Vector2(0.0, -radius), gravity_snapshot)
 	assert(snapshot_gravity.is_finite())
 	var heliocentric_gravity := PlanetarySystem.gravity_acceleration_from_heliocentric_states(Vector2(0.0, -radius), gravity_snapshot)
