@@ -600,8 +600,6 @@ func _update_guidance(dt: float) -> void:
 						autopilot_complete = true
 				else:
 					thrust_key_down = fuel > 0.0 and circular_alignment_error < deg_to_rad(2.0)
-				else:
-					thrust_key_down = fuel > 0.0 and circular_alignment_error < deg_to_rad(2.0)
 
 			"PLAN_TRANSFER":
 				status_message = "AUTOPILOT  •  SIMULATING TRANSFER TRAJECTORIES"
