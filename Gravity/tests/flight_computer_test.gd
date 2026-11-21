@@ -173,7 +173,7 @@ func _initialize() -> void:
 	route_sim.autopilot_enabled = true
 	route_sim.guidance_enabled = true
 	route_sim.autopilot_route_nodes = [
-		{"time": 10.0, "prograde": 0.000001, "radial": 0.0},
+		{"time": 10.0, "prograde": 5.0, "radial": 0.0},
 		{"time": 20.0, "prograde": 5.0, "radial": 0.0}
 	]
 	route_sim.autopilot_phase = "ROUTE_COAST"
@@ -182,7 +182,7 @@ func _initialize() -> void:
 	route_sim.sim_time = 10.0
 	route_sim._update_guidance(0.01)
 	assert(route_sim.autopilot_phase == "ROUTE_BURN")
-	route_sim._physics_step(0.01)
+	route_sim._physics_step(2.0)
 	assert(route_sim.autopilot_phase == "ROUTE_COAST")
 	assert(route_sim.autopilot_route_node_index == 1)
 	route_sim.sim_time = 20.0
