@@ -132,6 +132,7 @@ func _initialize() -> void:
 	var precise_local_body_after: Dictionary = precision_simulation._nearest_body_state(precision_simulation.rocket_position, precision_simulation.rocket_position_precise)
 	assert(str(precise_local_body_after.get("name", "")) == "Mars")
 	assert(absf(float(precise_local_body_after.get("distance", 0.0)) - mars_local_radius) < 100.0)
+	precision_simulation.sim_time = ephemeris_time
 	var moon_position_components: PackedFloat64Array = PlanetarySystem.moon_state(ephemeris_time).position_components
 	var moon_local_radius := PlanetarySystem.MOON_RADIUS + 150000.0
 	precision_simulation._set_rocket_position_components(moon_position_components[0] + moon_local_radius, moon_position_components[1])
