@@ -3,6 +3,8 @@ extends SceneTree
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RoutePlanner = preload("res://scripts/route_planner.gd")
 
 func _initialize() -> void:
 	var radius := FlightComputer.EARTH_RADIUS + 200000.0
@@ -143,6 +145,28 @@ func _initialize() -> void:
 	assert(float(local_transfer_plan.get("total_delta_v", INF)) < 100.0)
 	var invalid_transfer_plan := FlightComputer.simulated_transfer_search(Vector2.ZERO, Vector2.ZERO, 0.0, -3, 5000.0)
 	assert(not bool(invalid_transfer_plan.get("valid", true)))
+
+	var manoeuvre_sim: Variant = SimulationView.new()
+	manoeuvre_sim.set_rocket_design(RocketDesign.create_default())
+	var manoeuvre_radius: float = FlightComputer.EARTH_RADIUS + 200000.0
+	var manoeuvre_speed: float = FlightComputer.circular_orbit_speed(manoeuvre_radius)
+	manoeuvre_sim.landed = false
+	manoeuvre_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
+	manoeuvre_sim.velocity = Vector2(manoeuvre_speed, 0.0)
+	manoeuvre_sim.rotation_angle = PI * 0.5
+	manoeuvre_sim.autopilot_enabled = true
+	manoeuvre_sim.guidance_enabled = true
+	manoeuvre_sim.autopilot_phase = "MANEUVER_BURN"
+	manoeuvre_sim.autopilot_burn_direction = Vector2.RIGHT
+	manoeuvre_sim.autopilot_burn_remaining = 0.000001
+	manoeuvre_sim._update_guidance(0.01)
+	assert(manoeuvre_sim.thrust_key_down)
+	manoeuvre_sim._physics_step(0.01)
+	assert(manoeuvre_sim.autopilot_phase == "COMPLETE")
+	assert(manoeuvre_sim.autopilot_complete)
+	var route_planner_window: Window = RoutePlanner.new()
+	assert(route_planner_window is Window)
+	route_planner_window.free()
 
 	print("Flight computer orbital calculation tests passed.")
 	quit()
