@@ -1075,11 +1075,10 @@ func _draw_solar_label(label: String, anchor: Vector2, font_size: int, color: Co
 
 func _draw_solar_system(center: Vector2) -> void:
 	var ephemeris: Dictionary = PlanetarySystem.gravity_body_states(sim_time)
-	var gravity_bodies: Array = ephemeris.get("bodies", [])
-	if gravity_bodies.is_empty():
+	var heliocentric_bodies: Array = ephemeris.get("heliocentric_bodies", [])
+	if heliocentric_bodies.is_empty():
 		return
-	var sun_state: Dictionary = gravity_bodies[0]
-	var earth_heliocentric: Vector2 = -Vector2(sun_state.get("position", Vector2.ZERO))
+	var earth_heliocentric: Vector2 = Vector2(ephemeris.get("earth_heliocentric_position", Vector2.ZERO))
 	var system_extent: float = 4.4951e12
 	var map_scale: float = minf(size.x * 0.82, size.y * 0.78) / (system_extent * 2.0) * solar_map_zoom
 	var occupied: Array[Rect2] = []
@@ -1106,11 +1105,10 @@ func _draw_solar_system(center: Vector2) -> void:
 	for planet in PlanetarySystem.PLANETS:
 		var orbit_radius: float = float(planet.semi_major_axis)
 		draw_arc(center, orbit_radius * map_scale, 0.0, TAU, 180, Color(0.28, 0.43, 0.58, 0.34), 1.0)
-	for body_variant in gravity_bodies:
+	for body_variant in heliocentric_bodies:
 		var body: Dictionary = body_variant
 		var body_name: String = str(body.get("name", ""))
-		var heliocentric_position: Vector2 = earth_heliocentric + Vector2(body.get("position", Vector2.ZERO))
-		positions[body_name] = heliocentric_position
+		positions[body_name] = Vector2(body.get("position", Vector2.ZERO))
 	for planet in PlanetarySystem.PLANETS:
 		var planet_name: String = str(planet.name)
 		var planet_position: Vector2 = Vector2(positions.get(planet_name, Vector2.ZERO))
