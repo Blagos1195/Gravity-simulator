@@ -339,6 +339,7 @@ func _build_prediction_paths() -> void:
 			if coast_steps <= 0:
 				break
 			var coast_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, coast_duration, coast_steps)
+			planned_path = coast_result.get("path", planned_path)
 			plan_position = coast_result.get("position", plan_position)
 			plan_velocity = coast_result.get("velocity", plan_velocity)
 			integrated_steps += coast_steps
@@ -358,6 +359,7 @@ func _build_prediction_paths() -> void:
 	final_duration = clampf(final_duration, 60.0, 30.0 * 86400.0)
 	var remaining_steps: int = maxi(1, 3000 - integrated_steps)
 	var final_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, final_duration, remaining_steps)
+	planned_path = final_result.get("path", planned_path)
 	orbit_plot.set_paths(current_path, planned_path, markers, float(current_body.get("radius", 0.0)), relative_position)
 	if not nodes.is_empty():
 		var periapsis_altitude: float = (float(final_orbit.get("periapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0
