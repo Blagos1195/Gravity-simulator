@@ -172,7 +172,7 @@ func _physics_step(dt: float) -> void:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
 	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var thrust_impulse := thrust_direction * thrust_delta_v
-	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN"] and thrust_delta_v > 0.0:
+	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
 		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
 		if autopilot_burn_remaining <= 1.0:
 			thrust_key_down = false
@@ -655,7 +655,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0F M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
 				var route_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 0.1 and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
 				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 			"TRANSFER_BURN":
