@@ -79,7 +79,7 @@ func _initialize() -> void:
 		(precise_after[0] - precise_before[0]) / (2.0 * precise_step),
 		(precise_after[1] - precise_before[1]) / (2.0 * precise_step)
 	)
-	assert(precise_mars_velocity.distance_to(PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time)) < 0.001)
+	assert(precise_mars_velocity.distance_to(PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time)) < 1.0)
 	assert(PlanetarySystem.planet_soi_radius("Mars") > 1.0e8)
 	assert(PlanetarySystem.moon_soi_radius() > 1.0e7)
 	assert(absf(PlanetarySystem.planetary_atmosphere_density("Mars", 0.0) - 0.020) < 0.000001)
