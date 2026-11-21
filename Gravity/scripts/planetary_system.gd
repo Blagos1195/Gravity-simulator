@@ -200,7 +200,7 @@ static func gravity_acceleration_from_heliocentric_states(earth_relative_positio
 	return rocket_acceleration - earth_acceleration
 
 static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vector2:
-	return gravity_acceleration_from_states(position, gravity_body_states(time_seconds))
+	return gravity_acceleration_from_heliocentric_states(position, gravity_body_states(time_seconds))
 
 static func gravity_acceleration_from_states(position: Vector2, body_states: Dictionary) -> Vector2:
 	var distance := maxf(position.length(), EARTH_RADIUS)
