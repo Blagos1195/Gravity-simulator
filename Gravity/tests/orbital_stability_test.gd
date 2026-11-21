@@ -86,6 +86,7 @@ func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int)
 	var elapsed := 0.0
 	var maximum_step_count := int(ceil(duration / 0.3)) + 10
 	var step_count := 0
+	var next_checkpoint := 0.25
 	while elapsed < duration:
 		var step: float = minf(simulation._adaptive_step_size(), duration - elapsed)
 		if not _check(step > 0.000001, "%s orbit produced a zero physics step" % body_name):
@@ -100,6 +101,13 @@ func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int)
 		if not _check(not simulation.crashed, "%s orbit crashed during an unpowered revolution" % body_name):
 			simulation.free()
 			return false
+		if elapsed >= duration * next_checkpoint:
+			var checkpoint_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
+			var checkpoint_position: Vector2 = checkpoint_body.relative_position
+			var checkpoint_velocity: Vector2 = simulation.velocity - Vector2(checkpoint_body.velocity)
+			var checkpoint_state: Dictionary = FlightComputer.orbital_state(checkpoint_position, checkpoint_velocity, mu)
+			print("%s orbit at %.0f%%: e=%.8f" % [body_name, next_checkpoint * 100.0, float(checkpoint_state.get("eccentricity", 1.0))])
+			next_checkpoint += 0.25
 	var final_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var relative_position: Vector2 = final_body.relative_position
 	var relative_velocity: Vector2 = simulation.velocity - Vector2(final_body.velocity)
