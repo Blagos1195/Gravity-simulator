@@ -6,6 +6,8 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 
 func _initialize() -> void:
+	if not _validate_moon_ephemeris_cache():
+		return
 	var orbit_cases := [
 		{"name": "LEO", "altitude": 200000.0, "orbits": 3},
 		{"name": "MEO", "altitude": 20200000.0, "orbits": 1},
@@ -29,6 +31,30 @@ func _initialize() -> void:
 			return
 	print("Long-duration orbital stability tests passed.")
 	quit()
+
+
+func _validate_moon_ephemeris_cache() -> bool:
+	var simulation: Variant = SimulationView.new()
+	simulation.set_rocket_design(RocketDesign.create_default())
+	simulation._ephemeris_states_at(0.0)
+	var states: Dictionary = simulation._ephemeris_states_at(5.0)
+	var expected: Dictionary = PlanetarySystem.moon_state(5.0)
+	var expected_position: PackedFloat64Array = expected.position_components
+	var expected_velocity: PackedFloat64Array = expected.velocity_components
+	for body in states.get("bodies", []):
+		if str(body.get("name", "")) != "Moon":
+			continue
+		var actual_position: PackedFloat64Array = body.position_components
+		var actual_velocity: PackedFloat64Array = body.velocity_components
+		var position_error := Vector2(actual_position[0] - expected_position[0], actual_position[1] - expected_position[1]).length()
+		var velocity_error := Vector2(actual_velocity[0] - expected_velocity[0], actual_velocity[1] - expected_velocity[1]).length()
+		var valid := _check(position_error < 0.001, "Cached Moon position differs from its exact ephemeris by %.6f m" % position_error)
+		valid = _check(velocity_error < 0.000001, "Cached Moon velocity differs from its exact ephemeris by %.9f m/s" % velocity_error) and valid
+		simulation.free()
+		return valid
+	simulation.free()
+	return _check(false, "Moon was missing from the cached gravity ephemeris")
+
 
 func _validate_orbit(orbit_name: String, altitude: float, orbit_count: int) -> bool:
 	var radius: float = FlightComputer.EARTH_RADIUS + altitude
