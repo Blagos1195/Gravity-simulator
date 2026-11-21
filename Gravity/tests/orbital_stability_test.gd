@@ -111,6 +111,6 @@ func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int)
 	var valid := _check(str(final_body.get("name", "")) == body_name, "%s spacecraft left its local reference body" % body_name)
 	valid = _check(bool(final_state.get("bound", false)), "%s local orbit became unbound" % body_name) and valid
 	valid = _check(altitude_error < altitude_tolerance, "%s local orbit altitude drifted by %.1f m" % [body_name, altitude_error]) and valid
-	valid = _check(float(final_state.get("eccentricity", 1.0)) < eccentricity_limit, "%s local orbit became eccentric" % body_name) and valid
+	valid = _check(float(final_state.get("eccentricity", 1.0)) < eccentricity_limit, "%s local orbit became eccentric (e=%.6f, limit=%.6f)" % [body_name, float(final_state.get("eccentricity", 1.0)), eccentricity_limit]) and valid
 	simulation.free()
 	return valid
