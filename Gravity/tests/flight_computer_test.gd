@@ -32,21 +32,8 @@ func _initialize() -> void:
 	var heliocentric_gravity := PlanetarySystem.gravity_acceleration_from_heliocentric_states(Vector2(0.0, -radius), gravity_snapshot)
 	assert(heliocentric_gravity.is_finite())
 	var earth_only_gravity := Vector2(0.0, 1.0) * PlanetarySystem.G * PlanetarySystem.EARTH_MASS / (radius * radius)
-	var earth_heliocentric_position: Vector2 = gravity_snapshot.earth_heliocentric_position
-	print("Earth heliocentric position: ", earth_heliocentric_position, " distance: ", earth_heliocentric_position.length())
-	for body_variant in gravity_snapshot.heliocentric_bodies:
-		var body: Dictionary = body_variant
-		var body_position: Vector2 = body.position
-		var body_mass: float = float(body.mass)
-		var body_radius: float = float(body.radius)
-		var rocket_offset: Vector2 = body_position - (earth_heliocentric_position + Vector2(0.0, -radius))
-		var earth_offset: Vector2 = body_position - earth_heliocentric_position
-		var rocket_distance: float = maxf(body_radius, rocket_offset.length())
-		var earth_distance: float = maxf(body_radius, earth_offset.length())
-		var rocket_pull := rocket_offset / rocket_distance * PlanetarySystem.G * body_mass / (rocket_distance * rocket_distance)
-		var earth_pull := earth_offset / earth_distance * PlanetarySystem.G * body_mass / (earth_distance * earth_distance) if str(body.name) != "Earth" else Vector2.ZERO
-		print(str(body.name), " differential: ", rocket_pull - earth_pull)
-	print("Heliocentric gravity: ", heliocentric_gravity, " Earth-only: ", earth_only_gravity, " Difference: ", heliocentric_gravity.distance_to(earth_only_gravity))
+	assert(heliocentric_gravity.distance_to(snapshot_gravity) < 0.0001)
+	var earth_only_gravity := Vector2(0.0, 1.0) * PlanetarySystem.G * PlanetarySystem.EARTH_MASS / (radius * radius)
 	assert(heliocentric_gravity.distance_to(earth_only_gravity) < 0.001)
 
 	var transfer := FlightComputer.hohmann_transfer(radius, FlightComputer.EARTH_RADIUS + 35786000.0)
