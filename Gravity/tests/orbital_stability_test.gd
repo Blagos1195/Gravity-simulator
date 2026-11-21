@@ -92,6 +92,9 @@ func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int)
 		var moon_acceleration := Vector2(moon_after[0] - moon_now[0] * 2.0 + moon_before[0], moon_after[1] - moon_now[1] * 2.0 + moon_before[1])
 		var relative_acceleration: Vector2 = initial_acceleration - moon_acceleration
 		var expected_acceleration: Vector2 = Vector2(-mu / (radius * radius), 0.0)
+		print("Moon acceleration diagnostic: gravity=%s moon=%s relative=%s rocket=%s moon_position=%s moon_velocity=%s" % [initial_acceleration, moon_acceleration, relative_acceleration, simulation.rocket_position_precise, moon_now, PlanetarySystem.moon_state(0.0).velocity_components])
+		for gravity_body in initial_states.get("bodies", []):
+			print("Gravity body %s position=%s precise=%s mass=%s" % [gravity_body.get("name", ""), gravity_body.get("position", Vector2.ZERO), gravity_body.get("position_components", PackedFloat64Array()), gravity_body.get("mass", 0.0)])
 	var elapsed := 0.0
 	var maximum_step_count := int(ceil(duration / 0.3)) + 10
 	var step_count := 0
