@@ -137,7 +137,8 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 		if planet.name == "Earth":
 			continue
 		var planet_state := _planet_heliocentric_state(planet, time_seconds)
-		var relative_position: Vector2 = planet_state.position - earth_position
+		var relative_components := _planet_relative_position_components(planet, time_seconds)
+		var relative_position := Vector2(relative_components[0], relative_components[1])
 		var relative_velocity: Vector2 = planet_state.velocity - earth_velocity
 		var planet_name := str(planet.name)
 		var planet_mass := float(planet.mass)
