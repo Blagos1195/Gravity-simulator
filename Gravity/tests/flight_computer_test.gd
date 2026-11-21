@@ -164,6 +164,32 @@ func _initialize() -> void:
 	manoeuvre_sim._physics_step(0.01)
 	assert(manoeuvre_sim.autopilot_phase == "COMPLETE")
 	assert(manoeuvre_sim.autopilot_complete)
+	var route_sim: Variant = SimulationView.new()
+	route_sim.set_rocket_design(RocketDesign.create_default())
+	route_sim.landed = false
+	route_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
+	route_sim.velocity = Vector2(manoeuvre_speed, 0.0)
+	route_sim.rotation_angle = PI * 0.5
+	route_sim.autopilot_enabled = true
+	route_sim.guidance_enabled = true
+	route_sim.autopilot_route_nodes = [
+		{"time": 10.0, "prograde": 0.000001, "radial": 0.0},
+		{"time": 20.0, "prograde": 5.0, "radial": 0.0}
+	]
+	route_sim.autopilot_phase = "ROUTE_COAST"
+	route_sim._update_guidance(0.01)
+	assert(route_sim.autopilot_phase == "ROUTE_COAST")
+	route_sim.sim_time = 10.0
+	route_sim._update_guidance(0.01)
+	assert(route_sim.autopilot_phase == "ROUTE_BURN")
+	route_sim._physics_step(0.01)
+	assert(route_sim.autopilot_phase == "ROUTE_COAST")
+	assert(route_sim.autopilot_route_node_index == 1)
+	route_sim.sim_time = 20.0
+	route_sim._update_guidance(0.01)
+	assert(route_sim.autopilot_phase == "ROUTE_BURN")
+	route_sim.free()
+
 	var route_planner_window: Window = RoutePlanner.new()
 	assert(route_planner_window is Window)
 	route_planner_window.free()
