@@ -14,7 +14,7 @@ const DEFAULT_DESIGN := {
 	"stages": [
 		{
 			"name": "FIRST STAGE",
-			"dry_mass": 25000.0,
+			"dry_mass": 30000.0,
 			"fuel_capacity": 300000.0,
 			"thrust": 5000000.0,
 			"vacuum_thrust": 6000000.0,
