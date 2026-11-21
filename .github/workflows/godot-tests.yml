@@ -24,6 +24,8 @@ jobs:
           include-templates: false
       - name: Import and parse project
         run: godot --headless --path Gravity --editor --quit
+      - name: Diagnose simulation script parsing
+        run: godot --headless --path Gravity --script res://tests/compile_simulation_view.gd --quit-after 1
       - name: Test rocket design validation
         run: godot --headless --path Gravity --script res://tests/rocket_design_test.gd --quit-after 1
       - name: Test flight computer calculations
