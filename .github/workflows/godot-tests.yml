@@ -37,3 +37,4 @@ jobs:
           run_check --headless --path Gravity --script res://tests/rocket_design_test.gd --quit-after 1
           run_check --headless --path Gravity --script res://tests/flight_computer_test.gd --quit-after 1
           run_check --headless --path Gravity --script res://tests/orbital_stability_test.gd --quit-after 1
+          run_check --headless --path Gravity --script res://tests/simulation_lifecycle_test.gd --quit-after 1
