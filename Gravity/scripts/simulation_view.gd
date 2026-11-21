@@ -976,29 +976,111 @@ func _draw() -> void:
 
 	_draw_hud()
 
+func _draw_solar_label(label: String, anchor: Vector2, font_size: int, color: Color, occupied: Array[Rect2]) -> void:
+	var font: Font = ThemeDB.fallback_font
+	var text_size: Vector2 = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	var label_size := text_size + Vector2(10.0, 6.0)
+	var offsets: Array[Vector2] = [
+		Vector2(10.0, -label_size.y - 5.0),
+		Vector2(10.0, 5.0),
+		Vector2(-label_size.x - 10.0, -label_size.y - 5.0),
+		Vector2(-label_size.x - 10.0, 5.0),
+		Vector2(0.0, -label_size.y - 13.0),
+		Vector2(0.0, 13.0),
+		Vector2(15.0, -label_size.y * 0.5),
+		Vector2(-label_size.x - 15.0, -label_size.y * 0.5)
+	]
+	var chosen := Rect2()
+	var found := false
+	for offset in offsets:
+		var candidate := Rect2(anchor + offset, label_size)
+		candidate.position.x = clampf(candidate.position.x, 8.0, maxf(8.0, size.x - label_size.x - 8.0))
+		candidate.position.y = clampf(candidate.position.y, 8.0, maxf(8.0, size.y - label_size.y - 8.0))
+		var overlaps := false
+		for existing in occupied:
+			if candidate.intersects(existing):
+				overlaps = true
+				break
+		if not overlaps:
+			chosen = candidate
+			found = true
+			break
+	if not found:
+		var column_x: float = size.x - label_size.x - 12.0
+		var column_y: float = 42.0
+		for existing in occupied:
+			if existing.position.x >= column_x - 2.0 and existing.position.y + existing.size.y >= column_y:
+				column_y = existing.position.y + existing.size.y + 5.0
+		chosen = Rect2(Vector2(column_x, minf(column_y, maxf(8.0, size.y - label_size.y - 8.0))), label_size)
+	if chosen.position.distance_to(anchor) > 24.0:
+		draw_line(anchor, chosen.position + Vector2(0.0, label_size.y * 0.5), Color(color.r, color.g, color.b, 0.5), 1.0)
+	draw_rect(chosen, Color(0.025, 0.045, 0.075, 0.88), true)
+	draw_string(font, chosen.position + Vector2(5.0, text_size.y + 1.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
+	occupied.append(chosen)
+
 func _draw_solar_system(center: Vector2) -> void:
-	var map_scale := minf(size.x, size.y) * 0.43 / 4.4951e12 * solar_map_zoom
-	draw_circle(center, 5.0, Color(1.0, 0.78, 0.28))
-	draw_string(ThemeDB.fallback_font, center + Vector2(10, 4), "SUN", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.82, 0.48))
+	var ephemeris: Dictionary = PlanetarySystem.gravity_body_states(sim_time)
+	var gravity_bodies: Array = ephemeris.get("bodies", [])
+	if gravity_bodies.is_empty():
+		return
+	var sun_state: Dictionary = gravity_bodies[0]
+	var earth_heliocentric: Vector2 = -Vector2(sun_state.get("position", Vector2.ZERO))
+	var system_extent: float = 4.4951e12
+	var map_scale: float = minf(size.x * 0.82, size.y * 0.78) / (system_extent * 2.0) * solar_map_zoom
+	var occupied: Array[Rect2] = []
+	var header := Rect2(Vector2(18.0, 14.0), Vector2(minf(size.x - 36.0, 370.0), 24.0))
+	draw_rect(header, Color(0.025, 0.045, 0.075, 0.9), true)
+	draw_string(ThemeDB.fallback_font, header.position + Vector2(7.0, 18.0), "LIVE SOLAR SYSTEM  •  SIMULATION EPHEMERIS", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
+	occupied.append(header)
+	var sun_screen := center
+	draw_circle(sun_screen, 7.0, Color(1.0, 0.78, 0.28))
+	draw_circle(sun_screen, 11.0, Color(1.0, 0.65, 0.2, 0.12))
+	_draw_solar_label("SUN", sun_screen, 11, Color(1.0, 0.82, 0.48), occupied)
+	var positions: Dictionary = {}
+	var colors: Dictionary = {
+		"Mercury": Color(0.68, 0.64, 0.58),
+		"Venus": Color(0.91, 0.73, 0.43),
+		"Earth": Color(0.22, 0.68, 1.0),
+		"Mars": Color(0.88, 0.39, 0.24),
+		"Jupiter": Color(0.82, 0.66, 0.48),
+		"Saturn": Color(0.82, 0.75, 0.53),
+		"Uranus": Color(0.48, 0.78, 0.82),
+		"Neptune": Color(0.32, 0.48, 0.92),
+		"Moon": Color(0.72, 0.74, 0.78)
+	}
 	for planet in PlanetarySystem.PLANETS:
-		var orbit_radius := float(planet.semi_major_axis) * map_scale
-		draw_arc(center, orbit_radius, 0.0, TAU, 180, Color(0.28, 0.43, 0.58, 0.42), 1.0)
-		var period := float(planet.orbital_period) * 86400.0
-		var angle := TAU * sim_time / period
-		var planet_position := center + Vector2(cos(angle), sin(angle)) * orbit_radius
-		var planet_radius := clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
-		var planet_color := Color(0.32, 0.62, 0.88)
-		if planet.name == "Earth":
-			planet_color = Color(0.22, 0.68, 1.0)
-		elif planet.name == "Mars":
-			planet_color = Color(0.88, 0.39, 0.24)
-		elif planet.name == "Jupiter":
-			planet_color = Color(0.82, 0.66, 0.48)
-		elif planet.name == "Saturn":
-			planet_color = Color(0.82, 0.75, 0.53)
-		draw_circle(planet_position, planet_radius, planet_color)
-		draw_string(ThemeDB.fallback_font, planet_position + Vector2(planet_radius + 5.0, 4.0), str(planet.name).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.72, 0.82, 0.92))
-	draw_string(ThemeDB.fallback_font, Vector2(24, size.y - 420.0 * clampf(minf(size.x / 1440.0, size.y / 900.0), 0.7, 1.0)), "SOLAR SYSTEM OVERVIEW  •  ALL PLANETARY ORBITS", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
+		var orbit_radius: float = float(planet.semi_major_axis)
+		draw_arc(center, orbit_radius * map_scale, 0.0, TAU, 180, Color(0.28, 0.43, 0.58, 0.34), 1.0)
+	for body_variant in gravity_bodies:
+		var body: Dictionary = body_variant
+		var body_name: String = str(body.get("name", ""))
+		var heliocentric_position: Vector2 = earth_heliocentric + Vector2(body.get("position", Vector2.ZERO))
+		positions[body_name] = heliocentric_position
+	for planet in PlanetarySystem.PLANETS:
+		var planet_name: String = str(planet.name)
+		var planet_position: Vector2 = Vector2(positions.get(planet_name, Vector2.ZERO))
+		var planet_screen: Vector2 = center + Vector2(planet_position.x, -planet_position.y) * map_scale
+		var planet_radius: float = clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
+		var planet_color: Color = colors.get(planet_name, Color(0.65, 0.72, 0.82))
+		draw_circle(planet_screen, planet_radius, planet_color)
+		if planet_name == "Saturn":
+			draw_arc(planet_screen, planet_radius + 3.0, 0.0, TAU, 48, Color(0.85, 0.78, 0.58, 0.8), 1.5)
+		_draw_solar_label(planet_name.to_upper(), planet_screen, 10, Color(0.82, 0.88, 0.96), occupied)
+	var moon_position: Vector2 = Vector2(positions.get("Moon", Vector2.ZERO))
+	var moon_screen: Vector2 = center + Vector2(moon_position.x, -moon_position.y) * map_scale
+	draw_circle(moon_screen, 2.5, colors["Moon"])
+	_draw_solar_label("MOON", moon_screen, 9, Color(0.78, 0.82, 0.9), occupied)
+	var rocket_heliocentric: Vector2 = earth_heliocentric + rocket_position
+	var rocket_screen: Vector2 = center + Vector2(rocket_heliocentric.x, -rocket_heliocentric.y) * map_scale
+	draw_line(rocket_screen + Vector2(-6.0, 0.0), rocket_screen + Vector2(6.0, 0.0), Color(0.3, 1.0, 0.65), 2.0)
+	draw_line(rocket_screen + Vector2(0.0, -6.0), rocket_screen + Vector2(0.0, 6.0), Color(0.3, 1.0, 0.65), 2.0)
+	draw_circle(rocket_screen, 3.0, Color(0.3, 1.0, 0.65))
+	_draw_solar_label("ROCKET", rocket_screen, 10, Color(0.4, 1.0, 0.72), occupied)
+	var footer_text: String = "SIM TIME  %.2f DAYS     MAP SCALE  %.2f×     WHEEL TO ZOOM" % [sim_time / 86400.0, solar_map_zoom]
+	var footer_size: Vector2 = ThemeDB.fallback_font.get_string_size(footer_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11)
+	var footer_rect := Rect2(Vector2(18.0, size.y - 34.0), Vector2(footer_size.x + 14.0, 23.0))
+	draw_rect(footer_rect, Color(0.025, 0.045, 0.075, 0.9), true)
+	draw_string(ThemeDB.fallback_font, footer_rect.position + Vector2(7.0, 16.0), footer_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.7, 0.8, 0.9))
 
 func _calculate_predicted_trajectory() -> void:
 	predicted_path.clear()
