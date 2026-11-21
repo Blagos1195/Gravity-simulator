@@ -78,6 +78,7 @@ Run the calculation tests from the project directory:
 ```powershell
 godot --headless --path . --script res://tests/rocket_design_test.gd
 godot --headless --path . --script res://tests/flight_computer_test.gd
+godot --headless --path . --script res://tests/orbital_stability_test.gd
 ```
 
 ## Controls
