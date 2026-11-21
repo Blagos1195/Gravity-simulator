@@ -161,24 +161,7 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 	}
 
 static func gravity_acceleration_from_heliocentric_states(earth_relative_position: Vector2, body_states: Dictionary) -> Vector2:
-	var heliocentric_bodies: Array = body_states.get("heliocentric_bodies", [])
-	var earth_position: Vector2 = body_states.get("earth_heliocentric_position", Vector2.ZERO)
-	var rocket_heliocentric_position: Vector2 = earth_position + earth_relative_position
-	var rocket_acceleration := Vector2.ZERO
-	var earth_acceleration := Vector2.ZERO
-	for body_variant in heliocentric_bodies:
-		var body: Dictionary = body_variant
-		var body_position: Vector2 = body.get("position", Vector2.ZERO)
-		var body_mass: float = float(body.get("mass", 0.0))
-		var body_radius: float = maxf(1.0, float(body.get("radius", 1.0)))
-		var rocket_offset: Vector2 = body_position - rocket_heliocentric_position
-		var rocket_distance: float = maxf(body_radius, rocket_offset.length())
-		if str(body.get("name", "")) != "Earth":
-			var earth_offset: Vector2 = body_position - earth_position
-			var earth_distance: float = maxf(body_radius, earth_offset.length())
-			earth_acceleration += earth_offset / earth_distance * (G * body_mass / (earth_distance * earth_distance))
-		rocket_acceleration += rocket_offset / rocket_distance * (G * body_mass / (rocket_distance * rocket_distance))
-	return rocket_acceleration - earth_acceleration
+	return gravity_acceleration_from_states(earth_relative_position, body_states)
 
 static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vector2:
 	return gravity_acceleration_from_heliocentric_states(position, gravity_body_states(time_seconds))
