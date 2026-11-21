@@ -5,8 +5,8 @@ A procedural 2D spaceflight simulator built with Godot 4.
 ## Current prototype
 
 - Procedural starfield and vector-drawn spacecraft
-- Earth-centred Newtonian gravity with lunar perturbations
-- Centralised planetary data for all eight planets
+- Earth-relative Newtonian flight dynamics evaluated in a heliocentric inertial gravity frame, including differential solar, lunar and planetary perturbations
+- Time-dependent Keplerian planetary ephemerides for all eight planets, with position-consistent velocity estimates
 - Time-dependent circular Moon orbit and lunar gravity
 - Layered standard-atmosphere pressure and temperature model through 120 km
 - Vehicle assembly screen with 2–8 configurable stages and payload mass
@@ -40,6 +40,7 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Surface contact, low-speed landing and high-speed crash states for the Moon and rocky planets; gas-giant 1-bar reference levels are treated as atmospheric loss boundaries
 - Powered landing guidance from a stable orbit around the Moon or a solid planet, with body-relative velocity control and variable throttle
 - Deep-space adaptive integration with up to 1,000,000× time warp while retaining fine steps near Earth
+- Automated orbital stability regression tests covering three LEO revolutions and one full MEO and GEO revolution
 - Manual engine controls disengage autopilot; saved flight state preserves the selected target, departure burn vector and guidance phase
 - Remaining ideal vehicle delta-v and thrust-to-weight telemetry
 - Orbital trajectory, periapsis, apoapsis and thrust-to-weight readouts
@@ -110,4 +111,4 @@ Flight saves are stored in the user's Godot application data directory under `sa
 
 The vehicle assembly system supports 2–8 configurable stages. It checks engine specific impulse (220–380 s sea-level and 250–465 s vacuum), stage mass fractions, ignition and burnout thrust-to-weight, total mass (maximum 5,000 tonnes) and total ideal delta-v (8.5–16.5 km/s). Invalid designs cannot be launched or saved. Stage-level values remain an abstraction rather than a detailed component-by-component engineering model.
 
-This remains an early Earth-centred prototype. The multi-stage vehicle, adaptive substepping, gimbal, lift, heating, gravity-turn and powered-landing guidance are simplified gameplay models, not validated launch-vehicle engineering. Planetary gravity uses circular coplanar orbits and differential perturbations rather than accurate ephemerides or a full n-body solar-system integration. Interplanetary transfer estimates assume circular coplanar Hohmann transfers; the autopilot performs departure injection, target-relative encounter detection and a one-burn circular capture at closest approach. Powered landing guidance is available from a stable orbit around the Moon or a solid planet, but terrain, parachutes, landing legs and detailed surface operations are not implemented. Gas-giant reference levels are atmospheric loss boundaries, not solid surfaces. Lunar departure timing is a two-body phase estimate. Planetary atmospheric profiles and heating are approximations, and heating does not yet damage or destroy the vehicle. Detailed tank and engine structural modelling, higher-fidelity aerodynamic coefficients, career progression, missions, docking, replay tooling and multiplayer remain planned follow-on systems.
+This remains an early Earth-centred prototype. The multi-stage vehicle, adaptive substepping, gimbal, lift, heating, gravity-turn and powered-landing guidance are simplified gameplay models, not validated launch-vehicle engineering. Planetary positions use time-dependent Keplerian orbital elements and approximate two-dimensional ephemerides rather than a live n-body solar-system integration. Rocket gravity is evaluated in a heliocentric inertial frame and converted to Earth-relative acceleration, including differential solar, lunar and planetary gravity. This is more consistent than a stationary-Earth approximation, but the planetary ephemerides remain approximate and do not model full three-dimensional motion. Interplanetary transfer estimates assume circular coplanar Hohmann transfers; the autopilot performs departure injection, target-relative encounter detection and a one-burn circular capture at closest approach. Powered landing guidance is available from a stable orbit around the Moon or a solid planet, but terrain, parachutes, landing legs and detailed surface operations are not implemented. Gas-giant reference levels are atmospheric loss boundaries, not solid surfaces. Lunar departure timing is a two-body phase estimate. Planetary atmospheric profiles and heating are approximations, and heating does not yet damage or destroy the vehicle. Detailed tank and engine structural modelling, higher-fidelity aerodynamic coefficients, career progression, missions, docking, replay tooling and multiplayer remain planned follow-on systems.
