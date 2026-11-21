@@ -23,12 +23,17 @@ jobs:
           use-dotnet: false
           include-templates: false
       - name: Import and parse project
-        run: godot --headless --path Gravity --editor --quit
-      - name: Diagnose simulation script parsing
-        run: godot --headless --path Gravity --script res://tests/compile_simulation_view.gd --quit-after 1
-      - name: Test rocket design validation
-        run: godot --headless --path Gravity --script res://tests/rocket_design_test.gd --quit-after 1
-      - name: Test flight computer calculations
-        run: godot --headless --path Gravity --script res://tests/flight_computer_test.gd --quit-after 1
-      - name: Test long-duration orbital stability
-        run: godot --headless --path Gravity --script res://tests/orbital_stability_test.gd --quit-after 1
+        run: |
+          run_check() {
+            local output
+            output="$(godot "$@" 2>&1)" || { printf '%s\n' "$output"; return 1; }
+            printf '%s\n' "$output"
+            if printf '%s\n' "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
+              return 1
+            fi
+          }
+          run_check --headless --path Gravity --editor --quit
+          run_check --headless --path Gravity --script res://tests/compile_simulation_view.gd --quit-after 1
+          run_check --headless --path Gravity --script res://tests/rocket_design_test.gd --quit-after 1
+          run_check --headless --path Gravity --script res://tests/flight_computer_test.gd --quit-after 1
+          run_check --headless --path Gravity --script res://tests/orbital_stability_test.gd --quit-after 1
