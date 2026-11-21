@@ -125,12 +125,13 @@ static func moon_velocity(time_seconds: float) -> Vector2:
 	return moon_state(time_seconds).velocity
 
 static func gravity_body_states(time_seconds: float) -> Dictionary:
-	var earth_state := _earth_heliocentric_state(time_seconds)
-	var earth_position: Vector2 = earth_state.position
-	var earth_velocity: Vector2 = earth_state.velocity
+	var barycentre_state := _planet_heliocentric_state(PLANETS[2], time_seconds)
 	var moon_state_value := moon_state(time_seconds)
 	var moon_position_value: Vector2 = moon_state_value.position
 	var moon_velocity_value: Vector2 = moon_state_value.velocity
+	var earth_moon_ratio: float = MOON_MASS / (EARTH_MASS + MOON_MASS)
+	var earth_position: Vector2 = barycentre_state.position - moon_position_value * earth_moon_ratio
+	var earth_velocity: Vector2 = barycentre_state.velocity - moon_velocity_value * earth_moon_ratio
 	var bodies: Array[Dictionary] = [
 		{"name": "Sun", "mass": SUN_MASS, "position": -earth_position, "velocity": -earth_velocity, "radius": 6.957e8},
 		{"name": "Moon", "mass": MOON_MASS, "position": moon_position_value, "velocity": moon_velocity_value, "radius": MOON_RADIUS}
