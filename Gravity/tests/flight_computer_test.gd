@@ -228,6 +228,25 @@ func _initialize() -> void:
 	cached_simulation.rocket_position = Vector2(0.0, -FlightComputer.EARTH_RADIUS - 1000.0)
 	var atmospheric_step: float = cached_simulation._adaptive_step_size()
 	assert(atmospheric_step <= 0.25)
+	cached_simulation.rocket_position = Vector2(1.495978707e11, 0.0)
+	cached_simulation.velocity = Vector2(30000.0, 0.0)
+	var deep_space_step: float = cached_simulation._adaptive_step_size()
+	assert(deep_space_step >= 1000.0)
+	cached_simulation.rocket_position = Vector2(0.0, -FlightComputer.EARTH_RADIUS - 200000.0)
+	cached_simulation.velocity = Vector2(7800.0, 0.0)
+	cached_simulation.autopilot_enabled = true
+	cached_simulation.autopilot_phase = "MANEUVER_BURN"
+	cached_simulation.autopilot_burn_remaining = 100.0
+	var alignment_step: float = cached_simulation._adaptive_step_size()
+	assert(alignment_step <= 0.1)
+	cached_simulation.autopilot_enabled = false
+	cached_simulation.autopilot_phase = "IDLE"
+	cached_simulation.autopilot_burn_remaining = 0.0
+	cached_simulation.time_warp = 1000.0
+	cached_simulation.sim_time = 0.0
+	cached_simulation._process(0.016)
+	assert(cached_simulation.sim_time >= 15.9)
+	assert(cached_simulation.simulation_time_backlog < 0.001)
 	cached_simulation.free()
 
 	print("Flight computer orbital calculation tests passed.")
