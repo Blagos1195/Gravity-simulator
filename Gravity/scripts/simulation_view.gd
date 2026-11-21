@@ -1210,6 +1210,7 @@ func _draw_solar_system(center: Vector2) -> void:
 func _calculate_predicted_trajectory() -> void:
 	predicted_path.clear()
 	var position := rocket_position
+	var position_components := rocket_position_precise.duplicate()
 	var predicted_velocity := velocity
 	var predicted_fuel := fuel
 	var predicted_stage := stage_index
@@ -1229,7 +1230,7 @@ func _calculate_predicted_trajectory() -> void:
 				mass += float(upper.get("dry_mass", 0.0)) + float(upper.get("fuel_capacity", 0.0))
 			total_flow = float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 			burn = minf(predicted_fuel, total_flow * throttle * dt)
-			var atmosphere := _atmosphere_at(position, predicted_velocity, step_time)
+			var atmosphere := _atmosphere_at(position, predicted_velocity, step_time, position_components)
 			var pressure_ratio := float(atmosphere.density) * float(atmosphere.gas_constant) * float(atmosphere.temperature) / 101325.0
 			thrust_force = lerpf(float(active.get("vacuum_thrust", 0.0)), float(active.get("thrust", 0.0)), clampf(pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1)) * throttle
 		var mass_after := maxf(1.0, mass - burn)
@@ -1238,20 +1239,35 @@ func _calculate_predicted_trajectory() -> void:
 		if burn > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
 			thrust_delta_v = thrust_force / total_flow * log(mass / mass_after)
 		var thrust_impulse := Vector2.UP.rotated(rotation_angle + gimbal_angle) * thrust_delta_v
-		var initial_gravity := PlanetarySystem.gravity_acceleration(position, step_time)
-		var initial_aero := _aerodynamic_acceleration(position, predicted_velocity, mass_mid, step_time)
+		var initial_gravity_states := PlanetarySystem.gravity_body_states(step_time)
+		var initial_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(position_components, initial_gravity_states)
+		var initial_aero := _aerodynamic_acceleration(position, predicted_velocity, mass_mid, step_time, position_components)
 		var half_velocity := predicted_velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
-		var next_position := position + half_velocity * dt
-		var final_gravity := PlanetarySystem.gravity_acceleration(next_position, step_time + dt)
-		var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, step_time + dt)
+		var next_position_components := PackedFloat64Array([
+			position_components[0] + half_velocity.x * dt,
+			position_components[1] + half_velocity.y * dt
+		])
+		var next_position := Vector2(next_position_components[0], next_position_components[1])
+		var final_gravity_states := PlanetarySystem.gravity_body_states(step_time + dt)
+		var final_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(next_position_components, final_gravity_states)
+		var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, step_time + dt, next_position_components)
 		predicted_velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
+		position_components = next_position_components
 		position = next_position
 		predicted_fuel = maxf(0.0, predicted_fuel - burn)
 		if predicted_fuel <= 0.0001 and predicted_stage < rocket_stages.size() - 1:
 			predicted_stage += 1
 			predicted_fuel = float(rocket_stages[predicted_stage].get("fuel_capacity", 0.0))
 		predicted_path.append(position)
-		if position.length() < EARTH_RADIUS:
+		var impacted := false
+		for body in final_gravity_states.get("surface_bodies", []):
+			var body_components := _body_position_components(body)
+			var delta_x: float = position_components[0] - body_components[0]
+			var delta_y: float = position_components[1] - body_components[1]
+			if sqrt(delta_x * delta_x + delta_y * delta_y) <= float(body.get("radius", 0.0)):
+				impacted = true
+				break
+		if impacted:
 			break
 
 func _draw_grid(center: Vector2) -> void:
