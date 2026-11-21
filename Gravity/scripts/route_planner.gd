@@ -166,7 +166,7 @@ func _build_interface() -> void:
 	root.add_child(heading)
 
 	var description := Label.new()
-	description.text = "Drag anywhere on the orbital map to set or move a destination inside the current body's sphere of influence. Choose a transfer time and the computer solves a local two-body Lambert transfer, calculates departure ΔV and previews the route. Drag orange burn nodes to edit additional manoeuvres. Atmospheres and third-body perturbations are not included in this preview."
+	description.text = "Drag anywhere on the orbital map to set or move a destination inside the current body's sphere of influence. Choose a transfer time up to 48 hours and the computer solves a local two-body Lambert transfer, calculates departure ΔV and previews the route. Drag orange burn nodes to edit additional manoeuvres. Atmospheres and third-body perturbations are not included in this preview."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 
@@ -188,7 +188,7 @@ func _build_interface() -> void:
 	destination_row.add_child(duration_label)
 	route_time_input = SpinBox.new()
 	route_time_input.min_value = 0.1
-	route_time_input.max_value = 8760.0
+	route_time_input.max_value = 48.0
 	route_time_input.step = 0.5
 	route_time_input.value = route_duration / 3600.0
 	route_time_input.custom_minimum_size.x = 110.0
@@ -673,7 +673,7 @@ func _build_prediction_paths() -> void:
 		if final_axis > 0.0:
 			final_duration = TAU * sqrt(pow(final_axis, 3.0) / gravitational_parameter)
 	final_duration = route_duration if has_route_target else clampf(final_duration, 60.0, 30.0 * 86400.0)
-	var remaining_steps: int = 180
+	var remaining_steps: int = 1440
 	var final_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, final_duration, remaining_steps)
 	planned_path = final_result.get("path", planned_path)
 	if has_route_target:
