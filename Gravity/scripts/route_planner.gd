@@ -706,7 +706,7 @@ func _update_manoeuvre() -> void:
 			valid_nodes = false
 	autopilot_button.disabled = landed_state or crashed_state or not valid_nodes or total_planned_delta_v > available_delta_v
 	var delta_v_used := maxf(0.0, initial_available_delta_v - available_delta_v)
-	burn_report.text = "PLANNED NODES: %d   •   PLANNED ΔV: %.1f m/s   •   USED: %.1f m/s   •   REMAINING: %.1f m/s   •   %s" % [
+	burn_report.text = "PLANNED NODES: %d   •   PLANNED ΔV: %.1f m/s   •   ROUTE ΔV: %s   •   USED: %.1f m/s   •   REMAINING: %.1f m/s   •   %s" % [
 		nodes.size(),
 		total_planned_delta_v,
 		"NO SOLUTION" if not is_finite(route_delta_v) else "%.1f m/s" % route_delta_v if has_route_target else "N/A",
