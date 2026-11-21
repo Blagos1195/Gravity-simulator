@@ -405,7 +405,7 @@ func _update_manoeuvre() -> void:
 		nodes.size(),
 		total_planned_delta_v,
 		available_delta_v,
-		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
+		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
 	]
 
 func _send_to_autopilot() -> void:
