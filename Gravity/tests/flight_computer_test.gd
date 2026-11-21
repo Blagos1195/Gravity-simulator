@@ -116,6 +116,23 @@ func _initialize() -> void:
 	var mars_local_body: Dictionary = simulation._nearest_body_state(mars_surface_position_for_view)
 	assert(str(mars_local_body.get("name", "")) == "Mars")
 	assert(absf(float(mars_local_body.get("distance", 0.0)) - (3.3895e6 + 150000.0)) < 50000.0)
+	var precision_simulation: Variant = SimulationView.new()
+	precision_simulation.set_rocket_design(RocketDesign.create_default())
+	precision_simulation.sim_time = ephemeris_time
+	precision_simulation.landed = false
+	var mars_position_components := PlanetarySystem._planet_relative_position_components(mars_planet, ephemeris_time)
+	var mars_local_radius := 3.3895e6 + 150000.0
+	precision_simulation._set_rocket_position_components(mars_position_components[0] + mars_local_radius, mars_position_components[1])
+	var precise_local_body: Dictionary = precision_simulation._nearest_body_state(precision_simulation.rocket_position, precision_simulation.rocket_position_precise)
+	assert(str(precise_local_body.get("name", "")) == "Mars")
+	assert(absf(float(precise_local_body.get("distance", 0.0)) - mars_local_radius) < 1.0)
+	var mars_local_speed := sqrt(PlanetarySystem.G * 6.4171e23 / mars_local_radius)
+	precision_simulation.velocity = PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time) + Vector2(0.0, mars_local_speed)
+	precision_simulation._physics_step(0.1)
+	var precise_local_body_after: Dictionary = precision_simulation._nearest_body_state(precision_simulation.rocket_position, precision_simulation.rocket_position_precise)
+	assert(str(precise_local_body_after.get("name", "")) == "Mars")
+	assert(absf(float(precise_local_body_after.get("distance", 0.0)) - mars_local_radius) < 100.0)
+	precision_simulation.free()
 	var moon_surface_position := PlanetarySystem.moon_position(simulation.sim_time) + Vector2(PlanetarySystem.MOON_RADIUS + 100000.0, 0.0)
 	var moon_local_body: Dictionary = simulation._nearest_body_state(moon_surface_position)
 	assert(str(moon_local_body.get("name", "")) == "Moon")
