@@ -72,13 +72,14 @@ func _initialize() -> void:
 	var mars_velocity_error := numerical_mars_velocity.distance_to(PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time))
 	assert(mars_velocity_error < 5.0)
 	var mars_planet: Dictionary = PlanetarySystem._find_planet("Mars")
-	var precise_before := PlanetarySystem._planet_relative_position_components(mars_planet, ephemeris_time - 86400.0)
-	var precise_after := PlanetarySystem._planet_relative_position_components(mars_planet, ephemeris_time + 86400.0)
+	var precise_step := minf(float(mars_planet.orbital_period) * 86400.0 * 0.001, 86400.0)
+	var precise_before := PlanetarySystem._planet_relative_position_components(mars_planet, ephemeris_time - precise_step)
+	var precise_after := PlanetarySystem._planet_relative_position_components(mars_planet, ephemeris_time + precise_step)
 	var precise_mars_velocity := Vector2(
-		(precise_after[0] - precise_before[0]) / 172800.0,
-		(precise_after[1] - precise_before[1]) / 172800.0
+		(precise_after[0] - precise_before[0]) / (2.0 * precise_step),
+		(precise_after[1] - precise_before[1]) / (2.0 * precise_step)
 	)
-	assert(precise_mars_velocity.distance_to(PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time)) < 0.1)
+	assert(precise_mars_velocity.distance_to(PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time)) < 0.001)
 	assert(PlanetarySystem.planet_soi_radius("Mars") > 1.0e8)
 	assert(PlanetarySystem.moon_soi_radius() > 1.0e7)
 	assert(absf(PlanetarySystem.planetary_atmosphere_density("Mars", 0.0) - 0.020) < 0.000001)
