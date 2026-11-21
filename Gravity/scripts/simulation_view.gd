@@ -170,14 +170,14 @@ func _physics_step(dt: float) -> void:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
 	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var thrust_impulse := thrust_direction * thrust_delta_v
-	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"] and thrust_delta_v > 0.0:
+	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN"] and thrust_delta_v > 0.0:
 		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
 		if autopilot_burn_remaining <= 1.0:
 			thrust_key_down = false
 			if autopilot_phase == "TRANSFER_BURN":
 				autopilot_transfer_start_time = sim_time
 				autopilot_phase = "TRANSFER_COAST"
-			else:
+			elif autopilot_phase == "ARRIVAL_CAPTURE_BURN":
 				var arrival_state := _autopilot_target_state()
 				var arrival_position: Vector2 = rocket_position - arrival_state.position
 				var arrival_velocity: Vector2 = velocity + thrust_impulse - arrival_state.velocity
@@ -187,6 +187,10 @@ func _physics_step(dt: float) -> void:
 					autopilot_complete = true
 				else:
 					autopilot_phase = "FAILED"
+			else:
+				autopilot_phase = "COMPLETE"
+				autopilot_complete = true
+				status_message = "AUTOPILOT  •  MANOEUVRE BURN COMPLETE"
 	var initial_gravity := PlanetarySystem.gravity_acceleration(rocket_position, start_time)
 	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid, start_time)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
@@ -603,6 +607,13 @@ func _update_guidance(dt: float) -> void:
 				if desired_radial.length_squared() > 0.5 and rocket_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)):
 					autopilot_burn_direction = tangent * autopilot_transfer_direction
 					autopilot_phase = "TRANSFER_BURN"
+			"MANEUVER_BURN":
+				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0F M/S" % autopilot_burn_remaining
+				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
+				rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
+				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
+					autopilot_phase = "FAILED"
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0F M/S" % autopilot_burn_remaining
 				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
@@ -683,7 +694,7 @@ func _update_guidance(dt: float) -> void:
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent
 		elif autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"]:
 			autopilot_direction = tangent * autopilot_transfer_direction
-		elif autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN"]:
+		elif autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN"]:
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 		elif autopilot_phase == "LANDING_DESCENT":
 			var landing_direction_state := _autopilot_target_state()
