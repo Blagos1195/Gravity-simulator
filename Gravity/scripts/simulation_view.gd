@@ -413,36 +413,10 @@ func _autopilot_target_body_name() -> String:
 	return ""
 
 func _autopilot_target_state() -> Dictionary:
-	var body_name := _autopilot_target_body_name()
-	if body_name == "Earth":
-		return {
-			"name": "Earth",
-			"position": Vector2.ZERO,
-			"velocity": Vector2.ZERO,
-			"mass": PlanetarySystem.EARTH_MASS,
-			"radius": PlanetarySystem.EARTH_RADIUS,
-			"soi": 9.25e8
-		}
-	if body_name == "Moon":
-		return {
-			"name": "Moon",
-			"position": PlanetarySystem.moon_position(sim_time),
-			"velocity": PlanetarySystem.moon_velocity(sim_time),
-			"mass": PlanetarySystem.MOON_MASS,
-			"radius": PlanetarySystem.MOON_RADIUS,
-			"soi": PlanetarySystem.moon_soi_radius()
-		}
-	for body in PlanetarySystem.PLANETS:
-		if str(body.name) == body_name:
-			return {
-				"name": body_name,
-				"position": PlanetarySystem.planet_position_relative_to_earth(body_name, sim_time),
-				"velocity": PlanetarySystem.planet_velocity_relative_to_earth(body_name, sim_time),
-				"mass": float(body.mass),
-				"radius": float(body.radius),
-				"soi": PlanetarySystem.planet_soi_radius(body_name)
-			}
-	return {}
+	var body_name: String = _autopilot_target_body_name()
+	if body_name.is_empty():
+		return {}
+	return _surface_body_state(body_name)
 
 func _begin_arrival_capture(target_state: Dictionary) -> void:
 	var relative_position: Vector2 = rocket_position - target_state.position
