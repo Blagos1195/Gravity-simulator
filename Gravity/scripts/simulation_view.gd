@@ -22,6 +22,8 @@ var time_warp := 1.0
 var simulation_time_backlog := 0.0
 var ephemeris_cache_time := -INF
 var ephemeris_cache: Dictionary = {}
+var ephemeris_output_cache_time := -INF
+var ephemeris_output_cache: Dictionary = {}
 var rocket_position := Vector2(0, -EARTH_RADIUS - 2.0)
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
@@ -463,9 +465,13 @@ func _ephemeris_states_at(time_seconds: float) -> Dictionary:
 	if ephemeris_cache.is_empty() or time_seconds < ephemeris_cache_time or time_seconds - ephemeris_cache_time >= 10.0:
 		ephemeris_cache = PlanetarySystem.gravity_body_states(time_seconds)
 		ephemeris_cache_time = time_seconds
+		ephemeris_output_cache.clear()
+		ephemeris_output_cache_time = -INF
 	var offset: float = time_seconds - ephemeris_cache_time
 	if absf(offset) < 0.000001:
 		return ephemeris_cache
+	if is_equal_approx(time_seconds, ephemeris_output_cache_time) and not ephemeris_output_cache.is_empty():
+		return ephemeris_output_cache
 	var adjusted_bodies: Array[Dictionary] = []
 	for body in ephemeris_cache.get("bodies", []):
 		var adjusted: Dictionary = body.duplicate()
@@ -476,7 +482,9 @@ func _ephemeris_states_at(time_seconds: float) -> Dictionary:
 		var adjusted: Dictionary = body.duplicate()
 		adjusted["position"] = Vector2(body.get("position", Vector2.ZERO)) + Vector2(body.get("velocity", Vector2.ZERO)) * offset
 		adjusted_surface.append(adjusted)
-	return {"bodies": adjusted_bodies, "surface_bodies": adjusted_surface}
+	ephemeris_output_cache = {"bodies": adjusted_bodies, "surface_bodies": adjusted_surface}
+	ephemeris_output_cache_time = time_seconds
+	return ephemeris_output_cache
 
 func _surface_body_state(body_name: String) -> Dictionary:
 	var states: Dictionary = _ephemeris_states_at(sim_time)
@@ -489,7 +497,7 @@ func _nearest_body_state(position: Vector2) -> Dictionary:
 	var nearest: Dictionary = {}
 	var nearest_distance: float = INF
 	for body in states.get("surface_bodies", []):
-		var candidate: Dictionary = body
+		var candidate: Dictionary = body.duplicate()
 		var candidate_distance: float = position.distance_to(Vector2(candidate.get("position", Vector2.ZERO)))
 		if candidate_distance < nearest_distance:
 			nearest = candidate
