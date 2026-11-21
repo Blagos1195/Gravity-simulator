@@ -174,10 +174,10 @@ func _initialize() -> void:
 	manoeuvre_sim.guidance_enabled = true
 	manoeuvre_sim.autopilot_phase = "MANEUVER_BURN"
 	manoeuvre_sim.autopilot_burn_direction = Vector2.RIGHT
-	manoeuvre_sim.autopilot_burn_remaining = 0.000001
+	manoeuvre_sim.autopilot_burn_remaining = 10.0
 	manoeuvre_sim._update_guidance(0.01)
 	assert(manoeuvre_sim.thrust_key_down)
-	manoeuvre_sim._physics_step(0.01)
+	manoeuvre_sim._physics_step(1.0)
 	assert(manoeuvre_sim.autopilot_phase == "COMPLETE")
 	assert(manoeuvre_sim.autopilot_complete)
 	var route_sim: Variant = SimulationView.new()
