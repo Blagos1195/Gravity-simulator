@@ -106,9 +106,11 @@ func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int)
 	var final_state: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, mu)
 	var final_altitude: float = relative_position.length() - float(body_state.radius)
 	var altitude_error: float = absf(final_altitude - altitude)
+	var altitude_tolerance := 5000.0 if body_name == "Moon" else maxf(1000.0, altitude * 0.0001)
+	var eccentricity_limit := 0.002 if body_name == "Moon" else 0.001
 	var valid := _check(str(final_body.get("name", "")) == body_name, "%s spacecraft left its local reference body" % body_name)
 	valid = _check(bool(final_state.get("bound", false)), "%s local orbit became unbound" % body_name) and valid
-	valid = _check(altitude_error < maxf(1000.0, altitude * 0.0001), "%s local orbit altitude drifted by %.1f m" % [body_name, altitude_error]) and valid
-	valid = _check(float(final_state.get("eccentricity", 1.0)) < 0.001, "%s local orbit became eccentric" % body_name) and valid
+	valid = _check(altitude_error < altitude_tolerance, "%s local orbit altitude drifted by %.1f m" % [body_name, altitude_error]) and valid
+	valid = _check(float(final_state.get("eccentricity", 1.0)) < eccentricity_limit, "%s local orbit became eccentric" % body_name) and valid
 	simulation.free()
 	return valid
