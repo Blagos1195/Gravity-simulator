@@ -198,6 +198,32 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 static func gravity_acceleration_from_heliocentric_states(earth_relative_position: Vector2, body_states: Dictionary) -> Vector2:
 	return gravity_acceleration_from_states(earth_relative_position, body_states)
 
+static func gravity_acceleration_from_precise_states(position_components: PackedFloat64Array, body_states: Dictionary) -> Vector2:
+	if position_components.size() < 2:
+		return Vector2.ZERO
+	var position_x: float = position_components[0]
+	var position_y: float = position_components[1]
+	var earth_distance := maxf(sqrt(position_x * position_x + position_y * position_y), EARTH_RADIUS)
+	var earth_factor := G * EARTH_MASS / (earth_distance * earth_distance * earth_distance)
+	var acceleration_x := -position_x * earth_factor
+	var acceleration_y := -position_y * earth_factor
+	for body in body_states.get("bodies", []):
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var body_x: float = body_components[0]
+		var body_y: float = body_components[1]
+		var body_mass := float(body.get("mass", 0.0))
+		var body_radius := float(body.get("radius", 1.0))
+		var relative_x := body_x - position_x
+		var relative_y := body_y - position_y
+		var relative_distance := maxf(sqrt(relative_x * relative_x + relative_y * relative_y), body_radius)
+		var body_distance := maxf(sqrt(body_x * body_x + body_y * body_y), 1.0e7)
+		var direct_factor := G * body_mass / (relative_distance * relative_distance * relative_distance)
+		var indirect_factor := G * body_mass / (body_distance * body_distance * body_distance)
+		acceleration_x += relative_x * direct_factor - body_x * indirect_factor
+		acceleration_y += relative_y * direct_factor - body_y * indirect_factor
+	return Vector2(acceleration_x, acceleration_y)
+
 static func gravity_acceleration(position: Vector2, time_seconds: float) -> Vector2:
 	return gravity_acceleration_from_heliocentric_states(position, gravity_body_states(time_seconds))
 
