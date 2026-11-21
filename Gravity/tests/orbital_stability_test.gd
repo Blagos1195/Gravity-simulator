@@ -86,13 +86,12 @@ func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int)
 	if body_name == "Moon":
 		var initial_states: Dictionary = simulation._ephemeris_states_at(0.0)
 		var initial_acceleration: Vector2 = PlanetarySystem.gravity_acceleration_from_precise_states(simulation.rocket_position_precise, initial_states)
-		var moon_before: Vector2 = PlanetarySystem.moon_state(-1.0).position
-		var moon_now: Vector2 = PlanetarySystem.moon_state(0.0).position
-		var moon_after: Vector2 = PlanetarySystem.moon_state(1.0).position
-		var moon_acceleration: Vector2 = moon_after - moon_now * 2.0 + moon_before
+		var moon_before: PackedFloat64Array = PlanetarySystem.moon_state(-1.0).position_components
+		var moon_now: PackedFloat64Array = PlanetarySystem.moon_state(0.0).position_components
+		var moon_after: PackedFloat64Array = PlanetarySystem.moon_state(1.0).position_components
+		var moon_acceleration := Vector2(moon_after[0] - moon_now[0] * 2.0 + moon_before[0], moon_after[1] - moon_now[1] * 2.0 + moon_before[1])
 		var relative_acceleration: Vector2 = initial_acceleration - moon_acceleration
 		var expected_acceleration: Vector2 = Vector2(-mu / (radius * radius), 0.0)
-		print("Moon initial relative acceleration: actual=%s expected=%s" % [relative_acceleration, expected_acceleration])
 	var elapsed := 0.0
 	var maximum_step_count := int(ceil(duration / 0.3)) + 10
 	var step_count := 0
