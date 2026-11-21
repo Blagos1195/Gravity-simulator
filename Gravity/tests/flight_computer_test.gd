@@ -32,6 +32,7 @@ func _initialize() -> void:
 	var heliocentric_gravity := PlanetarySystem.gravity_acceleration_from_heliocentric_states(Vector2(0.0, -radius), gravity_snapshot)
 	assert(heliocentric_gravity.is_finite())
 	var earth_only_gravity := Vector2(0.0, 1.0) * PlanetarySystem.G * PlanetarySystem.EARTH_MASS / (radius * radius)
+	print("Heliocentric gravity: ", heliocentric_gravity, " Earth-only: ", earth_only_gravity, " Difference: ", heliocentric_gravity.distance_to(earth_only_gravity))
 	assert(heliocentric_gravity.distance_to(earth_only_gravity) < 0.001)
 
 	var transfer := FlightComputer.hohmann_transfer(radius, FlightComputer.EARTH_RADIUS + 35786000.0)
