@@ -25,6 +25,17 @@ func _initialize() -> void:
 	assert(FlightComputer._segment_intersects_circle(Vector2(-10.0, 0.0), Vector2(10.0, 0.0), Vector2.ZERO, 2.0))
 	assert(FlightComputer._segment_intersects_circle(Vector2(0.0, 0.0), Vector2(0.0, 0.0), Vector2.ZERO, 2.0))
 	assert(not FlightComputer._segment_intersects_circle(Vector2(-10.0, 3.0), Vector2(10.0, 3.0), Vector2.ZERO, 2.0))
+	var distant_origin := 1.495978707e11
+	var precise_segment_start := PackedFloat64Array([distant_origin, 2500.0])
+	var precise_segment_end := PackedFloat64Array([distant_origin, -2500.0])
+	var precise_segment_center := PackedFloat64Array([distant_origin, 0.0])
+	assert(FlightComputer._segment_intersects_circle_precise(precise_segment_start, precise_segment_end, precise_segment_center, 1000.0))
+	var precise_miss_center := PackedFloat64Array([distant_origin + 2000.0, 0.0])
+	assert(not FlightComputer._segment_intersects_circle_precise(precise_segment_start, precise_segment_end, precise_miss_center, 1000.0))
+	var mars_target_components: PackedFloat64Array = FlightComputer._simulated_target_state(0, 0.0).position_components
+	var expected_mars_components: PackedFloat64Array = PlanetarySystem.planet_position_relative_to_earth_components("Mercury", 0.0)
+	assert(absf(mars_target_components[0] - expected_mars_components[0]) < 0.001)
+	assert(absf(mars_target_components[1] - expected_mars_components[1]) < 0.001)
 	var gravity_snapshot := PlanetarySystem.gravity_body_states(0.0)
 	assert(gravity_snapshot.get("bodies", []).size() == 9)
 	for body in gravity_snapshot.get("surface_bodies", []):
