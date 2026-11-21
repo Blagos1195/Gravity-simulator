@@ -29,6 +29,9 @@ func _initialize() -> void:
 	assert(gravity_snapshot.get("bodies", []).size() == 9)
 	var snapshot_gravity := PlanetarySystem.gravity_acceleration_from_states(Vector2(0.0, -radius), gravity_snapshot)
 	assert(snapshot_gravity.is_finite())
+	var heliocentric_gravity := PlanetarySystem.gravity_acceleration_from_heliocentric_states(Vector2(0.0, -radius), gravity_snapshot)
+	assert(heliocentric_gravity.is_finite())
+	assert(heliocentric_gravity.distance_to(snapshot_gravity) < 0.0001)
 
 	var transfer := FlightComputer.hohmann_transfer(radius, FlightComputer.EARTH_RADIUS + 35786000.0)
 	assert(bool(transfer.get("valid", false)))
@@ -228,7 +231,7 @@ func _initialize() -> void:
 	cached_simulation.rocket_position = Vector2(0.0, -FlightComputer.EARTH_RADIUS - 200000.0)
 	cached_simulation.velocity = Vector2(7800.0, 0.0)
 	var orbital_step: float = cached_simulation._adaptive_step_size()
-	assert(orbital_step > 5.0 and orbital_step <= 180.0)
+	assert(orbital_step > 0.05 and orbital_step <= 0.5)
 	cached_simulation.rocket_position = Vector2(0.0, -FlightComputer.EARTH_RADIUS - 1000.0)
 	var atmospheric_step: float = cached_simulation._adaptive_step_size()
 	assert(atmospheric_step <= 0.25)
