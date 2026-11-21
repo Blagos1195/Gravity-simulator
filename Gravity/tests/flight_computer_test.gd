@@ -216,9 +216,12 @@ func _initialize() -> void:
 	root.add_child(route_planner_window)
 	route_planner_window.configure(planner_sim, RocketDesign.create_default())
 	route_planner_window._add_node()
+	assert(route_planner_window.autopilot_button.disabled)
+	assert(route_planner_window.burn_report.text.contains("ADD A NON-ZERO BURN"))
 	route_planner_window.time_input.value = 30.0
 	route_planner_window.prograde_input.value = 5.0
 	route_planner_window._update_selected_node()
+	assert(not route_planner_window.autopilot_button.disabled)
 	assert(route_planner_window.nodes.size() == 1)
 	assert(route_planner_window.orbit_plot.planned_path.size() > 1)
 	route_planner_window._send_to_autopilot()
