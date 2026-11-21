@@ -81,10 +81,6 @@ class OrbitPlot extends Control:
 			return -1
 		var nearest_index := -1
 		var nearest_distance := 16.0 * 16.0
-		if has_target:
-			var target_screen: Vector2 = center + Vector2(target_position.x, -target_position.y) * plot_scale
-			draw_circle(target_screen, 8.0, Color(0.25, 0.78, 1.0))
-			draw_arc(target_screen, 12.0, 0.0, TAU, 48, Color(0.55, 0.88, 1.0), 1.8)
 		for index in range(node_positions.size()):
 			var screen_position := plot_center + Vector2(node_positions[index].x, -node_positions[index].y) * plot_scale
 			var distance: float = mouse_position.distance_squared_to(screen_position)
@@ -128,6 +124,10 @@ class OrbitPlot extends Control:
 			draw_polyline(current_screen, Color(0.55, 0.7, 0.82, 0.8), 1.5, true)
 		if planned_screen.size() > 1:
 			draw_polyline(planned_screen, Color(0.25, 0.9, 0.68), 2.2, true)
+		if has_target:
+			var target_screen: Vector2 = center + Vector2(target_position.x, -target_position.y) * plot_scale
+			draw_circle(target_screen, 8.0, Color(0.25, 0.78, 1.0))
+			draw_arc(target_screen, 12.0, 0.0, TAU, 48, Color(0.55, 0.88, 1.0), 1.8)
 		var rocket_screen: Vector2 = center + Vector2(rocket_position.x, -rocket_position.y) * plot_scale
 		draw_circle(rocket_screen, 4.5, Color(1.0, 0.86, 0.35))
 		for index in range(node_positions.size()):
