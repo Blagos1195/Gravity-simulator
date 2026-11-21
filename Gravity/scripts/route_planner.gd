@@ -94,7 +94,7 @@ func _build_interface() -> void:
 	root.add_child(heading)
 
 	var description := Label.new()
-	description.text = "Build a sequence of timed orbital manoeuvres. The preview coasts between nodes, applies each planned impulse and plots the resulting route."
+	description.text = "Build timed orbital manoeuvres and send the sequence to autopilot. The preview is an impulsive two-body estimate; live flight uses the simulator physics."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 
@@ -335,7 +335,7 @@ func _build_prediction_paths() -> void:
 		var node_time: float = maxf(elapsed, float(node.get("time_offset", 0.0)))
 		var coast_duration: float = node_time - elapsed
 		if coast_duration > 0.0:
-			var coast_steps: int = mini(3000 - integrated_steps, maxi(1, int(ceil(coast_duration / 120.0))))
+			var coast_steps: int = mini(5500 - integrated_steps, maxi(1, int(ceil(coast_duration / 120.0))))
 			if coast_steps <= 0:
 				break
 			var coast_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, coast_duration, coast_steps)
@@ -357,7 +357,7 @@ func _build_prediction_paths() -> void:
 		if final_axis > 0.0:
 			final_duration = TAU * sqrt(pow(final_axis, 3.0) / gravitational_parameter)
 	final_duration = clampf(final_duration, 60.0, 30.0 * 86400.0)
-	var remaining_steps: int = maxi(1, 3000 - integrated_steps)
+	var remaining_steps: int = 180
 	var final_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, final_duration, remaining_steps)
 	planned_path = final_result.get("path", planned_path)
 	orbit_plot.set_paths(current_path, planned_path, markers, float(current_body.get("radius", 0.0)), relative_position)
