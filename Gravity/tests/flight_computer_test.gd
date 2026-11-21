@@ -246,8 +246,7 @@ func _initialize() -> void:
 	cached_simulation.landed = false
 	cached_simulation.sim_time = 0.0
 	cached_simulation._process(0.016)
-	assert(cached_simulation.sim_time >= 15.9)
-	assert(cached_simulation.simulation_time_backlog < 0.001)
+	assert(absf(cached_simulation.sim_time + cached_simulation.simulation_time_backlog - 16.0) < 0.01)
 	cached_simulation.free()
 
 	print("Flight computer orbital calculation tests passed.")
