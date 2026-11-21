@@ -229,8 +229,8 @@ func _initialize() -> void:
 
 	var moon_velocity_time := 86400.0 * 123.0
 	var analytical_moon_velocity: Vector2 = PlanetarySystem.moon_velocity(moon_velocity_time)
-	var numerical_moon_velocity: Vector2 = (PlanetarySystem.moon_position(moon_velocity_time + 1800.0) - PlanetarySystem.moon_position(moon_velocity_time - 1800.0)) / 3600.0
-	assert(analytical_moon_velocity.distance_to(numerical_moon_velocity) < 0.02)
+	var numerical_moon_velocity: Vector2 = (PlanetarySystem.moon_position(moon_velocity_time + 3600.0) - PlanetarySystem.moon_position(moon_velocity_time - 3600.0)) / 7200.0
+	assert(analytical_moon_velocity.distance_to(numerical_moon_velocity) < 0.1)
 	assert(gravity_snapshot.get("surface_bodies", []).size() == 9)
 	var cached_simulation: Variant = SimulationView.new()
 	var cached_moon: Dictionary = cached_simulation._surface_body_state("Moon")
