@@ -910,7 +910,7 @@ func _show_autopilot_panel() -> void:
 				text_lines.append("Press CALCULATE FLIGHT PLAN to simulate candidate trajectories from the current state.")
 			else:
 				var available_for_transfer: float = remaining_delta_v * (1.0 - sim.autopilot_safety_margin)
-				var simulated_plan := FlightComputer.simulated_transfer_search(sim.rocket_position, sim.velocity, sim.sim_time, destination_index, available_for_transfer, sim.autopilot_speed_priority)
+				var simulated_plan := FlightComputer.simulated_transfer_search_precise(sim.rocket_position_precise, sim.velocity, sim.sim_time, destination_index, available_for_transfer, sim.autopilot_speed_priority)
 				if bool(simulated_plan.get("valid", false)):
 					text_lines.append("Departure manoeuvre: %.0f m/s Δv" % float(simulated_plan.get("departure_delta_v", 0.0)))
 					text_lines.append("Arrival capture: %.0f m/s Δv" % float(simulated_plan.get("capture_delta_v", 0.0)))
