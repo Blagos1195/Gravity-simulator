@@ -20,13 +20,49 @@ var available_delta_v := 0.0
 var nodes: Array[Dictionary] = []
 var selected_node_index := -1
 var loading_node := false
+var current_orbit_duration := 7200.0
+var refresh_elapsed := 0.0
 
 class OrbitPlot extends Control:
+	signal node_dragged(index: int, world_position: Vector2)
 	var body_radius := 0.0
 	var current_path := PackedVector2Array()
 	var planned_path := PackedVector2Array()
 	var node_positions := PackedVector2Array()
 	var rocket_position := Vector2.ZERO
+	var dragging_node := -1
+	var plot_scale := 1.0
+	var plot_center := Vector2.ZERO
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				dragging_node = _nearest_node(event.position)
+				if dragging_node >= 0:
+					accept_event()
+			elif dragging_node >= 0:
+					node_dragged.emit(dragging_node, _screen_to_world(event.position))
+					dragging_node = -1
+					accept_event()
+		elif event is InputEventMouseMotion and dragging_node >= 0:
+				node_dragged.emit(dragging_node, _screen_to_world(event.position))
+				accept_event()
+
+	func _screen_to_world(screen_position: Vector2) -> Vector2:
+		return Vector2((screen_position.x - plot_center.x) / plot_scale, -(screen_position.y - plot_center.y) / plot_scale)
+
+	func _nearest_node(mouse_position: Vector2) -> int:
+		if node_positions.is_empty() or plot_scale <= 0.0:
+			return -1
+		var nearest_index := -1
+		var nearest_distance := 16.0 * 16.0
+		for index in range(node_positions.size()):
+			var screen_position := plot_center + Vector2(node_positions[index].x, -node_positions[index].y) * plot_scale
+			var distance := mouse_position.distance_squared_to(screen_position)
+			if distance < nearest_distance:
+				nearest_distance = distance
+				nearest_index = index
+		return nearest_index
 
 	func set_paths(current: PackedVector2Array, planned: PackedVector2Array, markers: PackedVector2Array, radius: float, initial_position: Vector2) -> void:
 		current_path = current
@@ -45,8 +81,10 @@ class OrbitPlot extends Control:
 		for point in planned_path:
 			extent = maxf(extent, point.length())
 		extent = maxf(1.0, extent * 1.08)
-		var scale_factor: float = minf(size.x, size.y) * 0.46 / extent
-		var center: Vector2 = size * 0.5
+		plot_scale = minf(size.x, size.y) * 0.46 / extent
+		plot_center = size * 0.5
+		var center: Vector2 = plot_center
+		var scale_factor: float = plot_scale
 		var body_screen_radius: float = maxf(4.0, body_radius * scale_factor)
 		draw_circle(center, body_screen_radius, Color(0.16, 0.39, 0.72))
 		draw_arc(center, body_screen_radius, 0.0, TAU, 96, Color(0.45, 0.72, 1.0), 1.5)
@@ -64,8 +102,9 @@ class OrbitPlot extends Control:
 		draw_circle(rocket_screen, 4.5, Color(1.0, 0.86, 0.35))
 		for index in range(node_positions.size()):
 			var node_screen: Vector2 = center + Vector2(node_positions[index].x, -node_positions[index].y) * scale_factor
-			draw_circle(node_screen, 5.0, Color(1.0, 0.48, 0.25))
-			draw_string(ThemeDB.fallback_font, node_screen + Vector2(7.0, -7.0), str(index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.72, 0.42))
+			draw_circle(node_screen, 7.0, Color(1.0, 0.48, 0.25))
+			draw_arc(node_screen, 9.0, 0.0, TAU, 32, Color(1.0, 0.8, 0.5), 1.5)
+			draw_string(ThemeDB.fallback_font, node_screen + Vector2(10.0, -8.0), str(index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.72, 0.42))
 
 func configure(simulation_node: Control, design: Dictionary) -> void:
 	simulation = simulation_node
@@ -94,12 +133,14 @@ func _build_interface() -> void:
 	root.add_child(heading)
 
 	var description := Label.new()
-	description.text = "Build timed orbital manoeuvres and send the sequence to autopilot. The preview is an impulsive two-body estimate; live flight uses the simulator physics."
+	description.text = "Drag the flight computer by its title bar. Drag an orange manoeuvre marker around the current orbit to choose its burn point; the computer calculates the circularisation ΔV automatically. Live progress refreshes continuously."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 
 	orbit_plot = OrbitPlot.new()
 	orbit_plot.custom_minimum_size = Vector2(0, 340)
+	orbit_plot.mouse_filter = Control.MOUSE_FILTER_STOP
+	orbit_plot.node_dragged.connect(_drag_node_to_orbit_position)
 	orbit_plot.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	orbit_plot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(orbit_plot)
@@ -203,6 +244,12 @@ func _build_interface() -> void:
 	prograde_input.value_changed.connect(_update_selected_node)
 	radial_input.value_changed.connect(_update_selected_node)
 
+func _process(delta: float) -> void:
+	refresh_elapsed += delta
+	if refresh_elapsed >= 0.5 and is_instance_valid(simulation):
+		refresh_elapsed = 0.0
+		_refresh_state()
+
 func _create_burn_input() -> SpinBox:
 	var spin := SpinBox.new()
 	spin.min_value = -10000.0
@@ -243,6 +290,46 @@ func _remove_node() -> void:
 		return
 	nodes.remove_at(selected_node_index)
 	selected_node_index = mini(selected_node_index, nodes.size() - 1)
+	_rebuild_node_list()
+	_load_selected_node()
+	_update_manoeuvre()
+
+func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
+	if index < 0 or index >= nodes.size() or current_path.size() < 2:
+		return
+	var nearest_index := 0
+	var nearest_distance := INF
+	for point_index in range(current_path.size()):
+		var distance := current_path[point_index].distance_squared_to(world_position)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_index = point_index
+	var fraction := float(nearest_index) / float(current_path.size() - 1)
+	var time_offset := fraction * current_orbit_duration
+	var step_time := current_orbit_duration / float(current_path.size() - 1)
+	var before_index := maxi(0, nearest_index - 1)
+	var after_index := mini(current_path.size() - 1, nearest_index + 1)
+	var burn_position := current_path[nearest_index]
+	var burn_velocity := (current_path[after_index] - current_path[before_index]) / maxf(0.001, float(after_index - before_index) * step_time)
+	var radial := burn_position.normalized()
+	var tangent := Vector2(-radial.y, radial.x)
+	if burn_position.cross(burn_velocity) < 0.0:
+		tangent = -tangent
+	var circular_velocity := tangent * sqrt(gravitational_parameter / maxf(1.0, burn_position.length()))
+	var required_burn := circular_velocity - burn_velocity
+	var node: Dictionary = nodes[index]
+	node["time_offset"] = time_offset
+	node["prograde"] = required_burn.dot(tangent)
+	node["radial"] = required_burn.dot(radial)
+	nodes[index] = node
+	nodes.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("time_offset", 0.0)) < float(b.get("time_offset", 0.0))
+	)
+	selected_node_index = 0
+	for node_index in range(nodes.size()):
+		if is_equal_approx(float(nodes[node_index].get("time_offset", 0.0)), time_offset):
+			selected_node_index = node_index
+			break
 	_rebuild_node_list()
 	_load_selected_node()
 	_update_manoeuvre()
@@ -325,6 +412,7 @@ func _build_prediction_paths() -> void:
 		if semi_major_axis > 0.0:
 			orbit_duration = TAU * sqrt(pow(semi_major_axis, 3.0) / gravitational_parameter)
 	orbit_duration = clampf(orbit_duration, 60.0, 30.0 * 86400.0)
+	current_orbit_duration = orbit_duration
 	var current_result: Dictionary = _append_integrated_path(current_path, relative_position, relative_velocity, orbit_duration, 180)
 	current_path = current_result.get("path", PackedVector2Array())
 	var plan_position: Vector2 = relative_position
