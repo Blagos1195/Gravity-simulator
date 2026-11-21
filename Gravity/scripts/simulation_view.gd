@@ -109,7 +109,8 @@ func _process(delta: float) -> void:
 	if not paused and not crashed:
 		var current_body := _nearest_body_state(rocket_position)
 		var altitude: float = maxf(0.0, float(current_body.distance) - float(current_body.radius))
-		var near_atmosphere: bool = float(current_body.distance) < float(current_body.soi) and altitude < 80000.0
+		var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(current_body.get("name", "Earth")))
+		var near_atmosphere: bool = float(current_body.distance) < float(current_body.soi) and altitude < atmosphere_height
 		var effective_warp: float = minf(time_warp, 100.0) if near_atmosphere else time_warp
 		simulation_time_backlog += effective_warp * delta
 		var iterations := 0
@@ -237,8 +238,10 @@ func _adaptive_step_size() -> float:
 	var orbital_limit: float = 0.015 * sqrt(radius / maxf(0.001, gravity))
 	var speed: float = (velocity - Vector2(body.velocity)).length()
 	var deep_space: bool = altitude > 1.0e8
-	var maximum_step: float = 1800.0 if deep_space else (180.0 if altitude > 80000.0 else 0.25)
-	var travel_distance_limit: float = maxf(100000.0, radius * 0.01) if altitude > 80000.0 else 250.0
+	var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(body.get("name", "Earth")))
+	var in_atmosphere: bool = altitude < atmosphere_height
+	var maximum_step: float = 1800.0 if deep_space else (0.25 if in_atmosphere else 180.0)
+	var travel_distance_limit: float = 250.0 if in_atmosphere else maxf(100000.0, radius * 0.01)
 	if deep_space:
 		travel_distance_limit = maxf(50000000.0, radius * 0.01)
 	var travel_limit: float = travel_distance_limit / maxf(100.0, speed)
