@@ -299,7 +299,7 @@ func _acceleration(position: Vector2) -> Vector2:
 	var radius: float = maxf(1.0, position.length())
 	return -position / radius * gravitational_parameter / (radius * radius)
 
-func _append_integrated_path(path: PackedVector2Array, position: Vector2, velocity_value: Vector2, duration: float, max_steps: int) -> Array:
+func _append_integrated_path(path: PackedVector2Array, position: Vector2, velocity_value: Vector2, duration: float, max_steps: int) -> Dictionary:
 	var steps: int = clampi(int(ceil(duration / 120.0)), 1, max_steps)
 	var step: float = duration / float(steps)
 	var sample_position: Vector2 = position
