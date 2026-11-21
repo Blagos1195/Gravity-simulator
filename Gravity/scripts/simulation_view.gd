@@ -158,17 +158,17 @@ func _physics_step(dt: float) -> void:
 	if landed:
 		if thrust_key_down and fuel > 0.0:
 			var surface_state := _surface_body_state(landed_body_name)
-			var normal: Vector2 = (rocket_position - surface_state.position).normalized()
+			var normal := _relative_position_to_body(surface_state).normalized()
 			rotation_angle = normal.angle() - Vector2.UP.angle()
-			rocket_position = surface_state.position + normal * (float(surface_state.radius) + 5.0)
+			_set_rocket_position_relative_to_body(surface_state, normal * (float(surface_state.radius) + 5.0))
 			velocity = surface_state.velocity + Vector2(-normal.y, normal.x) * float(surface_state.radius) * float(surface_state.rotation_rate)
 			landed = false
 			status_message = "LAUNCHING FROM %s" % landed_body_name.to_upper()
 		else:
 			sim_time = end_time
 			var landed_surface_state := _surface_body_state(landed_body_name)
-			var landed_normal: Vector2 = (rocket_position - landed_surface_state.position).normalized()
-			rocket_position = landed_surface_state.position + landed_normal * (float(landed_surface_state.radius) + 0.5)
+			var landed_normal := _relative_position_to_body(landed_surface_state).normalized()
+			_set_rocket_position_relative_to_body(landed_surface_state, landed_normal * (float(landed_surface_state.radius) + 0.5))
 			velocity = landed_surface_state.velocity + Vector2(-landed_normal.y, landed_normal.x) * float(landed_surface_state.radius) * float(landed_surface_state.rotation_rate)
 			throttle = 0.0
 			return
@@ -176,7 +176,8 @@ func _physics_step(dt: float) -> void:
 		sim_time = end_time
 		throttle = 0.0
 		return
-	var altitude := rocket_position.length() - EARTH_RADIUS
+	var local_body := _nearest_body_state(rocket_position)
+	var altitude := maxf(0.0, float(local_body.get("distance", EARTH_RADIUS)) - float(local_body.get("radius", EARTH_RADIUS)))
 	if guidance_enabled:
 		_update_guidance(dt)
 	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "ROUTE_COAST", "COMPLETE", "FAILED"]:
@@ -203,7 +204,7 @@ func _physics_step(dt: float) -> void:
 				autopilot_phase = "TRANSFER_COAST"
 			elif autopilot_phase == "ARRIVAL_CAPTURE_BURN":
 				var arrival_state := _autopilot_target_state()
-				var arrival_position: Vector2 = rocket_position - arrival_state.position
+				var arrival_position := _relative_position_to_body(arrival_state)
 				var arrival_velocity: Vector2 = velocity + thrust_impulse - arrival_state.velocity
 				var arrival_orbit := FlightComputer.orbital_state(arrival_position, arrival_velocity, G * float(arrival_state.mass))
 				if bool(arrival_orbit.get("bound", false)) and float(arrival_orbit.get("periapsis", 0.0)) > float(arrival_state.radius) + 50000.0:
@@ -225,23 +226,28 @@ func _physics_step(dt: float) -> void:
 				autopilot_complete = true
 				status_message = "AUTOPILOT  •  MANOEUVRE BURN COMPLETE"
 	var gravity_states: Dictionary = _ephemeris_states_at(start_time + dt * 0.5)
-	var initial_gravity: Vector2 = PlanetarySystem.gravity_acceleration_from_heliocentric_states(rocket_position, gravity_states)
-	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid, start_time)
+	var initial_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(rocket_position_precise, gravity_states)
+	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid, start_time, rocket_position_precise)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
-	var next_position := rocket_position + half_velocity * dt
-	var final_gravity: Vector2 = PlanetarySystem.gravity_acceleration_from_heliocentric_states(next_position, gravity_states)
-	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, end_time)
+	var next_position_components := PackedFloat64Array([
+		rocket_position_precise[0] + half_velocity.x * dt,
+		rocket_position_precise[1] + half_velocity.y * dt
+	])
+	var next_position := Vector2(next_position_components[0], next_position_components[1])
+	var final_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(next_position_components, gravity_states)
+	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, end_time, next_position_components)
 	velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
-	rocket_position = next_position
+	_set_rocket_position_components(next_position_components[0], next_position_components[1])
 	sim_time = end_time
 	fuel = maxf(0.0, fuel - fuel_used)
-	var final_atmosphere: Dictionary = _atmosphere_at(rocket_position, velocity, end_time)
+	var final_atmosphere: Dictionary = _atmosphere_at(rocket_position, velocity, end_time, rocket_position_precise)
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
 	if fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
 	_handle_body_contact()
-	var final_altitude := maxf(0.0, rocket_position.length() - EARTH_RADIUS)
+	var final_body := _nearest_body_state(rocket_position)
+	var final_altitude := maxf(0.0, float(final_body.get("distance", EARTH_RADIUS)) - float(final_body.get("radius", EARTH_RADIUS)))
 	if not autopilot_enabled and not landed and not crashed:
 		status_message = "STAGE %d  •  ENGINE FIRING" % (stage_index + 1) if throttle > 0.0 else "PAD READY  •  W TO IGNITE" if final_altitude < 100.0 else "FLIGHT ACTIVE"
 
