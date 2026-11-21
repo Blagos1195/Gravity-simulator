@@ -34,8 +34,7 @@ func _validate_leo_autopilot_mission() -> void:
 		elapsed += step
 		iterations += 1
 		assert(iterations < 30000)
-	print("LEO diagnostic: phase=", simulation.autopilot_phase, " elapsed=", elapsed, " iterations=", iterations, " altitude=", simulation._nearest_body_state(simulation.rocket_position).distance - PlanetarySystem.EARTH_RADIUS, " speed=", simulation.velocity.length(), " fuel=", simulation.fuel, " crashed=", simulation.crashed)
-	assert(not simulation.crashed)
+	assert(not simulation.crashed, "LEO ascent crashed: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f" % [simulation.autopilot_phase, simulation.status_message, elapsed, simulation._nearest_body_state(simulation.rocket_position).distance - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel])
 	assert(simulation.autopilot_complete)
 	assert(simulation.autopilot_phase == "COMPLETE")
 	assert(not simulation.landed)
