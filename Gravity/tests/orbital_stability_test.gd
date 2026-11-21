@@ -14,6 +14,13 @@ func _initialize() -> void:
 	for orbit_case in orbit_cases:
 		if not _validate_orbit(str(orbit_case.name), float(orbit_case.altitude), int(orbit_case.orbits)):
 			return
+	var local_orbit_cases := [
+		{"body": "Moon", "altitude": 100000.0, "orbits": 1},
+		{"body": "Mars", "altitude": 300000.0, "orbits": 1}
+	]
+	for orbit_case in local_orbit_cases:
+		if not _validate_local_orbit(str(orbit_case.body), float(orbit_case.altitude), int(orbit_case.orbits)):
+			return
 	print("Long-duration orbital stability tests passed.")
 	quit()
 
@@ -61,3 +68,47 @@ func _check(condition: bool, message: String) -> bool:
 	push_error(message)
 	quit(1)
 	return false
+
+func _validate_local_orbit(body_name: String, altitude: float, orbit_count: int) -> bool:
+	var simulation: Variant = SimulationView.new()
+	simulation.set_rocket_design(RocketDesign.create_default())
+	simulation.realism = "Realistic"
+	simulation.landed = false
+	simulation.sim_time = 0.0
+	var body_state: Dictionary = simulation._surface_body_state(body_name)
+	var radius: float = float(body_state.radius) + altitude
+	var mu: float = FlightComputer.G * float(body_state.mass)
+	var speed := sqrt(mu / radius)
+	var period := TAU * sqrt(radius * radius * radius / mu)
+	var duration := period * float(orbit_count)
+	simulation._set_rocket_position_relative_to_body(body_state, Vector2(radius, 0.0))
+	simulation.velocity = Vector2(body_state.velocity) + Vector2(0.0, speed)
+	var elapsed := 0.0
+	var maximum_step_count := int(ceil(duration / 0.3)) + 10
+	var step_count := 0
+	while elapsed < duration:
+		var step: float = minf(simulation._adaptive_step_size(), duration - elapsed)
+		if not _check(step > 0.000001, "%s orbit produced a zero physics step" % body_name):
+			simulation.free()
+			return false
+		simulation._physics_step(step)
+		elapsed += step
+		step_count += 1
+		if not _check(step_count <= maximum_step_count, "%s orbit exceeded its integration step budget" % body_name):
+			simulation.free()
+			return false
+		if not _check(not simulation.crashed, "%s orbit crashed during an unpowered revolution" % body_name):
+			simulation.free()
+			return false
+	var final_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
+	var relative_position: Vector2 = final_body.relative_position
+	var relative_velocity: Vector2 = simulation.velocity - Vector2(final_body.velocity)
+	var final_state: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, mu)
+	var final_altitude: float = relative_position.length() - float(body_state.radius)
+	var altitude_error: float = absf(final_altitude - altitude)
+	var valid := _check(str(final_body.get("name", "")) == body_name, "%s spacecraft left its local reference body" % body_name)
+	valid = _check(bool(final_state.get("bound", false)), "%s local orbit became unbound" % body_name) and valid
+	valid = _check(altitude_error < maxf(1000.0, altitude * 0.0001), "%s local orbit altitude drifted by %.1f m" % [body_name, altitude_error]) and valid
+	valid = _check(float(final_state.get("eccentricity", 1.0)) < 0.001, "%s local orbit became eccentric" % body_name) and valid
+	simulation.free()
+	return valid
