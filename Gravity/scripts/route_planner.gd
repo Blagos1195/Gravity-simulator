@@ -28,7 +28,7 @@ var refresh_elapsed := 0.0
 class OrbitPlot extends Control:
 	signal node_dragged(index: int, world_position: Vector2)
 	var body_radius := 0.0
-	current_path = PackedVector2Array()
+	var current_path := PackedVector2Array()
 	var planned_path := PackedVector2Array()
 	var node_positions := PackedVector2Array()
 	var rocket_position := Vector2.ZERO
@@ -43,12 +43,12 @@ class OrbitPlot extends Control:
 				if dragging_node >= 0:
 					accept_event()
 			elif dragging_node >= 0:
-					node_dragged.emit(dragging_node, _screen_to_world(event.position))
-					dragging_node = -1
-					accept_event()
-		elif event is InputEventMouseMotion and dragging_node >= 0:
 				node_dragged.emit(dragging_node, _screen_to_world(event.position))
+				dragging_node = -1
 				accept_event()
+		elif event is InputEventMouseMotion and dragging_node >= 0:
+			node_dragged.emit(dragging_node, _screen_to_world(event.position))
+			accept_event()
 
 	func _screen_to_world(screen_position: Vector2) -> Vector2:
 		return Vector2((screen_position.x - plot_center.x) / plot_scale, -(screen_position.y - plot_center.y) / plot_scale)
@@ -60,7 +60,7 @@ class OrbitPlot extends Control:
 		var nearest_distance := 16.0 * 16.0
 		for index in range(node_positions.size()):
 			var screen_position := plot_center + Vector2(node_positions[index].x, -node_positions[index].y) * plot_scale
-			var distance := mouse_position.distance_squared_to(screen_position)
+			var distance: float = mouse_position.distance_squared_to(screen_position)
 			if distance < nearest_distance:
 				nearest_distance = distance
 				nearest_index = index
@@ -86,24 +86,23 @@ class OrbitPlot extends Control:
 		plot_scale = minf(size.x, size.y) * 0.46 / extent
 		plot_center = size * 0.5
 		var center: Vector2 = plot_center
-		var scale_factor: float = plot_scale
-		var body_screen_radius: float = maxf(4.0, body_radius * scale_factor)
+		var body_screen_radius: float = maxf(4.0, body_radius * plot_scale)
 		draw_circle(center, body_screen_radius, Color(0.16, 0.39, 0.72))
 		draw_arc(center, body_screen_radius, 0.0, TAU, 96, Color(0.45, 0.72, 1.0), 1.5)
 		var current_screen := PackedVector2Array()
 		for point in current_path:
-			current_screen.append(center + Vector2(point.x, -point.y) * scale_factor)
+			current_screen.append(center + Vector2(point.x, -point.y) * plot_scale)
 		var planned_screen := PackedVector2Array()
 		for point in planned_path:
-			planned_screen.append(center + Vector2(point.x, -point.y) * scale_factor)
+			planned_screen.append(center + Vector2(point.x, -point.y) * plot_scale)
 		if current_screen.size() > 1:
 			draw_polyline(current_screen, Color(0.55, 0.7, 0.82, 0.8), 1.5, true)
 		if planned_screen.size() > 1:
 			draw_polyline(planned_screen, Color(0.25, 0.9, 0.68), 2.2, true)
-		var rocket_screen: Vector2 = center + Vector2(rocket_position.x, -rocket_position.y) * scale_factor
+		var rocket_screen: Vector2 = center + Vector2(rocket_position.x, -rocket_position.y) * plot_scale
 		draw_circle(rocket_screen, 4.5, Color(1.0, 0.86, 0.35))
 		for index in range(node_positions.size()):
-			var node_screen: Vector2 = center + Vector2(node_positions[index].x, -node_positions[index].y) * scale_factor
+			var node_screen: Vector2 = center + Vector2(node_positions[index].x, -node_positions[index].y) * plot_scale
 			draw_circle(node_screen, 7.0, Color(1.0, 0.48, 0.25))
 			draw_arc(node_screen, 9.0, 0.0, TAU, 32, Color(1.0, 0.8, 0.5), 1.5)
 			draw_string(ThemeDB.fallback_font, node_screen + Vector2(10.0, -8.0), str(index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.72, 0.42))
@@ -407,7 +406,7 @@ func _append_integrated_path(path: PackedVector2Array, position: Vector2, veloci
 	return {"path": path, "position": sample_position, "velocity": sample_velocity}
 
 func _build_prediction_paths() -> void:
-	var current_path := PackedVector2Array()
+	current_path = PackedVector2Array()
 	var planned_path := PackedVector2Array()
 	var markers := PackedVector2Array()
 	var current_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, gravitational_parameter)
