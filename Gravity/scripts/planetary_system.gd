@@ -284,6 +284,12 @@ static func planet_position_relative_to_earth(planet_name: String, time_seconds:
 		return Vector2.ZERO
 	return _planet_relative_position(planet, time_seconds)
 
+static func planet_position_relative_to_earth_components(planet_name: String, time_seconds: float) -> PackedFloat64Array:
+	var planet := _find_planet(planet_name)
+	if planet.is_empty() or planet_name == "Earth":
+		return PackedFloat64Array([0.0, 0.0])
+	return _planet_relative_position_components(planet, time_seconds)
+
 static func planet_velocity_relative_to_earth(planet_name: String, time_seconds: float) -> Vector2:
 	var planet := _find_planet(planet_name)
 	if planet.is_empty() or planet_name == "Earth":
