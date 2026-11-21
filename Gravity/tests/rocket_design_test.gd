@@ -4,7 +4,6 @@ const RocketDesign = preload("res://scripts/rocket_design.gd")
 
 func _initialize() -> void:
 	var design := RocketDesign.create_default()
-	print("Default vehicle validation: ", RocketDesign.validation_errors(design))
 	assert(RocketDesign.validation_errors(design).is_empty())
 	assert(is_equal_approx(RocketDesign.total_initial_mass(design), 364500.0))
 	assert(RocketDesign.total_delta_v(design) > 0.0)
