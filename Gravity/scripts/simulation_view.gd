@@ -1416,6 +1416,7 @@ func get_save_data() -> Dictionary:
 	return {
 		"sim_time": sim_time,
 		"position": [rocket_position.x, rocket_position.y],
+		"position_precise": [rocket_position_precise[0], rocket_position_precise[1]],
 		"velocity": [velocity.x, velocity.y],
 		"rotation_angle": rotation_angle,
 		"fuel": fuel,
@@ -1461,8 +1462,9 @@ func load_save_data(data: Dictionary) -> void:
 	stage_index = clampi(int(data.get("stage_index", 0)), 0, maxi(0, rocket_stages.size() - 1))
 	sim_time = float(data.get("sim_time", 0.0))
 	var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 2.0])
+	var precise_position: Array = data.get("position_precise", p)
 	var v: Array = data.get("velocity", [EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0])
-	rocket_position = Vector2(float(p[0]), float(p[1]))
+	_set_rocket_position_components(float(precise_position[0]), float(precise_position[1]))
 	velocity = Vector2(float(v[0]), float(v[1]))
 	rotation_angle = float(data.get("rotation_angle", 0.0))
 	fuel = float(data.get("fuel", _active_stage_data().get("fuel_capacity", 0.0)))
