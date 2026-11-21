@@ -482,7 +482,7 @@ func _ephemeris_states_at(time_seconds: float) -> Dictionary:
 	var offset: float = time_seconds - ephemeris_cache_time
 	if absf(offset) < 0.000001:
 		return ephemeris_cache
-	if is_equal_approx(time_seconds, ephemeris_output_cache_time) and not ephemeris_output_cache.is_empty():
+	if absf(time_seconds - ephemeris_output_cache_time) < 0.000001 and not ephemeris_output_cache.is_empty():
 		return ephemeris_output_cache
 	var adjusted_bodies: Array[Dictionary] = []
 	for body in ephemeris_cache.get("bodies", []):
