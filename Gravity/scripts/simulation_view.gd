@@ -578,7 +578,7 @@ func _update_guidance(dt: float) -> void:
 		var prograde := guidance_velocity.normalized() if guidance_velocity.length() > 1.0 else tangent
 		match autopilot_phase:
 			"ASCENT":
-				status_message = "AUTOPILOT  •  ASCENT TO %.0F KM" % (autopilot_target_altitude / 1000.0)
+				status_message = "AUTOPILOT  •  ASCENT TO %.0f KM" % (autopilot_target_altitude / 1000.0)
 				var ascent_orbit_periapsis := float(orbit.get("periapsis", 0.0))
 				var ascent_orbit_radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
 				var already_in_stable_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + 70000.0 and ascent_orbit_radial_speed < 100.0
@@ -597,7 +597,7 @@ func _update_guidance(dt: float) -> void:
 					var altitude_pitch: float = lerpf(88.0, 4.0, ascent_altitude_fraction)
 					var speed_pitch: float = lerpf(88.0, 4.0, ascent_speed_fraction)
 					pitch_above_horizon = minf(altitude_pitch, speed_pitch)
-					status_message = "AUTOPILOT  •  ASCENT  •  ALT %.0F KM  •  Vt %.2F KM/S  •  PITCH %.0F°" % [altitude / 1000.0, ascent_tangential_speed / 1000.0, pitch_above_horizon]
+					status_message = "AUTOPILOT  •  ASCENT  •  ALT %.0f KM  •  Vt %.2f KM/S  •  PITCH %.0f°" % [altitude / 1000.0, ascent_tangential_speed / 1000.0, pitch_above_horizon]
 					thrust_key_down = fuel > 0.0
 			"COAST":
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
@@ -650,7 +650,7 @@ func _update_guidance(dt: float) -> void:
 						autopilot_phase = "TRANSFER_COAST"
 					else:
 						autopilot_phase = "TRANSFER_BURN"
-					status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2F KM/S" % (autopilot_burn_remaining / 1000.0)
+					status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2f KM/S" % (autopilot_burn_remaining / 1000.0)
 			"WAIT_WINDOW":
 				var remaining_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
 				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1f DAYS" % (remaining_window / 86400.0)
@@ -665,7 +665,7 @@ func _update_guidance(dt: float) -> void:
 					autopilot_burn_direction = tangent * autopilot_transfer_direction
 					autopilot_phase = "TRANSFER_BURN"
 			"MANEUVER_BURN":
-				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0F M/S" % autopilot_burn_remaining
+				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0f M/S" % autopilot_burn_remaining
 				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
@@ -679,7 +679,7 @@ func _update_guidance(dt: float) -> void:
 				else:
 					var route_node: Dictionary = autopilot_route_nodes[autopilot_route_node_index]
 					var node_time: float = float(route_node.get("time", sim_time))
-					status_message = "AUTOPILOT  •  COAST TO NODE %d  •  T+ %.1F MIN" % [autopilot_route_node_index + 1, maxf(0.0, node_time - sim_time) / 60.0]
+					status_message = "AUTOPILOT  •  COAST TO NODE %d  •  T+ %.1f MIN" % [autopilot_route_node_index + 1, maxf(0.0, node_time - sim_time) / 60.0]
 					if sim_time >= node_time:
 						var route_radial: Vector2 = guidance_position.normalized()
 						var route_tangent := Vector2(-route_radial.y, route_radial.x)
@@ -693,14 +693,14 @@ func _update_guidance(dt: float) -> void:
 							autopilot_burn_remaining = route_burn_vector.length()
 							autopilot_phase = "ROUTE_BURN"
 			"ROUTE_BURN":
-				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0F M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
+				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0f M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
 				var route_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 0.1 and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
 				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 			"TRANSFER_BURN":
-				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0F M/S" % autopilot_burn_remaining
+				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
 				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 				var injection_rotation := injection_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
@@ -714,7 +714,7 @@ func _update_guidance(dt: float) -> void:
 				var transfer_destination_state := _autopilot_target_state()
 				var destination_distance := rocket_position.distance_to(transfer_destination_state.position)
 				var encounter_radius := float(transfer_destination_state.soi)
-				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1F DAYS REMAINING" % [str(transfer_destination_state.name).to_upper(), transfer_remaining / 86400.0]
+				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1f DAYS REMAINING" % [str(transfer_destination_state.name).to_upper(), transfer_remaining / 86400.0]
 				if destination_distance <= encounter_radius:
 					autopilot_phase = "ARRIVAL_APPROACH"
 				elif transfer_elapsed > autopilot_transfer_duration * 0.4 and autopilot_transfer_corrections < 2:
@@ -730,11 +730,11 @@ func _update_guidance(dt: float) -> void:
 				var approach_relative_velocity: Vector2 = velocity - approach_target_state.velocity
 				var arrival_orbit := FlightComputer.orbital_state(approach_relative_position, approach_relative_velocity, G * float(approach_target_state.mass))
 				var approach_radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
-				status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0F KM" % [str(approach_target_state.name).to_upper(), (approach_relative_position.length() - float(approach_target_state.radius)) / 1000.0]
+				status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0f KM" % [str(approach_target_state.name).to_upper(), (approach_relative_position.length() - float(approach_target_state.radius)) / 1000.0]
 				if approach_radial_speed >= -10.0:
 					_begin_arrival_capture(approach_target_state)
 			"ARRIVAL_CAPTURE_BURN":
-				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0F M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
+				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
 				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, capture_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
@@ -758,7 +758,7 @@ func _update_guidance(dt: float) -> void:
 				var landing_available_acceleration := _engine_thrust(landing_altitude) / maxf(1.0, _current_vehicle_mass())
 				autopilot_throttle = clampf(landing_required_acceleration.length() / maxf(0.01, landing_available_acceleration), 0.0, 1.0)
 				thrust_key_down = autopilot_throttle > 0.001
-				status_message = "LANDING GUIDANCE  •  %s  •  ALT %.1F KM  •  V/S %.1F M/S" % [str(landing_target_state.name).to_upper(), landing_altitude / 1000.0, landing_radial_speed]
+				status_message = "LANDING GUIDANCE  •  %s  •  ALT %.1f KM  •  V/S %.1f M/S" % [str(landing_target_state.name).to_upper(), landing_altitude / 1000.0, landing_radial_speed]
 				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 					thrust_key_down = false
