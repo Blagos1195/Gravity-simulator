@@ -7,6 +7,9 @@ const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
 
 func _initialize() -> void:
+	assert(FlightComputer.target_body_name(-2) == "Earth")
+	assert(FlightComputer.target_body_name(-1) == "Moon")
+	assert(FlightComputer.target_body_name(0) == "Mercury")
 	var radius := FlightComputer.EARTH_RADIUS + 200000.0
 	var circular_speed := FlightComputer.circular_orbit_speed(radius)
 	var state := FlightComputer.orbital_state(Vector2(radius, 0.0), Vector2(0.0, circular_speed))
@@ -22,6 +25,18 @@ func _initialize() -> void:
 	assert(bool(corrected_orbit.get("bound", false)))
 	assert(absf(float(corrected_orbit.get("eccentricity", 1.0))) < 0.000001)
 	assert(float(corrected_orbit.get("periapsis", 0.0)) > FlightComputer.EARTH_RADIUS + 70000.0)
+
+	var target_radius := FlightComputer.EARTH_RADIUS + 200000.0
+	var high_position := Vector2(target_radius + 300000.0, 0.0)
+	var high_velocity_speed := FlightComputer.circular_orbit_speed(high_position.length())
+	var high_velocity := Vector2(0.0, high_velocity_speed)
+	var target_transfer := FlightComputer.target_radius_burn(high_position, high_velocity, target_radius)
+	assert(bool(target_transfer.get("valid", false)))
+	assert(float(target_transfer.get("delta_v", 0.0)) > 0.0)
+	var target_burn_vector: Vector2 = target_transfer.get("burn_vector", Vector2.ZERO)
+	var target_orbit := FlightComputer.orbital_state(high_position, high_velocity + target_burn_vector)
+	assert(bool(target_orbit.get("bound", false)))
+	assert(absf(float(target_orbit.get("periapsis", 0.0)) - target_radius) < 5000.0)
 	assert(FlightComputer._segment_intersects_circle(Vector2(-10.0, 0.0), Vector2(10.0, 0.0), Vector2.ZERO, 2.0))
 	assert(FlightComputer._segment_intersects_circle(Vector2(0.0, 0.0), Vector2(0.0, 0.0), Vector2.ZERO, 2.0))
 	assert(not FlightComputer._segment_intersects_circle(Vector2(-10.0, 3.0), Vector2(10.0, 3.0), Vector2.ZERO, 2.0))
@@ -207,14 +222,16 @@ func _initialize() -> void:
 	var mars_mu := FlightComputer.G * 6.4171e23
 	var arrival_position := Vector2(1.0e7, 0.0)
 	var arrival_velocity := Vector2(500.0, 7000.0)
-	var capture := FlightComputer.arrival_capture_burn(arrival_position, arrival_velocity, mars_mu, 3.3895e6)
+	var target_orbit_altitude := 250000.0
+	var capture := FlightComputer.arrival_capture_burn(arrival_position, arrival_velocity, mars_mu, 3.3895e6, target_orbit_altitude)
 	assert(bool(capture.get("valid", false)))
 	assert(float(capture.get("delta_v", 0.0)) > 0.0)
+	assert(float(capture.get("total_delta_v", 0.0)) >= float(capture.get("delta_v", 0.0)))
 	var captured_orbit := FlightComputer.orbital_state(arrival_position, capture.desired_velocity, mars_mu)
 	assert(bool(captured_orbit.get("bound", false)))
-	assert(float(captured_orbit.get("eccentricity", 1.0)) < 0.000001)
+	assert(float(captured_orbit.get("eccentricity", 0.0)) > 0.0)
 	assert(absf(float(captured_orbit.get("apoapsis", 0.0)) - arrival_position.length()) < 1.0)
-	assert(float(captured_orbit.get("periapsis", 0.0)) > 3.3895e6 + 50000.0)
+	assert(absf(float(captured_orbit.get("periapsis", 0.0)) - (3.3895e6 + target_orbit_altitude)) < 1.0)
 	assert(not bool(FlightComputer.arrival_capture_burn(Vector2(3.4e6, 0.0), Vector2.ZERO, mars_mu, 3.3895e6).get("valid", true)))
 
 	var moon_transfer := FlightComputer.interplanetary_transfer(-1, 200000.0)

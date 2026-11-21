@@ -156,8 +156,10 @@ func configure(simulation_node: Control, design: Dictionary) -> void:
 	simulation = simulation_node
 	rocket_design = design.duplicate(true)
 	var initial_stages: Array = rocket_design.get("stages", [])
-	if not initial_stages.is_empty():
+	if not initial_stages.is_empty() and not bool(simulation.get("infinite_weightless_fuel")):
 		initial_available_delta_v = FlightComputer.available_delta_v(rocket_design, 0, float(initial_stages[0].get("fuel_capacity", 0.0)))
+	elif bool(simulation.get("infinite_weightless_fuel")):
+		initial_available_delta_v = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V
 	title = "FLIGHT COMPUTER  •  ORBITAL ROUTE PLANNER"
 	size = Vector2i(980, 820)
 	min_size = Vector2i(760, 650)
@@ -724,7 +726,8 @@ func _build_prediction_paths() -> void:
 	if not nodes.is_empty():
 		var periapsis_altitude: float = (float(final_orbit.get("periapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0
 		var apoapsis_altitude: float = (float(final_orbit.get("apoapsis", INF)) - float(current_body.get("radius", 0.0))) / 1000.0
-		state_report.text = "BODY: %s   ALTITUDE: %.1f km   SPEED: %.0f m/s\nCURRENT ORBIT: Pe %.1f km   Ap %s\nFINAL PLANNED ORBIT: Pe %.1f km   Ap %s\nVEHICLE ΔV: %.2f km/s" % [
+		var planned_vehicle_delta_v_text := "UNLIMITED • MASSLESS FUEL" if bool(simulation.get("infinite_weightless_fuel")) else "%.2f km/s" % (available_delta_v / 1000.0)
+		state_report.text = "BODY: %s   ALTITUDE: %.1f km   SPEED: %.0f m/s\nCURRENT ORBIT: Pe %.1f km   Ap %s\nFINAL PLANNED ORBIT: Pe %.1f km   Ap %s\nVEHICLE ΔV: %s" % [
 			str(current_body.get("name", "Unknown")),
 			(relative_position.length() - float(current_body.get("radius", 0.0))) / 1000.0,
 			relative_velocity.length(),
@@ -732,16 +735,17 @@ func _build_prediction_paths() -> void:
 			"UNBOUND" if not bool(current_orbit.get("bound", false)) else "%.1f km" % ((float(current_orbit.get("apoapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0),
 			periapsis_altitude,
 			"UNBOUND" if not bool(final_orbit.get("bound", false)) else "%.1f km" % apoapsis_altitude,
-			available_delta_v / 1000.0
+			planned_vehicle_delta_v_text
 		]
 	else:
-		state_report.text = "BODY: %s   ALTITUDE: %.1f km   SPEED: %.0f m/s\nCURRENT ORBIT: Pe %.1f km   Ap %s\nNO MANOEUVRE NODES PLANNED\nVEHICLE ΔV: %.2f km/s" % [
+		var idle_vehicle_delta_v_text := "UNLIMITED • MASSLESS FUEL" if bool(simulation.get("infinite_weightless_fuel")) else "%.2f km/s" % (available_delta_v / 1000.0)
+		state_report.text = "BODY: %s   ALTITUDE: %.1f km   SPEED: %.0f m/s\nCURRENT ORBIT: Pe %.1f km   Ap %s\nNO MANOEUVRE NODES PLANNED\nVEHICLE ΔV: %s" % [
 			str(current_body.get("name", "Unknown")),
 			(relative_position.length() - float(current_body.get("radius", 0.0))) / 1000.0,
 			relative_velocity.length(),
 			(float(current_orbit.get("periapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0,
 			"UNBOUND" if not bool(current_orbit.get("bound", false)) else "%.1f km" % ((float(current_orbit.get("apoapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0),
-			available_delta_v / 1000.0
+			idle_vehicle_delta_v_text
 		]
 
 func _update_manoeuvre() -> void:
@@ -749,7 +753,7 @@ func _update_manoeuvre() -> void:
 		return
 	var active_stage: int = int(simulation.get("stage_index"))
 	var remaining_fuel: float = float(simulation.get("fuel"))
-	available_delta_v = FlightComputer.available_delta_v(rocket_design, active_stage, remaining_fuel)
+	available_delta_v = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, active_stage, remaining_fuel)
 	var total_planned_delta_v := 0.0
 	for node in nodes:
 		total_planned_delta_v += Vector2(float(node.get("prograde", 0.0)), float(node.get("radial", 0.0))).length()
@@ -761,13 +765,13 @@ func _update_manoeuvre() -> void:
 		if Vector2(float(node.get("prograde", 0.0)), float(node.get("radial", 0.0))).length() < 0.1:
 			valid_nodes = false
 	autopilot_button.disabled = landed_state or crashed_state or not valid_nodes or total_planned_delta_v > available_delta_v
-	var delta_v_used := maxf(0.0, initial_available_delta_v - available_delta_v)
-	burn_report.text = "PLANNED NODES: %d   •   PLANNED ΔV: %.1f m/s   •   ROUTE ΔV: %s   •   USED: %.1f m/s   •   REMAINING: %.1f m/s   •   %s" % [
+	var delta_v_used := 0.0 if bool(simulation.get("infinite_weightless_fuel")) else maxf(0.0, initial_available_delta_v - available_delta_v)
+	burn_report.text = "PLANNED NODES: %d   •   PLANNED ΔV: %.1f m/s   •   ROUTE ΔV: %s   •   USED: %.1f m/s   •   REMAINING: %s   •   %s" % [
 		nodes.size(),
 		total_planned_delta_v,
 		"NO SOLUTION" if not is_finite(route_delta_v) else "%.1f m/s" % route_delta_v if has_route_target else "N/A",
 		delta_v_used,
-		available_delta_v,
+		"UNLIMITED" if bool(simulation.get("infinite_weightless_fuel")) else "%.1f m/s" % available_delta_v,
 		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "ROUTE NEEDS RECALCULATION" if has_route_target and route_solution_dirty else "NO VALID ROUTE SOLUTION" if has_route_target and not is_finite(route_delta_v) else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
 	]
 	if is_instance_valid(route_report):
@@ -796,4 +800,3 @@ func _send_to_autopilot() -> void:
 	simulation.set("guidance_enabled", true)
 	simulation.set("thrust_key_down", false)
 	burn_report.text += "   •   ROUTE SENT TO AUTOPILOT"
-

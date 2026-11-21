@@ -3,6 +3,7 @@ extends Control
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
+const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
 const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
@@ -11,6 +12,8 @@ var mode := "menu"
 var realism := "Realistic"
 var world_scale := "Compressed"
 var career_enabled := false
+var infinite_weightless_fuel := false
+var simulate_belt_collisions := false
 var save_slot := 1
 var sim
 var autosave_elapsed := 0.0
@@ -66,12 +69,16 @@ func _load_general_settings() -> void:
 	var config := ConfigFile.new()
 	config.load("user://settings.cfg")
 	autosave_enabled = bool(config.get_value("general", "autosave", true))
+	infinite_weightless_fuel = bool(config.get_value("general", "infinite_weightless_fuel", false))
+	simulate_belt_collisions = bool(config.get_value("general", "simulate_belt_collisions", false))
 	var fullscreen := bool(config.get_value("general", "fullscreen", false))
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
 
 func _save_general_settings() -> void:
 	var config := ConfigFile.new()
 	config.set_value("general", "autosave", autosave_enabled)
+	config.set_value("general", "infinite_weightless_fuel", infinite_weightless_fuel)
+	config.set_value("general", "simulate_belt_collisions", simulate_belt_collisions)
 	config.set_value("general", "fullscreen", DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN)
 	config.save("user://settings.cfg")
 
@@ -267,6 +274,31 @@ func _show_vehicle_editor() -> void:
 		stage_title.add_theme_font_size_override("font_size", 20)
 		stage_title.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 		fields.add_child(stage_title)
+		var part_row := HBoxContainer.new()
+		var part_label := Label.new()
+		part_label.text = "Stage part template"
+		part_row.add_child(part_label)
+		var part_selector := OptionButton.new()
+		part_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var stage_part_options := RocketDesign.stage_part_options()
+		var selected_part_index := 0
+		for part_index in range(stage_part_options.size()):
+			var part_option: Dictionary = stage_part_options[part_index]
+			part_selector.add_item(str(part_option.label))
+			part_selector.set_item_metadata(part_index, str(part_option.id))
+			if str(stage.get("part_id", "")) == str(part_option.id):
+				selected_part_index = part_index
+		if not stage_part_options.is_empty():
+			part_selector.select(selected_part_index)
+		part_selector.item_selected.connect(func(part_index: int):
+			var selected_part_id := str(part_selector.get_item_metadata(part_index))
+			var replacement_stage := RocketDesign.create_stage_part(selected_part_id)
+			if not replacement_stage.is_empty():
+				rocket_design["stages"][stage_index] = replacement_stage
+				_show_vehicle_editor()
+		)
+		part_row.add_child(part_selector)
+		fields.add_child(part_row)
 		_add_design_field(fields, stage_index, "dry_mass", "Dry mass (kg)", 500.0, 200000.0, 100.0)
 		_add_design_field(fields, stage_index, "fuel_capacity", "Propellant capacity (kg)", 500.0, 1000000.0, 1000.0)
 		_add_design_field(fields, stage_index, "thrust", "Sea-level thrust (N)", 100000.0, 20000000.0, 100000.0)
@@ -326,15 +358,9 @@ func _add_rocket_stage() -> void:
 	var stages: Array = rocket_design["stages"]
 	if stages.size() >= 8:
 		return
-	stages.append({
-		"name": "STAGE %02d" % (stages.size() + 1),
-		"dry_mass": 4000.0,
-		"fuel_capacity": 30000.0,
-		"thrust": 200000.0,
-		"vacuum_thrust": 250000.0,
-		"flow": 63.3,
-		"engine_count": 1
-	})
+	var stage := RocketDesign.default_stage_part()
+	stage["name"] = "STAGE %02d" % (stages.size() + 1)
+	stages.append(stage)
 	_show_vehicle_editor()
 
 func _remove_rocket_stage() -> void:
@@ -396,6 +422,9 @@ func _save_rocket_design() -> void:
 		file.close()
 		if is_instance_valid(design_error_label):
 			design_error_label.text = "DESIGN SAVED"
+	else:
+		if is_instance_valid(design_error_label):
+			design_error_label.text = "DESIGN FILE COULD NOT BE OPENED"
 
 
 func _load_rocket_design() -> void:
@@ -406,6 +435,8 @@ func _load_rocket_design() -> void:
 		return
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
+		if is_instance_valid(design_error_label):
+			design_error_label.text = "SAVED DESIGN COULD NOT BE OPENED"
 		return
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	file.close()
@@ -602,6 +633,27 @@ func _show_settings() -> void:
 		_save_general_settings()
 	)
 	settings_root.add_child(autosave)
+	var infinite_fuel := CheckButton.new()
+	infinite_fuel.text = "Infinite, weightless propellant (cheat)"
+	infinite_fuel.button_pressed = infinite_weightless_fuel
+	infinite_fuel.toggled.connect(func(enabled: bool):
+		infinite_weightless_fuel = enabled
+		_save_general_settings()
+	)
+	settings_root.add_child(infinite_fuel)
+	var belt_collisions := CheckButton.new()
+	belt_collisions.text = "Enable small-body collision simulation"
+	belt_collisions.button_pressed = simulate_belt_collisions
+	belt_collisions.toggled.connect(func(enabled: bool):
+		simulate_belt_collisions = enabled
+		_save_general_settings()
+	)
+	settings_root.add_child(belt_collisions)
+	var belt_collisions_note := Label.new()
+	belt_collisions_note.text = "Belt objects follow independent, massless Sun-orbit paths and can impact the spacecraft. Mutual asteroid gravity is not modeled."
+	belt_collisions_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	belt_collisions_note.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
+	settings_root.add_child(belt_collisions_note)
 	_add_setting_label(settings_root, "KEYBOARD CONTROLS")
 	for action in CONTROL_BINDINGS:
 		_add_rebind_button(settings_root, action)
@@ -621,6 +673,8 @@ func _start_flight() -> void:
 	sim.realism = realism
 	sim.world_scale = world_scale
 	sim.career_enabled = career_enabled
+	sim.infinite_weightless_fuel = infinite_weightless_fuel
+	sim.simulate_belt_collisions = simulate_belt_collisions
 	sim.set_rocket_design(rocket_design)
 	sim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(sim)
@@ -787,22 +841,34 @@ func _show_autopilot_panel() -> void:
 	)
 	root.add_child(safety)
 	var target_label := Label.new()
-	target_label.text = "PLANNED DESTINATION / ORBIT"
+	target_label.text = "DESTINATION BODY"
 	root.add_child(target_label)
 	var target := OptionButton.new()
-	target.add_item("Low Earth orbit · 200 km", 200000)
-	target.add_item("Medium Earth orbit · 2,000 km", 2000000)
-	target.add_item("Geostationary orbit · 35,786 km", 35786000)
-	target.add_separator()
+	target.add_item("Earth", -2)
 	target.add_item("Moon", -1)
-	target.add_item("Mercury", -2)
-	target.add_item("Venus", -3)
-	target.add_item("Mars", -4)
-	target.add_item("Jupiter", -5)
-	target.add_item("Saturn", -6)
-	target.add_item("Uranus", -7)
-	target.add_item("Neptune", -8)
+	for planet_index in range(FlightComputer.PLANET_TARGETS.size()):
+		target.add_item(str(FlightComputer.PLANET_TARGETS[planet_index].get("name", "Unknown")), planet_index)
+	target.select(0)
 	root.add_child(target)
+	var orbit_altitude_label := Label.new()
+	orbit_altitude_label.text = "TARGET ORBIT ALTITUDE"
+	root.add_child(orbit_altitude_label)
+	var orbit_altitude := SpinBox.new()
+	orbit_altitude.min_value = 70.0
+	orbit_altitude.max_value = 50000.0
+	orbit_altitude.step = 10.0
+	orbit_altitude.value = 200.0
+	orbit_altitude.suffix = " km"
+	root.add_child(orbit_altitude)
+	var update_orbit_altitude_limits := func():
+		var body_name := FlightComputer.target_body_name(target.get_selected_id())
+		var target_body: Dictionary = sim._surface_body_state(body_name)
+		var minimum_altitude_km: float = maxf(70.0, PlanetarySystem.planetary_atmosphere_height(body_name) / 1000.0 + 50.0)
+		var maximum_altitude_km: float = maxf(minimum_altitude_km, minf(50000.0, (float(target_body.get("soi", 0.0)) * 0.5 - float(target_body.get("radius", 0.0))) / 1000.0))
+		orbit_altitude.min_value = minimum_altitude_km
+		orbit_altitude.max_value = maximum_altitude_km
+		orbit_altitude.value = clampf(orbit_altitude.value, minimum_altitude_km, maximum_altitude_km)
+	update_orbit_altitude_limits.call()
 	var report_scroll := ScrollContainer.new()
 	report_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	report_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -827,11 +893,8 @@ func _show_autopilot_panel() -> void:
 	landing.text = "ENGAGE POWERED LANDING"
 	landing.pressed.connect(func():
 		var selected_id: int = target.get_selected_id()
-		if selected_id > 0:
-			report.text += "\n\nSelect a planetary body or the Moon for landing guidance."
-			return
-		var planet_index := -1 if selected_id == -1 else -selected_id - 2
-		var body_name := "Moon" if planet_index == -1 else str(FlightComputer.PLANET_TARGETS[planet_index].get("name", ""))
+		var planet_index := selected_id
+		var body_name := FlightComputer.target_body_name(planet_index)
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
 		if str(current_body.get("name", "")) != body_name:
 			report.text += "\n\nLanding guidance requires you to be inside the selected body's sphere of influence."
@@ -865,17 +928,22 @@ func _show_autopilot_panel() -> void:
 	var update_report := func() -> void:
 		var selected_id: int = target.get_selected_id()
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
-		landing.disabled = selected_id > 0 or sim.crashed
+		landing.disabled = sim.crashed
 		autopilot.disabled = sim.crashed
 		var current_position: Vector2 = sim.rocket_position - current_body.position
 		var current_velocity: Vector2 = sim.velocity - current_body.velocity
 		var state := FlightComputer.orbital_state(current_position, current_velocity, FlightComputer.G * float(current_body.mass))
 		var current_altitude: float = float(current_body.distance) - float(current_body.radius)
 		var text_lines := PackedStringArray()
-		var remaining_delta_v := FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel)
+		var remaining_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if sim.infinite_weightless_fuel else FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel)
 		var required_delta_v := 0.0
 		var mission_valid := true
-		var in_orbit := str(current_body.name) == "Earth" and current_altitude > 70000.0 and bool(state.get("bound", false))
+		var has_estimated_plan := false
+		var within_current_sphere := float(current_body.get("distance", INF)) <= float(current_body.get("soi", 0.0))
+		var stable_departure_state := not within_current_sphere or (bool(state.get("bound", false)) and float(state.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0)
+		var destination_name := FlightComputer.target_body_name(selected_id)
+		var destination_is_local := within_current_sphere and str(current_body.get("name", "")) == destination_name
+		var target_altitude_m := orbit_altitude.value * 1000.0
 		text_lines.append("CURRENT FLIGHT STATE")
 		text_lines.append("Current body: %s" % str(current_body.name))
 		text_lines.append("Altitude: %.1f km" % (current_altitude / 1000.0))
@@ -883,59 +951,61 @@ func _show_autopilot_panel() -> void:
 		text_lines.append("Apoapsis: %s" % ("UNBOUND" if not bool(state.get("bound", false)) else "%.1f km" % ((float(state.get("apoapsis", 0.0)) - float(current_body.radius)) / 1000.0)))
 		text_lines.append("Periapsis: %.1f km" % ((float(state.get("periapsis", 0.0)) - float(current_body.radius)) / 1000.0))
 		text_lines.append("")
-		if selected_id > 0 and str(current_body.name) == "Earth":
-			var target_radius := FlightComputer.EARTH_RADIUS + float(selected_id)
-			var circular := FlightComputer.circularisation_burn(current_position, current_velocity, true, FlightComputer.G * float(current_body.mass))
-			var orbit_origin_radius := maxf(float(current_body.radius) + 100000.0, current_position.length())
-			var orbit_transfer := FlightComputer.hohmann_transfer(orbit_origin_radius, target_radius)
-			var orbit_departure_direction := "PROGRADE" if target_radius > orbit_origin_radius else "RETROGRADE"
-			text_lines.append("TARGET EARTH ORBIT")
-			text_lines.append("Altitude: %.0f km" % (float(selected_id) / 1000.0))
-			text_lines.append("Circular speed: %.0f m/s" % FlightComputer.circular_orbit_speed(target_radius))
-			text_lines.append("Circularise at current position: %.0f m/s Δv" % float(circular.get("delta_v", 0.0)))
-			text_lines.append("Hohmann orbit-change estimate: %.0f m/s Δv" % float(orbit_transfer.get("total_delta_v", 0.0)))
-			text_lines.append("Transfer time: %.1f minutes" % (float(orbit_transfer.get("transfer_time", 0.0)) / 60.0))
-			required_delta_v = float(orbit_transfer.get("total_delta_v", 0.0)) if in_orbit else 9400.0 + float(orbit_transfer.get("total_delta_v", 0.0))
-		else:
-			var destination_index := -2 if selected_id > 0 else (-1 if selected_id == -1 else -selected_id - 2)
-			var destination_name := "Earth" if destination_index == -2 else "Moon" if destination_index == -1 else str(FlightComputer.PLANET_TARGETS[destination_index].get("name", "Unknown"))
-			var stable_departure_state := bool(state.get("bound", false)) and float(state.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0
-			text_lines.append("SIMULATED TRANSFER")
-			text_lines.append("Destination: %s" % destination_name)
-			if sim.landed or (current_altitude < 120000.0 and not stable_departure_state):
-				mission_valid = false
-				text_lines.append("A stable departure orbit is required before the transfer search can run.")
-				text_lines.append("Autopilot will establish the departure orbit, then simulate candidate trajectories.")
-			elif not calculate_simulated_transfer:
-				text_lines.append("Press CALCULATE FLIGHT PLAN to simulate candidate trajectories from the current state.")
+		text_lines.append("TARGET ORBIT")
+		text_lines.append("Body: %s" % destination_name)
+		text_lines.append("Altitude: %.0f km" % (target_altitude_m / 1000.0))
+		var target_body: Dictionary = sim._surface_body_state(destination_name)
+		var target_radius := float(target_body.get("radius", 0.0)) + target_altitude_m
+		text_lines.append("Circular speed: %.0f m/s" % FlightComputer.circular_orbit_speed(target_radius, FlightComputer.G * float(target_body.get("mass", 0.0))))
+		if destination_is_local:
+			if stable_departure_state:
+				var local_orbit_plan := FlightComputer.target_radius_burn(current_position, current_velocity, target_radius, FlightComputer.G * float(current_body.mass))
+				text_lines.append("Target-orbit transfer: %.0f m/s Δv" % float(local_orbit_plan.get("delta_v", 0.0)))
+				required_delta_v = float(local_orbit_plan.get("delta_v", 0.0))
+				has_estimated_plan = bool(local_orbit_plan.get("valid", false))
 			else:
-				var available_for_transfer: float = remaining_delta_v * (1.0 - sim.autopilot_safety_margin)
-				var simulated_plan := FlightComputer.simulated_transfer_search_precise(sim.rocket_position_precise, sim.velocity, sim.sim_time, destination_index, available_for_transfer, sim.autopilot_speed_priority)
-				if bool(simulated_plan.get("valid", false)):
-					text_lines.append("Departure manoeuvre: %.0f m/s Δv" % float(simulated_plan.get("departure_delta_v", 0.0)))
-					text_lines.append("Arrival capture: %.0f m/s Δv" % float(simulated_plan.get("capture_delta_v", 0.0)))
-					text_lines.append("Total simulated Δv: %.0f m/s" % float(simulated_plan.get("total_delta_v", 0.0)))
-					text_lines.append("Predicted flight time: %.1f days" % (float(simulated_plan.get("transfer_time", 0.0)) / 86400.0))
-					text_lines.append("Closest approach: %.0f km" % (float(simulated_plan.get("closest_approach", 0.0)) / 1000.0))
-					text_lines.append("Candidate trajectories simulated: %d" % int(simulated_plan.get("search_candidates", 0)))
-					required_delta_v = float(simulated_plan.get("total_delta_v", 0.0))
-				else:
-					mission_valid = false
-					text_lines.append("NO FEASIBLE TRAJECTORY FOUND")
-					text_lines.append(str(simulated_plan.get("reason", "No candidate passed the trajectory and capture checks.")))
-			text_lines.append("The search propagates candidate burns through the current multi-body gravity model. Finite engine-burn and atmospheric losses are not included in the search estimate.")
+				text_lines.append("Autopilot will launch and insert into the selected orbit around the current body.")
+		elif not stable_departure_state:
+			text_lines.append("Autopilot will first establish a 200 km parking orbit around %s." % str(current_body.get("name", "the current body")))
+			text_lines.append("Calculate a transfer after reaching that parking orbit for a trajectory estimate.")
+		elif not calculate_simulated_transfer:
+			text_lines.append("Press CALCULATE FLIGHT PLAN to simulate trajectories from the current orbit.")
+		else:
+			var available_for_transfer: float = remaining_delta_v * (1.0 - sim.autopilot_safety_margin)
+			var simulated_plan := FlightComputer.simulated_transfer_search_precise(sim.rocket_position_precise, sim.velocity, sim.sim_time, selected_id, available_for_transfer, sim.autopilot_speed_priority, false, target_altitude_m)
+			if bool(simulated_plan.get("valid", false)):
+				text_lines.append("Departure manoeuvre: %.0f m/s Δv" % float(simulated_plan.get("departure_delta_v", 0.0)))
+				text_lines.append("Arrival capture + circularisation: %.0f m/s Δv" % float(simulated_plan.get("capture_delta_v", 0.0)))
+				text_lines.append("Total simulated Δv: %.0f m/s" % float(simulated_plan.get("total_delta_v", 0.0)))
+				text_lines.append("Predicted flight time: %.1f days" % (float(simulated_plan.get("transfer_time", 0.0)) / 86400.0))
+				text_lines.append("Closest approach: %.0f km" % (float(simulated_plan.get("closest_approach", 0.0)) / 1000.0))
+				text_lines.append("Candidate trajectories simulated: %d" % int(simulated_plan.get("search_candidates", 0)))
+				required_delta_v = float(simulated_plan.get("total_delta_v", 0.0))
+				has_estimated_plan = true
+			else:
+				mission_valid = false
+				text_lines.append("NO FEASIBLE TRAJECTORY FOUND")
+				text_lines.append(str(simulated_plan.get("reason", "No candidate passed the trajectory and capture checks.")))
+			text_lines.append("Search estimates use impulsive burns; finite engine-burn and atmospheric losses are not included.")
 		text_lines.append("")
 		text_lines.append("VEHICLE FUEL FEASIBILITY")
-		text_lines.append("Remaining ideal vehicle Δv: %.2f km/s" % (remaining_delta_v / 1000.0))
-		text_lines.append("Estimated mission budget: %.2f km/s" % (required_delta_v / 1000.0))
-		text_lines.append("Selected fuel reserve: %.0f%%" % (sim.autopilot_safety_margin * 100.0))
-		text_lines.append("Available Δv after reserve: %.2f km/s" % (remaining_delta_v * (1.0 - sim.autopilot_safety_margin) / 1000.0))
-		var margin: float = remaining_delta_v * (1.0 - sim.autopilot_safety_margin) - required_delta_v
-		text_lines.append("Margin after reserve: %+.2f km/s" % (margin / 1000.0))
+		text_lines.append("Remaining ideal vehicle Δv: %s" % ("UNLIMITED • MASSLESS FUEL" if sim.infinite_weightless_fuel else "%.2f km/s" % (remaining_delta_v / 1000.0)))
+		var available_delta_v: float = remaining_delta_v * (1.0 - sim.autopilot_safety_margin)
+		var margin: float = available_delta_v - required_delta_v
+		if has_estimated_plan:
+			text_lines.append("Estimated mission budget: %.2f km/s" % (required_delta_v / 1000.0))
+			if not sim.infinite_weightless_fuel:
+				text_lines.append("Selected fuel reserve: %.0f%%" % (sim.autopilot_safety_margin * 100.0))
+				text_lines.append("Available Δv after reserve: %.2f km/s" % (available_delta_v / 1000.0))
+				text_lines.append("Margin after reserve: %+.2f km/s" % (margin / 1000.0))
 		if not mission_valid:
 			text_lines.append("STATUS: NO VALID FLIGHT PLAN")
+		elif sim.infinite_weightless_fuel:
+			text_lines.append("STATUS: INFINITE MASSLESS PROPELLANT ENABLED")
 		elif remaining_delta_v <= 0.0:
 			text_lines.append("STATUS: NO USABLE PROPELLANT")
+		elif not has_estimated_plan:
+			text_lines.append("STATUS: AWAITING DEPARTURE ORBIT OR FLIGHT PLAN")
 		elif margin >= 0.0:
 			text_lines.append("STATUS: DELTA-V BUDGET PASSES")
 		elif remaining_delta_v >= required_delta_v:
@@ -957,9 +1027,8 @@ func _show_autopilot_panel() -> void:
 		update_report.call()
 	)
 	launch_windows_button.pressed.connect(func():
-		var selected_id: int = target.get_selected_id()
-		var destination_index := -1 if selected_id == -1 else -selected_id - 2
-		if selected_id > 0:
+		var destination_index: int = target.get_selected_id()
+		if destination_index == -2:
 			report.text += "\n\nLaunch-window scanning is only available for planetary transfers."
 			return
 		var body: Dictionary = sim._nearest_body_state(sim.rocket_position)
@@ -972,17 +1041,22 @@ func _show_autopilot_panel() -> void:
 		launch_windows_button.disabled = true
 		report.text = "SCANNING FUTURE DEPARTURE DATES...\nThis simulates coarse candidate transfers and may take a little while."
 		await get_tree().process_frame
-		var available: float = FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel) * (1.0 - sim.autopilot_safety_margin)
-		var windows := FlightComputer.scan_launch_windows(relative_position, relative_velocity, sim.sim_time, destination_index, available, sim.autopilot_speed_priority)
+		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if sim.infinite_weightless_fuel else FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel) * (1.0 - sim.autopilot_safety_margin)
+		var windows := FlightComputer.scan_launch_windows(relative_position, relative_velocity, sim.sim_time, destination_index, available, sim.autopilot_speed_priority, 540, 30, orbit_altitude.value * 1000.0)
 		launch_windows_button.disabled = false
 		if not bool(windows.get("valid", false)):
 			report.text = "NO FEASIBLE WINDOWS FOUND\n" + str(windows.get("reason", "No valid transfer was found."))
 		else:
 			var best: Dictionary = windows.best
-			var destination := "Moon" if destination_index == -1 else str(FlightComputer.PLANET_TARGETS[destination_index].get("name", "Unknown"))
+			var destination := FlightComputer.target_body_name(destination_index)
 			report.text = "LAUNCH WINDOW SEARCH: %s\nDates sampled: %d\nBest refined departure: in %.1f days\nDeparture Δv: %.0f m/s\nCapture Δv: %.0f m/s\nTotal Δv: %.0f m/s\nTransfer time: %.1f days\n\nThis is the best of the sampled dates and burn candidates, not a guaranteed global optimum. Use CALCULATE FLIGHT PLAN at the selected date for a higher-resolution search." % [destination, int(windows.dates_checked), float(best.departure_wait_days), float(best.departure_delta_v), float(best.capture_delta_v), float(best.total_delta_v), float(best.transfer_time) / 86400.0]
 	)
 	target.item_selected.connect(func(_index: int):
+		update_orbit_altitude_limits.call()
+		calculate_simulated_transfer = false
+		update_report.call()
+	)
+	orbit_altitude.value_changed.connect(func(_value: float):
 		calculate_simulated_transfer = false
 		update_report.call()
 	)
@@ -990,9 +1064,9 @@ func _show_autopilot_panel() -> void:
 		var selected_id: int = target.get_selected_id()
 		sim.autopilot_enabled = true
 		sim.autopilot_complete = false
-		sim.autopilot_target_altitude = float(selected_id) if selected_id > 0 else 200000.0
-		sim.autopilot_target_mode = "ORBIT" if selected_id > 0 else "PLANET"
-		sim.autopilot_planet_index = -2 if selected_id > 0 else -1 if selected_id == -1 else -selected_id - 2
+		sim.autopilot_target_altitude = orbit_altitude.value * 1000.0
+		sim.autopilot_target_mode = "ORBIT"
+		sim.autopilot_planet_index = selected_id
 		sim.autopilot_burn_remaining = 0.0
 		sim.autopilot_burn_direction = Vector2.ZERO
 		sim.autopilot_transfer_corrections = 0
@@ -1001,30 +1075,23 @@ func _show_autopilot_panel() -> void:
 		var relative_velocity: Vector2 = sim.velocity - current_body.velocity
 		var current_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(current_body.mass))
 		var target_state: Dictionary = sim._autopilot_target_state()
-		var target_distance: float = sim.rocket_position.distance_to(Vector2(target_state.get("position", Vector2.ZERO)))
-		var target_is_near: bool = not target_state.is_empty() and target_distance <= float(target_state.get("soi", 0.0)) and (sim.autopilot_planet_index != -2 or str(current_body.name) == "Earth")
+		var target_distance: float = sim._relative_position_to_body(target_state).length() if not target_state.is_empty() else INF
+		var within_current_sphere := float(current_body.get("distance", INF)) <= float(current_body.get("soi", 0.0))
+		var destination_is_local := within_current_sphere and str(current_body.get("name", "")) == FlightComputer.target_body_name(selected_id)
+		var target_is_near: bool = not target_state.is_empty() and target_distance <= float(target_state.get("soi", 0.0)) and str(sim._nearest_body_state(sim.rocket_position).get("name", "")) == FlightComputer.target_body_name(selected_id)
 		var current_altitude := float(current_body.distance) - float(current_body.radius)
-		var stable_current_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0
-		var selected_earth_orbit := selected_id > 0
-		var source_is_earth := str(current_body.name) == "Earth"
-		var already_at_destination_surface: bool = not selected_earth_orbit and sim.landed and sim.landed_body_name == sim._autopilot_target_body_name()
-		if already_at_destination_surface:
-			sim.autopilot_phase = "COMPLETE"
-			sim.autopilot_complete = true
-		elif target_is_near and not (selected_earth_orbit and source_is_earth):
+		var stable_current_orbit := not within_current_sphere or (bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0)
+		if target_is_near and not sim.landed and not stable_current_orbit:
 			sim.autopilot_phase = "ARRIVAL_APPROACH"
-		elif selected_earth_orbit and source_is_earth:
-			if sim.landed or (current_altitude < 120000.0 and not stable_current_orbit):
-				sim.autopilot_phase = "ASCENT"
-			else:
-				sim.autopilot_phase = "CIRCULARISE"
-		elif sim.landed or (current_altitude < 120000.0 and not stable_current_orbit):
+		elif sim.landed or (current_altitude < PlanetarySystem.ATMOSPHERE_HEIGHT and not stable_current_orbit):
 			sim.autopilot_phase = "ASCENT"
+		elif destination_is_local:
+			sim.autopilot_phase = "CIRCULARISE"
 		else:
 			sim.autopilot_phase = "PLAN_TRANSFER"
 		sim.guidance_enabled = true
 		sim.thrust_key_down = sim.landed or sim.autopilot_phase == "ASCENT"
-		report.text += "\n\nAUTOPILOT ENGAGED. " + ("Target orbit: %.0f km." % (sim.autopilot_target_altitude / 1000.0) if selected_id > 0 else "Target: " + str(target.get_item_text(target.selected)) + ". A trajectory search will use your current position and velocity.")
+		report.text += "\n\nAUTOPILOT ENGAGED. Target: %s orbit at %.0f km altitude. Departure and transfer phases will be selected from your current body and orbit." % [FlightComputer.target_body_name(selected_id), sim.autopilot_target_altitude / 1000.0]
 	)
 	update_report.call()
 	window.popup_centered()
@@ -1086,6 +1153,9 @@ func _save_game(automatic: bool) -> void:
 			history_file.store_string(JSON.stringify(data, "\t"))
 			history_file.close()
 			_prune_autosave_history(save_slot)
+		else:
+			if status_label:
+				status_label.text = "AUTOSAVE HISTORY COULD NOT BE WRITTEN"
 
 	var path := "%s/slot_%02d.json" % [SAVE_DIR, save_slot]
 	var file := FileAccess.open(path, FileAccess.WRITE)
@@ -1094,6 +1164,9 @@ func _save_game(automatic: bool) -> void:
 		file.close()
 		if status_label:
 			status_label.text = ("AUTOSAVED" if automatic else "SAVED") + "  •  SLOT %02d" % save_slot
+	else:
+		if status_label:
+			status_label.text = "SAVE COULD NOT BE WRITTEN"
 
 func _load_menu_path(slot: int, path: String) -> void:
 	save_slot = slot
@@ -1117,13 +1190,19 @@ func _load_game_from_path(path: String) -> void:
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	file.close()
 	if parsed is Dictionary and sim:
+		var saved_design: Variant = parsed.get("rocket_design", null)
+		if not saved_design is Dictionary or not RocketDesign.validation_errors(saved_design).is_empty():
+			if status_label:
+				status_label.text = "SAVE DATA IS INVALID  •  SLOT %02d" % save_slot
+			return
+		if not sim.load_save_data(parsed):
+			if status_label:
+				status_label.text = "SAVE DATA IS INVALID  •  SLOT %02d" % save_slot
+			return
 		realism = str(parsed.get("realism", realism))
 		world_scale = str(parsed.get("world_scale", world_scale))
 		career_enabled = bool(parsed.get("career_enabled", career_enabled))
-		sim.load_save_data(parsed)
-		var saved_design: Variant = parsed.get("rocket_design", null)
-		if saved_design is Dictionary:
-			rocket_design = saved_design
+		rocket_design = saved_design
 		if status_label:
 			status_label.text = "LOADED  •  SLOT %02d" % save_slot
 	elif status_label:

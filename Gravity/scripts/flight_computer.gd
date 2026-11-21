@@ -3,27 +3,53 @@ class_name FlightComputer
 
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 
-const G := 6.67430e-11
-const EARTH_MU := 3.986004418e14
-const EARTH_RADIUS := 6.371e6
-const MOON_ORBIT_RADIUS := 3.844e8
-const MOON_MASS := 7.342e22
-const MOON_RADIUS := 1.7374e6
-const MOON_MU := G * MOON_MASS
-const SUN_MU := 1.32712440018e20
-const EARTH_ORBIT_RADIUS := 1.495978707e11
-const EARTH_ORBIT_PERIOD := 365.256363004 * 86400.0
-const PLANET_TARGETS := [
-	{"name": "Mercury", "radius": 5.7909e10, "planet_radius": 2.4397e6, "mass": 3.3011e23, "period_days": 87.969},
-	{"name": "Venus", "radius": 1.0821e11, "planet_radius": 6.0518e6, "mass": 4.8675e24, "period_days": 224.701},
-	{"name": "Mars", "radius": 2.2794e11, "planet_radius": 3.3895e6, "mass": 6.4171e23, "period_days": 686.980},
-	{"name": "Jupiter", "radius": 7.7857e11, "planet_radius": 6.9911e7, "mass": 1.8982e27, "period_days": 4332.59},
-	{"name": "Saturn", "radius": 1.4335e12, "planet_radius": 5.8232e7, "mass": 5.6834e26, "period_days": 10759.22},
-	{"name": "Uranus", "radius": 2.8725e12, "planet_radius": 2.5362e7, "mass": 8.6810e25, "period_days": 30688.5},
-	{"name": "Neptune", "radius": 4.4951e12, "planet_radius": 2.4622e7, "mass": 1.0241e26, "period_days": 60182.0}
-]
+static var G := 6.67430e-11
+static var EARTH_MU := 3.986004418e14
+static var EARTH_RADIUS := 6.371e6
+static var MOON_ORBIT_RADIUS := 3.844e8
+static var MOON_MASS := 7.342e22
+static var MOON_RADIUS := 1.7374e6
+static var MOON_MU := G * MOON_MASS
+static var SUN_MU := 1.32712440018e20
+static var EARTH_ORBIT_RADIUS := 1.495978707e11
+static var EARTH_ORBIT_PERIOD := 365.256363004 * 86400.0
+const INFINITE_FUEL_PLANNING_DELTA_V := 100000.0
+static var PLANET_TARGETS: Array[Dictionary] = []
 
-static func orbital_state(position: Vector2, velocity: Vector2, mu: float = EARTH_MU) -> Dictionary:
+static func _static_init() -> void:
+	G = PlanetarySystem.G
+	EARTH_MU = G * PlanetarySystem.EARTH_MASS
+	EARTH_RADIUS = PlanetarySystem.EARTH_RADIUS
+	MOON_ORBIT_RADIUS = PlanetarySystem.MOON_TRANSFER_ORBIT_RADIUS
+	MOON_MASS = PlanetarySystem.MOON_MASS
+	MOON_RADIUS = PlanetarySystem.MOON_RADIUS
+	MOON_MU = G * MOON_MASS
+	SUN_MU = G * PlanetarySystem.SUN_MASS
+	for planet in PlanetarySystem.PLANETS:
+		if str(planet.get("name", "")) == "Earth":
+			EARTH_ORBIT_RADIUS = float(planet.get("a", EARTH_ORBIT_RADIUS / PlanetarySystem.ASTRONOMICAL_UNIT)) * PlanetarySystem.ASTRONOMICAL_UNIT
+			EARTH_ORBIT_PERIOD = float(planet.get("orbital_period", 365.256)) * 86400.0
+			continue
+		PLANET_TARGETS.append({
+			"name": str(planet.get("name", "")),
+			"radius": float(planet.get("a", 0.0)) * PlanetarySystem.ASTRONOMICAL_UNIT,
+			"planet_radius": float(planet.get("radius", 0.0)),
+			"mass": float(planet.get("mass", 0.0)),
+			"period_days": float(planet.get("orbital_period", 0.0))
+		})
+
+static func target_body_name(target_index: int) -> String:
+	if target_index == -2:
+		return "Earth"
+	if target_index == -1:
+		return "Moon"
+	if target_index >= 0 and target_index < PLANET_TARGETS.size():
+		return str(PLANET_TARGETS[target_index].get("name", ""))
+	return ""
+
+static func orbital_state(position: Vector2, velocity: Vector2, mu: float = -1.0) -> Dictionary:
+	if mu < 0.0:
+		mu = EARTH_MU
 	var radius := position.length()
 	if radius <= 0.0 or mu <= 0.0:
 		return {"valid": false}
@@ -50,12 +76,16 @@ static func orbital_state(position: Vector2, velocity: Vector2, mu: float = EART
 		"bound": specific_energy < 0.0
 	}
 
-static func circular_orbit_speed(radius: float, mu: float = EARTH_MU) -> float:
+static func circular_orbit_speed(radius: float, mu: float = -1.0) -> float:
+	if mu < 0.0:
+		mu = EARTH_MU
 	if radius <= 0.0 or mu <= 0.0:
 		return 0.0
 	return sqrt(mu / radius)
 
-static func circularisation_burn(position: Vector2, velocity: Vector2, prograde: bool = true, mu: float = EARTH_MU) -> Dictionary:
+static func circularisation_burn(position: Vector2, velocity: Vector2, prograde: bool = true, mu: float = -1.0) -> Dictionary:
+	if mu < 0.0:
+		mu = EARTH_MU
 	var radius := position.length()
 	if radius <= 0.0:
 		return {"valid": false}
@@ -73,7 +103,35 @@ static func circularisation_burn(position: Vector2, velocity: Vector2, prograde:
 		"direction": burn_vector.normalized() if burn_vector.length() > 0.001 else Vector2.ZERO
 	}
 
-static func hohmann_transfer(origin_radius: float, target_radius: float, mu: float = EARTH_MU) -> Dictionary:
+static func target_radius_burn(position: Vector2, velocity: Vector2, target_radius: float, mu: float = -1.0) -> Dictionary:
+	if mu < 0.0:
+		mu = EARTH_MU
+	var radius := position.length()
+	if radius <= 0.0 or target_radius <= 0.0 or mu <= 0.0:
+		return {"valid": false}
+	var tangent := Vector2(-position.y, position.x).normalized()
+	var direction := 1.0 if velocity.dot(tangent) >= 0.0 else -1.0
+	var transfer_semi_major_axis := (radius + target_radius) * 0.5
+	var desired_speed := sqrt(mu * (2.0 / radius - 1.0 / transfer_semi_major_axis))
+	var desired_velocity := tangent * direction * desired_speed
+	var burn_vector := desired_velocity - velocity
+	var resulting_orbit := orbital_state(position, desired_velocity, mu)
+	var safe_periapsis := target_radius
+	return {
+		"valid": bool(resulting_orbit.get("bound", false)) and target_radius > 0.0,
+		"delta_v": burn_vector.length(),
+		"burn_vector": burn_vector,
+		"desired_velocity": desired_velocity,
+		"direction": burn_vector.normalized() if burn_vector.length() > 0.001 else Vector2.ZERO,
+		"target_radius": target_radius,
+		"periapsis": float(resulting_orbit.get("periapsis", 0.0)),
+		"apoapsis": float(resulting_orbit.get("apoapsis", INF)),
+		"safe_periapsis": safe_periapsis
+	}
+
+static func hohmann_transfer(origin_radius: float, target_radius: float, mu: float = -1.0) -> Dictionary:
+	if mu < 0.0:
+		mu = EARTH_MU
 	if origin_radius <= 0.0 or target_radius <= 0.0 or is_equal_approx(origin_radius, target_radius):
 		return {"valid": false}
 	var transfer_axis := (origin_radius + target_radius) * 0.5
@@ -206,26 +264,31 @@ static func departure_periapsis_direction(target_index: int, current_time: float
 	return periapsis_tangent.rotated(-direction_sign * PI * 0.5).normalized()
 
 
-static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float) -> Dictionary:
+static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float, target_altitude: float = 100000.0) -> Dictionary:
 	var radius := position.length()
-	var safe_periapsis := body_radius + 100000.0
-	if radius <= safe_periapsis or body_mu <= 0.0:
+	var target_radius := body_radius + maxf(70000.0, target_altitude)
+	if radius < target_radius or body_mu <= 0.0:
 		return {"valid": false}
-	var angular_momentum := position.cross(velocity)
-	var tangent := Vector2(-position.y, position.x).normalized()
-	var direction := 1.0 if angular_momentum >= 0.0 else -1.0
-	var desired_apoapsis := radius
-	var desired_speed := sqrt(body_mu / radius)
-	var desired_velocity := tangent * direction * desired_speed
-	var burn_vector := desired_velocity - velocity
+	var capture := target_radius_burn(position, velocity, target_radius, body_mu)
+	if not bool(capture.get("valid", false)) or float(capture.get("periapsis", 0.0)) < target_radius * 0.999:
+		return {"valid": false}
+	var transfer_axis := (radius + target_radius) * 0.5
+	var transfer_speed_at_periapsis := sqrt(body_mu * (2.0 / target_radius - 1.0 / transfer_axis))
+	var circular_speed := sqrt(body_mu / target_radius)
+	var circularisation_delta_v := absf(circular_speed - transfer_speed_at_periapsis)
+	var burn_vector: Vector2 = capture.burn_vector
+	var desired_velocity: Vector2 = capture.desired_velocity
 	return {
 		"valid": true,
 		"burn_vector": burn_vector,
 		"delta_v": burn_vector.length(),
 		"desired_velocity": desired_velocity,
-		"periapsis": radius,
-		"apoapsis": desired_apoapsis,
-		"safe_periapsis": safe_periapsis
+		"periapsis": float(capture.periapsis),
+		"apoapsis": float(capture.apoapsis),
+		"safe_periapsis": target_radius,
+		"target_radius": target_radius,
+		"circularisation_delta_v": circularisation_delta_v,
+		"total_delta_v": burn_vector.length() + circularisation_delta_v
 	}
 
 static func available_delta_v(design: Dictionary, active_stage_index: int = 0, active_fuel: float = -1.0) -> float:
@@ -317,11 +380,11 @@ static func _segment_intersects_circle_precise(start: PackedFloat64Array, finish
 	return offset_x * offset_x + offset_y * offset_y <= radius * radius
 
 
-static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false) -> Dictionary:
-	return simulated_transfer_search_precise(PackedFloat64Array([start_position.x, start_position.y]), start_velocity, start_time, target_index, maximum_delta_v, speed_priority, coarse_search)
+static func simulated_transfer_search(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false, target_orbit_altitude: float = 100000.0) -> Dictionary:
+	return simulated_transfer_search_precise(PackedFloat64Array([start_position.x, start_position.y]), start_velocity, start_time, target_index, maximum_delta_v, speed_priority, coarse_search, target_orbit_altitude)
 
 
-static func simulated_transfer_search_precise(start_position_components: PackedFloat64Array, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false) -> Dictionary:
+static func simulated_transfer_search_precise(start_position_components: PackedFloat64Array, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false, target_orbit_altitude: float = 100000.0) -> Dictionary:
 	if start_position_components.size() < 2 or target_index < -2 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Invalid target, position or manoeuvre capability."}
 	var initial_target := _simulated_target_state(target_index, start_time)
@@ -404,10 +467,10 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				if closest_distance > target_soi:
 					continue
 				var target_mu := G * float(initial_target.mass)
-				var capture := arrival_capture_burn(closest_relative_position, closest_relative_velocity, target_mu, float(initial_target.radius))
+				var capture := arrival_capture_burn(closest_relative_position, closest_relative_velocity, target_mu, float(initial_target.radius), target_orbit_altitude)
 				if not bool(capture.get("valid", false)):
 					continue
-				var capture_delta_v := float(capture.get("delta_v", INF))
+				var capture_delta_v := float(capture.get("total_delta_v", INF))
 				var total_delta_v := departure_delta_v + capture_delta_v
 				if total_delta_v > maximum_delta_v:
 					continue
@@ -439,7 +502,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	return best_plan
 
 
-static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 30) -> Dictionary:
+static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 30, target_orbit_altitude: float = 100000.0) -> Dictionary:
 	if target_index < -1 or target_index >= PLANET_TARGETS.size() or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Select the Moon or a planet and provide a positive manoeuvre budget."}
 	var radius := start_position.length()
@@ -461,7 +524,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		var rotation := orbital_rate * wait_seconds
 		var future_position := start_position.rotated(rotation)
 		var future_velocity := start_velocity.rotated(rotation)
-		var plan := simulated_transfer_search(future_position, future_velocity, start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true)
+		var plan := simulated_transfer_search(future_position, future_velocity, start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
 		dates_checked += 1
 		if not bool(plan.get("valid", false)):
 			continue
@@ -482,7 +545,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 			continue
 		var wait_seconds := wait_days * 86400.0
 		var rotation := orbital_rate * wait_seconds
-		var plan := simulated_transfer_search(start_position.rotated(rotation), start_velocity.rotated(rotation), start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true)
+		var plan := simulated_transfer_search(start_position.rotated(rotation), start_velocity.rotated(rotation), start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
 		dates_checked += 1
 		if not bool(plan.get("valid", false)):
 			continue
@@ -499,7 +562,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 			continue
 		var wait_seconds := wait_days * 86400.0
 		var rotation := orbital_rate * wait_seconds
-		var plan := simulated_transfer_search(start_position.rotated(rotation), start_velocity.rotated(rotation), start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true)
+		var plan := simulated_transfer_search(start_position.rotated(rotation), start_velocity.rotated(rotation), start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
 		dates_checked += 1
 		if not bool(plan.get("valid", false)):
 			continue
@@ -512,7 +575,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 	var final_wait_days := float(best_window.departure_wait_days)
 	var final_wait_seconds := final_wait_days * 86400.0
 	var final_rotation := orbital_rate * final_wait_seconds
-	var final_plan := simulated_transfer_search(start_position.rotated(final_rotation), start_velocity.rotated(final_rotation), start_time + final_wait_seconds, target_index, maximum_delta_v, speed_priority, false)
+	var final_plan := simulated_transfer_search(start_position.rotated(final_rotation), start_velocity.rotated(final_rotation), start_time + final_wait_seconds, target_index, maximum_delta_v, speed_priority, false, target_orbit_altitude)
 	if bool(final_plan.get("valid", false)):
 		final_plan["departure_wait_days"] = final_wait_days
 		final_plan["departure_time_seconds"] = start_time + final_wait_seconds

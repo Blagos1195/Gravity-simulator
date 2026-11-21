@@ -3,12 +3,12 @@ extends Control
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
-const G := PlanetarySystem.G
-const EARTH_MASS := PlanetarySystem.EARTH_MASS
-const EARTH_RADIUS := PlanetarySystem.EARTH_RADIUS
+static var G := PlanetarySystem.G
+static var EARTH_MASS := PlanetarySystem.EARTH_MASS
+static var EARTH_RADIUS := PlanetarySystem.EARTH_RADIUS
 const DRAG_AREA := 0.45
 const LIFT_AREA := 1.8
-const EARTH_ROTATION_RATE := 7.2921159e-5
+static var EARTH_ROTATION_RATE := PlanetarySystem.EARTH_ROTATION_RATE
 const MAX_PHYSICS_BUDGET_USEC := 6000
 const MAX_PHYSICS_STEPS_PER_FRAME := 4000
 
@@ -18,6 +18,8 @@ var payload_mass := 500.0
 var realism := "Realistic"
 var world_scale := "Compressed"
 var career_enabled := false
+var infinite_weightless_fuel := false
+var simulate_belt_collisions := false
 var paused := false
 var sim_time := 0.0
 var time_warp := 1.0
@@ -39,6 +41,7 @@ var rotation_angle := 0.0
 var fuel := 300000.0
 var stage_index := 0
 var discarded_stage_mass := 0.0
+var discarded_propellant_mass := 0.0
 var throttle := 0.0
 var gimbal_angle := 0.0
 var guidance_enabled := false
@@ -72,6 +75,7 @@ var camera_offset := Vector2.ZERO
 var trail: Array[Vector2] = []
 var trail_timer := 0.0
 var star_points: Array[Vector2] = []
+var solar_belt_particles: Array[Dictionary] = []
 var status_message := "PAD READY  •  PRESS W TO IGNITE"
 var orbit_path: Array[Vector2] = []
 var show_orbit := true
@@ -107,19 +111,55 @@ func _remaining_stack_mass() -> float:
 	var mass := payload_mass
 	for i in range(stage_index + 1, rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[i]
-		mass += float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
+		mass += float(stage.get("dry_mass", 0.0))
+		if not infinite_weightless_fuel:
+			mass += float(stage.get("fuel_capacity", 0.0))
 	return mass
 
 func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
 	var active := _active_stage_data()
-	return float(active.get("dry_mass", 0.0)) + _remaining_stack_mass() + (fuel if fuel_amount < 0.0 else fuel_amount)
+	var mass := float(active.get("dry_mass", 0.0)) + _remaining_stack_mass()
+	if not infinite_weightless_fuel:
+		mass += fuel if fuel_amount < 0.0 else fuel_amount
+	return mass
 
 func _ready() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 44219
 	for i in range(500):
 		star_points.append(Vector2(rng.randf_range(-12000, 12000), rng.randf_range(-8000, 8000)))
+	_prepare_small_body_belts()
 	set_process(true)
+
+func _prepare_small_body_belts() -> void:
+	solar_belt_particles.clear()
+	for belt in PlanetarySystem.get_small_body_belts():
+		var rng := RandomNumberGenerator.new()
+		rng.seed = int(belt.get("seed", 0))
+		var inner_radius_m := float(belt.get("inner_radius_au", 0.0)) * PlanetarySystem.ASTRONOMICAL_UNIT
+		var outer_radius_m := float(belt.get("outer_radius_au", 0.0)) * PlanetarySystem.ASTRONOMICAL_UNIT
+		var min_collision_radius_m := float(belt.get("collision_radius_min_m", 500.0))
+		var max_collision_radius_m := float(belt.get("collision_radius_max_m", 25000.0))
+		var particles: Array[Dictionary] = []
+		for i in range(int(belt.get("particle_count", 0))):
+			var radius_m := rng.randf_range(inner_radius_m, outer_radius_m)
+			particles.append({
+				"id": i,
+				"radius_m": radius_m,
+				"phase_rad": rng.randf_range(0.0, TAU),
+				"angular_rate": sqrt(PlanetarySystem.G * PlanetarySystem.SUN_MASS / pow(radius_m, 3.0)),
+				"size_px": float(belt.get("particle_size_px", 1.0)) * rng.randf_range(0.65, 1.35),
+				"collision_radius_m": lerpf(min_collision_radius_m, max_collision_radius_m, pow(rng.randf(), 4.0))
+			})
+		solar_belt_particles.append({
+			"name": str(belt.get("name", "Small-body belt")),
+			"color": PlanetarySystem.color_from_rgb(belt.get("color_rgb", []), Color(0.72, 0.65, 0.52)),
+			"opacity": float(belt.get("opacity", 0.35)),
+			"inner_radius_m": inner_radius_m,
+			"outer_radius_m": outer_radius_m,
+			"max_collision_radius_m": max_collision_radius_m,
+			"particles": particles
+		})
 
 func _process(delta: float) -> void:
 	if not paused and not crashed:
@@ -157,7 +197,7 @@ func _physics_step(dt: float) -> void:
 	var start_time := sim_time
 	var end_time := sim_time + dt
 	if landed:
-		if thrust_key_down and fuel > 0.0:
+		if thrust_key_down and (infinite_weightless_fuel or fuel > 0.0):
 			var surface_state := _surface_body_state(landed_body_name)
 			var normal := landed_surface_normal.normalized()
 			rotation_angle = normal.angle() - Vector2.UP.angle()
@@ -177,30 +217,37 @@ func _physics_step(dt: float) -> void:
 		sim_time = end_time
 		throttle = 0.0
 		return
+	var initial_rocket_position_components: PackedFloat64Array = rocket_position_precise.duplicate()
 	var local_body := _nearest_body_state(rocket_position)
 	var altitude := maxf(0.0, float(local_body.get("distance", EARTH_RADIUS)) - float(local_body.get("radius", EARTH_RADIUS)))
 	if guidance_enabled:
 		_update_guidance(dt)
-	if autopilot_enabled and autopilot_phase in ["COAST", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "ROUTE_COAST", "COMPLETE", "FAILED"]:
+	if autopilot_enabled and autopilot_phase in ["COAST", "COAST_TO_TARGET", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "ROUTE_COAST", "COMPLETE", "FAILED"]:
 		thrust_key_down = false
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	throttle = autopilot_throttle if autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and fuel > 0.0 else (1.0 if thrust_key_down and fuel > 0.0 else 0.0)
-	var fuel_used := minf(fuel, total_flow * throttle * dt)
+	var propellant_available := infinite_weightless_fuel or fuel > 0.0
+	throttle = autopilot_throttle if autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if thrust_key_down and propellant_available else 0.0)
+	var fuel_used := 0.0 if infinite_weightless_fuel else minf(fuel, total_flow * throttle * dt)
 	var mass_before := maxf(1.0, _current_vehicle_mass())
-	var mass_after := maxf(1.0, mass_before - fuel_used)
+	var mass_after := mass_before if infinite_weightless_fuel else maxf(1.0, mass_before - fuel_used)
 	var mass_mid := (mass_before + mass_after) * 0.5
 	var thrust_force: float = _engine_thrust(maxf(0.0, altitude)) * throttle if throttle > 0.0 else 0.0
 	var thrust_delta_v := 0.0
-	if fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
+	if infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
+		thrust_delta_v = thrust_force / mass_before * dt
+	elif fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
 	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var thrust_impulse := thrust_direction * thrust_delta_v
-	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
+	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
 		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
 		if autopilot_burn_remaining <= 1.0:
 			thrust_key_down = false
-			if autopilot_phase == "TRANSFER_BURN":
+			if autopilot_phase == "CIRCULARISE_BURN":
+				autopilot_phase = "COAST_TO_TARGET"
+				status_message = "AUTOPILOT  •  COASTING TO TARGET ORBIT"
+			elif autopilot_phase == "TRANSFER_BURN":
 				autopilot_transfer_start_time = sim_time
 				autopilot_phase = "TRANSFER_COAST"
 			elif autopilot_phase == "ARRIVAL_CAPTURE_BURN":
@@ -209,8 +256,7 @@ func _physics_step(dt: float) -> void:
 				var arrival_velocity: Vector2 = velocity + thrust_impulse - arrival_state.velocity
 				var arrival_orbit := FlightComputer.orbital_state(arrival_position, arrival_velocity, G * float(arrival_state.mass))
 				if bool(arrival_orbit.get("bound", false)) and float(arrival_orbit.get("periapsis", 0.0)) > float(arrival_state.radius) + 50000.0:
-					autopilot_phase = "COMPLETE"
-					autopilot_complete = true
+					autopilot_phase = "COAST_TO_TARGET"
 				else:
 					autopilot_phase = "FAILED"
 			elif autopilot_phase == "ROUTE_BURN":
@@ -241,17 +287,75 @@ func _physics_step(dt: float) -> void:
 	velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	_set_rocket_position_components(next_position_components[0], next_position_components[1])
 	sim_time = end_time
-	fuel = maxf(0.0, fuel - fuel_used)
+	if not infinite_weightless_fuel:
+		fuel = maxf(0.0, fuel - fuel_used)
 	var final_atmosphere: Dictionary = _atmosphere_at(rocket_position, velocity, end_time, rocket_position_precise)
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
-	if fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
+	if not infinite_weightless_fuel and fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
 	_handle_body_contact()
+	if simulate_belt_collisions and not crashed and not landed:
+		var collision: Dictionary = _small_body_collision(
+			start_time,
+			end_time,
+			initial_rocket_position_components,
+			rocket_position_precise,
+			initial_gravity_states,
+			final_gravity_states
+		)
+		if not collision.is_empty():
+			crashed = true
+			landed = false
+			thrust_key_down = false
+			throttle = 0.0
+			guidance_enabled = false
+			autopilot_enabled = false
+			status_message = "ASTEROID IMPACT  •  %s  •  %.0f M/S" % [str(collision.get("belt_name", "SMALL BODY")).to_upper(), float(collision.get("impact_speed_m_s", 0.0))]
 	var final_body := _nearest_body_state(rocket_position)
 	var final_altitude := maxf(0.0, float(final_body.get("distance", EARTH_RADIUS)) - float(final_body.get("radius", EARTH_RADIUS)))
 	if not autopilot_enabled and not landed and not crashed:
 		status_message = "STAGE %d  •  ENGINE FIRING" % (stage_index + 1) if throttle > 0.0 else "PAD READY  •  W TO IGNITE" if final_altitude < 100.0 else "FLIGHT ACTIVE"
+
+func _small_body_collision(start_time: float, end_time: float, rocket_start_components: PackedFloat64Array, rocket_end_components: PackedFloat64Array, start_states: Dictionary, end_states: Dictionary) -> Dictionary:
+	var earth_start: PackedFloat64Array = start_states.get("earth_heliocentric_position_components", PackedFloat64Array([0.0, 0.0]))
+	var earth_end: PackedFloat64Array = end_states.get("earth_heliocentric_position_components", PackedFloat64Array([0.0, 0.0]))
+	var rocket_start := Vector2(earth_start[0] + rocket_start_components[0], earth_start[1] + rocket_start_components[1])
+	var rocket_end := Vector2(earth_end[0] + rocket_end_components[0], earth_end[1] + rocket_end_components[1])
+	var radial_min := minf(rocket_start.length(), rocket_end.length())
+	var radial_max := maxf(rocket_start.length(), rocket_end.length())
+	var duration := maxf(0.000001, end_time - start_time)
+	for belt_variant in solar_belt_particles:
+		var belt: Dictionary = belt_variant
+		var maximum_radius := float(belt.get("max_collision_radius_m", 0.0))
+		var belt_inner := float(belt.get("inner_radius_m", 0.0)) - maximum_radius
+		var belt_outer := float(belt.get("outer_radius_m", 0.0)) + maximum_radius
+		if radial_max < belt_inner or radial_min > belt_outer:
+			continue
+		for particle_variant in belt.get("particles", []):
+			var particle: Dictionary = particle_variant
+			var body_radius := float(particle.get("radius_m", 0.0))
+			var phase := float(particle.get("phase_rad", 0.0))
+			var angular_rate := float(particle.get("angular_rate", 0.0))
+			var start_angle := phase + angular_rate * start_time
+			var end_angle := phase + angular_rate * end_time
+			var asteroid_start := Vector2(cos(start_angle), sin(start_angle)) * body_radius
+			var asteroid_end := Vector2(cos(end_angle), sin(end_angle)) * body_radius
+			var relative_start := rocket_start - asteroid_start
+			var relative_delta := (rocket_end - asteroid_end) - relative_start
+			var denominator := relative_delta.length_squared()
+			var closest_fraction := 0.0
+			if denominator > 0.0:
+				closest_fraction = clampf(-relative_start.dot(relative_delta) / denominator, 0.0, 1.0)
+			var closest_distance := (relative_start + relative_delta * closest_fraction).length()
+			var collision_radius := float(particle.get("collision_radius_m", 0.0)) + 10.0
+			if closest_distance <= collision_radius:
+				return {
+					"belt_name": belt.get("name", "Small-body belt"),
+					"particle_id": particle.get("id", -1),
+					"impact_speed_m_s": relative_delta.length() / duration
+				}
+	return {}
 
 func _adaptive_step_size() -> float:
 	var body := _nearest_body_state(rocket_position, rocket_position_precise)
@@ -271,31 +375,39 @@ func _adaptive_step_size() -> float:
 	if bool(local_orbit.get("bound", false)) and not in_atmosphere:
 		maximum_step = minf(maximum_step, 0.5)
 		travel_distance_limit = minf(travel_distance_limit, maxf(1000.0, radius * 0.0005))
+	if autopilot_enabled and autopilot_phase == "COAST_TO_TARGET":
+		maximum_step = minf(maximum_step, 0.25)
 	if deep_space:
 		travel_distance_limit = maxf(50000000.0, radius * 0.01)
 	var travel_limit: float = travel_distance_limit / maxf(100.0, speed)
 	var drag_acceleration := _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass()), -1.0, rocket_position_precise).length()
 	var drag_limit := 0.08 * speed / drag_acceleration if drag_acceleration > 0.01 else maximum_step
 	var active := _active_stage_data()
-	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and fuel > 0.0 else 0.0
+	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and (infinite_weightless_fuel or fuel > 0.0) else 0.0
 	var thrust_limit := 0.08 * maxf(100.0, speed) / engine_acceleration if engine_acceleration > 0.01 else maximum_step
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	var burnout_limit := fuel / total_flow if thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
+	var burnout_limit := fuel / total_flow if not infinite_weightless_fuel and thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
 	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, maximum_step)
 	var step_limit := minf(physics_limit, burnout_limit)
-	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and not thrust_key_down:
+	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and not thrust_key_down:
 		step_limit = minf(step_limit, 0.1)
-	if autopilot_enabled and autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and autopilot_burn_remaining > 0.0 and total_flow > 0.0:
+	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and autopilot_burn_remaining > 0.0:
 		var current_mass := maxf(1.0, _current_vehicle_mass())
 		var current_thrust := _engine_thrust(altitude)
-		var effective_exhaust_velocity := current_thrust / total_flow
-		if effective_exhaust_velocity > 0.0:
-			var required_propellant := current_mass * (1.0 - exp(-autopilot_burn_remaining / effective_exhaust_velocity))
-			step_limit = minf(step_limit, required_propellant / total_flow)
+		if infinite_weightless_fuel:
+			var acceleration := current_thrust / current_mass
+			if acceleration > 0.0:
+				step_limit = minf(step_limit, autopilot_burn_remaining / acceleration)
+		elif total_flow > 0.0:
+			var effective_exhaust_velocity := current_thrust / total_flow
+			if effective_exhaust_velocity > 0.0:
+				var required_propellant := current_mass * (1.0 - exp(-autopilot_burn_remaining / effective_exhaust_velocity))
+				step_limit = minf(step_limit, required_propellant / total_flow)
 	if autopilot_enabled and autopilot_phase == "COAST":
 		var coast_orbit: Dictionary = FlightComputer.orbital_state(body.relative_position, velocity - Vector2(body.velocity), G * float(body.mass))
 		var coast_radial_speed: float = absf(float(coast_orbit.get("radial_speed", 0.0)))
-		if bool(coast_orbit.get("bound", false)) and coast_radial_speed < 500.0 and float(coast_orbit.get("apoapsis", 0.0)) >= float(body.radius) + autopilot_target_altitude * 0.95:
+		var coast_orbit_altitude := autopilot_target_altitude if str(body.get("name", "")) == _autopilot_target_body_name() and float(body.get("distance", INF)) <= float(body.get("soi", 0.0)) else 200000.0
+		if bool(coast_orbit.get("bound", false)) and coast_radial_speed < 500.0 and float(coast_orbit.get("apoapsis", 0.0)) >= float(body.radius) + coast_orbit_altitude * 0.95:
 			step_limit = minf(step_limit, 0.25)
 	if autopilot_enabled and autopilot_phase == "ROUTE_COAST" and autopilot_route_node_index < autopilot_route_nodes.size():
 		var next_node: Dictionary = autopilot_route_nodes[autopilot_route_node_index]
@@ -317,8 +429,8 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: 
 		"altitude": 0.0,
 		"density": 0.0,
 		"temperature": 250.0,
-		"gas_constant": 287.05287,
-		"gamma": 1.4,
+		"gas_constant": PlanetarySystem.earth_atmosphere_gas_constant(),
+		"gamma": PlanetarySystem.earth_atmosphere_gamma(),
 		"relative_velocity": Vector2.ZERO
 	}
 	var components := position_components
@@ -333,12 +445,10 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: 
 			"altitude": earth_altitude,
 			"density": earth_density,
 			"temperature": PlanetarySystem.atmospheric_temperature(earth_altitude),
-			"gas_constant": 287.05287,
-			"gamma": 1.4,
+			"gas_constant": PlanetarySystem.earth_atmosphere_gas_constant(),
+			"gamma": PlanetarySystem.earth_atmosphere_gamma(),
 			"relative_velocity": current_velocity - Vector2(-components[1], components[0]) * EARTH_ROTATION_RATE
 		}
-	if position_radius < 1.0e8:
-		return best
 	var ephemeris: Dictionary = _ephemeris_states_at(sample_time)
 	for body in ephemeris.get("surface_bodies", []):
 		var body_name: String = str(body.get("name", ""))
@@ -352,8 +462,8 @@ func _atmosphere_at(position: Vector2, current_velocity: Vector2, time_seconds: 
 		if density <= float(best.get("density", 0.0)):
 			continue
 		var atmospheric_rotation: Vector2 = Vector2(-relative_position.y, relative_position.x) * float(body.get("rotation_rate", 0.0))
-		var gas_constant: float = 188.9 if body_name in ["Venus", "Mars"] else 3500.0
-		var gamma: float = 1.3 if body_name in ["Venus", "Mars"] else 1.4
+		var gas_constant := PlanetarySystem.planetary_atmosphere_gas_constant(body_name)
+		var gamma := PlanetarySystem.planetary_atmosphere_gamma(body_name)
 		best = {
 			"body_name": body_name,
 			"altitude": body_altitude,
@@ -435,7 +545,9 @@ func _update_heating(dt: float, atmosphere: Dictionary) -> void:
 func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
 		return
-	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0)) + fuel
+	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0))
+	if not infinite_weightless_fuel:
+		discarded_propellant_mass += fuel
 	velocity += Vector2.UP.rotated(rotation_angle) * 2.0
 	stage_index += 1
 	fuel = float(_active_stage_data().get("fuel_capacity", 0.0))
@@ -459,17 +571,16 @@ func _autopilot_target_state() -> Dictionary:
 func _begin_arrival_capture(target_state: Dictionary) -> void:
 	var relative_position := _relative_position_to_body(target_state)
 	var relative_velocity: Vector2 = velocity - target_state.velocity
-	var capture := FlightComputer.arrival_capture_burn(relative_position, relative_velocity, G * float(target_state.mass), float(target_state.radius))
+	var capture := FlightComputer.arrival_capture_burn(relative_position, relative_velocity, G * float(target_state.mass), float(target_state.radius), autopilot_target_altitude)
 	if not bool(capture.get("valid", false)):
 		autopilot_phase = "FAILED"
-		status_message = "ARRIVAL FAILED  •  TRAJECTORY INTERSECTS THE BODY"
+		status_message = "ARRIVAL FAILED  •  APPROACH CANNOT REACH SELECTED ORBIT"
 		return
 	autopilot_arrival_burn_vector = capture.burn_vector
 	autopilot_burn_direction = autopilot_arrival_burn_vector.normalized()
 	autopilot_burn_remaining = float(capture.delta_v)
 	if autopilot_burn_remaining < 1.0:
-		autopilot_phase = "COMPLETE"
-		autopilot_complete = true
+		autopilot_phase = "COAST_TO_TARGET"
 	else:
 		autopilot_phase = "ARRIVAL_CAPTURE_BURN"
 
@@ -615,13 +726,13 @@ func _nearest_body_state(position: Vector2, position_components: PackedFloat64Ar
 		var delta_x: float = components[0] - body_components[0]
 		var delta_y: float = components[1] - body_components[1]
 		var candidate_distance := sqrt(delta_x * delta_x + delta_y * delta_y)
+		if candidate_distance > float(candidate.get("soi", 0.0)):
+			continue
 		if candidate_distance < nearest_distance:
 			nearest = candidate
 			nearest_distance = candidate_distance
 			nearest["relative_position"] = Vector2(delta_x, delta_y)
 	if nearest.is_empty():
-		return {}
-	if nearest_distance > float(nearest.get("soi", 0.0)):
 		nearest = _surface_body_state("Earth")
 		nearest_distance = sqrt(components[0] * components[0] + components[1] * components[1])
 		nearest["relative_position"] = Vector2(components[0], components[1])
@@ -629,14 +740,9 @@ func _nearest_body_state(position: Vector2, position_components: PackedFloat64Ar
 	return nearest
 
 func _handle_body_contact() -> void:
-	var bodies: Array[Dictionary] = [
-		_surface_body_state("Earth"),
-		_surface_body_state("Moon")
-	]
-	for body in PlanetarySystem.PLANETS:
-		if str(body.name) != "Earth":
-			bodies.append(_surface_body_state(str(body.name)))
-	for body in bodies:
+	var states: Dictionary = _ephemeris_states_at(sim_time)
+	for body_variant in states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
 		var relative_position := _relative_position_to_body(body)
 		var body_radius := float(body.radius)
 		if relative_position.length() > body_radius + 0.5:
@@ -676,23 +782,34 @@ func _update_guidance(dt: float) -> void:
 	var guidance_velocity: Vector2 = velocity - guidance_body.velocity
 	var radial := guidance_position.normalized()
 	var altitude := maxf(0.0, float(guidance_body.distance) - float(guidance_body.radius))
+	var propellant_available := infinite_weightless_fuel or fuel > 0.0
+	var destination_is_local := float(guidance_body.get("distance", INF)) <= float(guidance_body.get("soi", 0.0)) and str(guidance_body.get("name", "")) == _autopilot_target_body_name()
+	var guidance_orbit_altitude := autopilot_target_altitude if destination_is_local else 200000.0
 	var tangent := Vector2(-radial.y, radial.x)
 	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / 100000.0, 0.0, 1.0))
 	if autopilot_enabled:
 		gimbal_angle = 0.0
 		var orbit := FlightComputer.orbital_state(guidance_position, guidance_velocity, G * float(guidance_body.mass))
-		var target_radius := float(guidance_body.radius) + autopilot_target_altitude
+		var target_radius := float(guidance_body.radius) + guidance_orbit_altitude
 		var prograde := guidance_velocity.normalized() if guidance_velocity.length() > 1.0 else tangent
 		match autopilot_phase:
 			"ASCENT":
-				status_message = "AUTOPILOT  •  ASCENT TO %.0f KM" % (autopilot_target_altitude / 1000.0)
+				status_message = "AUTOPILOT  •  ASCENT TO %.0f KM" % (guidance_orbit_altitude / 1000.0)
 				var ascent_orbit_periapsis := float(orbit.get("periapsis", 0.0))
 				var ascent_orbit_radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
 				var already_in_stable_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + 70000.0 and ascent_orbit_radial_speed < 100.0
-				if (autopilot_target_mode == "PLANET" or (autopilot_planet_index == -2 and str(guidance_body.name) != "Earth")) and already_in_stable_orbit:
+				var reached_parking_orbit := already_in_stable_orbit and float(orbit.get("apoapsis", 0.0)) >= target_radius - 25000.0
+				if reached_parking_orbit and not destination_is_local:
 					thrust_key_down = false
 					autopilot_phase = "PLAN_TRANSFER"
-				elif bool(orbit.get("bound", false)) and float(orbit.get("apoapsis", 0.0)) >= target_radius:
+				elif reached_parking_orbit and destination_is_local and absf(guidance_position.length() - target_radius) < maxf(500.0, target_radius * 0.002):
+					thrust_key_down = false
+					autopilot_phase = "COMPLETE"
+					autopilot_complete = true
+				elif already_in_stable_orbit:
+					thrust_key_down = false
+					autopilot_phase = "CIRCULARISE"
+				elif bool(orbit.get("bound", false)) and float(orbit.get("apoapsis", 0.0)) >= target_radius - 25000.0:
 					thrust_key_down = false
 					autopilot_phase = "COAST"
 				else:
@@ -705,44 +822,72 @@ func _update_guidance(dt: float) -> void:
 					var speed_pitch: float = lerpf(88.0, 4.0, ascent_speed_fraction)
 					pitch_above_horizon = minf(altitude_pitch, speed_pitch)
 					status_message = "AUTOPILOT  •  ASCENT  •  ALT %.0f KM  •  Vt %.2f KM/S  •  PITCH %.0f°" % [altitude / 1000.0, ascent_tangential_speed / 1000.0, pitch_above_horizon]
-					thrust_key_down = fuel > 0.0
+					thrust_key_down = propellant_available
 			"COAST":
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
 				thrust_key_down = false
 				var coast_radial_speed: float = float(orbit.get("radial_speed", 0.0))
-				if absf(coast_radial_speed) <= 1.0 and altitude > 70000.0:
+				if absf(coast_radial_speed) <= 10.0 and altitude > 70000.0:
 					autopilot_phase = "CIRCULARISE"
+			"COAST_TO_TARGET":
+				status_message = "AUTOPILOT  •  COASTING TO TARGET ORBIT"
+				thrust_key_down = false
+				var target_distance_error: float = absf(guidance_position.length() - target_radius)
+				var target_radial_speed: float = absf(float(orbit.get("radial_speed", 0.0)))
+				var target_bound: bool = bool(orbit.get("bound", false))
+				var target_periapsis: float = float(orbit.get("periapsis", 0.0))
+				if target_distance_error < maxf(500.0, target_radius * 0.002) and target_radial_speed < 50.0:
+					autopilot_phase = "CIRCULARISE"
+				elif target_bound and target_periapsis > float(guidance_body.radius):
+					status_message = "AUTOPILOT  •  APPROACHING TARGET RADIUS"
+				elif altitude > 70000.0 and propellant_available:
+					autopilot_phase = "CIRCULARISE"
+					status_message = "AUTOPILOT  •  CORRECTING LOW PERIAPSIS"
+				else:
+					autopilot_phase = "FAILED"
+					status_message = "ORBIT TRANSFER FAILED  •  TARGET PERIAPSIS IS BELOW THE BODY"
+			"CIRCULARISE_BURN":
+				status_message = "AUTOPILOT  •  CIRCULARISING  %.0f M/S" % autopilot_burn_remaining
+				var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
+				rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
+				if not propellant_available and stage_index >= rocket_stages.size() - 1:
+					autopilot_phase = "FAILED"
 			"CIRCULARISE":
 				status_message = "AUTOPILOT  •  ORBITAL CIRCULARISATION"
-				var circular_plan: Dictionary = FlightComputer.circularisation_burn(guidance_position, guidance_velocity, true, G * float(guidance_body.mass))
-				var circular_burn_vector: Vector2 = circular_plan.get("burn_vector", Vector2.ZERO)
-				autopilot_burn_direction = circular_burn_vector.normalized()
-				var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-				var circular_alignment_error := absf(angle_difference(rotation_angle, circular_burn_rotation))
-				var circularised_velocity: Vector2 = circular_plan.get("desired_velocity", guidance_velocity)
+				var target_orbit_plan: Dictionary = FlightComputer.target_radius_burn(guidance_position, guidance_velocity, target_radius, G * float(guidance_body.mass))
+				var target_burn_vector: Vector2 = target_orbit_plan.get("burn_vector", Vector2.ZERO)
+				var target_burn_delta_v: float = float(target_orbit_plan.get("delta_v", INF))
+				var circularised_velocity: Vector2 = target_orbit_plan.get("desired_velocity", guidance_velocity)
 				var circularised_orbit: Dictionary = FlightComputer.orbital_state(guidance_position, circularised_velocity, G * float(guidance_body.mass))
 				var safe_periapsis: float = float(guidance_body.radius) + 70000.0
-				var circularisation_complete: bool = bool(circular_plan.get("valid", false)) and float(circular_plan.get("delta_v", INF)) <= 0.1 and bool(circularised_orbit.get("bound", false)) and float(circularised_orbit.get("periapsis", 0.0)) > safe_periapsis
-				if not bool(circular_plan.get("valid", false)):
+				var circularisation_complete: bool = bool(target_orbit_plan.get("valid", false)) and absf(guidance_position.length() - target_radius) < 500.0 and target_burn_delta_v <= 1.0 and bool(circularised_orbit.get("bound", false)) and float(circularised_orbit.get("periapsis", 0.0)) > safe_periapsis
+				if not bool(target_orbit_plan.get("valid", false)):
 					thrust_key_down = false
 					autopilot_phase = "FAILED"
 					status_message = "ORBIT INSERTION FAILED  •  INVALID ORBIT STATE"
 				elif circularisation_complete:
 					thrust_key_down = false
-					if autopilot_target_mode == "PLANET" or (autopilot_planet_index == -2 and str(guidance_body.name) != "Earth"):
+					if not destination_is_local:
 						autopilot_phase = "PLAN_TRANSFER"
 					else:
 						autopilot_phase = "COMPLETE"
 						autopilot_complete = true
 				else:
-					thrust_key_down = fuel > 0.0 and circular_alignment_error < deg_to_rad(2.0)
+					autopilot_burn_direction = target_burn_vector.normalized()
+					autopilot_burn_remaining = target_burn_delta_v
+					if target_burn_delta_v <= 1.0:
+						thrust_key_down = false
+						autopilot_phase = "COAST_TO_TARGET"
+					else:
+						autopilot_phase = "CIRCULARISE_BURN"
 
 			"PLAN_TRANSFER":
 				status_message = "AUTOPILOT  •  SIMULATING TRANSFER TRAJECTORIES"
 				thrust_key_down = false
 				var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
-				var available_transfer_delta_v := FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
-				var transfer_plan := FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority)
+				var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
+				var transfer_plan := FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
 				if not bool(transfer_plan.get("valid", false)):
 					autopilot_phase = "FAILED"
 					status_message = "TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY"))
@@ -775,8 +920,8 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0f M/S" % autopilot_burn_remaining
 				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
-				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
+				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
+				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 			"ROUTE_COAST":
 				thrust_key_down = false
@@ -803,16 +948,16 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0f M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
 				var route_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 0.1 and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
-				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
+				thrust_key_down = propellant_available and autopilot_burn_remaining > 0.1 and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
+				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
 				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 				var injection_rotation := injection_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
-				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
+				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
+				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 			"TRANSFER_COAST":
 				thrust_key_down = false
@@ -822,7 +967,8 @@ func _update_guidance(dt: float) -> void:
 				var destination_distance := _relative_position_to_body(transfer_destination_state).length()
 				var encounter_radius := float(transfer_destination_state.soi)
 				status_message = "AUTOPILOT  •  TRANSFER TO %s  •  %.1f DAYS REMAINING" % [str(transfer_destination_state.name).to_upper(), transfer_remaining / 86400.0]
-				if destination_distance <= encounter_radius:
+				var current_nearest_body := _nearest_body_state(rocket_position, rocket_position_precise)
+				if destination_distance <= encounter_radius and str(current_nearest_body.get("name", "")) == str(transfer_destination_state.get("name", "")):
 					autopilot_phase = "ARRIVAL_APPROACH"
 				elif transfer_elapsed > autopilot_transfer_duration * 0.4 and autopilot_transfer_corrections < 2:
 					autopilot_transfer_corrections += 1
@@ -844,8 +990,8 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
 				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, capture_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = fuel > 0.0 and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
-				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
+				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
+				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 			"LANDING_DESCENT":
 				var landing_target_state := _autopilot_target_state()
@@ -866,7 +1012,7 @@ func _update_guidance(dt: float) -> void:
 				autopilot_throttle = clampf(landing_required_acceleration.length() / maxf(0.01, landing_available_acceleration), 0.0, 1.0)
 				thrust_key_down = autopilot_throttle > 0.001
 				status_message = "LANDING GUIDANCE  •  %s  •  ALT %.1f KM  •  V/S %.1f M/S" % [str(landing_target_state.name).to_upper(), landing_altitude / 1000.0, landing_radial_speed]
-				if fuel <= 0.0 and stage_index >= rocket_stages.size() - 1:
+				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					autopilot_phase = "FAILED"
 					thrust_key_down = false
 			"ARRIVAL_PENDING":
@@ -882,7 +1028,7 @@ func _update_guidance(dt: float) -> void:
 		var autopilot_direction := prograde
 		if autopilot_phase == "ASCENT":
 			autopilot_direction = radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
-		elif autopilot_phase == "CIRCULARISE":
+		elif autopilot_phase in ["CIRCULARISE", "CIRCULARISE_BURN"]:
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent
 		elif autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"]:
 			autopilot_direction = tangent * autopilot_transfer_direction
@@ -921,7 +1067,7 @@ func _input(event: InputEvent) -> void:
 		if autopilot_enabled:
 			autopilot_enabled = false
 			guidance_enabled = false
-		if landed and fuel > 0.0:
+		if landed and (infinite_weightless_fuel or fuel > 0.0):
 			thrust_key_down = true
 		else:
 			thrust_key_down = not thrust_key_down
@@ -1002,24 +1148,49 @@ func _draw_atmosphere(center: Vector2, planet_radius: float, atmosphere_height: 
 		draw_arc(center, ring_radius, 0.0, TAU, 96, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, alpha), maxf(1.0, visible_thickness / float(rings) * 1.5))
 	draw_arc(center, planet_radius + visible_thickness, 0.0, TAU, 96, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, 0.5), 1.0)
 
+func _draw_planet_rings(center: Vector2, planet_radius: float, visual_data: Dictionary, opacity_scale: float = 1.0) -> void:
+	if not bool(visual_data.get("has_rings", false)):
+		return
+	var inner_radius := planet_radius * float(visual_data.get("ring_inner_ratio", 1.2))
+	var outer_radius := planet_radius * float(visual_data.get("ring_outer_ratio", 2.0))
+	var ring_color: Color = visual_data.get("ring_color", Color.WHITE)
+	var alpha := float(visual_data.get("ring_opacity", 0.5)) * opacity_scale
+	var line_width := maxf(1.0, (outer_radius - inner_radius) * 0.16)
+	for ring_radius in [inner_radius, (inner_radius + outer_radius) * 0.5, outer_radius]:
+		draw_arc(center, ring_radius, 0.0, TAU, 64, Color(ring_color.r, ring_color.g, ring_color.b, alpha), line_width)
 
 func _planet_atmosphere_visual(name: String) -> Dictionary:
-	match name:
-		"Earth":
-			return {"height": 100000.0, "color": Color(0.22, 0.62, 1.0)}
-		"Venus":
-			return {"height": 250000.0, "color": Color(0.96, 0.72, 0.36)}
-		"Mars":
-			return {"height": 125000.0, "color": Color(0.91, 0.48, 0.31)}
-		"Jupiter":
-			return {"height": 1000000.0, "color": Color(0.86, 0.67, 0.48)}
-		"Saturn":
-			return {"height": 1500000.0, "color": Color(0.91, 0.79, 0.56)}
-		"Uranus":
-			return {"height": 1000000.0, "color": Color(0.46, 0.81, 0.86)}
-		"Neptune":
-			return {"height": 1500000.0, "color": Color(0.36, 0.53, 1.0)}
-	return {"height": 0.0, "color": Color.TRANSPARENT}
+	var visual_data := PlanetarySystem.planet_visual_data(name)
+	return {
+		"height": float(visual_data.get("atmosphere_height", 0.0)),
+		"color": visual_data.get("atmosphere_color", Color.TRANSPARENT)
+	}
+
+func _draw_destination_satellites(host_name: String, host_screen: Vector2, host_radius_px: float, host_state: Dictionary) -> void:
+	var host_planet: Dictionary = {}
+	for planet in PlanetarySystem.PLANETS:
+		if str(planet.get("name", "")) == host_name:
+			host_planet = planet
+			break
+	if host_planet.is_empty():
+		return
+	for satellite_variant in host_planet.get("satellites", []):
+		var satellite: Dictionary = satellite_variant
+		var satellite_state := _surface_body_state("%s %s" % [host_name, str(satellite.get("name", "Moon"))])
+		if satellite_state.is_empty():
+			continue
+		var host_position: Vector2 = host_state.get("position", Vector2.ZERO)
+		var satellite_position: Vector2 = satellite_state.get("position", Vector2.ZERO)
+		var world_offset := satellite_position - host_position
+		var direction := Vector2(world_offset.x, -world_offset.y).normalized()
+		var orbit_ratio := maxf(1.0, float(satellite.get("semi_major_axis_m", 0.0)) / float(host_planet.get("radius", 1.0)))
+		var orbit_radius_px := host_radius_px + 4.0 + log(orbit_ratio) * maxf(1.5, host_radius_px * 0.08)
+		var satellite_color := PlanetarySystem.color_from_rgb(satellite.get("color_rgb", []), Color(0.75, 0.78, 0.82))
+		draw_arc(host_screen, orbit_radius_px, 0.0, TAU, 48, Color(satellite_color.r, satellite_color.g, satellite_color.b, 0.3), 1.0)
+		var satellite_screen := host_screen + direction * orbit_radius_px
+		draw_circle(satellite_screen, maxf(1.5, host_radius_px * 0.06), satellite_color)
+		if host_radius_px >= 16.0:
+			draw_string(ThemeDB.fallback_font, satellite_screen + Vector2(4.0, -3.0), str(satellite.get("name", "Moon")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, satellite_color)
 
 
 func _draw() -> void:
@@ -1046,10 +1217,12 @@ func _draw() -> void:
 	if show_grid:
 		_draw_grid(view_center)
 
-	_draw_atmosphere(earth_screen, radius_px, 100000.0, Color(0.22, 0.62, 1.0))
+	var earth_visual := PlanetarySystem.planet_visual_data("Earth")
+	_draw_atmosphere(earth_screen, radius_px, float(earth_visual.get("atmosphere_height", 100000.0)), earth_visual.get("atmosphere_color", Color(0.22, 0.62, 1.0)))
 	draw_circle(earth_screen, radius_px + 7, Color(0.15, 0.35, 0.58, 0.12))
-	draw_circle(earth_screen, radius_px, Color(0.10, 0.28, 0.53))
-	draw_arc(earth_screen, radius_px, 0, TAU, 120, Color(0.28, 0.64, 0.95), 2.0)
+	var earth_color: Color = earth_visual.get("surface_color", Color(0.10, 0.28, 0.53))
+	draw_circle(earth_screen, radius_px, earth_color)
+	draw_arc(earth_screen, radius_px, 0, TAU, 120, earth_color.lightened(0.25), 2.0)
 	draw_arc(earth_screen, radius_px * 0.76, -0.4, 2.4, 48, Color(0.18, 0.43, 0.48, 0.45), 2.0)
 	draw_arc(earth_screen, radius_px * 0.53, 2.2, 5.4, 48, Color(0.18, 0.43, 0.48, 0.35), 2.0)
 	var object_scale := clampf(camera_zoom * world_scale_factor / 0.000045, 0.12, 5.0)
@@ -1065,9 +1238,10 @@ func _draw() -> void:
 	var moon_screen := rocket_screen + (moon_world - rocket_position) * camera_zoom * world_scale_factor
 	var moon_radius_px := maxf(2.0, PlanetarySystem.MOON_RADIUS * camera_zoom * world_scale_factor)
 	if moon_screen.x > -moon_radius_px and moon_screen.x < size.x + moon_radius_px and moon_screen.y > -moon_radius_px and moon_screen.y < size.y + moon_radius_px:
+		var moon_color: Color = PlanetarySystem.planet_visual_data("Moon").get("color", Color(0.72, 0.74, 0.78))
 		draw_circle(moon_screen, moon_radius_px + 3.0, Color(0.55, 0.58, 0.66, 0.16))
-		draw_circle(moon_screen, moon_radius_px, Color(0.48, 0.49, 0.52))
-		draw_arc(moon_screen, moon_radius_px, 0.0, TAU, 64, Color(0.72, 0.74, 0.78), 1.0)
+		draw_circle(moon_screen, moon_radius_px, moon_color.darkened(0.35))
+		draw_arc(moon_screen, moon_radius_px, 0.0, TAU, 64, moon_color, 1.0)
 		draw_string(ThemeDB.fallback_font, moon_screen + Vector2(moon_radius_px + 8.0, 4.0), "MOON", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.75, 0.78, 0.84))
 
 	var destination := _nearest_body_state(rocket_position)
@@ -1075,26 +1249,16 @@ func _draw() -> void:
 		var destination_screen: Vector2 = rocket_screen + (Vector2(destination.position) - rocket_position) * altitude_visual_scale
 		var destination_radius := clampf(float(destination.radius) * altitude_visual_scale, 3.0, 72.0)
 		if destination_screen.x > -destination_radius - 30.0 and destination_screen.x < size.x + destination_radius + 30.0 and destination_screen.y > -destination_radius - 30.0 and destination_screen.y < size.y + destination_radius + 30.0:
-			var destination_color := Color(0.82, 0.38, 0.25)
-			match str(destination.name):
-				"Mercury":
-					destination_color = Color(0.62, 0.58, 0.52)
-				"Venus":
-					destination_color = Color(0.88, 0.72, 0.42)
-				"Jupiter":
-					destination_color = Color(0.78, 0.62, 0.46)
-				"Saturn":
-					destination_color = Color(0.82, 0.75, 0.55)
-				"Uranus":
-					destination_color = Color(0.48, 0.78, 0.82)
-				"Neptune":
-					destination_color = Color(0.28, 0.42, 0.88)
+			var destination_visual := PlanetarySystem.planet_visual_data(str(destination.name))
+			var destination_color: Color = destination_visual.get("color", Color(0.82, 0.38, 0.25))
 			var atmosphere_visual: Dictionary = _planet_atmosphere_visual(str(destination.name))
 			_draw_atmosphere(destination_screen, destination_radius, float(atmosphere_visual.get("height", 0.0)), atmosphere_visual.get("color", Color.TRANSPARENT))
 			draw_circle(destination_screen, destination_radius + 5.0, Color(0.45, 0.7, 1.0, 0.12))
+			_draw_planet_rings(destination_screen, destination_radius, destination_visual)
 			draw_circle(destination_screen, destination_radius, destination_color)
 			draw_arc(destination_screen, destination_radius, 0.0, TAU, 80, Color(0.9, 0.92, 1.0, 0.8), 1.0)
 			draw_string(ThemeDB.fallback_font, destination_screen + Vector2(destination_radius + 8.0, 4.0), str(destination.name).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.8, 0.88, 1.0))
+			_draw_destination_satellites(str(destination.name), destination_screen, destination_radius, destination)
 		var soi_pixels := float(destination.soi) * altitude_visual_scale
 		if soi_pixels > destination_radius and soi_pixels < 1200.0:
 			draw_arc(destination_screen, soi_pixels, 0.0, TAU, 100, Color(0.35, 0.72, 1.0, 0.22), 1.0)
@@ -1186,7 +1350,11 @@ func _draw_solar_system(center: Vector2) -> void:
 	if heliocentric_bodies.is_empty():
 		return
 	var earth_heliocentric: Vector2 = Vector2(ephemeris.get("earth_heliocentric_position", Vector2.ZERO))
-	var system_extent: float = 4.4951e12
+	var system_extent: float = PlanetarySystem.ASTRONOMICAL_UNIT
+	for planet in PlanetarySystem.PLANETS:
+		system_extent = maxf(system_extent, float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT)
+	for belt in solar_belt_particles:
+		system_extent = maxf(system_extent, float(belt.get("outer_radius_m", 0.0)))
 	var map_scale: float = minf(size.x * 0.82, size.y * 0.78) / (system_extent * 2.0) * solar_map_zoom
 	var occupied: Array[Rect2] = []
 	var header := Rect2(Vector2(18.0, 14.0), Vector2(minf(size.x - 36.0, 370.0), 24.0))
@@ -1194,24 +1362,32 @@ func _draw_solar_system(center: Vector2) -> void:
 	draw_string(ThemeDB.fallback_font, header.position + Vector2(7.0, 18.0), "LIVE SOLAR SYSTEM  •  SIMULATION EPHEMERIS", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
 	occupied.append(header)
 	var sun_screen := center
-	draw_circle(sun_screen, 7.0, Color(1.0, 0.78, 0.28))
-	draw_circle(sun_screen, 11.0, Color(1.0, 0.65, 0.2, 0.12))
-	_draw_solar_label("SUN", sun_screen, 11, Color(1.0, 0.82, 0.48), occupied)
+	var sun_color := PlanetarySystem.system_visual_color()
+	draw_circle(sun_screen, 7.0, sun_color)
+	draw_circle(sun_screen, 11.0, Color(sun_color.r, sun_color.g, sun_color.b, 0.12))
+	_draw_solar_label("SUN", sun_screen, 11, sun_color.lightened(0.15), occupied)
 	var positions: Dictionary = {}
-	var colors: Dictionary = {
-		"Mercury": Color(0.68, 0.64, 0.58),
-		"Venus": Color(0.91, 0.73, 0.43),
-		"Earth": Color(0.22, 0.68, 1.0),
-		"Mars": Color(0.88, 0.39, 0.24),
-		"Jupiter": Color(0.82, 0.66, 0.48),
-		"Saturn": Color(0.82, 0.75, 0.53),
-		"Uranus": Color(0.48, 0.78, 0.82),
-		"Neptune": Color(0.32, 0.48, 0.92),
-		"Moon": Color(0.72, 0.74, 0.78)
-	}
 	for planet in PlanetarySystem.PLANETS:
-		var orbit_radius: float = float(planet.semi_major_axis)
+		var orbit_radius: float = float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT
 		draw_arc(center, orbit_radius * map_scale, 0.0, TAU, 180, Color(0.28, 0.43, 0.58, 0.34), 1.0)
+	for belt in solar_belt_particles:
+		var belt_inner_radius := float(belt.get("inner_radius_m", 0.0))
+		var belt_outer_radius := float(belt.get("outer_radius_m", 0.0))
+		var belt_color: Color = belt.get("color", Color(0.72, 0.65, 0.52))
+		var belt_opacity := float(belt.get("opacity", 0.35))
+		draw_arc(center, belt_inner_radius * map_scale, 0.0, TAU, 180, Color(belt_color.r, belt_color.g, belt_color.b, belt_opacity * 0.12), 1.0)
+		draw_arc(center, belt_outer_radius * map_scale, 0.0, TAU, 180, Color(belt_color.r, belt_color.g, belt_color.b, belt_opacity * 0.12), 1.0)
+		for particle_variant in belt.get("particles", []):
+			var particle: Dictionary = particle_variant
+			var angle := wrapf(float(particle.phase_rad) + float(particle.angular_rate) * sim_time, -PI, PI)
+			var radius := float(particle.radius_m)
+			var particle_position := Vector2(radius * cos(angle), radius * sin(angle))
+			var particle_screen := center + Vector2(particle_position.x, -particle_position.y) * map_scale
+			draw_circle(particle_screen, float(particle.size_px), Color(belt_color.r, belt_color.g, belt_color.b, belt_opacity))
+		var label_radius := (belt_inner_radius + belt_outer_radius) * 0.5
+		var label_angle := 1.1
+		var label_position := center + Vector2(cos(label_angle), -sin(label_angle)) * label_radius * map_scale
+		_draw_solar_label(str(belt.get("name", "BELT")).to_upper(), label_position, 9, Color(belt_color.r, belt_color.g, belt_color.b, 0.9), occupied)
 	for body_variant in heliocentric_bodies:
 		var body: Dictionary = body_variant
 		var body_name: String = str(body.get("name", ""))
@@ -1221,14 +1397,38 @@ func _draw_solar_system(center: Vector2) -> void:
 		var planet_position: Vector2 = Vector2(positions.get(planet_name, Vector2.ZERO))
 		var planet_screen: Vector2 = center + Vector2(planet_position.x, -planet_position.y) * map_scale
 		var planet_radius: float = clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
-		var planet_color: Color = colors.get(planet_name, Color(0.65, 0.72, 0.82))
+		var planet_visual := PlanetarySystem.planet_visual_data(planet_name)
+		var planet_color: Color = planet_visual.get("color", Color(0.65, 0.72, 0.82))
+		_draw_planet_rings(planet_screen, planet_radius, planet_visual, 0.85)
 		draw_circle(planet_screen, planet_radius, planet_color)
-		if planet_name == "Saturn":
-			draw_arc(planet_screen, planet_radius + 3.0, 0.0, TAU, 48, Color(0.85, 0.78, 0.58, 0.8), 1.5)
 		_draw_solar_label(planet_name.to_upper(), planet_screen, 10, Color(0.82, 0.88, 0.96), occupied)
-	var moon_position: Vector2 = Vector2(positions.get("Moon", Vector2.ZERO))
-	var moon_screen: Vector2 = center + Vector2(moon_position.x, -moon_position.y) * map_scale
-	draw_circle(moon_screen, 2.5, colors["Moon"])
+	for planet in PlanetarySystem.PLANETS:
+		var planet_name: String = str(planet.name)
+		var host_position: Vector2 = positions.get(planet_name, Vector2.ZERO)
+		var host_screen := center + Vector2(host_position.x, -host_position.y) * map_scale
+		var host_radius := clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
+		for satellite_variant in planet.get("satellites", []):
+			var satellite: Dictionary = satellite_variant
+			var satellite_name := "%s %s" % [planet_name, str(satellite.get("name", "Moon"))]
+			var satellite_position: Vector2 = positions.get(satellite_name, host_position)
+			var relative_direction := Vector2(satellite_position.x - host_position.x, -(satellite_position.y - host_position.y)).normalized()
+			var orbit_ratio := maxf(1.0, float(satellite.get("semi_major_axis_m", 0.0)) / float(planet.radius))
+			var orbit_radius_px := host_radius + 2.0 + log(orbit_ratio) * 1.6
+			var satellite_color := PlanetarySystem.color_from_rgb(satellite.get("color_rgb", []), Color(0.75, 0.78, 0.82))
+			draw_arc(host_screen, orbit_radius_px, 0.0, TAU, 32, Color(satellite_color.r, satellite_color.g, satellite_color.b, 0.22), 1.0)
+			var satellite_screen := host_screen + relative_direction * orbit_radius_px
+			draw_circle(satellite_screen, maxf(1.3, host_radius * 0.45), satellite_color)
+			if solar_map_zoom >= 2.0:
+				_draw_solar_label(str(satellite.get("name", "MOON")).to_upper(), satellite_screen, 8, satellite_color, occupied)
+	var earth_position: Vector2 = Vector2(positions.get("Earth", Vector2.ZERO))
+	var earth_screen: Vector2 = center + Vector2(earth_position.x, -earth_position.y) * map_scale
+	var moon_position: Vector2 = Vector2(positions.get("Moon", earth_position))
+	var moon_offset := Vector2(moon_position.x - earth_position.x, -(moon_position.y - earth_position.y)).normalized()
+	var earth_marker_radius := clampf(pow(PlanetarySystem.EARTH_RADIUS / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
+	var moon_orbit_display_radius := earth_marker_radius + 2.0 + log(PlanetarySystem.MOON_ORBIT_RADIUS / PlanetarySystem.EARTH_RADIUS) * 1.6
+	draw_arc(earth_screen, moon_orbit_display_radius, 0.0, TAU, 32, Color(0.65, 0.69, 0.77, 0.22), 1.0)
+	var moon_screen := earth_screen + moon_offset * moon_orbit_display_radius
+	draw_circle(moon_screen, 2.5, PlanetarySystem.planet_visual_data("Moon").get("color", Color(0.72, 0.74, 0.78)))
 	_draw_solar_label("MOON", moon_screen, 9, Color(0.78, 0.82, 0.9), occupied)
 	var rocket_heliocentric: Vector2 = earth_heliocentric + rocket_position
 	var rocket_screen: Vector2 = center + Vector2(rocket_heliocentric.x, -rocket_heliocentric.y) * map_scale
@@ -1259,19 +1459,26 @@ func _calculate_predicted_trajectory() -> void:
 		var burn := 0.0
 		if predicted_stage < rocket_stages.size():
 			active = rocket_stages[predicted_stage]
-			mass += float(active.get("dry_mass", 0.0)) + predicted_fuel
+			mass += float(active.get("dry_mass", 0.0))
+			if not infinite_weightless_fuel:
+				mass += predicted_fuel
 			for j in range(predicted_stage + 1, rocket_stages.size()):
 				var upper: Dictionary = rocket_stages[j]
-				mass += float(upper.get("dry_mass", 0.0)) + float(upper.get("fuel_capacity", 0.0))
+				mass += float(upper.get("dry_mass", 0.0))
+				if not infinite_weightless_fuel:
+					mass += float(upper.get("fuel_capacity", 0.0))
 			total_flow = float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-			burn = minf(predicted_fuel, total_flow * throttle * dt)
+			if not infinite_weightless_fuel:
+				burn = minf(predicted_fuel, total_flow * throttle * dt)
 			var atmosphere := _atmosphere_at(position, predicted_velocity, step_time, position_components)
 			var pressure_ratio := float(atmosphere.density) * float(atmosphere.gas_constant) * float(atmosphere.temperature) / 101325.0
 			thrust_force = lerpf(float(active.get("vacuum_thrust", 0.0)), float(active.get("thrust", 0.0)), clampf(pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1)) * throttle
-		var mass_after := maxf(1.0, mass - burn)
+		var mass_after := mass if infinite_weightless_fuel else maxf(1.0, mass - burn)
 		var mass_mid := (mass + mass_after) * 0.5
 		var thrust_delta_v := 0.0
-		if burn > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
+		if infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
+			thrust_delta_v = thrust_force / maxf(1.0, mass) * dt
+		elif burn > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
 			thrust_delta_v = thrust_force / total_flow * log(mass / mass_after)
 		var thrust_impulse := Vector2.UP.rotated(rotation_angle + gimbal_angle) * thrust_delta_v
 		var initial_gravity_states := PlanetarySystem.gravity_body_states(step_time)
@@ -1289,8 +1496,9 @@ func _calculate_predicted_trajectory() -> void:
 		predicted_velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
 		position_components = next_position_components
 		position = next_position
-		predicted_fuel = maxf(0.0, predicted_fuel - burn)
-		if predicted_fuel <= 0.0001 and predicted_stage < rocket_stages.size() - 1:
+		if not infinite_weightless_fuel:
+			predicted_fuel = maxf(0.0, predicted_fuel - burn)
+		if not infinite_weightless_fuel and predicted_fuel <= 0.0001 and predicted_stage < rocket_stages.size() - 1:
 			predicted_stage += 1
 			predicted_fuel = float(rocket_stages[predicted_stage].get("fuel_capacity", 0.0))
 		predicted_path.append(position)
@@ -1349,7 +1557,7 @@ func _draw_rocket(p: Vector2, object_scale: float) -> void:
 	var right := p - forward * 12.0 * object_scale + side * 6.0 * object_scale
 	draw_colored_polygon(PackedVector2Array([tip, left, right]), Color(0.82, 0.88, 0.94))
 	draw_line(left, right, Color(0.25, 0.55, 0.78), 1.5)
-	if throttle > 0.0 and fuel > 0.0:
+	if throttle > 0.0 and (infinite_weightless_fuel or fuel > 0.0):
 		var flame_base := p - forward * 12.0 * object_scale
 		var flame_tip := p - forward * (28.0 + randf_range(0, 8)) * object_scale
 		draw_colored_polygon(PackedVector2Array([flame_base - side * 3 * object_scale, flame_tip, flame_base + side * 3 * object_scale]), Color(1.0, 0.48, 0.12, 0.9))
@@ -1376,10 +1584,10 @@ func _draw_hud() -> void:
 		"ALTITUDE       %s" % _format_distance(altitude),
 		"INERTIAL SPEED %s" % _format_speed(orbital_speed),
 		"VERTICAL SPEED %s" % _format_speed(local_velocity.dot(local_position.normalized())),
-		"FUEL           %s%%" % str(roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
+		"FUEL           %s" % ("INFINITE • MASSLESS" if infinite_weightless_fuel else "%d%%" % roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
 		"THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
 		"THRUST / WEIGHT %.2f" % thrust_to_weight,
-		"IDEAL ΔV EST.  %.2f km/s" % (remaining_delta_v / 1000.0),
+		"IDEAL ΔV EST.  %s" % ("UNLIMITED" if infinite_weightless_fuel else "%.2f km/s" % (remaining_delta_v / 1000.0)),
 		"STAGE          %d / %d" % [stage_index + 1, rocket_stages.size()],
 		"MACH NUMBER    %.2f" % mach_number,
 		"DYNA PRESSURE  %.1f kPa" % (dynamic_pressure_pa / 1000.0),
@@ -1393,12 +1601,13 @@ func _draw_hud() -> void:
 		"MISSION TIME   %s" % _format_time(sim_time),
 		"TIME WARP      x%s%s" % [str(snappedf(time_warp, 0.01)), "  •  CATCHING UP" if simulation_time_backlog > 1.0 else ""]
 	]
-	if autopilot_target_mode in ["PLANET", "LAND"] and autopilot_enabled:
+	if autopilot_enabled:
 		var target_state: Dictionary = _autopilot_target_state()
-		var target_range: float = _relative_position_to_body(target_state).length()
-		var target_relative_speed: float = (velocity - target_state["velocity"]).length()
-		lines.append("TARGET RANGE   %s" % _format_distance(target_range))
-		lines.append("TARGET SPEED   %s" % _format_speed(target_relative_speed))
+		if not target_state.is_empty():
+			var target_range: float = _relative_position_to_body(target_state).length()
+			var target_relative_speed: float = (velocity - target_state["velocity"]).length()
+			lines.append("TARGET RANGE   %s" % _format_distance(target_range))
+			lines.append("TARGET SPEED   %s" % _format_speed(target_relative_speed))
 		lines.append("AUTOPILOT      %s" % autopilot_phase.replace("_", " "))
 	var hud_height := 421.0 + maxf(0.0, float(lines.size() - 18) * 23.0)
 	var box := Rect2(Vector2(18.0 * ui_scale, size.y - (hud_height + 20.0) * ui_scale), Vector2(310.0 * ui_scale, hud_height * ui_scale))
@@ -1414,6 +1623,8 @@ func _draw_hud() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(size.x - 280.0 * ui_scale, size.y - 28.0 * ui_scale), realism.to_upper() + "  /  " + world_scale.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(12.0 * ui_scale)), Color(0.48, 0.68, 0.84))
 
 func _remaining_ideal_delta_v(current_mass: float) -> float:
+	if infinite_weightless_fuel:
+		return INF
 	var total := 0.0
 	var mass := current_mass
 	for i in range(stage_index, rocket_stages.size()):
@@ -1474,6 +1685,7 @@ func get_save_data() -> Dictionary:
 		"fuel": fuel,
 		"stage_index": stage_index,
 		"discarded_stage_mass": discarded_stage_mass,
+		"discarded_propellant_mass": discarded_propellant_mass,
 		"gimbal_angle": gimbal_angle,
 		"guidance_enabled": guidance_enabled,
 		"autopilot_enabled": autopilot_enabled,
@@ -1509,10 +1721,70 @@ func get_save_data() -> Dictionary:
 		"rocket_design": {"payload_mass": payload_mass, "stages": rocket_stages.duplicate(true)}
 	}
 
-func load_save_data(data: Dictionary) -> void:
+func load_save_data(data: Dictionary) -> bool:
 	var saved_design: Variant = data.get("rocket_design", null)
-	if saved_design is Dictionary:
-		set_rocket_design(saved_design)
+	if not saved_design is Dictionary:
+		push_error("Save is missing a valid rocket design.")
+		return false
+	if not RocketDesign.validation_errors(saved_design).is_empty():
+		push_error("Save contains an invalid rocket design.")
+		return false
+	var precise_position_data: Variant = data.get("position_precise", null)
+	var position: Variant = data.get("position", null)
+	if precise_position_data is Array:
+		if precise_position_data.size() != 2 or not (precise_position_data[0] is float or precise_position_data[0] is int) or not (precise_position_data[1] is float or precise_position_data[1] is int):
+			push_error("Save contains an invalid precise position.")
+			return false
+		if not is_finite(float(precise_position_data[0])) or not is_finite(float(precise_position_data[1])):
+			push_error("Save contains a non-finite precise position.")
+			return false
+	elif position is Array:
+		if position.size() != 2 or not (position[0] is float or position[0] is int) or not (position[1] is float or position[1] is int):
+			push_error("Save contains an invalid position.")
+			return false
+		if not is_finite(float(position[0])) or not is_finite(float(position[1])):
+			push_error("Save contains a non-finite position.")
+			return false
+	else:
+		push_error("Save is missing a position.")
+		return false
+	var saved_velocity: Variant = data.get("velocity", null)
+	if not saved_velocity is Array or saved_velocity.size() != 2:
+		push_error("Save is missing a valid velocity.")
+		return false
+	if not (saved_velocity[0] is float or saved_velocity[0] is int) or not (saved_velocity[1] is float or saved_velocity[1] is int):
+		push_error("Save contains an invalid velocity.")
+		return false
+	var velocity_x := float(saved_velocity[0])
+	var velocity_y := float(saved_velocity[1])
+	if not is_finite(velocity_x) or not is_finite(velocity_y):
+		push_error("Save contains a non-finite velocity.")
+		return false
+	for key in ["sim_time", "rotation_angle", "fuel", "gimbal_angle", "autopilot_burn_remaining", "heat_shield_temperature", "peak_heat_flux_mw", "max_dynamic_pressure_pa"]:
+		var value: Variant = data.get(key, 0.0)
+		if not (value is float or value is int) or not is_finite(float(value)):
+			push_error("Save contains an invalid or non-finite %s value." % key)
+			return false
+	for key in ["discarded_stage_mass", "discarded_propellant_mass"]:
+		var value: Variant = data.get(key, 0.0)
+		if not (value is float or value is int) or not is_finite(float(value)) or float(value) < 0.0:
+			push_error("Save contains an invalid %s value." % key)
+			return false
+	var stage_index_value: Variant = data.get("stage_index", 0)
+	if not (stage_index_value is float or stage_index_value is int):
+		push_error("Save contains an invalid stage index.")
+		return false
+	var stage_index: int = int(stage_index_value)
+	var saved_stages: Array = saved_design.get("stages", [])
+	if stage_index < 0 or stage_index >= saved_stages.size():
+		push_error("Save stage index is outside the vehicle.")
+		return false
+	var saved_fuel: float = float(data.get("fuel", 0.0))
+	var active_fuel_capacity: float = float(saved_stages[stage_index].get("fuel_capacity", 0.0))
+	if saved_fuel < 0.0 or saved_fuel > active_fuel_capacity:
+		push_error("Save fuel amount is outside the active stage capacity.")
+		return false
+	set_rocket_design(saved_design)
 	stage_index = clampi(int(data.get("stage_index", 0)), 0, maxi(0, rocket_stages.size() - 1))
 	sim_time = float(data.get("sim_time", 0.0))
 	var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 2.0])
@@ -1523,6 +1795,7 @@ func load_save_data(data: Dictionary) -> void:
 	rotation_angle = float(data.get("rotation_angle", 0.0))
 	fuel = float(data.get("fuel", _active_stage_data().get("fuel_capacity", 0.0)))
 	discarded_stage_mass = float(data.get("discarded_stage_mass", 0.0))
+	discarded_propellant_mass = float(data.get("discarded_propellant_mass", 0.0))
 	gimbal_angle = float(data.get("gimbal_angle", 0.0))
 	guidance_enabled = bool(data.get("guidance_enabled", false))
 	autopilot_enabled = bool(data.get("autopilot_enabled", false))
@@ -1559,3 +1832,4 @@ func load_save_data(data: Dictionary) -> void:
 	time_warp = float(data.get("time_warp", 1.0))
 	paused = bool(data.get("paused", false))
 	trail.clear()
+	return true

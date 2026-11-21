@@ -47,4 +47,19 @@ func _validate_leo_autopilot_mission() -> void:
 	assert(float(orbit.get("periapsis", 0.0)) > PlanetarySystem.EARTH_RADIUS + 70000.0)
 	assert(float(orbit.get("apoapsis", 0.0)) > PlanetarySystem.EARTH_RADIUS + 100000.0)
 	assert(float(orbit.get("apoapsis", 0.0)) < PlanetarySystem.EARTH_RADIUS + 1000000.0)
+	var orbital_period := TAU * sqrt(pow(float(orbit.get("semi_major_axis", 0.0)), 3.0) / (PlanetarySystem.G * PlanetarySystem.EARTH_MASS))
+	var coast_elapsed := 0.0
+	while coast_elapsed < orbital_period:
+		var step: float = minf(simulation._adaptive_step_size(), orbital_period - coast_elapsed)
+		assert(step > 0.000001)
+		simulation._physics_step(step)
+		coast_elapsed += step
+		assert(not simulation.crashed, "LEO orbit decayed into Earth during one revolution")
+		assert(not simulation.landed, "LEO autopilot unexpectedly landed during one revolution")
+	var coast_earth_state: Dictionary = simulation._surface_body_state("Earth")
+	var coast_position: Vector2 = simulation._relative_position_to_body(coast_earth_state)
+	var coast_velocity: Vector2 = simulation.velocity - Vector2(coast_earth_state.velocity)
+	var coast_orbit: Dictionary = FlightComputer.orbital_state(coast_position, coast_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
+	assert(bool(coast_orbit.get("bound", false)), "LEO became unbound during one revolution")
+	assert(float(coast_orbit.get("periapsis", 0.0)) > PlanetarySystem.EARTH_RADIUS + 70000.0, "LEO periapsis fell below the safe orbit")
 	simulation.free()

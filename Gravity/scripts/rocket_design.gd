@@ -1,6 +1,8 @@
 extends RefCounted
 class_name RocketDesign
 
+const ContentCatalog = preload("res://scripts/content_catalog.gd")
+
 const G0 := 9.80665
 const MIN_STAGES := 2
 const MAX_STAGES := 8
@@ -8,108 +10,79 @@ const MAX_TOTAL_MASS := 5000000.0
 const MIN_TOTAL_DELTA_V := 8500.0
 const MAX_TOTAL_DELTA_V := 16500.0
 
-const DEFAULT_DESIGN := {
-	"name": "Explorer I",
-	"payload_mass": 500.0,
-	"stages": [
-		{
-			"name": "FIRST STAGE",
-			"dry_mass": 30000.0,
-			"fuel_capacity": 300000.0,
-			"thrust": 5000000.0,
-			"vacuum_thrust": 6000000.0,
-			"flow": 1500.0,
-			"engine_count": 1
-		},
-		{
-			"name": "UPPER STAGE",
-			"dry_mass": 4000.0,
-			"fuel_capacity": 30000.0,
-			"thrust": 200000.0,
-			"vacuum_thrust": 250000.0,
-			"flow": 63.3,
-			"engine_count": 1
-		}
-	]
-}
-
-
-const PRESET_DESIGNS := {
-	"SMALL_SAT": {
-		"name": "Scout · Small Satellite",
-		"payload_mass": 150.0,
-		"stages": [
-			{"name": "BOOSTER", "dry_mass": 3500.0, "fuel_capacity": 35000.0, "thrust": 750000.0, "vacuum_thrust": 850000.0, "flow": 250.0, "engine_count": 1},
-			{"name": "UPPER STAGE", "dry_mass": 1200.0, "fuel_capacity": 9000.0, "thrust": 180000.0, "vacuum_thrust": 220000.0, "flow": 65.0, "engine_count": 1},
-			{"name": "ORBITAL KICK STAGE", "dry_mass": 1300.0, "fuel_capacity": 3500.0, "thrust": 100000.0, "vacuum_thrust": 110000.0, "flow": 30.0, "engine_count": 1}
-		]
-	},
-	"LEO_CARGO": {
-		"name": "Freighter · LEO Cargo",
-		"payload_mass": 8000.0,
-		"stages": [
-			{"name": "CORE BOOSTER", "dry_mass": 22000.0, "fuel_capacity": 240000.0, "thrust": 5000000.0, "vacuum_thrust": 5700000.0, "flow": 1650.0, "engine_count": 1},
-			{"name": "UPPER STAGE", "dry_mass": 5500.0, "fuel_capacity": 65000.0, "thrust": 900000.0, "vacuum_thrust": 1100000.0, "flow": 320.0, "engine_count": 1},
-			{"name": "ORBITAL INSERTION STAGE", "dry_mass": 1800.0, "fuel_capacity": 15000.0, "thrust": 220000.0, "vacuum_thrust": 260000.0, "flow": 75.0, "engine_count": 1}
-		]
-	},
-	"CREW_ORBIT": {
-		"name": "Pioneer · Crewed Orbital",
-		"payload_mass": 6500.0,
-		"stages": [
-			{"name": "CORE BOOSTER", "dry_mass": 24000.0, "fuel_capacity": 250000.0, "thrust": 5600000.0, "vacuum_thrust": 6400000.0, "flow": 1800.0, "engine_count": 1},
-			{"name": "UPPER STAGE", "dry_mass": 6000.0, "fuel_capacity": 75000.0, "thrust": 1100000.0, "vacuum_thrust": 1300000.0, "flow": 370.0, "engine_count": 1},
-			{"name": "ORBITAL INSERTION STAGE", "dry_mass": 2200.0, "fuel_capacity": 18000.0, "thrust": 240000.0, "vacuum_thrust": 290000.0, "flow": 82.0, "engine_count": 1}
-		]
-	},
-	"LUNAR_CARGO": {
-		"name": "Pathfinder · Lunar Cargo",
-		"payload_mass": 12000.0,
-		"stages": [
-			{"name": "HEAVY CORE", "dry_mass": 30000.0, "fuel_capacity": 540000.0, "thrust": 10080000.0, "vacuum_thrust": 10800000.0, "flow": 3000.0, "engine_count": 1},
-			{"name": "TRANSFER STAGE", "dry_mass": 6000.0, "fuel_capacity": 108000.0, "thrust": 1230000.0, "vacuum_thrust": 1500000.0, "flow": 390.0, "engine_count": 1},
-			{"name": "INJECTION STAGE", "dry_mass": 2000.0, "fuel_capacity": 36000.0, "thrust": 400000.0, "vacuum_thrust": 460000.0, "flow": 110.0, "engine_count": 1}
-		]
-	},
-	"DEEP_SPACE": {
-		"name": "Odyssey · Deep-Space Probe",
-		"payload_mass": 1800.0,
-		"stages": [
-			{"name": "CORE BOOSTER", "dry_mass": 28000.0, "fuel_capacity": 300000.0, "thrust": 6200000.0, "vacuum_thrust": 7000000.0, "flow": 1950.0, "engine_count": 1},
-			{"name": "UPPER STAGE", "dry_mass": 7000.0, "fuel_capacity": 80000.0, "thrust": 1200000.0, "vacuum_thrust": 1450000.0, "flow": 410.0, "engine_count": 1},
-			{"name": "TRANSFER STAGE", "dry_mass": 2500.0, "fuel_capacity": 24000.0, "thrust": 250000.0, "vacuum_thrust": 310000.0, "flow": 87.0, "engine_count": 1},
-			{"name": "DEEP-SPACE KICK STAGE", "dry_mass": 700.0, "fuel_capacity": 4500.0, "thrust": 100000.0, "vacuum_thrust": 120000.0, "flow": 34.0, "engine_count": 1}
-		]
-	}
-}
-
-const PRESET_DESCRIPTIONS := {
-	"SMALL_SAT": "Light payloads and small scientific satellites. Optimised for low Earth orbit.",
-	"LEO_CARGO": "Heavy uncrewed cargo and station logistics. A practical general-purpose orbital launcher.",
-	"CREW_ORBIT": "Crew capsule and crew-support payloads. Balanced for reliable low Earth orbit insertion.",
-	"LUNAR_CARGO": "Large robotic payloads and lunar transfer missions. Includes a dedicated injection stage.",
-	"DEEP_SPACE": "Smaller probes with extra departure energy for interplanetary missions. Payload capacity is deliberately lower."
-}
+static func _rocket_catalog() -> Dictionary:
+	var catalog: Dictionary = ContentCatalog.get_catalog()
+	return catalog.get("rocket", {})
 
 static func preset_options() -> Array:
-	return [
-		{"id": "SMALL_SAT", "label": "Scout · Small satellite / LEO"},
-		{"id": "LEO_CARGO", "label": "Freighter · LEO cargo"},
-		{"id": "CREW_ORBIT", "label": "Pioneer · Crewed orbital"},
-		{"id": "LUNAR_CARGO", "label": "Pathfinder · Lunar cargo"},
-		{"id": "DEEP_SPACE", "label": "Odyssey · Deep-space probe"}
-	]
+	var presets: Dictionary = _rocket_catalog().get("presets", {})
+	var options: Array = []
+	for preset_id in presets:
+		var preset: Dictionary = presets[preset_id]
+		options.append({"id": str(preset_id), "label": str(preset.get("label", preset_id))})
+	return options
 
 static func create_preset(preset_id: String) -> Dictionary:
-	if not PRESET_DESIGNS.has(preset_id):
+	var presets: Dictionary = _rocket_catalog().get("presets", {})
+	if not presets.has(preset_id):
+		push_error("Unknown rocket preset: %s" % preset_id)
 		return create_default()
-	return PRESET_DESIGNS[preset_id].duplicate(true)
+	return _design_from_catalog(presets[preset_id])
 
 static func preset_description(preset_id: String) -> String:
-	return str(PRESET_DESCRIPTIONS.get(preset_id, "Select a mission profile to load its vehicle."))
+	var presets: Dictionary = _rocket_catalog().get("presets", {})
+	var preset: Dictionary = presets.get(preset_id, {})
+	return str(preset.get("description", "Select a mission profile to load its vehicle."))
 
 static func create_default() -> Dictionary:
-	return DEFAULT_DESIGN.duplicate(true)
+	return _design_from_catalog(_rocket_catalog().get("default_design", {}))
+
+static func stage_part_options() -> Array:
+	var options: Array = []
+	for part in _rocket_catalog().get("stage_parts", []):
+		options.append({"id": str(part.get("id", "")), "label": str(part.get("label", part.get("name", "Stage part")))})
+	return options
+
+static func create_stage_part(part_id: String) -> Dictionary:
+	for part in _rocket_catalog().get("stage_parts", []):
+		if str(part.get("id", "")) == part_id:
+			var stage: Dictionary = part.duplicate(true)
+			stage["part_id"] = part_id
+			stage.erase("id")
+			stage.erase("label")
+			return stage
+	push_error("Unknown rocket stage part: %s" % part_id)
+	return {}
+
+static func default_stage_part() -> Dictionary:
+	var parts: Array = stage_part_options()
+	if parts.is_empty():
+		push_error("Rocket catalog does not define any stage parts.")
+		return {}
+	var part_id := str(parts[mini(1, parts.size() - 1)].get("id", ""))
+	return create_stage_part(part_id)
+
+static func _design_from_catalog(definition: Dictionary) -> Dictionary:
+	var design := {
+		"name": str(definition.get("name", "Custom Vehicle")),
+		"payload_mass": float(definition.get("payload_mass", 500.0)),
+		"stages": []
+	}
+	var stage_parts: Dictionary = {}
+	for part in _rocket_catalog().get("stage_parts", []):
+		stage_parts[str(part.get("id", ""))] = part
+	for part_id_variant in definition.get("stages", []):
+		var part_id := str(part_id_variant)
+		if not stage_parts.has(part_id):
+			push_error("Rocket design references missing stage part: %s" % part_id)
+			return create_default() if definition.has("stages") else design
+		var part: Dictionary = stage_parts[part_id]
+		var stage: Dictionary = part.duplicate(true)
+		stage["part_id"] = part_id
+		stage.erase("id")
+		stage.erase("label")
+		design["stages"].append(stage)
+	return design
 
 static func total_initial_mass(design: Dictionary) -> float:
 	var stages: Array = design.get("stages", [])
@@ -136,15 +109,16 @@ static func stage_specific_impulse(stage: Dictionary, vacuum: bool) -> float:
 static func total_delta_v(design: Dictionary) -> float:
 	var stages: Array = design.get("stages", [])
 	var delta_v := 0.0
+	var mass := total_initial_mass(design)
 	for i in range(stages.size()):
 		var stage: Dictionary = stages[i]
 		var fuel := float(stage.get("fuel_capacity", 0.0))
 		var flow := float(stage.get("flow", 0.0))
 		var thrust := float(stage.get("vacuum_thrust", 0.0))
-		var initial_mass := stage_ignition_mass(design, i)
-		var final_mass := initial_mass - fuel
+		var final_mass := mass - fuel
 		if fuel > 0.0 and flow > 0.0 and thrust > 0.0 and final_mass > 0.0:
-			delta_v += thrust / flow * log(initial_mass / final_mass)
+			delta_v += thrust / flow * log(mass / final_mass)
+		mass = final_mass - float(stage.get("dry_mass", 0.0))
 	return delta_v
 
 static func validation_errors(design: Dictionary) -> PackedStringArray:

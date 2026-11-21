@@ -1,47 +1,176 @@
 extends RefCounted
 
-const G := 6.67430e-11
-const EARTH_MASS := 5.972e24
-const EARTH_RADIUS := 6.371e6
-const MOON_MASS := 7.342e22
-const MOON_RADIUS := 1.7374e6
-const MOON_ORBIT_RADIUS := 3.8474358321e8
-const MOON_ORBIT_ECCENTRICITY := 0.0549
-const MOON_ROTATION_PERIOD := 27.321661 * 86400.0
-const MOON_MEAN_ANOMALY_J2000 := 2.355555
-const MOON_PERIHELION_J2000 := 3.63734
-const MOON_MEAN_MOTION := 2.6616995272e-6
-const MOON_PERIHELION_RATE := 0.0
-const EPHEMERIS_EPOCH_JD := 2461364.5
-const J2000_JD := 2451545.0
-const J2000_CENTURY_DAYS := 36525.0
-const ATMOSPHERE_HEIGHT := 120000.0
-const SEA_LEVEL_DENSITY := 1.225
-const ATMOSPHERE_SCALE_HEIGHT := 8500.0
-const ASTRONOMICAL_UNIT := 1.495978707e11
-const SUN_MASS := 1.98847e30
-const EARTH_ORBIT_PERIOD := 365.256 * 86400.0
-const ATMOSPHERE_BASE_ALTITUDES := [0.0, 11000.0, 20000.0, 32000.0, 47000.0, 51000.0, 71000.0, 84852.0]
-const ATMOSPHERE_BASE_TEMPERATURES := [288.15, 216.65, 216.65, 228.65, 270.65, 270.65, 214.65, 186.946]
-const ATMOSPHERE_LAPSE_RATES := [-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0028, -0.002, 0.0]
-const ATMOSPHERE_BASE_PRESSURES := [101325.0, 22632.1, 5474.89, 868.019, 110.906, 66.9389, 3.95642, 0.3734]
+const ContentCatalog = preload("res://scripts/content_catalog.gd")
 
-const PLANETS := [
-	{"name": "Mercury", "mass": 3.3011e23, "radius": 2.4397e6, "a": 0.38709927, "adot": 0.00000037, "e": 0.20563593, "edot": 0.00001906, "i": 7.00497902, "idot": -0.00594749, "L": 252.25032350, "Ldot": 149472.67411175, "peri": 77.45779628, "peridot": 0.16047689, "node": 48.33076593, "nodedot": -0.12534081, "semi_major_axis": 5.7909e10, "orbital_period": 87.969},
-	{"name": "Venus", "mass": 4.8675e24, "radius": 6.0518e6, "a": 0.72333566, "adot": 0.00000390, "e": 0.00677672, "edot": -0.00004107, "i": 3.39467605, "idot": -0.00078890, "L": 181.97909950, "Ldot": 58517.81538729, "peri": 131.60246718, "peridot": 0.00268329, "node": 76.67984255, "nodedot": -0.27769418, "semi_major_axis": 1.0821e11, "orbital_period": 224.701},
-	{"name": "Earth", "mass": EARTH_MASS, "radius": EARTH_RADIUS, "a": 1.00000261, "adot": 0.00000562, "e": 0.01671123, "edot": -0.00004392, "i": -0.00001531, "idot": -0.01294668, "L": 100.46457166, "Ldot": 35999.37244981, "peri": 102.93768193, "peridot": 0.32327364, "node": 0.0, "nodedot": 0.0, "semi_major_axis": 1.4960e11, "orbital_period": 365.256},
-	{"name": "Mars", "mass": 6.4171e23, "radius": 3.3895e6, "a": 1.52371034, "adot": 0.00001847, "e": 0.09339410, "edot": 0.00007882, "i": 1.84969142, "idot": -0.00813131, "L": -4.55343205, "Ldot": 19140.30268499, "peri": -23.94362959, "peridot": 0.44441088, "node": 49.55953891, "nodedot": -0.29257343, "semi_major_axis": 2.2794e11, "orbital_period": 686.980},
-	{"name": "Jupiter", "mass": 1.8982e27, "radius": 6.9911e7, "a": 5.20288700, "adot": -0.00011607, "e": 0.04838624, "edot": -0.00013253, "i": 1.30439695, "idot": -0.00183714, "L": 34.39644051, "Ldot": 3034.74612775, "peri": 14.72847983, "peridot": 0.21252668, "node": 100.47390909, "nodedot": 0.20469106, "semi_major_axis": 7.7857e11, "orbital_period": 4332.59},
-	{"name": "Saturn", "mass": 5.6834e26, "radius": 5.8232e7, "a": 9.53667594, "adot": -0.00125060, "e": 0.05386179, "edot": -0.00050991, "i": 2.48599187, "idot": 0.00193609, "L": 49.95424423, "Ldot": 1222.49362201, "peri": 92.59887831, "peridot": -0.41897216, "node": 113.66242448, "nodedot": -0.28867794, "semi_major_axis": 1.4335e12, "orbital_period": 10759.22},
-	{"name": "Uranus", "mass": 8.6810e25, "radius": 2.5362e7, "a": 19.18916464, "adot": -0.00196176, "e": 0.04725744, "edot": -0.00004397, "i": 0.77263783, "idot": -0.00242939, "L": 313.23810451, "Ldot": 428.48202785, "peri": 170.95427630, "peridot": 0.40805281, "node": 74.01692503, "nodedot": 0.04240589, "semi_major_axis": 2.8725e12, "orbital_period": 30688.5},
-	{"name": "Neptune", "mass": 1.0241e26, "radius": 2.4622e7, "a": 30.06992276, "adot": 0.00026291, "e": 0.00859048, "edot": 0.00005105, "i": 1.77004347, "idot": 0.00035372, "L": -55.12002969, "Ldot": 218.45945325, "peri": 44.96476227, "peridot": -0.32241464, "node": 131.78422574, "nodedot": -0.00508664, "semi_major_axis": 4.4951e12, "orbital_period": 60182.0}
-]
+static var G := 6.67430e-11
+static var EARTH_MASS := 5.972e24
+static var EARTH_RADIUS := 6.371e6
+static var EARTH_ROTATION_RATE := 7.2921159e-5
+static var EARTH_SOI_RADIUS := 9.25e8
+static var MOON_MASS := 7.342e22
+static var MOON_RADIUS := 1.7374e6
+static var MOON_ORBIT_RADIUS := 3.8474358321e8
+static var MOON_TRANSFER_ORBIT_RADIUS := 3.844e8
+static var MOON_ORBIT_ECCENTRICITY := 0.0549
+static var MOON_ROTATION_PERIOD := 27.321661 * 86400.0
+static var MOON_MEAN_ANOMALY_J2000 := 2.355555
+static var MOON_PERIHELION_J2000 := 3.63734
+static var MOON_MEAN_MOTION := 2.6616995272e-6
+static var MOON_PERIHELION_RATE := 0.0
+static var MOON_SOI_RADIUS := 6.61e7
+static var MOON_ROTATION_RATE := 2.6616995272e-6
+static var MOON_SOLID := true
+static var EPHEMERIS_EPOCH_JD := 2461364.5
+static var J2000_JD := 2451545.0
+static var J2000_CENTURY_DAYS := 36525.0
+static var ATMOSPHERE_HEIGHT := 120000.0
+static var SEA_LEVEL_DENSITY := 1.225
+static var ATMOSPHERE_SCALE_HEIGHT := 8500.0
+static var ATMOSPHERE_GRAVITY := 9.80665
+static var ATMOSPHERE_GAS_CONSTANT := 287.05287
+static var ATMOSPHERE_GAMMA := 1.4
+static var ASTRONOMICAL_UNIT := 1.495978707e11
+static var SUN_MASS := 1.98847e30
+static var SUN_RADIUS := 6.957e8
+static var EARTH_ORBIT_PERIOD := 365.256 * 86400.0
+static var ATMOSPHERE_BASE_ALTITUDES: Array = []
+static var ATMOSPHERE_BASE_TEMPERATURES: Array = []
+static var ATMOSPHERE_LAPSE_RATES: Array = []
+static var ATMOSPHERE_BASE_PRESSURES: Array = []
+static var PLANETS: Array[Dictionary] = []
+static var SMALL_BODY_BELTS: Array[Dictionary] = []
+
+static func _static_init() -> void:
+	var catalog: Dictionary = ContentCatalog.get_catalog()
+	var system: Dictionary = catalog.get("system", {})
+	var earth_atmosphere: Dictionary = system.get("earth_atmosphere", {})
+	var moon: Dictionary = catalog.get("moon", {})
+	G = float(system.get("gravitational_constant", G))
+	ASTRONOMICAL_UNIT = float(system.get("astronomical_unit_m", ASTRONOMICAL_UNIT))
+	SUN_MASS = float(system.get("sun_mass_kg", SUN_MASS))
+	SUN_RADIUS = float(system.get("sun_radius_m", SUN_RADIUS))
+	EPHEMERIS_EPOCH_JD = float(system.get("ephemeris_epoch_jd", EPHEMERIS_EPOCH_JD))
+	J2000_JD = float(system.get("j2000_jd", J2000_JD))
+	J2000_CENTURY_DAYS = float(system.get("j2000_century_days", J2000_CENTURY_DAYS))
+	MOON_MASS = float(moon.get("mass_kg", MOON_MASS))
+	MOON_RADIUS = float(moon.get("radius_m", MOON_RADIUS))
+	MOON_ORBIT_RADIUS = float(moon.get("semi_major_axis_m", MOON_ORBIT_RADIUS))
+	MOON_TRANSFER_ORBIT_RADIUS = float(moon.get("transfer_orbit_radius_m", MOON_TRANSFER_ORBIT_RADIUS))
+	MOON_ORBIT_ECCENTRICITY = float(moon.get("eccentricity", MOON_ORBIT_ECCENTRICITY))
+	MOON_ROTATION_PERIOD = float(moon.get("rotation_period_s", MOON_ROTATION_PERIOD))
+	MOON_MEAN_ANOMALY_J2000 = float(moon.get("mean_anomaly_j2000_rad", MOON_MEAN_ANOMALY_J2000))
+	MOON_PERIHELION_J2000 = float(moon.get("perihelion_j2000_rad", MOON_PERIHELION_J2000))
+	MOON_MEAN_MOTION = float(moon.get("mean_motion_rad_s", MOON_MEAN_MOTION))
+	MOON_PERIHELION_RATE = float(moon.get("perihelion_rate_rad_s", MOON_PERIHELION_RATE))
+	MOON_SOI_RADIUS = float(moon.get("soi_radius_m", MOON_SOI_RADIUS))
+	MOON_ROTATION_RATE = float(moon.get("rotation_rate_rad_s", MOON_ROTATION_RATE))
+	MOON_SOLID = bool(moon.get("solid", MOON_SOLID))
+	ATMOSPHERE_HEIGHT = float(earth_atmosphere.get("height_m", ATMOSPHERE_HEIGHT))
+	SEA_LEVEL_DENSITY = float(earth_atmosphere.get("sea_level_density_kg_m3", SEA_LEVEL_DENSITY))
+	ATMOSPHERE_SCALE_HEIGHT = float(earth_atmosphere.get("scale_height_m", ATMOSPHERE_SCALE_HEIGHT))
+	ATMOSPHERE_GRAVITY = float(earth_atmosphere.get("gravity_m_s2", ATMOSPHERE_GRAVITY))
+	ATMOSPHERE_GAS_CONSTANT = float(earth_atmosphere.get("gas_constant_j_kg_k", ATMOSPHERE_GAS_CONSTANT))
+	ATMOSPHERE_GAMMA = float(earth_atmosphere.get("gamma", ATMOSPHERE_GAMMA))
+	ATMOSPHERE_BASE_ALTITUDES = earth_atmosphere.get("base_altitudes_m", [])
+	ATMOSPHERE_BASE_TEMPERATURES = earth_atmosphere.get("base_temperatures_k", [])
+	ATMOSPHERE_LAPSE_RATES = earth_atmosphere.get("lapse_rates_k_m", [])
+	ATMOSPHERE_BASE_PRESSURES = earth_atmosphere.get("base_pressures_pa", [])
+	for belt_variant in system.get("small_body_belts", []):
+		SMALL_BODY_BELTS.append(belt_variant.duplicate(true))
+	for planet_variant in catalog.get("planets", []):
+		var planet: Dictionary = planet_variant.duplicate(true)
+		PLANETS.append(planet)
+		if str(planet.get("name", "")) == "Earth":
+			EARTH_MASS = float(planet.get("mass", EARTH_MASS))
+			EARTH_RADIUS = float(planet.get("radius", EARTH_RADIUS))
+			EARTH_ROTATION_RATE = float(planet.get("rotation_rate_rad_s", EARTH_ROTATION_RATE))
+			EARTH_SOI_RADIUS = float(planet.get("soi_radius_m", EARTH_SOI_RADIUS))
+			EARTH_ORBIT_PERIOD = float(planet.get("orbital_period", 365.256)) * 86400.0
 
 static func get_planet_catalog() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for planet in PLANETS:
 		result.append(planet.duplicate(true))
 	return result
+
+static func get_small_body_belts() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for belt in SMALL_BODY_BELTS:
+		result.append(belt.duplicate(true))
+	return result
+
+static func color_from_rgb(value: Variant, fallback: Color = Color.WHITE) -> Color:
+	if not value is Array or value.size() < 3:
+		return fallback
+	return Color(float(value[0]), float(value[1]), float(value[2]))
+
+static func system_visual_color() -> Color:
+	var system: Dictionary = ContentCatalog.get_catalog().get("system", {})
+	return color_from_rgb(system.get("sun_color_rgb"), Color(1.0, 0.78, 0.28))
+
+static func planet_visual_data(planet_name: String) -> Dictionary:
+	if planet_name == "Moon":
+		var moon: Dictionary = ContentCatalog.get_catalog().get("moon", {})
+		return {
+			"color": color_from_rgb(moon.get("color_rgb"), Color(0.72, 0.74, 0.78)),
+			"atmosphere_height": 0.0,
+			"atmosphere_color": Color.TRANSPARENT,
+			"has_rings": false,
+			"ring_color": Color.WHITE,
+			"ring_inner_ratio": 1.0,
+			"ring_outer_ratio": 1.0,
+			"ring_opacity": 0.0
+		}
+	var satellite := _satellite_data(planet_name)
+	if not satellite.is_empty():
+		var atmosphere: Dictionary = satellite.get("atmosphere", {})
+		var satellite_color: Color = color_from_rgb(satellite.get("color_rgb"), Color.WHITE)
+		return {
+			"color": satellite_color,
+			"surface_color": satellite_color,
+			"atmosphere_height": float(atmosphere.get("visual_height_m", atmosphere.get("height_m", 0.0))),
+			"atmosphere_color": color_from_rgb(atmosphere.get("color_rgb"), Color.TRANSPARENT),
+			"has_rings": false,
+			"ring_color": Color.WHITE,
+			"ring_inner_ratio": 1.0,
+			"ring_outer_ratio": 1.0,
+			"ring_opacity": 0.0
+		}
+	var planet := _planet_data(planet_name)
+	if planet.is_empty():
+		return {}
+	var atmosphere: Dictionary = planet.get("atmosphere", {})
+	var rings: Dictionary = planet.get("rings", {})
+	var has_rings := bool(rings.get("enabled", false))
+	return {
+		"color": color_from_rgb(planet.get("color_rgb"), Color.WHITE),
+		"surface_color": color_from_rgb(planet.get("surface_color_rgb"), color_from_rgb(planet.get("color_rgb"), Color.WHITE)),
+		"atmosphere_height": float(atmosphere.get("visual_height_m", atmosphere.get("height_m", 0.0))),
+		"atmosphere_color": color_from_rgb(atmosphere.get("color_rgb"), Color.TRANSPARENT),
+		"has_rings": has_rings,
+		"ring_color": color_from_rgb(rings.get("color_rgb"), Color.WHITE),
+		"ring_inner_ratio": float(rings.get("inner_radius_ratio", 1.2)),
+		"ring_outer_ratio": float(rings.get("outer_radius_ratio", 2.0)),
+		"ring_opacity": float(rings.get("opacity", 0.5 if has_rings else 0.0))
+	}
+
+static func _planet_data(planet_name: String) -> Dictionary:
+	for planet in PLANETS:
+		if str(planet.get("name", "")) == planet_name:
+			return planet
+	return {}
+
+static func _satellite_data(satellite_body_name: String) -> Dictionary:
+	for planet in PLANETS:
+		for satellite_variant in planet.get("satellites", []):
+			var satellite: Dictionary = satellite_variant
+			var full_name := "%s %s" % [str(planet.get("name", "")), str(satellite.get("name", ""))]
+			if full_name == satellite_body_name:
+				return satellite
+	return {}
+
+static func _earth_planet_data() -> Dictionary:
+	return _planet_data("Earth")
 
 static func _ephemeris_centuries(time_seconds: float) -> float:
 	return (EPHEMERIS_EPOCH_JD + time_seconds / 86400.0 - J2000_JD) / J2000_CENTURY_DAYS
@@ -94,6 +223,18 @@ static func _planet_heliocentric_state(planet: Dictionary, time_seconds: float) 
 		"velocity_components": velocity_components
 	}
 
+static func _satellite_orbit_state(satellite: Dictionary, time_seconds: float) -> Dictionary:
+	var radius := float(satellite.get("semi_major_axis_m", 0.0))
+	var period := float(satellite.get("orbital_period_s", 0.0))
+	if radius <= 0.0 or period <= 0.0:
+		return {"position": Vector2.ZERO, "velocity": Vector2.ZERO}
+	var direction := -1.0 if float(satellite.get("orbital_direction", 1.0)) < 0.0 else 1.0
+	var angular_rate := TAU / period * direction
+	var angle := wrapf(float(satellite.get("phase_rad", 0.0)) + angular_rate * time_seconds, -PI, PI)
+	var position := Vector2(cos(angle), sin(angle)) * radius
+	var velocity := Vector2(-sin(angle), cos(angle)) * radius * angular_rate
+	return {"position": position, "velocity": velocity}
+
 static func moon_state(time_seconds: float) -> Dictionary:
 	var days_since_j2000 := EPHEMERIS_EPOCH_JD - J2000_JD + time_seconds / 86400.0
 	var mean_anomaly := MOON_MEAN_ANOMALY_J2000 + MOON_MEAN_MOTION * days_since_j2000 * 86400.0
@@ -127,7 +268,7 @@ static func moon_velocity(time_seconds: float) -> Vector2:
 	return moon_state(time_seconds).velocity
 
 static func gravity_body_states(time_seconds: float) -> Dictionary:
-	var barycentre_state := _planet_heliocentric_state(PLANETS[2], time_seconds)
+	var barycentre_state := _planet_heliocentric_state(_earth_planet_data(), time_seconds)
 	var moon_state_value := moon_state(time_seconds)
 	var moon_position_components: PackedFloat64Array = moon_state_value.position_components
 	var moon_velocity_components: PackedFloat64Array = moon_state_value.velocity_components
@@ -140,12 +281,12 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 	var earth_position_components: PackedFloat64Array = earth_state.position_components
 	var earth_velocity_components: PackedFloat64Array = earth_state.velocity_components
 	var bodies: Array[Dictionary] = [
-		{"name": "Sun", "mass": SUN_MASS, "position": -earth_position, "position_components": PackedFloat64Array([-earth_position_components[0], -earth_position_components[1]]), "velocity": -earth_velocity, "velocity_components": PackedFloat64Array([-earth_velocity_components[0], -earth_velocity_components[1]]), "radius": 6.957e8},
+		{"name": "Sun", "mass": SUN_MASS, "position": -earth_position, "position_components": PackedFloat64Array([-earth_position_components[0], -earth_position_components[1]]), "velocity": -earth_velocity, "velocity_components": PackedFloat64Array([-earth_velocity_components[0], -earth_velocity_components[1]]), "radius": SUN_RADIUS},
 		{"name": "Moon", "mass": MOON_MASS, "position": moon_position_value, "position_components": moon_position_components, "velocity": moon_velocity_value, "velocity_components": moon_velocity_components, "radius": MOON_RADIUS}
 	]
 	var surface_bodies: Array[Dictionary] = [
-		{"name": "Earth", "mass": EARTH_MASS, "position": Vector2.ZERO, "position_components": PackedFloat64Array([0.0, 0.0]), "velocity": Vector2.ZERO, "velocity_components": PackedFloat64Array([0.0, 0.0]), "radius": EARTH_RADIUS, "rotation_rate": 7.2921159e-5, "solid": true, "soi": 9.25e8},
-		{"name": "Moon", "mass": MOON_MASS, "position": moon_position_value, "position_components": moon_position_components, "velocity": moon_velocity_value, "velocity_components": moon_velocity_components, "radius": MOON_RADIUS, "rotation_rate": TAU / MOON_ROTATION_PERIOD, "solid": true, "soi": moon_soi_radius()}
+		{"name": "Earth", "mass": EARTH_MASS, "position": Vector2.ZERO, "position_components": PackedFloat64Array([0.0, 0.0]), "velocity": Vector2.ZERO, "velocity_components": PackedFloat64Array([0.0, 0.0]), "radius": EARTH_RADIUS, "rotation_rate": EARTH_ROTATION_RATE, "solid": true, "soi": EARTH_SOI_RADIUS},
+		{"name": "Moon", "mass": MOON_MASS, "position": moon_position_value, "position_components": moon_position_components, "velocity": moon_velocity_value, "velocity_components": moon_velocity_components, "radius": MOON_RADIUS, "rotation_rate": MOON_ROTATION_RATE, "solid": MOON_SOLID, "soi": moon_soi_radius()}
 	]
 	for planet in PLANETS:
 		if planet.name == "Earth":
@@ -162,6 +303,44 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 		var planet_mass := float(planet.mass)
 		var planet_radius := float(planet.radius)
 		bodies.append({"name": planet_name, "mass": planet_mass, "position": relative_position, "position_components": relative_components, "velocity": relative_velocity, "velocity_components": relative_velocity_components, "radius": planet_radius})
+		for satellite_variant in planet.get("satellites", []):
+			var satellite: Dictionary = satellite_variant
+			var satellite_orbit := _satellite_orbit_state(satellite, time_seconds)
+			var satellite_position: Vector2 = relative_position + satellite_orbit.position
+			var satellite_velocity: Vector2 = relative_velocity + satellite_orbit.velocity
+			var satellite_position_components := PackedFloat64Array([
+				relative_components[0] + satellite_orbit.position.x,
+				relative_components[1] + satellite_orbit.position.y
+			])
+			var satellite_velocity_components := PackedFloat64Array([
+				relative_velocity_components[0] + satellite_orbit.velocity.x,
+				relative_velocity_components[1] + satellite_orbit.velocity.y
+			])
+			var satellite_name := "%s %s" % [planet_name, str(satellite.get("name", "Moon"))]
+			var satellite_mass := float(satellite.get("mass_kg", 0.0))
+			var satellite_radius := float(satellite.get("radius_m", 0.0))
+			var satellite_soi := maxf(satellite_radius * 1.1, float(satellite.get("semi_major_axis_m", 0.0)) * pow(satellite_mass / (3.0 * planet_mass), 1.0 / 3.0))
+			bodies.append({
+				"name": satellite_name,
+				"mass": satellite_mass,
+				"position": satellite_position,
+				"position_components": satellite_position_components,
+				"velocity": satellite_velocity,
+				"velocity_components": satellite_velocity_components,
+				"radius": satellite_radius
+			})
+			surface_bodies.append({
+				"name": satellite_name,
+				"mass": satellite_mass,
+				"position": satellite_position,
+				"position_components": satellite_position_components,
+				"velocity": satellite_velocity,
+				"velocity_components": satellite_velocity_components,
+				"radius": satellite_radius,
+				"rotation_rate": float(satellite.get("rotation_rate_rad_s", 0.0)),
+				"solid": bool(satellite.get("solid", true)),
+				"soi": satellite_soi
+			})
 		surface_bodies.append({
 			"name": planet_name,
 			"mass": planet_mass,
@@ -171,7 +350,7 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 			"velocity_components": relative_velocity_components,
 			"radius": planet_radius,
 			"rotation_rate": planetary_rotation_rate(planet_name),
-			"solid": planet_name in ["Mercury", "Venus", "Mars"],
+			"solid": bool(planet.get("solid", false)),
 			"soi": float(planet.a) * ASTRONOMICAL_UNIT * pow(planet_mass / (3.0 * SUN_MASS), 1.0 / 3.0)
 		})
 	var moon_heliocentric_components := PackedFloat64Array([
@@ -183,7 +362,7 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 		earth_velocity_components[1] + moon_velocity_components[1]
 	])
 	var heliocentric_bodies: Array[Dictionary] = [
-		{"name": "Sun", "mass": SUN_MASS, "position": Vector2.ZERO, "position_components": PackedFloat64Array([0.0, 0.0]), "velocity": Vector2.ZERO, "velocity_components": PackedFloat64Array([0.0, 0.0]), "radius": 6.957e8},
+		{"name": "Sun", "mass": SUN_MASS, "position": Vector2.ZERO, "position_components": PackedFloat64Array([0.0, 0.0]), "velocity": Vector2.ZERO, "velocity_components": PackedFloat64Array([0.0, 0.0]), "radius": SUN_RADIUS},
 		{"name": "Earth", "mass": EARTH_MASS, "position": earth_position, "position_components": earth_position_components, "velocity": earth_velocity, "velocity_components": earth_velocity_components, "radius": EARTH_RADIUS},
 		{"name": "Moon", "mass": MOON_MASS, "position": earth_position + moon_position_value, "position_components": moon_heliocentric_components, "velocity": earth_velocity + moon_velocity_value, "velocity_components": moon_heliocentric_velocity_components, "radius": MOON_RADIUS}
 	]
@@ -192,6 +371,28 @@ static func gravity_body_states(time_seconds: float) -> Dictionary:
 			continue
 		var planet_state: Dictionary = _planet_heliocentric_state(planet, time_seconds)
 		heliocentric_bodies.append({"name": str(planet.name), "mass": float(planet.mass), "position": Vector2(planet_state.position), "position_components": planet_state.position_components, "velocity": planet_state.velocity, "velocity_components": planet_state.velocity_components, "radius": float(planet.radius)})
+		for satellite_variant in planet.get("satellites", []):
+			var satellite: Dictionary = satellite_variant
+			var satellite_orbit := _satellite_orbit_state(satellite, time_seconds)
+			var satellite_position := planet_state.position + satellite_orbit.position
+			var satellite_velocity := planet_state.velocity + satellite_orbit.velocity
+			var satellite_position_components := PackedFloat64Array([
+				planet_state.position_components[0] + satellite_orbit.position.x,
+				planet_state.position_components[1] + satellite_orbit.position.y
+			])
+			var satellite_velocity_components := PackedFloat64Array([
+				planet_state.velocity_components[0] + satellite_orbit.velocity.x,
+				planet_state.velocity_components[1] + satellite_orbit.velocity.y
+			])
+			heliocentric_bodies.append({
+				"name": "%s %s" % [str(planet.name), str(satellite.get("name", "Moon"))],
+				"mass": float(satellite.get("mass_kg", 0.0)),
+				"position": satellite_position,
+				"position_components": satellite_position_components,
+				"velocity": satellite_velocity,
+				"velocity_components": satellite_velocity_components,
+				"radius": float(satellite.get("radius_m", 0.0))
+			})
 	return {
 		"bodies": bodies,
 		"surface_bodies": surface_bodies,
@@ -257,11 +458,11 @@ static func _sun_relative_position(time_seconds: float) -> Vector2:
 	return -_earth_heliocentric_state(time_seconds).position
 
 static func _earth_heliocentric_state(time_seconds: float) -> Dictionary:
-	var barycentre := _planet_heliocentric_state(PLANETS[2], time_seconds)
+	var barycentre := _planet_heliocentric_state(_earth_planet_data(), time_seconds)
 	var moon_state_value := moon_state(time_seconds)
 	var moon_position_components: PackedFloat64Array = moon_state_value.position_components
 	var moon_velocity_components: PackedFloat64Array = moon_state_value.velocity_components
-	var earth_moon_ratio := MOON_MASS / (EARTH_MASS + MOON_MASS)
+
 	var position_components := PackedFloat64Array([
 		barycentre.position_components[0] - moon_position_components[0] * earth_moon_ratio,
 		barycentre.position_components[1] - moon_position_components[1] * earth_moon_ratio
@@ -278,19 +479,19 @@ static func _earth_heliocentric_state(time_seconds: float) -> Dictionary:
 	}
 
 static func planet_position_relative_to_earth(planet_name: String, time_seconds: float) -> Vector2:
-	var planet := _find_planet(planet_name)
+	var planet := _planet_data(planet_name)
 	if planet.is_empty() or planet_name == "Earth":
 		return Vector2.ZERO
 	return _planet_relative_position(planet, time_seconds)
 
 static func planet_position_relative_to_earth_components(planet_name: String, time_seconds: float) -> PackedFloat64Array:
-	var planet := _find_planet(planet_name)
+	var planet := _planet_data(planet_name)
 	if planet.is_empty() or planet_name == "Earth":
 		return PackedFloat64Array([0.0, 0.0])
 	return _planet_relative_position_components(planet, time_seconds)
 
 static func planet_velocity_relative_to_earth(planet_name: String, time_seconds: float) -> Vector2:
-	var planet := _find_planet(planet_name)
+	var planet := _planet_data(planet_name)
 	if planet.is_empty() or planet_name == "Earth":
 		return Vector2.ZERO
 	var earth_state := _earth_heliocentric_state(time_seconds)
@@ -301,19 +502,13 @@ static func planet_velocity_relative_to_earth(planet_name: String, time_seconds:
 	)
 
 static func moon_soi_radius() -> float:
-	return MOON_ORBIT_RADIUS * pow(MOON_MASS / (3.0 * EARTH_MASS), 1.0 / 3.0)
+	return MOON_SOI_RADIUS
 
 static func planet_soi_radius(planet_name: String) -> float:
-	var planet := _find_planet(planet_name)
+	var planet := _planet_data(planet_name)
 	if planet.is_empty():
 		return 0.0
 	return float(planet.a) * ASTRONOMICAL_UNIT * pow(float(planet.mass) / (3.0 * SUN_MASS), 1.0 / 3.0)
-
-static func _find_planet(planet_name: String) -> Dictionary:
-	for planet in PLANETS:
-		if str(planet.name) == planet_name:
-			return planet
-	return {}
 
 static func _planet_relative_position_components(planet: Dictionary, time_seconds: float) -> PackedFloat64Array:
 	var earth_state := _earth_heliocentric_state(time_seconds)
@@ -335,21 +530,16 @@ static func _differential_body_gravity(position: Vector2, body_mass: float, body
 
 static func atmospheric_temperature(altitude: float) -> float:
 	var h := clampf(altitude, 0.0, ATMOSPHERE_HEIGHT)
-	if h <= 11000.0:
-		return 288.15 - 0.0065 * h
-	if h <= 20000.0:
-		return 216.65
-	if h <= 32000.0:
-		return 216.65 + 0.001 * (h - 20000.0)
-	if h <= 47000.0:
-		return 228.65 + 0.0028 * (h - 32000.0)
-	if h <= 51000.0:
-		return 270.65
-	if h <= 71000.0:
-		return 270.65 - 0.0028 * (h - 51000.0)
-	if h <= 84852.0:
-		return 214.65 - 0.002 * (h - 71000.0)
-	return 186.946
+	var layer := 0
+	for i in range(ATMOSPHERE_BASE_ALTITUDES.size() - 1):
+		if h >= ATMOSPHERE_BASE_ALTITUDES[i + 1]:
+			layer = i + 1
+		else:
+			break
+	var base_altitude: float = ATMOSPHERE_BASE_ALTITUDES[layer]
+	var base_temperature: float = ATMOSPHERE_BASE_TEMPERATURES[layer]
+	var lapse_rate: float = ATMOSPHERE_LAPSE_RATES[layer]
+	return base_temperature + lapse_rate * (h - base_altitude)
 
 static func atmospheric_pressure(altitude: float) -> float:
 	var h := clampf(altitude, 0.0, ATMOSPHERE_HEIGHT)
@@ -364,92 +554,55 @@ static func atmospheric_pressure(altitude: float) -> float:
 	var lapse: float = ATMOSPHERE_LAPSE_RATES[layer]
 	var delta_height := h - base_height
 	if absf(lapse) < 0.0000001:
-		return ATMOSPHERE_BASE_PRESSURES[layer] * exp(-9.80665 * delta_height / (287.05287 * base_temperature))
+		return ATMOSPHERE_BASE_PRESSURES[layer] * exp(-ATMOSPHERE_GRAVITY * delta_height / (ATMOSPHERE_GAS_CONSTANT * base_temperature))
 	var temperature := base_temperature + lapse * delta_height
-	return ATMOSPHERE_BASE_PRESSURES[layer] * pow(temperature / base_temperature, -9.80665 / (lapse * 287.05287))
+	return ATMOSPHERE_BASE_PRESSURES[layer] * pow(temperature / base_temperature, -ATMOSPHERE_GRAVITY / (lapse * ATMOSPHERE_GAS_CONSTANT))
 
 static func atmospheric_density(altitude: float) -> float:
 	if altitude >= ATMOSPHERE_HEIGHT:
 		return 0.0
-	return atmospheric_pressure(altitude) / (287.05287 * atmospheric_temperature(altitude))
+	return atmospheric_pressure(altitude) / (ATMOSPHERE_GAS_CONSTANT * atmospheric_temperature(altitude))
+
+static func earth_atmosphere_gas_constant() -> float:
+	return ATMOSPHERE_GAS_CONSTANT
+
+static func earth_atmosphere_gamma() -> float:
+	return ATMOSPHERE_GAMMA
 
 static func planetary_atmosphere_height(planet_name: String) -> float:
-	match planet_name:
-		"Earth":
-			return ATMOSPHERE_HEIGHT
-		"Venus":
-			return 250000.0
-		"Mars":
-			return 125000.0
-		"Jupiter", "Uranus":
-			return 1000000.0
-		"Saturn", "Neptune":
-			return 1500000.0
-	return 0.0
+	if planet_name == "Earth":
+		return ATMOSPHERE_HEIGHT
+	return float(_atmosphere_data(planet_name).get("height_m", 0.0))
 
 static func planetary_atmosphere_density(planet_name: String, altitude: float) -> float:
-	var surface_density := 0.0
-	var scale_height := 1.0
-	var atmosphere_height := 0.0
-	match planet_name:
-		"Venus":
-			surface_density = 65.0
-			scale_height = 15900.0
-			atmosphere_height = 250000.0
-		"Mars":
-			surface_density = 0.020
-			scale_height = 11100.0
-			atmosphere_height = 125000.0
-		"Jupiter":
-			surface_density = 0.16
-			scale_height = 27000.0
-			atmosphere_height = 1000000.0
-		"Saturn":
-			surface_density = 0.19
-			scale_height = 60000.0
-			atmosphere_height = 1500000.0
-		"Uranus":
-			surface_density = 0.42
-			scale_height = 50000.0
-			atmosphere_height = 1000000.0
-		"Neptune":
-			surface_density = 0.45
-			scale_height = 60000.0
-			atmosphere_height = 1500000.0
-	if surface_density <= 0.0 or altitude >= atmosphere_height:
+	var atmosphere := _atmosphere_data(planet_name)
+	var model := str(atmosphere.get("model", "none"))
+	if model == "standard":
+		return atmospheric_density(altitude)
+	var atmosphere_height := float(atmosphere.get("height_m", 0.0))
+	var surface_density := float(atmosphere.get("surface_density_kg_m3", 0.0))
+	var scale_height := float(atmosphere.get("scale_height_m", 1.0))
+	if model != "exponential" or surface_density <= 0.0 or altitude >= atmosphere_height:
 		return 0.0
 	return surface_density * exp(-maxf(0.0, altitude) / scale_height)
 
 static func planetary_atmosphere_temperature(planet_name: String) -> float:
-	match planet_name:
-		"Venus":
-			return 735.0
-		"Mars":
-			return 210.0
-		"Jupiter":
-			return 165.0
-		"Saturn":
-			return 135.0
-		"Uranus":
-			return 76.0
-		"Neptune":
-			return 72.0
-	return 250.0
+	return float(_atmosphere_data(planet_name).get("temperature_k", 250.0))
+
+static func planetary_atmosphere_gas_constant(planet_name: String) -> float:
+	return float(_atmosphere_data(planet_name).get("gas_constant_j_kg_k", 287.05287))
+
+static func planetary_atmosphere_gamma(planet_name: String) -> float:
+	return float(_atmosphere_data(planet_name).get("gamma", 1.4))
+
+static func _atmosphere_data(body_name: String) -> Dictionary:
+	var planet := _planet_data(body_name)
+	if not planet.is_empty():
+		return planet.get("atmosphere", {})
+	var satellite := _satellite_data(body_name)
+	if not satellite.is_empty():
+		return satellite.get("atmosphere", {})
+	return {}
 
 static func planetary_rotation_rate(planet_name: String) -> float:
-	match planet_name:
-		"Mercury":
-			return 1.2400e-6
-		"Venus":
-			return -2.9924e-7
-		"Mars":
-			return 7.0882e-5
-		"Jupiter":
-			return 1.7585e-4
-		"Saturn":
-			return 1.6379e-4
-		"Uranus":
-			return -1.0124e-4
-		"Neptune":
-			return 1.0834e-4
-	return 0.0
+	return float(_planet_data(planet_name).get("rotation_rate_rad_s", 0.0))

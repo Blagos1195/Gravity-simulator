@@ -1,12 +1,14 @@
 extends SceneTree
 
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const FlightComputer = preload("res://scripts/flight_computer.gd")
 
 func _initialize() -> void:
 	var design := RocketDesign.create_default()
 	assert(RocketDesign.validation_errors(design).is_empty())
 	assert(is_equal_approx(RocketDesign.total_initial_mass(design), 364500.0))
 	assert(RocketDesign.total_delta_v(design) > 0.0)
+	assert(is_equal_approx(RocketDesign.total_delta_v(design), FlightComputer.available_delta_v(design)), "Full staged delta-v calculations disagree")
 	var multi_engine := design.duplicate(true)
 	multi_engine["stages"][0]["engine_count"] = 3
 	multi_engine["stages"][0]["thrust"] = float(multi_engine["stages"][0]["thrust"]) / 3.0
