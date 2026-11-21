@@ -225,8 +225,9 @@ func _physics_step(dt: float) -> void:
 				autopilot_phase = "COMPLETE"
 				autopilot_complete = true
 				status_message = "AUTOPILOT  •  MANOEUVRE BURN COMPLETE"
-	var gravity_states: Dictionary = _ephemeris_states_at(start_time + dt * 0.5)
-	var initial_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(rocket_position_precise, gravity_states)
+	var initial_gravity_states: Dictionary = _ephemeris_states_at(start_time)
+	var final_gravity_states: Dictionary = _ephemeris_states_at(end_time)
+	var initial_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(rocket_position_precise, initial_gravity_states)
 	var initial_aero := _aerodynamic_acceleration(rocket_position, velocity, mass_mid, start_time, rocket_position_precise)
 	var half_velocity := velocity + (initial_gravity + initial_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	var next_position_components := PackedFloat64Array([
@@ -234,7 +235,7 @@ func _physics_step(dt: float) -> void:
 		rocket_position_precise[1] + half_velocity.y * dt
 	])
 	var next_position := Vector2(next_position_components[0], next_position_components[1])
-	var final_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(next_position_components, gravity_states)
+	var final_gravity := PlanetarySystem.gravity_acceleration_from_precise_states(next_position_components, final_gravity_states)
 	var final_aero := _aerodynamic_acceleration(next_position, half_velocity, mass_mid, end_time, next_position_components)
 	velocity = half_velocity + (final_gravity + final_aero) * (0.5 * dt) + thrust_impulse * 0.5
 	_set_rocket_position_components(next_position_components[0], next_position_components[1])
