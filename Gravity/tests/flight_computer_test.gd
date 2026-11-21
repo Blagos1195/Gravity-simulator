@@ -190,9 +190,23 @@ func _initialize() -> void:
 	assert(route_sim.autopilot_phase == "ROUTE_BURN")
 	route_sim.free()
 
+	var planner_sim: Variant = SimulationView.new()
+	planner_sim.set_rocket_design(RocketDesign.create_default())
+	planner_sim.landed = false
+	planner_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
+	planner_sim.velocity = Vector2(manoeuvre_speed, 0.0)
 	var route_planner_window: Window = RoutePlanner.new()
-	assert(route_planner_window is Window)
+	root.add_child(route_planner_window)
+	route_planner_window.configure(planner_sim, RocketDesign.create_default())
+	route_planner_window._add_node()
+	route_planner_window.prograde_input.value = 5.0
+	assert(route_planner_window.nodes.size() == 1)
+	assert(route_planner_window.orbit_plot.planned_path.size() > 1)
+	route_planner_window._send_to_autopilot()
+	assert(planner_sim.autopilot_phase == "ROUTE_COAST")
+	assert(planner_sim.autopilot_route_nodes.size() == 1)
 	route_planner_window.free()
+	planner_sim.free()
 
 	print("Flight computer orbital calculation tests passed.")
 	quit()
