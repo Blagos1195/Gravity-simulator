@@ -28,6 +28,7 @@ var route_target := Vector2.ZERO
 var has_route_target := false
 var route_duration := 3600.0
 var route_delta_v := 0.0
+var route_solution_dirty := false
 var route_status := "NO DESTINATION SELECTED"
 var route_time_input: SpinBox
 var route_report: Label
@@ -343,7 +344,7 @@ func _refresh_state() -> void:
 	relative_position = rocket_position - body_position
 	relative_velocity = rocket_velocity - body_velocity
 	gravitational_parameter = FlightComputer.G * float(current_body.get("mass", 0.0))
-	if has_route_target:
+	if has_route_target and not route_solution_dirty:
 		_calculate_route()
 	else:
 		_update_manoeuvre()
@@ -351,6 +352,7 @@ func _refresh_state() -> void:
 func _add_node() -> void:
 	if not is_instance_valid(simulation):
 		return
+	_invalidate_route_solution()
 	var next_time := 0.0
 	if not nodes.is_empty():
 		next_time = float(nodes[nodes.size() - 1].get("time_offset", 0.0)) + 30.0
@@ -363,6 +365,7 @@ func _add_node() -> void:
 func _remove_node() -> void:
 	if selected_node_index < 0 or selected_node_index >= nodes.size():
 		return
+	_invalidate_route_solution()
 	nodes.remove_at(selected_node_index)
 	selected_node_index = mini(selected_node_index, nodes.size() - 1)
 	_rebuild_node_list()
@@ -376,6 +379,7 @@ func _change_route_duration(hours: float) -> void:
 
 func _clear_route_target() -> void:
 	has_route_target = false
+	route_solution_dirty = false
 	route_delta_v = 0.0
 	route_status = "NO DESTINATION SELECTED"
 	nodes.clear()
@@ -384,11 +388,18 @@ func _clear_route_target() -> void:
 	_load_selected_node()
 	_update_manoeuvre()
 
+func _invalidate_route_solution() -> void:
+	if has_route_target:
+		route_solution_dirty = true
+		route_delta_v = INF
+		route_status = "MANOEUVRE EDITED  •  DRAG DESTINATION TO RECALCULATE"
+
 func _set_route_target(world_position: Vector2) -> void:
 	if gravitational_parameter <= 0.0 or relative_position.length() <= 1.0:
 		return
 	route_target = world_position
 	has_route_target = true
+	route_solution_dirty = false
 	var body_radius := float(current_body.get("radius", 0.0))
 	var sphere_of_influence := float(current_body.get("soi", INF))
 	if route_target.length() <= body_radius:
@@ -509,6 +520,7 @@ func _solve_lambert(start_position: Vector2, finish_position: Vector2, duration:
 func _calculate_route() -> void:
 	if not has_route_target or gravitational_parameter <= 0.0:
 		return
+	route_solution_dirty = false
 	var solution := _solve_lambert(relative_position, route_target, route_duration)
 	if not bool(solution.get("valid", false)):
 		route_delta_v = INF
@@ -540,6 +552,7 @@ func _calculate_route() -> void:
 func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
 	if index < 0 or index >= nodes.size() or current_path.size() < 2:
 		return
+	_invalidate_route_solution()
 	var nearest_index := 0
 	var nearest_distance := INF
 	for point_index in range(current_path.size()):
@@ -601,6 +614,7 @@ func _load_selected_node() -> void:
 func _update_selected_node(_value: float = 0.0) -> void:
 	if loading_node or selected_node_index < 0 or selected_node_index >= nodes.size():
 		return
+	_invalidate_route_solution()
 	var node: Dictionary = nodes[selected_node_index]
 	node["time_offset"] = time_input.value * 60.0
 	node["prograde"] = prograde_input.value
@@ -734,7 +748,7 @@ func _update_manoeuvre() -> void:
 	_build_prediction_paths()
 	var landed_state: bool = bool(simulation.get("landed"))
 	var crashed_state: bool = bool(simulation.get("crashed"))
-	var valid_nodes: bool = not nodes.is_empty() and (not has_route_target or is_finite(route_delta_v))
+	var valid_nodes: bool = not nodes.is_empty() and (not has_route_target or (is_finite(route_delta_v) and not route_solution_dirty))
 	for node in nodes:
 		if Vector2(float(node.get("prograde", 0.0)), float(node.get("radial", 0.0))).length() < 0.1:
 			valid_nodes = false
@@ -746,7 +760,7 @@ func _update_manoeuvre() -> void:
 		"NO SOLUTION" if not is_finite(route_delta_v) else "%.1f m/s" % route_delta_v if has_route_target else "N/A",
 		delta_v_used,
 		available_delta_v,
-		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "NO VALID ROUTE SOLUTION" if has_route_target and not is_finite(route_delta_v) else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
+		"LAUNCH BEFORE EXECUTING" if landed_state else "CRAFT CRASHED" if crashed_state else "ROUTE NEEDS RECALCULATION" if has_route_target and route_solution_dirty else "NO VALID ROUTE SOLUTION" if has_route_target and not is_finite(route_delta_v) else "ADD A NON-ZERO BURN" if not valid_nodes else "EXCEEDS VEHICLE ΔV" if total_planned_delta_v > available_delta_v else "READY TO SEND TO AUTOPILOT"
 	]
 	if is_instance_valid(route_report):
 		if has_route_target:
