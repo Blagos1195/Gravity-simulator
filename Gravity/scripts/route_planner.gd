@@ -9,6 +9,7 @@ var prograde_input: SpinBox
 var radial_input: SpinBox
 var state_report: RichTextLabel
 var burn_report: Label
+var autopilot_button: Button
 var current_body: Dictionary = {}
 var relative_position := Vector2.ZERO
 var relative_velocity := Vector2.ZERO
@@ -186,7 +187,7 @@ func _build_interface() -> void:
 	preview_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preview_button.pressed.connect(_update_manoeuvre)
 	actions.add_child(preview_button)
-	var autopilot_button := Button.new()
+	autopilot_button = Button.new()
 	autopilot_button.text = "SEND BURN TO AUTOPILOT"
 	autopilot_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	autopilot_button.pressed.connect(_send_to_autopilot)
@@ -252,6 +253,7 @@ func _update_manoeuvre() -> void:
 		available_delta_v / 1000.0
 	]
 	var burn_angle: float = rad_to_deg(atan2(radial_input.value, prograde_input.value))
+	autopilot_button.disabled = bool(simulation.get("landed")) or bool(simulation.get("crashed")) or planned_burn_vector.length() < 0.1 or planned_burn_vector.length() > available_delta_v
 	burn_report.text = "TOTAL ΔV: %.1f m/s    •    BURN ROTATION FROM PROGRADE: %.1f°    •    %s" % [
 		planned_burn_vector.length(),
 		burn_angle,
