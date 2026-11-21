@@ -16,12 +16,16 @@ var gravitational_parameter := 0.0
 var planned_burn_vector := Vector2.ZERO
 
 class OrbitPlot extends Control:
+	const FlightComputer = preload("res://scripts/flight_computer.gd")
+
+	var body_radius := 0.0
 	var position_state := Vector2.ZERO
 	var velocity_state := Vector2.ZERO
 	var gravitational_parameter := 0.0
 	var burn_vector := Vector2.ZERO
 
-	func set_orbit(position: Vector2, velocity: Vector2, mu: float, burn: Vector2) -> void:
+	func set_orbit(position: Vector2, velocity: Vector2, mu: float, burn: Vector2, radius: float) -> void:
+		body_radius = radius
 		position_state = position
 		velocity_state = velocity
 		gravitational_parameter = mu
@@ -70,7 +74,6 @@ class OrbitPlot extends Control:
 		extent *= 1.08
 		var scale_factor: float = minf(size.x, size.y) * 0.46 / extent
 		var center: Vector2 = size * 0.5
-		var body_radius: float = minf(FlightComputer.EARTH_RADIUS, extent * 0.08)
 		var body_screen_radius: float = maxf(4.0, body_radius * scale_factor)
 		draw_circle(center, body_screen_radius, Color(0.16, 0.39, 0.72))
 		draw_arc(center, body_screen_radius, 0.0, TAU, 96, Color(0.45, 0.72, 1.0), 1.5)
@@ -101,7 +104,6 @@ func configure(simulation_node: Control, design: Dictionary) -> void:
 	close_requested.connect(queue_free)
 	_build_interface()
 	_refresh_state()
-	popup_centered()
 
 func _build_interface() -> void:
 	var root := VBoxContainer.new()
@@ -210,11 +212,13 @@ func _create_burn_input() -> SpinBox:
 func _refresh_state() -> void:
 	if not is_instance_valid(simulation):
 		return
-	current_body = simulation.call("_nearest_body_state", simulation.get("rocket_position"))
+	var rocket_position: Vector2 = simulation.get("rocket_position")
+	var rocket_velocity: Vector2 = simulation.get("velocity")
+	current_body = simulation.call("_nearest_body_state", rocket_position)
 	var body_position: Vector2 = current_body.get("position", Vector2.ZERO)
 	var body_velocity: Vector2 = current_body.get("velocity", Vector2.ZERO)
-	relative_position = Vector2(simulation.get("rocket_position")) - body_position
-	relative_velocity = Vector2(simulation.get("velocity")) - body_velocity
+	relative_position = rocket_position - body_position
+	relative_velocity = rocket_velocity - body_velocity
 	gravitational_parameter = FlightComputer.G * float(current_body.get("mass", 0.0))
 	_update_manoeuvre()
 
@@ -226,7 +230,7 @@ func _update_manoeuvre() -> void:
 	if relative_position.cross(relative_velocity) < 0.0:
 		tangent = -tangent
 	planned_burn_vector = tangent * prograde_input.value + radial * radial_input.value
-	orbit_plot.set_orbit(relative_position, relative_velocity, gravitational_parameter, planned_burn_vector)
+	orbit_plot.set_orbit(relative_position, relative_velocity, gravitational_parameter, planned_burn_vector, float(current_body.get("radius", 0.0)))
 	var current_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, gravitational_parameter)
 	var planned_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity + planned_burn_vector, gravitational_parameter)
 	var current_periapsis: float = (float(current_orbit.get("periapsis", 0.0)) - float(current_body.get("radius", 0.0))) / 1000.0
