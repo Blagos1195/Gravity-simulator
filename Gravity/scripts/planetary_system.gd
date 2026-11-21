@@ -272,6 +272,20 @@ static func atmospheric_density(altitude: float) -> float:
 		return 0.0
 	return atmospheric_pressure(altitude) / (287.05287 * atmospheric_temperature(altitude))
 
+static func planetary_atmosphere_height(planet_name: String) -> float:
+	match planet_name:
+		"Earth":
+			return ATMOSPHERE_HEIGHT
+		"Venus":
+			return 250000.0
+		"Mars":
+			return 125000.0
+		"Jupiter", "Uranus":
+			return 1000000.0
+		"Saturn", "Neptune":
+			return 1500000.0
+	return 0.0
+
 static func planetary_atmosphere_density(planet_name: String, altitude: float) -> float:
 	var surface_density := 0.0
 	var scale_height := 1.0
