@@ -1033,7 +1033,10 @@ func _show_flight_computer() -> void:
 	var planner = RoutePlanner.new()
 	add_child(planner)
 	planner.configure(sim, rocket_design)
-	planner.popup_centered()
+	var screen_size := DisplayServer.screen_get_size()
+	planner.size = Vector2i(mini(980, screen_size.x - 40), mini(820, screen_size.y - 80))
+	planner.position = Vector2i(maxi(20, screen_size.x - planner.size.x - 24), 40)
+	planner.popup()
 
 func _pause_simulation() -> void:
 	if sim:
