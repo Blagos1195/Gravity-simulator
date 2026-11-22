@@ -1113,6 +1113,7 @@ func _show_autopilot_panel() -> void:
 		sim.autopilot_target_mode = "ORBIT"
 		sim.autopilot_planet_index = selected_id
 		sim.autopilot_burn_remaining = 0.0
+		sim.autopilot_apsis_correction_armed = true
 		sim.autopilot_burn_direction = Vector2.ZERO
 		sim.autopilot_transfer_corrections = 0
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
