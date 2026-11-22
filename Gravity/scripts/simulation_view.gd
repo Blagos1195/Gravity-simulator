@@ -1062,8 +1062,10 @@ func _update_guidance(dt: float) -> void:
 				var approach_radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
 				var approach_speed_tolerance := maxf(0.1, minf(10.0, FlightComputer.circular_orbit_speed(float(approach_target_state.radius) + autopilot_target_altitude, G * float(approach_target_state.mass)) * 0.001))
 				status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0f KM" % [str(approach_target_state.name).to_upper(), (approach_relative_position.length() - float(approach_target_state.radius)) / 1000.0]
-				if approach_radial_speed >= -approach_speed_tolerance:
+				if approach_radial_speed < 0.0:
 					_begin_arrival_capture(approach_target_state)
+				else:
+					_fail_autopilot("ARRIVAL CAPTURE WINDOW MISSED  •  SPACECRAFT IS MOVING AWAY FROM THE MOON")
 			"ARRIVAL_CAPTURE_BURN":
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
 				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
@@ -1764,6 +1766,8 @@ func get_save_data() -> Dictionary:
 		"discarded_propellant_mass": discarded_propellant_mass,
 		"gimbal_angle": gimbal_angle,
 		"guidance_enabled": guidance_enabled,
+		"infinite_weightless_fuel": infinite_weightless_fuel,
+		"show_velocity_vector": show_vectors,
 		"autopilot_enabled": autopilot_enabled,
 		"autopilot_target_altitude": autopilot_target_altitude,
 		"autopilot_target_mode": autopilot_target_mode,
@@ -1876,6 +1880,8 @@ func load_save_data(data: Dictionary) -> bool:
 	discarded_propellant_mass = float(data.get("discarded_propellant_mass", 0.0))
 	gimbal_angle = float(data.get("gimbal_angle", 0.0))
 	guidance_enabled = bool(data.get("guidance_enabled", false))
+	infinite_weightless_fuel = bool(data.get("infinite_weightless_fuel", false))
+	show_vectors = bool(data.get("show_velocity_vector", true))
 	autopilot_enabled = bool(data.get("autopilot_enabled", false))
 	autopilot_target_altitude = float(data.get("autopilot_target_altitude", 200000.0))
 	autopilot_target_mode = str(data.get("autopilot_target_mode", "ORBIT"))
