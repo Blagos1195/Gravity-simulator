@@ -157,9 +157,6 @@ class OrbitPlot extends Control:
 		var extent := maxf(rocket_position.length(), target_position.length())
 		for point in planned_path:
 			extent = maxf(extent, point.length())
-		for body in solar_system_bodies:
-			if str(body.get("name", "")) == "Sun":
-				extent = maxf(extent, Vector2(body.get("position", Vector2.ZERO)).length())
 		extent = maxf(1.0, extent * 1.08)
 		var scale_value := minf(size.x, size.y) * 0.46 / extent * zoom_factor
 		var center := size * 0.5
