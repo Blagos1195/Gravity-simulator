@@ -860,7 +860,7 @@ func _update_guidance(dt: float) -> void:
 				var target_apoapsis: float = float(orbit.get("apoapsis", INF))
 				var safe_target_orbit: bool = target_bound and target_periapsis > float(guidance_body.radius) + 70000.0
 				var target_alignment_tolerance: float = maxf(500.0, target_radius * 0.002)
-				var target_alignment_window: bool = target_distance_error < target_alignment_tolerance and target_radial_speed < 50.0
+				var target_alignment_window: bool = target_distance_error < 500.0 and target_radial_speed < 50.0
 				var target_apsis_reached: bool = target_radial_speed <= 10.0 and altitude > 70000.0
 				var periapsis_target_error: float = absf(target_periapsis - target_radius)
 				var apoapsis_target_error: float = absf(target_apoapsis - target_radius)
