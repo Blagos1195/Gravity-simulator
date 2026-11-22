@@ -6,14 +6,16 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 
 func _initialize() -> void:
-	_validate_leo_autopilot_mission()
-	print("LEO autopilot mission test passed.")
+	_validate_leo_autopilot_mission(false)
+	_validate_leo_autopilot_mission(true)
+	print("LEO autopilot mission tests passed with finite and infinite propellant.")
 	quit()
 
-func _validate_leo_autopilot_mission() -> void:
+func _validate_leo_autopilot_mission(infinite_propellant: bool) -> void:
 	var simulation: Variant = SimulationView.new()
 	simulation.set_rocket_design(RocketDesign.create_default())
 	simulation.realism = "Realistic"
+	simulation.infinite_weightless_fuel = infinite_propellant
 	simulation.landed = true
 	simulation.landed_body_name = "Earth"
 	simulation.landed_surface_normal = Vector2.UP
@@ -50,7 +52,7 @@ func _validate_leo_autopilot_mission() -> void:
 			previous_phase = simulation.autopilot_phase
 		if iterations >= 300000:
 			break
-	print("LEO phase trace: " + "; ".join(PackedStringArray(phase_transitions)))
+	print("LEO phase trace (%s): " % ("infinite" if infinite_propellant else "finite") + "; ".join(PackedStringArray(phase_transitions)))
 	var end_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var end_position: Vector2 = end_body.relative_position
 	var end_velocity: Vector2 = simulation.velocity - end_body.velocity
