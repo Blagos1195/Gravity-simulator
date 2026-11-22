@@ -114,15 +114,13 @@ func _remaining_stack_mass() -> float:
 	for i in range(stage_index + 1, rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[i]
 		mass += float(stage.get("dry_mass", 0.0))
-		if not infinite_weightless_fuel:
-			mass += float(stage.get("fuel_capacity", 0.0))
+		mass += float(stage.get("fuel_capacity", 0.0))
 	return mass
 
 func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
 	var active := _active_stage_data()
 	var mass := float(active.get("dry_mass", 0.0)) + _remaining_stack_mass()
-	if not infinite_weightless_fuel:
-		mass += fuel if fuel_amount < 0.0 else fuel_amount
+	mass += fuel if fuel_amount < 0.0 else fuel_amount
 	return mass
 
 func _ready() -> void:
@@ -573,8 +571,7 @@ func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
 		return
 	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0))
-	if not infinite_weightless_fuel:
-		discarded_propellant_mass += fuel
+	discarded_propellant_mass += fuel
 	velocity += Vector2.UP.rotated(rotation_angle) * 2.0
 	stage_index += 1
 	fuel = float(_active_stage_data().get("fuel_capacity", 0.0))
@@ -1537,13 +1534,11 @@ func _calculate_predicted_trajectory() -> void:
 		if predicted_stage < rocket_stages.size():
 			active = rocket_stages[predicted_stage]
 			mass += float(active.get("dry_mass", 0.0))
-			if not infinite_weightless_fuel:
-				mass += predicted_fuel
+			mass += predicted_fuel
 			for j in range(predicted_stage + 1, rocket_stages.size()):
 				var upper: Dictionary = rocket_stages[j]
 				mass += float(upper.get("dry_mass", 0.0))
-				if not infinite_weightless_fuel:
-					mass += float(upper.get("fuel_capacity", 0.0))
+				mass += float(upper.get("fuel_capacity", 0.0))
 			total_flow = float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 			if not infinite_weightless_fuel:
 				burn = minf(predicted_fuel, total_flow * throttle * dt)
@@ -1661,7 +1656,7 @@ func _draw_hud() -> void:
 		"ALTITUDE       %s" % _format_distance(altitude),
 		"INERTIAL SPEED %s" % _format_speed(orbital_speed),
 		"VERTICAL SPEED %s" % _format_speed(local_velocity.dot(local_position.normalized())),
-		"FUEL           %s" % ("INFINITE • MASSLESS" if infinite_weightless_fuel else "%d%%" % roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
+		"FUEL           %s" % ("INFINITE • MASS RETAINED" if infinite_weightless_fuel else "%d%%" % roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
 		"THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
 		"THRUST / WEIGHT %.2f" % thrust_to_weight,
 		"IDEAL ΔV EST.  %s" % ("UNLIMITED" if infinite_weightless_fuel else "%.2f km/s" % (remaining_delta_v / 1000.0)),
