@@ -104,7 +104,7 @@ func _validate_local_orbit_autopilot(body_name: String) -> void:
 	simulation.autopilot_phase = "CIRCULARISE"
 	var elapsed := 0.0
 	var iterations := 0
-	var previous_phase := simulation.autopilot_phase
+	var previous_phase: String = str(simulation.autopilot_phase)
 	var phase_transitions: Array[String] = []
 	while elapsed < orbital_period and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
 		var step: float = simulation._adaptive_step_size()
