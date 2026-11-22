@@ -857,16 +857,19 @@ func _update_guidance(dt: float) -> void:
 				var target_radial_speed: float = absf(float(orbit.get("radial_speed", 0.0)))
 				var target_bound: bool = bool(orbit.get("bound", false))
 				var target_periapsis: float = float(orbit.get("periapsis", 0.0))
+				var target_apoapsis: float = float(orbit.get("apoapsis", INF))
 				var safe_target_orbit: bool = target_bound and target_periapsis > float(guidance_body.radius) + 70000.0
-				var target_radius_reached: bool = target_distance_error < 500.0 and target_radial_speed < 50.0
-				var target_alignment_window: bool = target_distance_error < maxf(500.0, target_radius * 0.002) and target_radial_speed < 50.0
+				var target_alignment_tolerance: float = maxf(500.0, target_radius * 0.002)
+				var target_alignment_window: bool = target_distance_error < target_alignment_tolerance and target_radial_speed < 50.0
 				var target_apsis_reached: bool = target_radial_speed <= 10.0 and altitude > 70000.0
-				var should_check_target_burn: bool = target_alignment_window or target_apsis_reached or (not safe_target_orbit and altitude > 70000.0 and propellant_available)
+				var periapsis_target_error: float = absf(target_periapsis - target_radius)
+				var apoapsis_target_error: float = absf(target_apoapsis - target_radius)
+				var transfer_already_reaches_target: bool = target_bound and minf(periapsis_target_error, apoapsis_target_error) <= target_alignment_tolerance
 				var target_correction_needed := false
-				if should_check_target_burn:
+				if target_apsis_reached and not transfer_already_reaches_target:
 					var coast_correction_plan: Dictionary = FlightComputer.target_radius_burn(guidance_position, guidance_velocity, target_radius, G * float(guidance_body.mass))
 					target_correction_needed = bool(coast_correction_plan.get("valid", false)) and float(coast_correction_plan.get("delta_v", INF)) > 1.0
-				if target_radius_reached:
+				if target_alignment_window:
 					autopilot_phase = "CIRCULARISE"
 				elif target_correction_needed:
 					autopilot_phase = "CIRCULARISE"
