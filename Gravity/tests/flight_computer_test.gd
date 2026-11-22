@@ -344,6 +344,23 @@ func _initialize() -> void:
 	assert(route_planner_window.target_x_input is SpinBox)
 	assert(route_planner_window.target_y_input is SpinBox)
 	assert(route_planner_window.route_time_input.max_value >= 8760.0)
+	assert(route_planner_window.navigation_planet_dropdown is OptionButton)
+	assert(route_planner_window.navigation_moon_dropdown is OptionButton)
+	assert(route_planner_window.navigation_altitude_input is SpinBox)
+	assert(route_planner_window.navigation_moon_dropdown.get_selected_id() == -2)
+	route_planner_window.navigation_altitude_input.value = 300.0
+	route_planner_window._calculate_destination_plan()
+	assert(route_planner_window.navigation_plan_valid)
+	assert(float(route_planner_window.navigation_plan.get("delta_v", INF)) > 0.0)
+	assert(route_planner_window.navigation_report.text.contains("ORBIT CHANGE SOLVED"))
+	route_planner_window._send_destination_to_autopilot()
+	assert(planner_sim.autopilot_enabled)
+	assert(planner_sim.autopilot_target_mode == "ORBIT")
+	assert(planner_sim.autopilot_phase == "CIRCULARISE")
+	assert(is_equal_approx(planner_sim.autopilot_target_altitude, 300000.0))
+	planner_sim.autopilot_enabled = false
+	planner_sim.guidance_enabled = false
+	planner_sim.autopilot_phase = "IDLE"
 	route_planner_window.target_x_input.value = 8000.0
 	route_planner_window.target_y_input.value = 3000.0
 	route_planner_window._apply_target_coordinates()
