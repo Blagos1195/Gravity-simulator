@@ -852,12 +852,9 @@ func _update_guidance(dt: float) -> void:
 				elif already_in_stable_orbit:
 					thrust_key_down = false
 					autopilot_phase = "CIRCULARISE"
-				elif bool(orbit.get("bound", false)) and altitude > minimum_safe_altitude and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002)):
+				elif bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002)):
 					thrust_key_down = false
 					autopilot_phase = "COAST"
-				elif altitude > minimum_safe_altitude and float(orbit.get("specific_energy", -INF)) >= -G * float(guidance_body.mass) / (guidance_position.length() + target_radius):
-					thrust_key_down = false
-					autopilot_phase = "CIRCULARISE"
 				elif not bool(orbit.get("bound", false)) and float(orbit.get("radial_speed", 0.0)) > 0.0 and altitude > minimum_safe_altitude and not destination_is_local:
 					thrust_key_down = false
 					autopilot_phase = "PLAN_TRANSFER"
