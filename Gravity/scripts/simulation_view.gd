@@ -858,16 +858,21 @@ func _update_guidance(dt: float) -> void:
 				var target_bound: bool = bool(orbit.get("bound", false))
 				var target_periapsis: float = float(orbit.get("periapsis", 0.0))
 				var safe_target_orbit: bool = target_bound and target_periapsis > float(guidance_body.radius) + 70000.0
-				if target_distance_error < maxf(500.0, target_radius * 0.002) and target_radial_speed < 50.0:
+				var target_radius_reached: bool = target_distance_error < 500.0 and target_radial_speed < 50.0
+				var target_alignment_window: bool = target_distance_error < maxf(500.0, target_radius * 0.002) and target_radial_speed < 50.0
+				var target_apsis_reached: bool = target_radial_speed <= 10.0 and altitude > 70000.0
+				var should_check_target_burn: bool = target_alignment_window or target_apsis_reached or (not safe_target_orbit and altitude > 70000.0 and propellant_available)
+				var target_correction_needed := false
+				if should_check_target_burn:
+					var coast_correction_plan: Dictionary = FlightComputer.target_radius_burn(guidance_position, guidance_velocity, target_radius, G * float(guidance_body.mass))
+					target_correction_needed = bool(coast_correction_plan.get("valid", false)) and float(coast_correction_plan.get("delta_v", INF)) > 1.0
+				if target_radius_reached:
 					autopilot_phase = "CIRCULARISE"
-				elif safe_target_orbit and target_radial_speed <= 10.0 and altitude > 70000.0:
+				elif target_correction_needed:
 					autopilot_phase = "CIRCULARISE"
 					status_message = "AUTOPILOT  •  CORRECTING ORBIT AT APSIS"
-				elif safe_target_orbit:
+				elif safe_target_orbit or (altitude > 70000.0 and propellant_available):
 					status_message = "AUTOPILOT  •  APPROACHING TARGET RADIUS"
-				elif altitude > 70000.0 and propellant_available:
-					autopilot_phase = "CIRCULARISE"
-					status_message = "AUTOPILOT  •  CORRECTING LOW PERIAPSIS"
 				else:
 					_fail_autopilot("TARGET PERIAPSIS IS BELOW THE BODY")
 			"CIRCULARISE_BURN":
