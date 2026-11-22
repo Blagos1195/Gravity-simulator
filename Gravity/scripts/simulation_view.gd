@@ -819,7 +819,7 @@ func _update_guidance(dt: float) -> void:
 	var guidance_orbit_altitude := autopilot_target_altitude if destination_is_local else parking_altitude
 	var tangent := Vector2(-radial.y, radial.x)
 	var atmosphere_height := PlanetarySystem.planetary_atmosphere_height(guidance_body_name)
-	var pitch_reference_altitude := maxf(5000.0, atmosphere_height)
+	var pitch_reference_altitude := maxf(maxf(5000.0, float(guidance_body.radius) * 0.01), atmosphere_height * 0.6)
 	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / pitch_reference_altitude, 0.0, 1.0))
 	if autopilot_enabled:
 		gimbal_angle = 0.0
