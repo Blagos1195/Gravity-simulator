@@ -963,6 +963,13 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = false
 				var transfer_plan: Dictionary = autopilot_precomputed_transfer_plan.duplicate(true)
 				autopilot_precomputed_transfer_plan.clear()
+				if not transfer_plan.is_empty():
+					var planned_position: Vector2 = transfer_plan.get("planned_position", Vector2.INF)
+					var planned_velocity: Vector2 = transfer_plan.get("planned_velocity", Vector2.INF)
+					var plan_matches_target := int(transfer_plan.get("target_id", -999)) == autopilot_planet_index and is_equal_approx(float(transfer_plan.get("target_altitude", -1.0)), autopilot_target_altitude)
+					var plan_matches_state := absf(sim_time - float(transfer_plan.get("planned_at_time", -INF))) <= 2.0 and planned_position.distance_to(rocket_position) <= 20000.0 and planned_velocity.distance_to(velocity) <= 5.0
+					if not plan_matches_target or not plan_matches_state:
+						transfer_plan.clear()
 				if transfer_plan.is_empty():
 					var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
 					var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
