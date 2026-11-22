@@ -70,6 +70,7 @@ class OrbitPlot extends Control:
 	var zoom_factor := 1.0
 	var solar_system_mode := false
 	var solar_system_bodies: Array[Dictionary] = []
+	var solar_system_target_name := ""
 
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
@@ -134,8 +135,9 @@ class OrbitPlot extends Control:
 		has_target = destination_enabled
 		queue_redraw()
 
-	func set_solar_system_path(path: PackedVector2Array, initial_position: Vector2, destination: Vector2, bodies: Array[Dictionary]) -> void:
+	func set_solar_system_path(path: PackedVector2Array, initial_position: Vector2, destination: Vector2, bodies: Array[Dictionary], destination_name: String) -> void:
 		solar_system_mode = true
+		solar_system_target_name = destination_name
 		solar_system_bodies = bodies.duplicate(true)
 		current_path = PackedVector2Array([initial_position])
 		planned_path = path
@@ -164,7 +166,7 @@ class OrbitPlot extends Control:
 			var body_name := str(body.get("name", ""))
 			var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
 			var screen_position := center + Vector2(body_position.x, -body_position.y) * scale_value
-			var body_color := Color(0.92, 0.76, 0.35) if body_name == "Sun" else Color(0.25, 0.78, 1.0) if body_name == str(body.get("target_name", "")) else Color(0.55, 0.68, 0.82)
+			var body_color := Color(0.92, 0.76, 0.35) if body_name == "Sun" else Color(0.25, 0.78, 1.0) if body_name == solar_system_target_name else Color(0.55, 0.68, 0.82)
 			var screen_radius := maxf(2.5, float(body.get("radius", 0.0)) * scale_value)
 			draw_circle(screen_position, screen_radius, body_color)
 			draw_string(ThemeDB.fallback_font, screen_position + Vector2(5.0, -5.0), body_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.82, 0.88, 0.96))
@@ -629,7 +631,8 @@ func _update_navigation_plot() -> void:
 		trajectory,
 		Vector2(simulation.get("rocket_position")),
 		Vector2(target_components[0], target_components[1]),
-		bodies
+		bodies,
+		str(navigation_plan.get("target_name", ""))
 	)
 
 func _send_destination_to_autopilot() -> void:
