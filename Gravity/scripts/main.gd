@@ -861,10 +861,8 @@ func _show_autopilot_panel() -> void:
 			moon_dropdown.add_item("Moon", -1)
 		else:
 			var parent_name := FlightComputer.target_body_name(parent_target_index)
-			for satellite_variant in FlightComputer.SATELLITE_TARGETS:
-				var satellite: Dictionary = satellite_variant
-				if str(satellite.get("host_name", "")) == parent_name:
-					moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
+			for satellite in FlightComputer.satellite_targets_for_host(parent_name):
+				moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
 		moon_dropdown.select(0)
 		moon_dropdown.disabled = moon_dropdown.item_count <= 1
 	var selected_target_index := func() -> int:
