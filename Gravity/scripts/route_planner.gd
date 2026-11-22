@@ -14,6 +14,7 @@ var radial_input: SpinBox
 var state_report: RichTextLabel
 var burn_report: Label
 var autopilot_button: Button
+var cancel_route_button: Button
 var current_body: Dictionary = {}
 var relative_position := Vector2.ZERO
 var relative_velocity := Vector2.ZERO
@@ -361,6 +362,11 @@ func _build_interface() -> void:
 	autopilot_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	autopilot_button.pressed.connect(_send_to_autopilot)
 	actions.add_child(autopilot_button)
+	cancel_route_button = Button.new()
+	cancel_route_button.text = "CANCEL ACTIVE ROUTE"
+	cancel_route_button.visible = false
+	cancel_route_button.pressed.connect(_cancel_route)
+	actions.add_child(cancel_route_button)
 	var close_button := Button.new()
 	close_button.text = "CLOSE"
 	close_button.pressed.connect(queue_free)
@@ -857,6 +863,8 @@ func _update_manoeuvre() -> void:
 	var can_send := not landed_state and not crashed_state and stable_orbit and valid_nodes and not exceeds_delta_v and not route_active and not route_complete
 	autopilot_button.disabled = not can_send
 	autopilot_button.text = "ROUTE ACTIVE IN AUTOPILOT" if route_active else "ROUTE COMPLETE" if route_complete else "SEND ROUTE TO AUTOPILOT"
+	cancel_route_button.visible = route_active or route_complete
+	cancel_route_button.text = "CANCEL ACTIVE ROUTE" if route_active else "CLEAR COMPLETED ROUTE"
 	var send_block_reason := ""
 	if route_active:
 		send_block_reason = "A route is already running."
@@ -892,6 +900,24 @@ func _update_manoeuvre() -> void:
 			route_report.text = "%s   •   TIME %.2f HOURS   •   TARGET X %.1f km, Y %.1f km   •   RANGE %.1f km" % [route_status, route_duration / 3600.0, route_target.x / 1000.0, route_target.y / 1000.0, route_target.length() / 1000.0]
 		else:
 			route_report.text = route_status
+
+func _cancel_route() -> void:
+	if not is_instance_valid(simulation):
+		return
+	var route_was_active := str(simulation.get("autopilot_phase")) in ["ROUTE_COAST", "ROUTE_BURN"]
+	var route_was_complete := str(simulation.get("autopilot_phase")) == "COMPLETE" and str(simulation.get("autopilot_target_mode")) == "MANEUVER"
+	if str(simulation.get("autopilot_target_mode")) != "MANEUVER" or not (route_was_active or route_was_complete):
+		return
+	simulation.set("autopilot_enabled", false)
+	simulation.set("guidance_enabled", false)
+	simulation.set("thrust_key_down", false)
+	simulation.set("autopilot_complete", false)
+	simulation.set("autopilot_phase", "IDLE")
+	simulation.set("autopilot_route_nodes", [])
+	simulation.set("autopilot_route_node_index", 0)
+	simulation.set("autopilot_burn_remaining", 0.0)
+	simulation.set("status_message", "AUTOPILOT  •  ROUTE CANCELLED" if route_was_active else "AUTOPILOT  •  COMPLETED ROUTE CLEARED")
+	_update_manoeuvre()
 
 func _send_to_autopilot() -> void:
 	if not is_instance_valid(simulation) or autopilot_button.disabled:
