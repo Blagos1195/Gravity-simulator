@@ -529,10 +529,11 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 					"departure_delta_v": departure_delta_v,
 					"departure_direction": burn_direction,
 					"capture_delta_v": capture_delta_v,
-					"capture_direction": capture.get("direction", Vector2.ZERO),
+					"capture_direction": Vector2(capture.get("burn_vector", Vector2.ZERO)).normalized(),
 					"total_delta_v": total_delta_v,
 					"transfer_time": closest_time,
 					"closest_approach": closest_distance,
+					"arrival_speed": closest_relative_velocity.length(),
 					"target_soi": target_soi,
 					"simulated_steps": integration_steps,
 					"search_candidates": direction_count * magnitudes.size() * durations.size()
