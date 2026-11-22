@@ -855,6 +855,9 @@ func _update_guidance(dt: float) -> void:
 				elif bool(orbit.get("bound", false)) and altitude > minimum_safe_altitude and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002)):
 					thrust_key_down = false
 					autopilot_phase = "COAST"
+				elif altitude > minimum_safe_altitude and float(orbit.get("specific_energy", -INF)) >= -G * float(guidance_body.mass) / (guidance_position.length() + target_radius):
+					thrust_key_down = false
+					autopilot_phase = "CIRCULARISE"
 				elif not bool(orbit.get("bound", false)) and float(orbit.get("radial_speed", 0.0)) > 0.0 and altitude > minimum_safe_altitude and not destination_is_local:
 					thrust_key_down = false
 					autopilot_phase = "PLAN_TRANSFER"
@@ -866,7 +869,7 @@ func _update_guidance(dt: float) -> void:
 					var ascent_speed_fraction: float = clampf(ascent_speed_gain / maxf(1.0, target_orbit_speed), 0.0, 1.0)
 					var altitude_pitch: float = lerpf(88.0, 4.0, ascent_altitude_fraction)
 					var speed_pitch: float = lerpf(88.0, 4.0, ascent_speed_fraction)
-					pitch_above_horizon = maxf(altitude_pitch, speed_pitch)
+					pitch_above_horizon = minf(altitude_pitch, speed_pitch)
 					status_message = "AUTOPILOT  •  ASCENT  •  ALT %.0f KM  •  Vt %.2f KM/S  •  PITCH %.0f°" % [altitude / 1000.0, ascent_tangential_speed / 1000.0, pitch_above_horizon]
 					thrust_key_down = propellant_available
 			"COAST":
