@@ -999,8 +999,13 @@ func _show_autopilot_panel() -> void:
 			else:
 				text_lines.append("Autopilot will launch and insert into the selected orbit around the current body.")
 		elif not stable_departure_state:
-			text_lines.append("Autopilot will first establish a 200 km parking orbit around %s." % str(current_body.get("name", "the current body")))
-			text_lines.append("Calculate a transfer after reaching that parking orbit for a trajectory estimate.")
+			var current_maximum_stable_altitude := FlightComputer.maximum_stable_orbit_altitude(float(current_body.get("radius", 0.0)), float(current_body.get("soi", 0.0)))
+			if current_maximum_stable_altitude < current_minimum_safe_altitude:
+				text_lines.append("This body has no stable parking orbit inside its sphere of influence; autopilot will use direct escape.")
+			else:
+				var parking_altitude := clampf(200000.0, current_minimum_safe_altitude, current_maximum_stable_altitude)
+				text_lines.append("Autopilot will first establish a %.0f km parking orbit around %s." % [parking_altitude / 1000.0, str(current_body.get("name", "the current body"))])
+				text_lines.append("Calculate a transfer after reaching that parking orbit for a trajectory estimate.")
 		elif not calculate_simulated_transfer:
 			text_lines.append("Press CALCULATE FLIGHT PLAN to simulate trajectories from the current orbit.")
 		else:
@@ -1122,10 +1127,9 @@ func _show_autopilot_panel() -> void:
 		var current_altitude := float(current_body.distance) - float(current_body.radius)
 		var current_minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(str(current_body.get("name", "")), float(current_body.get("radius", 0.0)))
 		var stable_current_orbit := not within_current_sphere or (bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.radius) + current_minimum_safe_altitude)
-		var current_atmosphere_height := PlanetarySystem.planetary_atmosphere_height(str(current_body.get("name", "")))
 		if target_is_near and not sim.landed and not stable_current_orbit:
 			sim.autopilot_phase = "ARRIVAL_APPROACH"
-		elif sim.landed or (current_altitude < current_atmosphere_height and not stable_current_orbit):
+		elif sim.landed or (current_altitude < current_minimum_safe_altitude and not stable_current_orbit):
 			sim.autopilot_phase = "ASCENT"
 		elif destination_is_local:
 			sim.autopilot_phase = "CIRCULARISE"
