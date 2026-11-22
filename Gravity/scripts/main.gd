@@ -858,7 +858,8 @@ func _show_autopilot_panel() -> void:
 		moon_dropdown.clear()
 		moon_dropdown.add_item("Planet only", parent_target_index)
 		if parent_target_index == -2:
-			moon_dropdown.add_item("Moon", -1)
+			moon_dropdown.add_item("Moon")
+			moon_dropdown.set_item_id(moon_dropdown.item_count - 1, -1)
 		else:
 			var parent_name := FlightComputer.target_body_name(parent_target_index)
 			for satellite in FlightComputer.satellite_targets_for_host(parent_name):
