@@ -34,6 +34,9 @@ var route_status := "NO DESTINATION SELECTED"
 var route_time_input: SpinBox
 var route_report: Label
 var solve_route_button: Button
+var target_x_input: SpinBox
+var target_y_input: SpinBox
+var target_coordinates_loading := false
 var interface_scroll: ScrollContainer
 var node_editor: Control
 var add_node_button: Button
@@ -200,7 +203,7 @@ func _build_interface() -> void:
 	root.add_child(heading)
 
 	var description := Label.new()
-	description.text = "Click the map to choose a destination in the current body's sphere of influence. Add a burn node, select it, then edit its time and prograde/radial ΔV. SEND ROUTE stays below while you scroll. It is enabled when the spacecraft is in a safe orbit and the route fits the fuel budget."
+	description.text = "Choose any point inside the current body's sphere of influence by clicking the map or entering body-centred X/Y coordinates. The planner calculates a transfer, previews the path and creates the departure burn. Add or edit further manoeuvre nodes below. Transfers use a simplified two-body model."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 
@@ -213,16 +216,43 @@ func _build_interface() -> void:
 	orbit_plot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(orbit_plot)
 
+	var target_coordinate_row := HBoxContainer.new()
+	target_coordinate_row.add_theme_constant_override("separation", 8)
+	root.add_child(target_coordinate_row)
+	var target_x_label := Label.new()
+	target_x_label.text = "X (KM)"
+	target_x_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	target_coordinate_row.add_child(target_x_label)
+	target_x_input = _create_coordinate_input()
+	target_x_input.tooltip_text = "Target X coordinate relative to the current body's centre."
+	target_coordinate_row.add_child(target_x_input)
+	var target_y_label := Label.new()
+	target_y_label.text = "Y (KM)"
+	target_y_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	target_coordinate_row.add_child(target_y_label)
+	target_y_input = _create_coordinate_input()
+	target_y_input.tooltip_text = "Target Y coordinate relative to the current body's centre."
+	target_coordinate_row.add_child(target_y_input)
+	var set_target_button := Button.new()
+	set_target_button.text = "SET DESTINATION"
+	set_target_button.pressed.connect(_apply_target_coordinates)
+	target_coordinate_row.add_child(set_target_button)
+
+	var coordinate_hint := Label.new()
+	coordinate_hint.text = "Coordinates are relative to the selected body's centre. X points right, Y points up. The destination must be outside the body and inside its sphere of influence."
+	coordinate_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(coordinate_hint)
+
 	var destination_row := HBoxContainer.new()
 	destination_row.add_theme_constant_override("separation", 8)
 	root.add_child(destination_row)
 	var duration_label := Label.new()
-	duration_label.text = "TRANSFER TIME (HOURS)"
+	duration_label.text = "TIME TO ARRIVAL (HOURS)"
 	duration_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	destination_row.add_child(duration_label)
 	route_time_input = SpinBox.new()
 	route_time_input.min_value = 0.1
-	route_time_input.max_value = 48.0
+	route_time_input.max_value = 8760.0
 	route_time_input.step = 0.5
 	route_time_input.value = route_duration / 3600.0
 	route_time_input.custom_minimum_size.x = 110.0
@@ -278,7 +308,7 @@ func _build_interface() -> void:
 	node_controls.add_child(timing_label)
 	time_input = SpinBox.new()
 	time_input.min_value = 0.0
-	time_input.max_value = 10080.0
+	time_input.max_value = 525600.0
 	time_input.step = 1.0
 	time_input.custom_minimum_size.x = 150.0
 	node_controls.add_child(time_input)
@@ -346,6 +376,14 @@ func _process(delta: float) -> void:
 		refresh_elapsed = 0.0
 		_refresh_state()
 
+func _create_coordinate_input() -> SpinBox:
+	var spin := SpinBox.new()
+	spin.min_value = -1000000000000.0
+	spin.max_value = 1000000000000.0
+	spin.step = 1.0
+	spin.custom_minimum_size.x = 150.0
+	return spin
+
 func _create_burn_input() -> SpinBox:
 	var spin := SpinBox.new()
 	spin.min_value = -10000.0
@@ -412,6 +450,10 @@ func _change_route_duration(hours: float) -> void:
 			_calculate_route()
 
 func _clear_route_target() -> void:
+	target_coordinates_loading = true
+	target_x_input.value = 0.0
+	target_y_input.value = 0.0
+	target_coordinates_loading = false
 	has_route_target = false
 	route_solution_dirty = false
 	route_delta_v = 0.0
@@ -437,6 +479,10 @@ func _set_route_target(world_position: Vector2) -> void:
 		route_target = world_position
 		has_route_target = true
 	route_target = world_position
+	target_coordinates_loading = true
+	target_x_input.value = world_position.x / 1000.0
+	target_y_input.value = world_position.y / 1000.0
+	target_coordinates_loading = false
 	route_solution_dirty = false
 	var body_radius := float(current_body.get("radius", 0.0))
 	var sphere_of_influence := float(current_body.get("soi", INF))
@@ -451,6 +497,11 @@ func _set_route_target(world_position: Vector2) -> void:
 		_update_manoeuvre()
 		return
 	_calculate_route()
+
+func _apply_target_coordinates() -> void:
+	if target_coordinates_loading:
+		return
+	_set_route_target(Vector2(target_x_input.value, target_y_input.value) * 1000.0)
 
 func _stumpff_c(value: float) -> float:
 	if absf(value) < 0.0001:
@@ -838,7 +889,7 @@ func _update_manoeuvre() -> void:
 	]
 	if is_instance_valid(route_report):
 		if has_route_target:
-			route_report.text = "%s   •   FLIGHT TIME %.2f HOURS   •   TARGET ALTITUDE %.1f km" % [route_status, route_duration / 3600.0, (route_target.length() - float(current_body.get("radius", 0.0))) / 1000.0]
+			route_report.text = "%s   •   TIME %.2f HOURS   •   TARGET X %.1f km, Y %.1f km   •   RANGE %.1f km" % [route_status, route_duration / 3600.0, route_target.x / 1000.0, route_target.y / 1000.0, route_target.length() / 1000.0]
 		else:
 			route_report.text = route_status
 
