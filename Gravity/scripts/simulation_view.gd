@@ -893,7 +893,10 @@ func _update_guidance(dt: float) -> void:
 				var circularised_velocity: Vector2 = target_orbit_plan.get("desired_velocity", guidance_velocity)
 				var circularised_orbit: Dictionary = FlightComputer.orbital_state(guidance_position, circularised_velocity, G * float(guidance_body.mass))
 				var safe_periapsis: float = float(guidance_body.radius) + 70000.0
-				var circularisation_complete: bool = bool(target_orbit_plan.get("valid", false)) and absf(guidance_position.length() - target_radius) < 500.0 and target_burn_delta_v <= 1.0 and bool(circularised_orbit.get("bound", false)) and float(circularised_orbit.get("periapsis", 0.0)) > safe_periapsis
+				var target_orbit_tolerance: float = 4000.0
+				var circularised_periapsis: float = float(circularised_orbit.get("periapsis", 0.0))
+				var circularised_apoapsis: float = float(circularised_orbit.get("apoapsis", INF))
+				var circularisation_complete: bool = bool(target_orbit_plan.get("valid", false)) and target_burn_delta_v <= 1.0 and bool(circularised_orbit.get("bound", false)) and circularised_periapsis > safe_periapsis and absf(circularised_periapsis - target_radius) < target_orbit_tolerance and absf(circularised_apoapsis - target_radius) < target_orbit_tolerance
 				if not bool(target_orbit_plan.get("valid", false)):
 					thrust_key_down = false
 					_fail_autopilot("ORBIT INSERTION HAS AN INVALID STATE")
