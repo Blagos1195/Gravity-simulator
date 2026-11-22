@@ -892,18 +892,24 @@ func _update_guidance(dt: float) -> void:
 				var target_alignment_speed_tolerance := maxf(0.05, minf(0.5, target_orbit_speed * 0.0001))
 				var apsis_speed_tolerance := maxf(0.05, minf(0.5, target_orbit_speed * 0.0001))
 				var target_alignment_window: bool = target_distance_error < target_alignment_window_radius and target_radial_speed < target_alignment_speed_tolerance
+				var periapsis_target_error: float = absf(target_periapsis - target_radius)
+				var apoapsis_target_error: float = absf(target_apoapsis - target_radius)
+				var orbit_completion_tolerance := maxf(1000.0, minf(5000.0, target_radius * 0.001))
+				var target_orbit_complete: bool = safe_target_orbit and periapsis_target_error <= orbit_completion_tolerance and apoapsis_target_error <= orbit_completion_tolerance
 				var angular_distance_since_correction := absf(wrapf(guidance_position.angle() - autopilot_apsis_correction_angle, -PI, PI))
 				if not autopilot_apsis_correction_armed and angular_distance_since_correction > deg_to_rad(150.0):
 					autopilot_apsis_correction_armed = true
 				var target_apsis_reached: bool = autopilot_apsis_correction_armed and target_radial_speed <= apsis_speed_tolerance and altitude > minimum_safe_altitude
-				var periapsis_target_error: float = absf(target_periapsis - target_radius)
-				var apoapsis_target_error: float = absf(target_apoapsis - target_radius)
 				var transfer_already_reaches_target: bool = target_bound and minf(periapsis_target_error, apoapsis_target_error) <= target_apsis_tolerance
 				var target_correction_needed := false
 				if target_apsis_reached and not transfer_already_reaches_target:
 					var coast_correction_plan: Dictionary = FlightComputer.target_radius_burn(guidance_position, guidance_velocity, target_radius, G * float(guidance_body.mass))
 					target_correction_needed = bool(coast_correction_plan.get("valid", false)) and float(coast_correction_plan.get("delta_v", INF)) > FlightComputer.BURN_COMPLETION_TOLERANCE
-				if target_alignment_window:
+				if target_orbit_complete:
+					autopilot_phase = "COMPLETE"
+					autopilot_complete = true
+					status_message = "AUTOPILOT  •  TARGET ORBIT ACHIEVED"
+				elif target_alignment_window:
 					autopilot_phase = "CIRCULARISE"
 				elif target_correction_needed:
 					autopilot_apsis_correction_armed = false
