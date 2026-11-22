@@ -499,7 +499,7 @@ func _show_new_game_setup() -> void:
 	career.toggled.connect(func(value: bool): career_enabled = value)
 	root.add_child(career)
 	var infinite_fuel := CheckButton.new()
-	infinite_fuel.text = "Infinite, weightless propellant (cheat)"
+	infinite_fuel.text = "Infinite propellant (fuel mass retained)"
 	infinite_fuel.button_pressed = infinite_weightless_fuel
 	infinite_fuel.toggled.connect(func(value: bool): infinite_weightless_fuel = value)
 	root.add_child(infinite_fuel)
