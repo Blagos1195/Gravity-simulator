@@ -45,6 +45,7 @@ var navigation_planet_dropdown: OptionButton
 var navigation_moon_dropdown: OptionButton
 var navigation_altitude_input: SpinBox
 var navigation_report: RichTextLabel
+var navigation_plot: OrbitPlot
 var navigation_engage_button: Button
 var navigation_plan_valid := false
 var navigation_plan: Dictionary = {}
@@ -66,6 +67,8 @@ class OrbitPlot extends Control:
 	var interaction_scale := 1.0
 	var interaction_center := Vector2.ZERO
 	var zoom_factor := 1.0
+	var solar_system_mode := false
+	var solar_system_bodies: Array[Dictionary] = []
 
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
@@ -119,6 +122,8 @@ class OrbitPlot extends Control:
 		return nearest_index
 
 	func set_paths(current: PackedVector2Array, planned: PackedVector2Array, markers: PackedVector2Array, radius: float, initial_position: Vector2, destination: Vector2, destination_enabled: bool) -> void:
+		solar_system_mode = false
+		solar_system_bodies.clear()
 		current_path = current
 		planned_path = planned
 		node_positions = markers
@@ -128,8 +133,52 @@ class OrbitPlot extends Control:
 		has_target = destination_enabled
 		queue_redraw()
 
+	func set_solar_system_path(path: PackedVector2Array, initial_position: Vector2, destination: Vector2, bodies: Array[Dictionary]) -> void:
+		solar_system_mode = true
+		solar_system_bodies = bodies.duplicate(true)
+		current_path = PackedVector2Array([initial_position])
+		planned_path = path
+		node_positions.clear()
+		body_radius = 0.0
+		rocket_position = initial_position
+		target_position = destination
+		has_target = true
+		queue_redraw()
+
+	func _draw_solar_system() -> void:
+		var extent := maxf(rocket_position.length(), target_position.length())
+		for point in planned_path:
+			extent = maxf(extent, point.length())
+		for body in solar_system_bodies:
+			extent = maxf(extent, Vector2(body.get("position", Vector2.ZERO)).length())
+		extent = maxf(1.0, extent * 1.08)
+		var scale_value := minf(size.x, size.y) * 0.46 / extent * zoom_factor
+		var center := size * 0.5
+		var path_screen := PackedVector2Array()
+		for point in planned_path:
+			path_screen.append(center + Vector2(point.x, -point.y) * scale_value)
+		if path_screen.size() > 1:
+			draw_polyline(path_screen, Color(0.25, 0.9, 0.68), 2.2, true)
+		for body in solar_system_bodies:
+			var body_name := str(body.get("name", ""))
+			var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+			var screen_position := center + Vector2(body_position.x, -body_position.y) * scale_value
+			var body_color := Color(0.92, 0.76, 0.35) if body_name == "Sun" else Color(0.25, 0.78, 1.0) if body_name == str(body.get("target_name", "")) else Color(0.55, 0.68, 0.82)
+			var screen_radius := maxf(2.5, float(body.get("radius", 0.0)) * scale_value)
+			draw_circle(screen_position, screen_radius, body_color)
+			draw_string(ThemeDB.fallback_font, screen_position + Vector2(5.0, -5.0), body_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.82, 0.88, 0.96))
+		var rocket_screen := center + Vector2(rocket_position.x, -rocket_position.y) * scale_value
+		var target_screen := center + Vector2(target_position.x, -target_position.y) * scale_value
+		draw_circle(rocket_screen, 4.5, Color(1.0, 0.86, 0.35))
+		draw_circle(target_screen, 7.0, Color(0.25, 0.78, 1.0))
+		draw_arc(target_screen, 11.0, 0.0, TAU, 48, Color(0.55, 0.88, 1.0), 1.8)
+		draw_string(ThemeDB.fallback_font, Vector2(8.0, 18.0), "EARTH-CENTRED TRAJECTORY", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.72, 0.82, 0.92))
+
 	func _draw() -> void:
 		if size.x <= 0.0 or size.y <= 0.0 or current_path.is_empty():
+			return
+		if solar_system_mode:
+			_draw_solar_system()
 			return
 		var extent: float = maxf(rocket_position.length(), body_radius * 1.2)
 		if has_target:
@@ -273,6 +322,12 @@ func _build_interface() -> void:
 	navigation_report.custom_minimum_size.y = 76
 	navigation_report.scroll_active = false
 	root.add_child(navigation_report)
+	navigation_plot = OrbitPlot.new()
+	navigation_plot.custom_minimum_size = Vector2(0, 250)
+	navigation_plot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	navigation_plot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	navigation_plot.visible = false
+	root.add_child(navigation_plot)
 
 	orbit_plot = OrbitPlot.new()
 	orbit_plot.custom_minimum_size = Vector2(0, 250)
@@ -457,6 +512,8 @@ func _rebuild_navigation_moons(parent_target_index: int) -> void:
 func _invalidate_navigation_plan() -> void:
 	navigation_plan_valid = false
 	navigation_plan.clear()
+	if is_instance_valid(navigation_plot):
+		navigation_plot.visible = false
 	if is_instance_valid(navigation_engage_button):
 		navigation_engage_button.disabled = true
 	if is_instance_valid(navigation_report):
@@ -523,6 +580,9 @@ func _calculate_destination_plan() -> void:
 		navigation_plan["local"] = false
 	navigation_plan_valid = true
 	navigation_engage_button.disabled = false
+	navigation_plot.visible = not bool(navigation_plan.get("local", false))
+	if not bool(navigation_plan.get("local", false)):
+		_update_navigation_plot()
 	if bool(navigation_plan.get("local", false)):
 		navigation_report.text = "ORBIT CHANGE SOLVED  •  %s\nTarget altitude: %.1f km\nRequired ΔV: %.0f m/s\nThis plan will circularise around the current body." % [target_name, target_altitude / 1000.0, float(navigation_plan.get("delta_v", 0.0))]
 	else:
@@ -537,6 +597,39 @@ func _calculate_destination_plan() -> void:
 			float(navigation_plan.get("arrival_speed", 0.0)),
 			int(navigation_plan.get("search_candidates", 0))
 		]
+
+func _update_navigation_plot() -> void:
+	if not is_instance_valid(simulation) or navigation_plan.is_empty():
+		return
+	var trajectory: PackedVector2Array = navigation_plan.get("trajectory", PackedVector2Array())
+	var target_components: PackedFloat64Array = navigation_plan.get("target_position", PackedFloat64Array())
+	if trajectory.size() < 2 or target_components.size() < 2:
+		navigation_plot.visible = false
+		return
+	var body_states: Dictionary = PlanetarySystem.gravity_body_states(float(simulation.get("sim_time")))
+	var bodies: Array[Dictionary] = []
+	for body_variant in body_states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
+		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+		var components: PackedFloat64Array = body.get("position_components", PackedFloat64Array())
+		if components.size() >= 2:
+			body_position = Vector2(components[0], components[1])
+		bodies.append({"name": str(body.get("name", "Unknown")), "position": body_position, "radius": float(body.get("radius", 0.0))})
+	for body_variant in body_states.get("bodies", []):
+		var body: Dictionary = body_variant
+		if str(body.get("name", "")) == "Sun":
+			var sun_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+			var sun_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array())
+			if sun_components.size() >= 2:
+				sun_position = Vector2(sun_components[0], sun_components[1])
+			bodies.append({"name": "Sun", "position": sun_position, "radius": float(body.get("radius", 0.0))})
+			break
+	navigation_plot.set_solar_system_path(
+		trajectory,
+		Vector2(simulation.get("rocket_position")),
+		Vector2(target_components[0], target_components[1]),
+		bodies
+	)
 
 func _send_destination_to_autopilot() -> void:
 	if not navigation_plan_valid or not is_instance_valid(simulation) or bool(simulation.get("crashed")):
