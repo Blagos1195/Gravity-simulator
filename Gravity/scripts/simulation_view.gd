@@ -229,19 +229,19 @@ func _physics_step(dt: float) -> void:
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 	var propellant_available := infinite_weightless_fuel or fuel > 0.0
 	throttle = autopilot_throttle if autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if thrust_key_down and propellant_available else 0.0)
-	var fuel_used := 0.0 if infinite_weightless_fuel else minf(fuel, total_flow * throttle * dt)
+	var fuel_used := minf(fuel, total_flow * throttle * dt) if total_flow > 0.0 else 0.0
 	var mass_before := maxf(1.0, _current_vehicle_mass())
-	var mass_after := mass_before if infinite_weightless_fuel else maxf(1.0, mass_before - fuel_used)
+	var mass_after := maxf(1.0, mass_before - fuel_used)
 	var mass_mid := (mass_before + mass_after) * 0.5
 	var initial_atmosphere: Dictionary = {}
 	if realism != "Arcade" or throttle > 0.0:
 		initial_atmosphere = _atmosphere_at(rocket_position, velocity, start_time, rocket_position_precise)
 	var thrust_force: float = _engine_thrust(maxf(0.0, altitude), initial_atmosphere) * throttle if throttle > 0.0 else 0.0
 	var thrust_delta_v := 0.0
-	if infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
-		thrust_delta_v = thrust_force / mass_before * dt
-	elif fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
+	if fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
+	elif infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
+		thrust_delta_v = thrust_force / mass_before * dt
 	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var thrust_impulse := thrust_direction * thrust_delta_v
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
@@ -299,11 +299,10 @@ func _physics_step(dt: float) -> void:
 	final_atmosphere["relative_velocity"] = Vector2(final_atmosphere.get("relative_velocity", Vector2.ZERO)) + velocity - half_velocity
 	_set_rocket_position_components(next_position_components[0], next_position_components[1])
 	sim_time = end_time
-	if not infinite_weightless_fuel:
-		fuel = maxf(0.0, fuel - fuel_used)
+	fuel = maxf(0.0, fuel - fuel_used)
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
-	if not infinite_weightless_fuel and fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
+	if fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
 	_handle_body_contact()
 	if simulate_belt_collisions and not crashed and not landed:
@@ -408,7 +407,7 @@ func _adaptive_step_size() -> float:
 	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and (infinite_weightless_fuel or fuel > 0.0) else 0.0
 	var thrust_limit := 0.08 * maxf(100.0, speed) / engine_acceleration if engine_acceleration > 0.01 else maximum_step
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	var burnout_limit := fuel / total_flow if not infinite_weightless_fuel and thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
+	var burnout_limit := fuel / total_flow if thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
 	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, maximum_step)
 	var step_limit := minf(physics_limit, burnout_limit)
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and not thrust_key_down:
