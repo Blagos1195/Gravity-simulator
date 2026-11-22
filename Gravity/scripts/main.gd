@@ -69,7 +69,6 @@ func _load_general_settings() -> void:
 	var config := ConfigFile.new()
 	config.load("user://settings.cfg")
 	autosave_enabled = bool(config.get_value("general", "autosave", true))
-	infinite_weightless_fuel = bool(config.get_value("general", "infinite_weightless_fuel", false))
 	simulate_belt_collisions = bool(config.get_value("general", "simulate_belt_collisions", false))
 	var fullscreen := bool(config.get_value("general", "fullscreen", false))
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
@@ -77,7 +76,6 @@ func _load_general_settings() -> void:
 func _save_general_settings() -> void:
 	var config := ConfigFile.new()
 	config.set_value("general", "autosave", autosave_enabled)
-	config.set_value("general", "infinite_weightless_fuel", infinite_weightless_fuel)
 	config.set_value("general", "simulate_belt_collisions", simulate_belt_collisions)
 	config.set_value("general", "fullscreen", DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN)
 	config.save("user://settings.cfg")
@@ -456,6 +454,7 @@ func _launch_designed_vehicle() -> void:
 
 func _begin_new_game() -> void:
 	rocket_design = RocketDesign.create_default()
+	infinite_weightless_fuel = false
 	_show_new_game_setup()
 
 func _show_new_game_setup() -> void:
@@ -499,6 +498,11 @@ func _show_new_game_setup() -> void:
 	career.button_pressed = career_enabled
 	career.toggled.connect(func(value: bool): career_enabled = value)
 	root.add_child(career)
+	var infinite_fuel := CheckButton.new()
+	infinite_fuel.text = "Infinite, weightless propellant (cheat)"
+	infinite_fuel.button_pressed = infinite_weightless_fuel
+	infinite_fuel.toggled.connect(func(value: bool): infinite_weightless_fuel = value)
+	root.add_child(infinite_fuel)
 	var note := Label.new()
 	note.text = "These choices are stored with this new save and remain separate from global game settings."
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -633,14 +637,6 @@ func _show_settings() -> void:
 		_save_general_settings()
 	)
 	settings_root.add_child(autosave)
-	var infinite_fuel := CheckButton.new()
-	infinite_fuel.text = "Infinite, weightless propellant (cheat)"
-	infinite_fuel.button_pressed = infinite_weightless_fuel
-	infinite_fuel.toggled.connect(func(enabled: bool):
-		infinite_weightless_fuel = enabled
-		_save_general_settings()
-	)
-	settings_root.add_child(infinite_fuel)
 	var belt_collisions := CheckButton.new()
 	belt_collisions.text = "Enable small-body collision simulation"
 	belt_collisions.button_pressed = simulate_belt_collisions
@@ -718,6 +714,7 @@ func _build_flight_hud() -> void:
 	right.add_child(slot_picker)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
+	_add_button(right, "VELOCITY VECTOR  [V]", func(): sim.show_vectors = not sim.show_vectors)
 	_add_button(right, "AUTOPILOT", _show_autopilot_panel)
 	_add_button(right, "FLIGHT COMPUTER", _show_flight_computer)
 	_add_button(right, "PREDICTED PATH  [P]", func():
@@ -738,7 +735,7 @@ func _build_flight_hud() -> void:
 	bottom.offset_top = -58
 	bottom.offset_bottom = -8
 	bottom.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
+	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
