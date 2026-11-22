@@ -104,6 +104,8 @@ func _validate_local_orbit_autopilot(body_name: String) -> void:
 	simulation.autopilot_phase = "CIRCULARISE"
 	var elapsed := 0.0
 	var iterations := 0
+	var previous_phase := simulation.autopilot_phase
+	var phase_transitions: Array[String] = []
 	while elapsed < orbital_period and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
 		var step: float = simulation._adaptive_step_size()
 		assert(step > 0.000001, "%s autopilot produced a zero physics step" % body_name)
@@ -111,7 +113,19 @@ func _validate_local_orbit_autopilot(body_name: String) -> void:
 		simulation._physics_step(step)
 		elapsed += step
 		iterations += 1
+		if simulation.autopilot_phase != previous_phase:
+			var phase_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
+			var phase_position: Vector2 = phase_body.relative_position
+			var phase_velocity: Vector2 = simulation.velocity - Vector2(phase_body.velocity)
+			var phase_orbit := FlightComputer.orbital_state(phase_position, phase_velocity, body_mu)
+			phase_transitions.append("%.1f %s>%s alt=%.1f radial=%.3f peri=%.1f apo=%.1f burn=%.3f" % [elapsed, previous_phase, simulation.autopilot_phase, float(phase_body.distance) - body_radius, float(phase_orbit.get("radial_speed", INF)), float(phase_orbit.get("periapsis", 0.0)) - body_radius, float(phase_orbit.get("apoapsis", INF)) - body_radius, simulation.autopilot_burn_remaining])
+			previous_phase = simulation.autopilot_phase
 		assert(iterations < 300000, "%s autopilot exceeded its step budget" % body_name)
+	var diagnostic_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
+	var diagnostic_position: Vector2 = diagnostic_body.relative_position
+	var diagnostic_velocity: Vector2 = simulation.velocity - Vector2(diagnostic_body.velocity)
+	var diagnostic_orbit := FlightComputer.orbital_state(diagnostic_position, diagnostic_velocity, body_mu)
+	print("%s autopilot trace: phase=%s elapsed=%.1f alt=%.1f radial=%.3f peri=%.1f apo=%.1f burn=%.3f transitions=%s" % [body_name, simulation.autopilot_phase, elapsed, float(diagnostic_body.distance) - body_radius, float(diagnostic_orbit.get("radial_speed", INF)), float(diagnostic_orbit.get("periapsis", 0.0)) - body_radius, float(diagnostic_orbit.get("apoapsis", INF)) - body_radius, simulation.autopilot_burn_remaining, "; ".join(PackedStringArray(phase_transitions))])
 	assert(simulation.autopilot_complete, "%s local orbit autopilot failed: phase=%s status=%s altitude=%.1f fuel=%.1f" % [body_name, simulation.autopilot_phase, simulation.status_message, float(simulation._nearest_body_state(simulation.rocket_position).get("distance", 0.0)) - body_radius, simulation.fuel])
 	var final_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	assert(str(final_body.get("name", "")) == body_name, "%s autopilot left its local reference body" % body_name)
