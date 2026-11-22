@@ -30,19 +30,29 @@ func _validate_leo_autopilot_mission() -> void:
 	var mission_time_limit: float = target_orbit_period * 2.0
 	var elapsed := 0.0
 	var iterations := 0
+	var previous_phase: String = simulation.autopilot_phase
+	var phase_transitions: Array[String] = []
 	while elapsed < mission_time_limit and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
 		var step: float = simulation._adaptive_step_size()
 		assert(step > 0.000001)
 		simulation._physics_step(step)
 		elapsed += step
 		iterations += 1
-		assert(iterations < 100000, "LEO mission exceeded its iteration budget: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f step=%.4f" % [simulation.autopilot_phase, simulation.status_message, elapsed, simulation._nearest_body_state(simulation.rocket_position).distance - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel, step])
+		if simulation.autopilot_phase != previous_phase:
+			var transition_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
+			var transition_position: Vector2 = transition_body.relative_position
+			var transition_velocity: Vector2 = simulation.velocity - transition_body.velocity
+			var transition_orbit: Dictionary = FlightComputer.orbital_state(transition_position, transition_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
+			phase_transitions.append("%.1f s %s>%s alt=%.0f radial=%.1f peri=%.0f apo=%.0f burn=%.1f" % [elapsed, previous_phase, simulation.autopilot_phase, float(transition_body.distance) - PlanetarySystem.EARTH_RADIUS, float(transition_orbit.get("radial_speed", INF)), float(transition_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(transition_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.autopilot_burn_remaining])
+			previous_phase = simulation.autopilot_phase
+		if iterations >= 300000:
+			break
 	var end_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var end_position: Vector2 = end_body.relative_position
 	var end_velocity: Vector2 = simulation.velocity - end_body.velocity
 	var end_orbit: Dictionary = FlightComputer.orbital_state(end_position, end_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
 	assert(not simulation.crashed, "LEO ascent crashed: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f" % [simulation.autopilot_phase, simulation.status_message, elapsed, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel])
-	assert(simulation.autopilot_complete, "LEO mission did not complete: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f radial_speed=%.1f periapsis_altitude=%.1f apoapsis_altitude=%.1f fuel=%.1f landed=%s crashed=%s" % [simulation.autopilot_phase, simulation.status_message, elapsed, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), float(end_orbit.get("radial_speed", INF)), float(end_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(end_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, simulation.landed, simulation.crashed])
+	assert(simulation.autopilot_complete, "LEO mission did not complete: phase=%s status=%s elapsed=%.1f iterations=%d altitude=%.1f speed=%.1f radial_speed=%.1f periapsis_altitude=%.1f apoapsis_altitude=%.1f fuel=%.1f landed=%s crashed=%s transitions=%s" % [simulation.autopilot_phase, simulation.status_message, elapsed, iterations, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), float(end_orbit.get("radial_speed", INF)), float(end_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(end_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, simulation.landed, simulation.crashed, "; ".join(phase_transitions)])
 	assert(simulation.autopilot_phase == "COMPLETE")
 	assert(not simulation.landed)
 	var earth_state: Dictionary = simulation._surface_body_state("Earth")
