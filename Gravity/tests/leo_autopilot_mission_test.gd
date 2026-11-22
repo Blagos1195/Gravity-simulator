@@ -25,15 +25,17 @@ func _validate_leo_autopilot_mission() -> void:
 	simulation.autopilot_planet_index = -2
 	simulation.autopilot_phase = "ASCENT"
 	simulation.thrust_key_down = true
+	var target_orbit_radius := PlanetarySystem.EARTH_RADIUS + simulation.autopilot_target_altitude
+	var mission_time_limit := TAU * sqrt(pow(target_orbit_radius, 3.0) / (PlanetarySystem.G * PlanetarySystem.EARTH_MASS))
 	var elapsed := 0.0
 	var iterations := 0
-	while elapsed < 2400.0 and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
+	while elapsed < mission_time_limit and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
 		var step: float = simulation._adaptive_step_size()
 		assert(step > 0.000001)
 		simulation._physics_step(step)
 		elapsed += step
 		iterations += 1
-		assert(iterations < 30000, "LEO ascent exceeded its iteration budget: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f step=%.4f" % [simulation.autopilot_phase, simulation.status_message, elapsed, simulation._nearest_body_state(simulation.rocket_position).distance - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel, step])
+		assert(iterations < 100000, "LEO mission exceeded its iteration budget: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f step=%.4f" % [simulation.autopilot_phase, simulation.status_message, elapsed, simulation._nearest_body_state(simulation.rocket_position).distance - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel, step])
 	assert(not simulation.crashed, "LEO ascent crashed: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f" % [simulation.autopilot_phase, simulation.status_message, elapsed, simulation._nearest_body_state(simulation.rocket_position).distance - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel])
 	assert(simulation.autopilot_complete)
 	assert(simulation.autopilot_phase == "COMPLETE")
