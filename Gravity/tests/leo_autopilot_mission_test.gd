@@ -50,6 +50,7 @@ func _validate_leo_autopilot_mission() -> void:
 			previous_phase = simulation.autopilot_phase
 		if iterations >= 300000:
 			break
+	print("LEO phase trace: " + "; ".join(PackedStringArray(phase_transitions)))
 	var end_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var end_position: Vector2 = end_body.relative_position
 	var end_velocity: Vector2 = simulation.velocity - end_body.velocity
