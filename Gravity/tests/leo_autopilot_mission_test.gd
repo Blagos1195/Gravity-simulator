@@ -25,8 +25,8 @@ func _validate_leo_autopilot_mission() -> void:
 	simulation.autopilot_planet_index = -2
 	simulation.autopilot_phase = "ASCENT"
 	simulation.thrust_key_down = true
-	var target_orbit_radius := PlanetarySystem.EARTH_RADIUS + simulation.autopilot_target_altitude
-	var mission_time_limit := TAU * sqrt(pow(target_orbit_radius, 3.0) / (PlanetarySystem.G * PlanetarySystem.EARTH_MASS))
+	var target_orbit_radius: float = PlanetarySystem.EARTH_RADIUS + float(simulation.autopilot_target_altitude)
+	var mission_time_limit: float = TAU * sqrt(pow(target_orbit_radius, 3.0) / (PlanetarySystem.G * PlanetarySystem.EARTH_MASS))
 	var elapsed := 0.0
 	var iterations := 0
 	while elapsed < mission_time_limit and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
