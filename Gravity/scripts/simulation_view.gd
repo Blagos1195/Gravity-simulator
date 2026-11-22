@@ -1060,7 +1060,6 @@ func _update_guidance(dt: float) -> void:
 				var approach_relative_velocity: Vector2 = velocity - approach_target_state.velocity
 				var arrival_orbit := FlightComputer.orbital_state(approach_relative_position, approach_relative_velocity, G * float(approach_target_state.mass))
 				var approach_radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
-				var approach_speed_tolerance := maxf(0.1, minf(10.0, FlightComputer.circular_orbit_speed(float(approach_target_state.radius) + autopilot_target_altitude, G * float(approach_target_state.mass)) * 0.001))
 				status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0f KM" % [str(approach_target_state.name).to_upper(), (approach_relative_position.length() - float(approach_target_state.radius)) / 1000.0]
 				if approach_radial_speed < 0.0:
 					_begin_arrival_capture(approach_target_state)
