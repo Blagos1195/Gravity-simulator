@@ -866,7 +866,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
 				thrust_key_down = false
 				var coast_radial_speed: float = float(orbit.get("radial_speed", 0.0))
-				var coast_speed_tolerance := maxf(0.1, minf(10.0, target_orbit_speed * 0.001))
+				var coast_speed_tolerance := maxf(0.1, minf(10.0, target_orbit_speed * 0.01))
 				if absf(coast_radial_speed) <= coast_speed_tolerance and altitude > minimum_safe_altitude:
 					autopilot_phase = "CIRCULARISE"
 			"COAST_TO_TARGET":
@@ -879,8 +879,8 @@ func _update_guidance(dt: float) -> void:
 				var target_apoapsis: float = float(orbit.get("apoapsis", INF))
 				var safe_target_orbit: bool = target_bound and target_periapsis > float(guidance_body.radius) + minimum_safe_altitude
 				var target_alignment_tolerance := FlightComputer.orbit_radius_tolerance(target_radius)
-				var target_alignment_speed_tolerance := maxf(0.1, minf(50.0, target_orbit_speed * 0.005))
-				var apsis_speed_tolerance := maxf(0.1, minf(10.0, target_orbit_speed * 0.001))
+				var target_alignment_speed_tolerance := maxf(0.1, minf(50.0, target_orbit_speed * 0.03))
+				var apsis_speed_tolerance := maxf(0.1, minf(10.0, target_orbit_speed * 0.01))
 				var target_alignment_window: bool = target_distance_error < target_alignment_tolerance and target_radial_speed < target_alignment_speed_tolerance
 				var target_apsis_reached: bool = target_radial_speed <= apsis_speed_tolerance and altitude > minimum_safe_altitude
 				var periapsis_target_error: float = absf(target_periapsis - target_radius)
