@@ -50,6 +50,7 @@ var autopilot_target_altitude := 200000.0
 var autopilot_target_mode := "ORBIT"
 var autopilot_planet_index := -1
 var autopilot_burn_remaining := 0.0
+var autopilot_apsis_correction_armed := true
 var autopilot_throttle := 0.0
 var autopilot_transfer_start_time := -1.0
 var autopilot_transfer_duration := 0.0
@@ -248,6 +249,7 @@ func _physics_step(dt: float) -> void:
 		if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
 			thrust_key_down = false
 			if autopilot_phase == "CIRCULARISE_BURN":
+				autopilot_apsis_correction_armed = false
 				autopilot_phase = "COAST_TO_TARGET"
 				status_message = "AUTOPILOT  •  COASTING TO TARGET ORBIT"
 			elif autopilot_phase == "TRANSFER_BURN":
@@ -260,6 +262,7 @@ func _physics_step(dt: float) -> void:
 				var arrival_orbit := FlightComputer.orbital_state(arrival_position, arrival_velocity, G * float(arrival_state.mass))
 				var arrival_minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(str(arrival_state.get("name", "")), float(arrival_state.radius))
 				if bool(arrival_orbit.get("bound", false)) and float(arrival_orbit.get("periapsis", 0.0)) > float(arrival_state.radius) + arrival_minimum_safe_altitude:
+					autopilot_apsis_correction_armed = false
 					autopilot_phase = "COAST_TO_TARGET"
 				else:
 					_fail_autopilot("ARRIVAL BURN DID NOT PRODUCE A SAFE ORBIT")
@@ -600,6 +603,7 @@ func _begin_arrival_capture(target_state: Dictionary) -> void:
 	autopilot_burn_direction = autopilot_arrival_burn_vector.normalized()
 	autopilot_burn_remaining = float(capture.delta_v)
 	if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
+		autopilot_apsis_correction_armed = false
 		autopilot_phase = "COAST_TO_TARGET"
 	else:
 		autopilot_phase = "ARRIVAL_CAPTURE_BURN"
@@ -883,7 +887,10 @@ func _update_guidance(dt: float) -> void:
 				var target_alignment_speed_tolerance := maxf(0.05, minf(0.5, target_orbit_speed * 0.0001))
 				var apsis_speed_tolerance := maxf(0.05, minf(0.5, target_orbit_speed * 0.0001))
 				var target_alignment_window: bool = target_distance_error < target_alignment_window_radius and target_radial_speed < target_alignment_speed_tolerance
-				var target_apsis_reached: bool = target_radial_speed <= apsis_speed_tolerance and altitude > minimum_safe_altitude
+				var apsis_release_speed := maxf(0.05, target_orbit_speed * 0.002)
+				if not autopilot_apsis_correction_armed and target_radial_speed > apsis_release_speed:
+					autopilot_apsis_correction_armed = true
+				var target_apsis_reached: bool = autopilot_apsis_correction_armed and target_radial_speed <= apsis_speed_tolerance and altitude > minimum_safe_altitude
 				var periapsis_target_error: float = absf(target_periapsis - target_radius)
 				var apoapsis_target_error: float = absf(target_apoapsis - target_radius)
 				var transfer_already_reaches_target: bool = target_bound and minf(periapsis_target_error, apoapsis_target_error) <= target_apsis_tolerance
@@ -894,6 +901,7 @@ func _update_guidance(dt: float) -> void:
 				if target_alignment_window:
 					autopilot_phase = "CIRCULARISE"
 				elif target_correction_needed:
+					autopilot_apsis_correction_armed = false
 					autopilot_phase = "CIRCULARISE"
 					status_message = "AUTOPILOT  •  CORRECTING ORBIT AT APSIS"
 				elif safe_target_orbit or (altitude > minimum_safe_altitude and propellant_available):
@@ -934,6 +942,7 @@ func _update_guidance(dt: float) -> void:
 					autopilot_burn_remaining = target_burn_delta_v
 					if target_burn_delta_v <= FlightComputer.BURN_COMPLETION_TOLERANCE:
 						thrust_key_down = false
+						autopilot_apsis_correction_armed = false
 						autopilot_phase = "COAST_TO_TARGET"
 					else:
 						autopilot_phase = "CIRCULARISE_BURN"
@@ -1747,6 +1756,7 @@ func get_save_data() -> Dictionary:
 		"autopilot_target_mode": autopilot_target_mode,
 		"autopilot_planet_index": autopilot_planet_index,
 		"autopilot_burn_remaining": autopilot_burn_remaining,
+		"autopilot_apsis_correction_armed": autopilot_apsis_correction_armed,
 		"autopilot_throttle": autopilot_throttle,
 		"autopilot_transfer_start_time": autopilot_transfer_start_time,
 		"autopilot_transfer_duration": autopilot_transfer_duration,
@@ -1857,6 +1867,7 @@ func load_save_data(data: Dictionary) -> bool:
 	autopilot_target_mode = str(data.get("autopilot_target_mode", "ORBIT"))
 	autopilot_planet_index = int(data.get("autopilot_planet_index", -1))
 	autopilot_burn_remaining = float(data.get("autopilot_burn_remaining", 0.0))
+	autopilot_apsis_correction_armed = bool(data.get("autopilot_apsis_correction_armed", true))
 	autopilot_throttle = float(data.get("autopilot_throttle", 0.0))
 	autopilot_transfer_start_time = float(data.get("autopilot_transfer_start_time", sim_time if str(data.get("autopilot_phase", "IDLE")) == "TRANSFER_COAST" else -1.0))
 	autopilot_transfer_duration = float(data.get("autopilot_transfer_duration", 0.0))
