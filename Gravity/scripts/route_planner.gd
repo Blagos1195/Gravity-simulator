@@ -22,6 +22,7 @@ var gravitational_parameter := 0.0
 var available_delta_v := 0.0
 var initial_available_delta_v := 0.0
 var nodes: Array[Dictionary] = []
+var planned_path_times := PackedFloat64Array()
 var selected_node_index := -1
 var loading_node := false
 var current_orbit_duration := 7200.0
@@ -943,24 +944,25 @@ func _calculate_route() -> void:
 	_update_manoeuvre()
 
 func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
-	if index < 0 or index >= nodes.size() or current_path.size() < 2:
+	if index < 0 or index >= nodes.size() or planned_path.size() < 2 or planned_path_times.size() != planned_path.size():
 		return
 	if index == 0:
 		_invalidate_route_solution()
 	var nearest_index := 0
 	var nearest_distance := INF
-	for point_index in range(current_path.size()):
-		var distance: float = current_path[point_index].distance_squared_to(world_position)
+	for point_index in range(planned_path.size()):
+		var distance: float = planned_path[point_index].distance_squared_to(world_position)
 		if distance < nearest_distance:
 			nearest_distance = distance
 			nearest_index = point_index
-	var fraction := float(nearest_index) / float(current_path.size() - 1)
-	var time_offset := fraction * current_orbit_duration
-	var step_time := current_orbit_duration / float(current_path.size() - 1)
+	var time_offset: float = planned_path_times[nearest_index]
 	var before_index := maxi(0, nearest_index - 1)
-	var after_index := mini(current_path.size() - 1, nearest_index + 1)
-	var burn_position: Vector2 = current_path[nearest_index]
-	var burn_velocity: Vector2 = (current_path[after_index] - current_path[before_index]) / maxf(0.001, float(after_index - before_index) * step_time)
+	var after_index := mini(planned_path.size() - 1, nearest_index + 1)
+	var burn_position: Vector2 = planned_path[nearest_index]
+	var sample_duration: float = planned_path_times[after_index] - planned_path_times[before_index]
+	var burn_velocity: Vector2 = relative_velocity
+	if sample_duration > 0.001:
+		burn_velocity = (planned_path[after_index] - planned_path[before_index]) / sample_duration
 	var radial: Vector2 = burn_position.normalized()
 	var tangent := Vector2(-radial.y, radial.x)
 	if burn_position.cross(burn_velocity) < 0.0:
@@ -977,7 +979,8 @@ func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
 	)
 	selected_node_index = 0
 	for node_index in range(nodes.size()):
-		if is_equal_approx(float(nodes[node_index].get("time_offset", 0.0)), time_offset):
+		var candidate: Dictionary = nodes[node_index]
+		if is_equal_approx(float(candidate.get("time_offset", 0.0)), time_offset) and is_equal_approx(float(candidate.get("prograde", 0.0)), float(node.get("prograde", 0.0))) and is_equal_approx(float(candidate.get("radial", 0.0)), float(node.get("radial", 0.0))):
 			selected_node_index = node_index
 			break
 	_rebuild_node_list()
@@ -1055,7 +1058,8 @@ func _append_integrated_path(path: PackedVector2Array, position: Vector2, veloci
 
 func _build_prediction_paths() -> void:
 	current_path = PackedVector2Array()
-	var planned_path := PackedVector2Array()
+	var planned_path := PackedVector2Array([relative_position])
+	planned_path_times = PackedFloat64Array([0.0])
 	var markers := PackedVector2Array()
 	var current_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, gravitational_parameter)
 	var orbit_duration: float = 7200.0
@@ -1080,6 +1084,8 @@ func _build_prediction_paths() -> void:
 				break
 			var coast_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, coast_duration, coast_steps)
 			planned_path = coast_result.get("path", planned_path)
+			for sample_index in range(coast_steps):
+				planned_path_times.append(elapsed + coast_duration * float(sample_index + 1) / float(coast_steps))
 			plan_position = coast_result.get("position", plan_position)
 			plan_velocity = coast_result.get("velocity", plan_velocity)
 			integrated_steps += coast_steps
@@ -1098,8 +1104,11 @@ func _build_prediction_paths() -> void:
 			final_duration = TAU * sqrt(pow(final_axis, 3.0) / gravitational_parameter)
 	final_duration = route_duration if has_route_target else clampf(final_duration, 60.0, 30.0 * 86400.0)
 	var remaining_steps: int = 1440
+	var final_steps: int = clampi(int(ceil(final_duration / 120.0)), 1, remaining_steps)
 	var final_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, final_duration, remaining_steps)
 	planned_path = final_result.get("path", planned_path)
+	for sample_index in range(final_steps):
+		planned_path_times.append(elapsed + final_duration * float(sample_index + 1) / float(final_steps))
 	if has_route_target:
 		var body_radius := float(current_body.get("radius", 0.0))
 		for point in planned_path:
