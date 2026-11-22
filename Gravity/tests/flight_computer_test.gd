@@ -60,11 +60,11 @@ func _initialize() -> void:
 	assert(absf(mars_target_components[0] - expected_mars_components[0]) < 0.001)
 	assert(absf(mars_target_components[1] - expected_mars_components[1]) < 0.001)
 	var gravity_snapshot := PlanetarySystem.gravity_body_states(0.0)
-	var expected_gravity_body_count := 9
+	var expected_body_count := 9
 	for planet in PlanetarySystem.get_planet_catalog():
 		if str(planet.get("name", "")) != "Earth":
-			expected_gravity_body_count += planet.get("satellites", []).size()
-	assert(gravity_snapshot.get("bodies", []).size() == expected_gravity_body_count)
+			expected_body_count += planet.get("satellites", []).size()
+	assert(gravity_snapshot.get("bodies", []).size() == expected_body_count)
 	for body in gravity_snapshot.get("surface_bodies", []):
 		assert(body.get("position_components", PackedFloat64Array()) is PackedFloat64Array)
 		assert(body.get("velocity_components", PackedFloat64Array()) is PackedFloat64Array)
@@ -364,7 +364,7 @@ func _initialize() -> void:
 	var analytical_moon_velocity: Vector2 = PlanetarySystem.moon_velocity(moon_velocity_time)
 	var numerical_moon_velocity: Vector2 = (PlanetarySystem.moon_position(moon_velocity_time + 3600.0) - PlanetarySystem.moon_position(moon_velocity_time - 3600.0)) / 7200.0
 	assert(analytical_moon_velocity.distance_to(numerical_moon_velocity) < 0.1)
-	assert(gravity_snapshot.get("surface_bodies", []).size() == 9)
+	assert(gravity_snapshot.get("surface_bodies", []).size() == expected_body_count)
 	var cached_simulation: Variant = SimulationView.new()
 	var cached_moon: Dictionary = cached_simulation._surface_body_state("Moon")
 	var interpolated_states: Dictionary = cached_simulation._ephemeris_states_at(5.0)
