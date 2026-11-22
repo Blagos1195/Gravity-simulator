@@ -72,7 +72,7 @@ func _validate_infinite_weightless_fuel() -> void:
 	simulation._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 0.5)
 	var initial_mass: float = simulation._current_vehicle_mass()
 	var initial_fuel: float = simulation.fuel
-	assert(initial_mass < RocketDesign.total_initial_mass(RocketDesign.create_default()))
+	assert(is_equal_approx(initial_mass, RocketDesign.total_initial_mass(RocketDesign.create_default())))
 	simulation.thrust_key_down = true
 	simulation._physics_step(0.05)
 	assert(not simulation.landed)
@@ -80,6 +80,12 @@ func _validate_infinite_weightless_fuel() -> void:
 	assert(is_equal_approx(simulation._current_vehicle_mass(), initial_mass))
 	assert(simulation.velocity.length() > 0.0)
 	assert(not is_finite(simulation._remaining_ideal_delta_v(initial_mass)))
+	var first_stage_fuel: float = float(simulation._active_stage_data().get("fuel_capacity", 0.0))
+	var first_stage_dry_mass: float = float(simulation._active_stage_data().get("dry_mass", 0.0))
+	simulation._separate_stage()
+	assert(is_equal_approx(simulation.discarded_propellant_mass, first_stage_fuel))
+	assert(is_equal_approx(simulation.discarded_stage_mass, first_stage_dry_mass))
+	assert(is_equal_approx(simulation._current_vehicle_mass(), initial_mass - first_stage_fuel - first_stage_dry_mass))
 	simulation.free()
 
 
