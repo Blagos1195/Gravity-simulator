@@ -41,6 +41,13 @@ var target_coordinates_loading := false
 var interface_scroll: ScrollContainer
 var node_editor: Control
 var add_node_button: Button
+var navigation_planet_dropdown: OptionButton
+var navigation_moon_dropdown: OptionButton
+var navigation_altitude_input: SpinBox
+var navigation_report: RichTextLabel
+var navigation_engage_button: Button
+var navigation_plan_valid := false
+var navigation_plan: Dictionary = {}
 
 class OrbitPlot extends Control:
 	signal node_dragged(index: int, world_position: Vector2)
@@ -207,6 +214,65 @@ func _build_interface() -> void:
 	description.text = "Choose any point inside the current body's sphere of influence by clicking the map or entering body-centred X/Y coordinates. The planner calculates a transfer, previews the path and creates the departure burn. Add or edit further manoeuvre nodes below. Transfers use a simplified two-body model."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
+
+	var navigation_heading := Label.new()
+	navigation_heading.text = "DESTINATION NAVIGATION"
+	navigation_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	root.add_child(navigation_heading)
+	var navigation_description := Label.new()
+	navigation_description.text = "Plan a transfer to any modeled planet or moon and enter a target orbit. This uses the same trajectory search and autopilot as the main destination controls."
+	navigation_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(navigation_description)
+	var navigation_row := HBoxContainer.new()
+	root.add_child(navigation_row)
+	navigation_planet_dropdown = OptionButton.new()
+	navigation_planet_dropdown.add_item("Earth", -2)
+	for planet_index in range(FlightComputer.PLANET_TARGETS.size()):
+		var planet: Dictionary = FlightComputer.PLANET_TARGETS[planet_index]
+		navigation_planet_dropdown.add_item(str(planet.get("name", "Unknown")), planet_index)
+	navigation_planet_dropdown.item_selected.connect(func(_index: int):
+		_rebuild_navigation_moons(navigation_planet_dropdown.get_selected_id())
+		_invalidate_navigation_plan()
+	)
+	navigation_row.add_child(navigation_planet_dropdown)
+	navigation_moon_dropdown = OptionButton.new()
+	navigation_moon_dropdown.custom_minimum_size.x = 190.0
+	navigation_moon_dropdown.item_selected.connect(func(_index: int): _invalidate_navigation_plan())
+	navigation_row.add_child(navigation_moon_dropdown)
+	_rebuild_navigation_moons(-2)
+	var altitude_row := HBoxContainer.new()
+	root.add_child(altitude_row)
+	var altitude_label := Label.new()
+	altitude_label.text = "TARGET ORBIT ALTITUDE"
+	altitude_row.add_child(altitude_label)
+	navigation_altitude_input = SpinBox.new()
+	navigation_altitude_input.min_value = 1.0
+	navigation_altitude_input.max_value = 1000000000.0
+	navigation_altitude_input.step = 1.0
+	navigation_altitude_input.value = 200.0
+	navigation_altitude_input.suffix = " km"
+	navigation_altitude_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	navigation_altitude_input.value_changed.connect(func(_value: float): _invalidate_navigation_plan())
+	altitude_row.add_child(navigation_altitude_input)
+	var navigation_actions := HBoxContainer.new()
+	root.add_child(navigation_actions)
+	var calculate_navigation_button := Button.new()
+	calculate_navigation_button.text = "CALCULATE DESTINATION TRANSFER"
+	calculate_navigation_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	calculate_navigation_button.pressed.connect(_calculate_destination_plan)
+	navigation_actions.add_child(calculate_navigation_button)
+	navigation_engage_button = Button.new()
+	navigation_engage_button.text = "SEND TO AUTOPILOT"
+	navigation_engage_button.disabled = true
+	navigation_engage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	navigation_engage_button.pressed.connect(_send_destination_to_autopilot)
+	navigation_actions.add_child(navigation_engage_button)
+	navigation_report = RichTextLabel.new()
+	navigation_report.bbcode_enabled = false
+	navigation_report.fit_content = true
+	navigation_report.custom_minimum_size.y = 76
+	navigation_report.scroll_active = false
+	root.add_child(navigation_report)
 
 	orbit_plot = OrbitPlot.new()
 	orbit_plot.custom_minimum_size = Vector2(0, 250)
@@ -375,6 +441,128 @@ func _build_interface() -> void:
 	time_input.value_changed.connect(_update_selected_node)
 	prograde_input.value_changed.connect(_update_selected_node)
 	radial_input.value_changed.connect(_update_selected_node)
+
+func _rebuild_navigation_moons(parent_target_index: int) -> void:
+	navigation_moon_dropdown.clear()
+	navigation_moon_dropdown.add_item("Planet only", parent_target_index)
+	if parent_target_index == -2:
+		navigation_moon_dropdown.add_item("Moon", -1)
+	else:
+		var parent_name := FlightComputer.target_body_name(parent_target_index)
+		for satellite in FlightComputer.satellite_targets_for_host(parent_name):
+			navigation_moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
+	navigation_moon_dropdown.select(0)
+	navigation_moon_dropdown.disabled = navigation_moon_dropdown.item_count <= 1
+
+func _invalidate_navigation_plan() -> void:
+	navigation_plan_valid = false
+	navigation_plan.clear()
+	if is_instance_valid(navigation_engage_button):
+		navigation_engage_button.disabled = true
+	if is_instance_valid(navigation_report):
+		navigation_report.text = "DESTINATION CHANGED  •  RECALCULATE THE TRANSFER BEFORE SENDING IT TO AUTOPILOT."
+
+func _calculate_destination_plan() -> void:
+	if not is_instance_valid(simulation):
+		return
+	var target_id := navigation_moon_dropdown.get_selected_id()
+	var target_name := FlightComputer.target_body_name(target_id)
+	var target_altitude := navigation_altitude_input.value * 1000.0
+	var target_body: Dictionary = simulation.call("_surface_body_state", target_name)
+	if target_body.is_empty():
+		navigation_report.text = "TARGET BODY DATA IS UNAVAILABLE."
+		_invalidate_navigation_plan()
+		return
+	var target_radius := float(target_body.get("radius", 0.0)) + target_altitude
+	var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(target_name, float(target_body.get("radius", 0.0)))
+	var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(float(target_body.get("radius", 0.0)), float(target_body.get("soi", 0.0)))
+	if target_altitude < minimum_altitude or target_altitude > maximum_altitude:
+		navigation_report.text = "NO STABLE TARGET ORBIT AT THAT ALTITUDE. Valid range: %.1f–%.1f km." % [minimum_altitude / 1000.0, maximum_altitude / 1000.0]
+		_invalidate_navigation_plan()
+		return
+	var rocket_position: Vector2 = simulation.get("rocket_position")
+	var current: Dictionary = simulation.call("_nearest_body_state", rocket_position)
+	var current_name := str(current.get("name", ""))
+	var current_position: Vector2 = rocket_position - Vector2(current.get("position", Vector2.ZERO))
+	var current_velocity: Vector2 = Vector2(simulation.get("velocity")) - Vector2(current.get("velocity", Vector2.ZERO))
+	var current_mu := FlightComputer.G * float(current.get("mass", 0.0))
+	var current_orbit := FlightComputer.orbital_state(current_position, current_velocity, current_mu)
+	var current_minimum := FlightComputer.minimum_safe_orbit_altitude(current_name, float(current.get("radius", 0.0)))
+	var inside_current_soi := float(current.get("distance", INF)) <= float(current.get("soi", 0.0))
+	var stable_orbit := inside_current_soi and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + current_minimum
+	if current_name == target_name:
+		if not stable_orbit:
+			navigation_report.text = "ESTABLISH A SAFE ORBIT AROUND %s BEFORE CALCULATING AN ORBIT CHANGE." % target_name.to_upper()
+			_invalidate_navigation_plan()
+			return
+		var local_plan := FlightComputer.target_radius_burn(current_position, current_velocity, target_radius, current_mu)
+		if not bool(local_plan.get("valid", false)):
+			navigation_report.text = "NO VALID LOCAL ORBIT CHANGE WAS FOUND."
+			_invalidate_navigation_plan()
+			return
+		navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "delta_v": float(local_plan.get("delta_v", 0.0)), "local": true}
+	else:
+		if not stable_orbit:
+			navigation_report.text = "A SAFE PARKING ORBIT AROUND %s IS REQUIRED BEFORE A DESTINATION TRANSFER CAN BE CALCULATED." % current_name.to_upper()
+			_invalidate_navigation_plan()
+			return
+		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
+		var transfer: Dictionary = FlightComputer.simulated_transfer_search_precise(simulation.get("rocket_position_precise"), simulation.get("velocity"), float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
+		if not bool(transfer.get("valid", false)):
+			navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
+			_invalidate_navigation_plan()
+			return
+		navigation_plan = transfer.duplicate(true)
+		navigation_plan["target_id"] = target_id
+		navigation_plan["target_name"] = target_name
+		navigation_plan["target_altitude"] = target_altitude
+		navigation_plan["local"] = false
+	navigation_plan_valid = true
+	navigation_engage_button.disabled = false
+	if bool(navigation_plan.get("local", false)):
+		navigation_report.text = "ORBIT CHANGE SOLVED  •  %s\nTarget altitude: %.1f km\nRequired ΔV: %.0f m/s\nThis plan will circularise around the current body." % [target_name, target_altitude / 1000.0, float(navigation_plan.get("delta_v", 0.0))]
+	else:
+		navigation_report.text = "TRANSFER SOLVED  •  %s\nDeparture ΔV: %.0f m/s\nArrival capture ΔV: %.0f m/s\nTotal estimated ΔV: %.0f m/s\nFlight time: %.1f days\nClosest approach: %.0f km\nCandidate trajectories: %d\nFinite-burn losses and mid-course correction errors are not included." % [
+			target_name,
+			float(navigation_plan.get("departure_delta_v", 0.0)),
+			float(navigation_plan.get("capture_delta_v", 0.0)),
+			float(navigation_plan.get("total_delta_v", 0.0)),
+			float(navigation_plan.get("transfer_time", 0.0)) / 86400.0,
+			float(navigation_plan.get("closest_approach", 0.0)) / 1000.0,
+			int(navigation_plan.get("search_candidates", 0))
+		]
+
+func _send_destination_to_autopilot() -> void:
+	if not navigation_plan_valid or not is_instance_valid(simulation) or bool(simulation.get("crashed")):
+		return
+	var target_id := int(navigation_plan.get("target_id", -999))
+	var target_name := str(navigation_plan.get("target_name", ""))
+	if target_id == -999 or target_name.is_empty():
+		return
+	var current: Dictionary = simulation.call("_nearest_body_state", simulation.get("rocket_position"))
+	var current_name := str(current.get("name", ""))
+	var relative_position: Vector2 = Vector2(simulation.get("rocket_position")) - Vector2(current.get("position", Vector2.ZERO))
+	var relative_velocity: Vector2 = Vector2(simulation.get("velocity")) - Vector2(current.get("velocity", Vector2.ZERO))
+	var current_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(current.get("mass", 0.0)))
+	var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(current_name, float(current.get("radius", 0.0)))
+	var stable_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + minimum_altitude
+	simulation.set("autopilot_enabled", true)
+	simulation.set("autopilot_complete", false)
+	simulation.set("autopilot_target_mode", "ORBIT")
+	simulation.set("autopilot_planet_index", target_id)
+	simulation.set("autopilot_target_altitude", float(navigation_plan.get("target_altitude", 200000.0)))
+	simulation.set("autopilot_burn_remaining", 0.0)
+	simulation.set("autopilot_burn_direction", Vector2.ZERO)
+	simulation.set("autopilot_transfer_corrections", 0)
+	simulation.set("autopilot_apsis_correction_armed", true)
+	simulation.set("autopilot_apsis_correction_angle", relative_position.angle())
+	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if bool(simulation.get("landed")) or not stable_orbit else "PLAN_TRANSFER")
+	simulation.set("guidance_enabled", true)
+	simulation.set("thrust_key_down", bool(simulation.get("landed")) or not stable_orbit)
+	simulation.set("status_message", "FLIGHT COMPUTER  •  NAVIGATING TO %s" % target_name.to_upper())
+	navigation_engage_button.disabled = true
+	navigation_engage_button.text = "AUTOPILOT ENGAGED"
+	navigation_report.text += "\n\nAUTOPILOT ENGAGED. The flight computer has transferred the destination and orbit altitude to the live guidance system."
 
 func _process(delta: float) -> void:
 	refresh_elapsed += delta
