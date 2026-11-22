@@ -75,6 +75,8 @@ class OrbitPlot extends Control:
 	var solar_system_target_name := ""
 
 	func _gui_input(event: InputEvent) -> void:
+		if solar_system_mode and not (event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]):
+			return
 		if event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 			zoom_factor = clampf(zoom_factor * (1.15 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.15), 0.25, 4.0)
 			queue_redraw()
@@ -337,7 +339,7 @@ func _build_interface() -> void:
 	root.add_child(navigation_progress)
 	navigation_plot = OrbitPlot.new()
 	navigation_plot.custom_minimum_size = Vector2(0, 250)
-	navigation_plot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	navigation_plot.mouse_filter = Control.MOUSE_FILTER_STOP
 	navigation_plot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	navigation_plot.visible = false
 	root.add_child(navigation_plot)
