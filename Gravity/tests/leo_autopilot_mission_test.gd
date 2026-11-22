@@ -43,7 +43,10 @@ func _validate_leo_autopilot_mission() -> void:
 			var transition_position: Vector2 = transition_body.relative_position
 			var transition_velocity: Vector2 = simulation.velocity - transition_body.velocity
 			var transition_orbit: Dictionary = FlightComputer.orbital_state(transition_position, transition_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
-			phase_transitions.append("%.1f s %s>%s alt=%.0f radial=%.1f peri=%.0f apo=%.0f burn=%.1f" % [elapsed, previous_phase, simulation.autopilot_phase, float(transition_body.distance) - PlanetarySystem.EARTH_RADIUS, float(transition_orbit.get("radial_speed", INF)), float(transition_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(transition_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.autopilot_burn_remaining])
+			if phase_transitions.size() < 30:
+				phase_transitions.append("%.1f s %s>%s alt=%.0f radial=%.1f peri=%.0f apo=%.0f burn=%.1f" % [elapsed, previous_phase, simulation.autopilot_phase, float(transition_body.distance) - PlanetarySystem.EARTH_RADIUS, float(transition_orbit.get("radial_speed", INF)), float(transition_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(transition_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.autopilot_burn_remaining])
+			elif phase_transitions.size() == 30:
+				phase_transitions.append("Further phase transitions omitted")
 			previous_phase = simulation.autopilot_phase
 		if iterations >= 300000:
 			break
