@@ -1064,7 +1064,7 @@ func _update_guidance(dt: float) -> void:
 				if approach_radial_speed < 0.0:
 					_begin_arrival_capture(approach_target_state)
 				else:
-					_fail_autopilot("ARRIVAL CAPTURE WINDOW MISSED  •  SPACECRAFT IS MOVING AWAY FROM THE MOON")
+					_fail_autopilot("ARRIVAL CAPTURE WINDOW MISSED  •  SPACECRAFT IS MOVING AWAY FROM THE TARGET")
 			"ARRIVAL_CAPTURE_BURN":
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
 				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
