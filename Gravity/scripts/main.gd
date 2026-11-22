@@ -868,8 +868,7 @@ func _show_autopilot_panel() -> void:
 		moon_dropdown.select(0)
 		moon_dropdown.disabled = moon_dropdown.item_count <= 1
 	var selected_target_index := func() -> int:
-		var selected_item_id := moon_dropdown.get_selected_id()
-		return selected_item_id if selected_item_id != -1 or planet_dropdown.get_selected_id() == -2 else planet_dropdown.get_selected_id()
+		return moon_dropdown.get_selected_id()
 	planet_dropdown.select(0)
 	rebuild_moon_options.call(planet_dropdown.get_selected_id())
 	var orbit_altitude_label := Label.new()
