@@ -105,7 +105,7 @@ static func maximum_stable_orbit_altitude(body_radius: float, sphere_of_influenc
 
 
 static func orbit_radius_tolerance(target_radius: float) -> float:
-	return maxf(10.0, minf(4000.0, target_radius * 0.0005))
+	return maxf(500.0, minf(4000.0, target_radius * 0.0008))
 
 
 static func orbital_state(position: Vector2, velocity: Vector2, mu: float = -1.0) -> Dictionary:
