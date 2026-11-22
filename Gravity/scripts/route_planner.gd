@@ -470,15 +470,15 @@ func _calculate_destination_plan() -> void:
 	var target_altitude := navigation_altitude_input.value * 1000.0
 	var target_body: Dictionary = simulation.call("_surface_body_state", target_name)
 	if target_body.is_empty():
-		navigation_report.text = "TARGET BODY DATA IS UNAVAILABLE."
 		_invalidate_navigation_plan()
+		navigation_report.text = "TARGET BODY DATA IS UNAVAILABLE."
 		return
 	var target_radius := float(target_body.get("radius", 0.0)) + target_altitude
 	var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(target_name, float(target_body.get("radius", 0.0)))
 	var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(float(target_body.get("radius", 0.0)), float(target_body.get("soi", 0.0)))
 	if target_altitude < minimum_altitude or target_altitude > maximum_altitude:
-		navigation_report.text = "NO STABLE TARGET ORBIT AT THAT ALTITUDE. Valid range: %.1f–%.1f km." % [minimum_altitude / 1000.0, maximum_altitude / 1000.0]
 		_invalidate_navigation_plan()
+		navigation_report.text = "NO STABLE TARGET ORBIT AT THAT ALTITUDE. Valid range: %.1f–%.1f km." % [minimum_altitude / 1000.0, maximum_altitude / 1000.0]
 		return
 	var rocket_position: Vector2 = simulation.get("rocket_position")
 	var current: Dictionary = simulation.call("_nearest_body_state", rocket_position)
@@ -492,25 +492,26 @@ func _calculate_destination_plan() -> void:
 	var stable_orbit := inside_current_soi and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + current_minimum
 	if current_name == target_name:
 		if not stable_orbit:
-			navigation_report.text = "ESTABLISH A SAFE ORBIT AROUND %s BEFORE CALCULATING AN ORBIT CHANGE." % target_name.to_upper()
 			_invalidate_navigation_plan()
+			navigation_report.text = "ESTABLISH A SAFE ORBIT AROUND %s BEFORE CALCULATING AN ORBIT CHANGE." % target_name.to_upper()
 			return
 		var local_plan := FlightComputer.target_radius_burn(current_position, current_velocity, target_radius, current_mu)
-		if not bool(local_plan.get("valid", false)):
-			navigation_report.text = "NO VALID LOCAL ORBIT CHANGE WAS FOUND."
+		var local_available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
+		if not bool(local_plan.get("valid", false)) or float(local_plan.get("delta_v", INF)) > local_available:
 			_invalidate_navigation_plan()
+			navigation_report.text = "NO FEASIBLE LOCAL ORBIT CHANGE. Check the target orbit and remaining ΔV budget."
 			return
 		navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "delta_v": float(local_plan.get("delta_v", 0.0)), "local": true}
 	else:
 		if not stable_orbit:
-			navigation_report.text = "A SAFE PARKING ORBIT AROUND %s IS REQUIRED BEFORE A DESTINATION TRANSFER CAN BE CALCULATED." % current_name.to_upper()
 			_invalidate_navigation_plan()
+			navigation_report.text = "A SAFE PARKING ORBIT AROUND %s IS REQUIRED BEFORE A DESTINATION TRANSFER CAN BE CALCULATED." % current_name.to_upper()
 			return
 		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
 		var transfer: Dictionary = FlightComputer.simulated_transfer_search_precise(simulation.get("rocket_position_precise"), simulation.get("velocity"), float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
 		if not bool(transfer.get("valid", false)):
-			navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
 			_invalidate_navigation_plan()
+			navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
 			return
 		navigation_plan = transfer.duplicate(true)
 		navigation_plan["target_id"] = target_id
