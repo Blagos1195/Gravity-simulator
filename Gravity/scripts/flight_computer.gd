@@ -471,6 +471,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				var closest_relative_velocity := Vector2.ZERO
 				var closest_target_position := PackedFloat64Array()
 				var closest_time := flight_duration
+				var closest_trajectory_index := 0
 				var candidate_trajectory := PackedVector2Array([Vector2(position[0], position[1])])
 				var collided := false
 				for step_index in range(integration_steps):
@@ -508,6 +509,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 						closest_relative_velocity = velocity - Vector2(target_state.velocity)
 						closest_target_position = target_position.duplicate()
 						closest_time = float(step_index + 1) * step_size
+						closest_trajectory_index = candidate_trajectory.size() - 1
 				if collided:
 					continue
 				var target_soi := float(initial_target.soi)
@@ -528,6 +530,9 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				if candidate_score >= best_score:
 					continue
 				best_score = candidate_score
+				var arrival_trajectory := PackedVector2Array()
+				for trajectory_index in range(closest_trajectory_index + 1):
+					arrival_trajectory.append(candidate_trajectory[trajectory_index])
 				best_plan = {
 					"valid": true,
 					"departure_delta_v": departure_delta_v,
@@ -539,7 +544,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 					"closest_approach": closest_distance,
 					"arrival_speed": closest_relative_velocity.length(),
 					"target_position": closest_target_position,
-					"trajectory": candidate_trajectory,
+					"trajectory": arrival_trajectory,
 					"target_soi": target_soi,
 					"simulated_steps": integration_steps,
 					"search_candidates": direction_count * magnitudes.size() * durations.size()
