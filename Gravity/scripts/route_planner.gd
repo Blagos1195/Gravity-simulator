@@ -7,6 +7,7 @@ var simulation: Control
 var rocket_design: Dictionary = {}
 var orbit_plot: OrbitPlot
 var current_path := PackedVector2Array()
+var planned_path := PackedVector2Array()
 var node_list: ItemList
 var time_input: SpinBox
 var prograde_input: SpinBox
@@ -1134,7 +1135,7 @@ func _append_integrated_path(path: PackedVector2Array, position: Vector2, veloci
 
 func _build_prediction_paths() -> void:
 	current_path = PackedVector2Array()
-	var planned_path := PackedVector2Array([relative_position])
+	planned_path = PackedVector2Array([relative_position])
 	planned_path_times = PackedFloat64Array([0.0])
 	var markers := PackedVector2Array()
 	var current_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, gravitational_parameter)
