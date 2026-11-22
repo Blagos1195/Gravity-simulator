@@ -128,7 +128,7 @@ func _initialize() -> void:
 	) / 172800.0
 	var mars_velocity_error := numerical_mars_velocity.distance_to(PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time))
 	assert(mars_velocity_error < 5.0)
-	var mars_planet: Dictionary = PlanetarySystem._find_planet("Mars")
+	var mars_planet: Dictionary = PlanetarySystem._planet_data("Mars")
 	var precise_step := minf(float(mars_planet.orbital_period) * 86400.0 * 0.001, 86400.0)
 	var precise_before := PlanetarySystem._planet_relative_position_components(mars_planet, ephemeris_time - precise_step)
 	var precise_after := PlanetarySystem._planet_relative_position_components(mars_planet, ephemeris_time + precise_step)
