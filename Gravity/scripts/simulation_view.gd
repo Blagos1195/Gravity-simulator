@@ -422,7 +422,11 @@ func _adaptive_step_size() -> float:
 	if autopilot_enabled and autopilot_phase == "COAST":
 		var coast_orbit: Dictionary = FlightComputer.orbital_state(body.relative_position, velocity - Vector2(body.velocity), G * float(body.mass))
 		var coast_radial_speed: float = absf(float(coast_orbit.get("radial_speed", 0.0)))
-		var coast_orbit_altitude := autopilot_target_altitude if str(body.get("name", "")) == _autopilot_target_body_name() and float(body.get("distance", INF)) <= float(body.get("soi", 0.0)) else 200000.0
+		var body_name := str(body.get("name", ""))
+		var body_minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(body_name, float(body.radius))
+		var body_maximum_stable_altitude := FlightComputer.maximum_stable_orbit_altitude(float(body.radius), float(body.get("soi", 0.0)))
+		var parking_altitude := clampf(200000.0, body_minimum_safe_altitude, maxf(body_minimum_safe_altitude, body_maximum_stable_altitude))
+		var coast_orbit_altitude := autopilot_target_altitude if body_name == _autopilot_target_body_name() and float(body.get("distance", INF)) <= float(body.get("soi", 0.0)) else parking_altitude
 		if bool(coast_orbit.get("bound", false)) and coast_radial_speed < 500.0 and float(coast_orbit.get("apoapsis", 0.0)) >= float(body.radius) + coast_orbit_altitude * 0.95:
 			step_limit = minf(step_limit, 10.0)
 	if autopilot_enabled and autopilot_phase == "ROUTE_COAST" and autopilot_route_node_index < autopilot_route_nodes.size():
