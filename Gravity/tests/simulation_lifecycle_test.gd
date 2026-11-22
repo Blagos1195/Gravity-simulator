@@ -7,6 +7,7 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 func _initialize() -> void:
 	_validate_launch_and_fuel()
 	_validate_infinite_weightless_fuel()
+	_validate_save_options()
 	_validate_staging()
 	_validate_atmospheric_forces()
 	_validate_surface_contact()
@@ -80,6 +81,20 @@ func _validate_infinite_weightless_fuel() -> void:
 	assert(simulation.velocity.length() > 0.0)
 	assert(not is_finite(simulation._remaining_ideal_delta_v(initial_mass)))
 	simulation.free()
+
+
+func _validate_save_options() -> void:
+	var original: Variant = SimulationView.new()
+	original.set_rocket_design(RocketDesign.create_default())
+	original.infinite_weightless_fuel = true
+	original.show_vectors = false
+	var save_data: Dictionary = original.get_save_data()
+	var restored: Variant = SimulationView.new()
+	assert(restored.load_save_data(save_data), "Save options could not be restored")
+	assert(restored.infinite_weightless_fuel, "Infinite propellant was not saved per flight")
+	assert(not restored.show_vectors, "Velocity vector visibility was not saved per flight")
+	original.free()
+	restored.free()
 
 func _validate_atmospheric_forces() -> void:
 	var simulation: Variant = SimulationView.new()
