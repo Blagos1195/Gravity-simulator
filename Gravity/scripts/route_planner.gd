@@ -913,8 +913,8 @@ func _cancel_route() -> void:
 	simulation.set("thrust_key_down", false)
 	simulation.set("autopilot_complete", false)
 	simulation.set("autopilot_phase", "IDLE")
-	var empty_route: Array[Dictionary] = []
-	simulation.set("autopilot_route_nodes", empty_route)
+	var active_route_nodes: Array[Dictionary] = simulation.get("autopilot_route_nodes")
+	active_route_nodes.clear()
 	simulation.set("autopilot_route_node_index", 0)
 	simulation.set("autopilot_burn_remaining", 0.0)
 	simulation.set("status_message", "AUTOPILOT  •  ROUTE CANCELLED" if route_was_active else "AUTOPILOT  •  COMPLETED ROUTE CLEARED")
