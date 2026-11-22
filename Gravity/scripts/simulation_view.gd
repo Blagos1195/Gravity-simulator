@@ -893,7 +893,7 @@ func _update_guidance(dt: float) -> void:
 				var apsis_speed_tolerance := maxf(0.05, minf(0.5, target_orbit_speed * 0.0001))
 				var target_alignment_window: bool = target_distance_error < target_alignment_window_radius and target_radial_speed < target_alignment_speed_tolerance
 				var angular_distance_since_correction := absf(wrapf(guidance_position.angle() - autopilot_apsis_correction_angle, -PI, PI))
-				if not autopilot_apsis_correction_armed and angular_distance_since_correction > deg_to_rad(30.0):
+				if not autopilot_apsis_correction_armed and angular_distance_since_correction > deg_to_rad(150.0):
 					autopilot_apsis_correction_armed = true
 				var target_apsis_reached: bool = autopilot_apsis_correction_armed and target_radial_speed <= apsis_speed_tolerance and altitude > minimum_safe_altitude
 				var periapsis_target_error: float = absf(target_periapsis - target_radius)
