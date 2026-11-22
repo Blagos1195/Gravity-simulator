@@ -1245,6 +1245,7 @@ func _load_game_from_path(path: String) -> void:
 			if status_label:
 				status_label.text = "SAVE DATA IS INVALID  •  SLOT %02d" % save_slot
 			return
+		infinite_weightless_fuel = sim.infinite_weightless_fuel
 		realism = str(parsed.get("realism", realism))
 		world_scale = str(parsed.get("world_scale", world_scale))
 		career_enabled = bool(parsed.get("career_enabled", career_enabled))
