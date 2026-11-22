@@ -83,6 +83,22 @@ static func target_body_name(target_index: int) -> String:
 		return str(satellite.get("name", ""))
 	return ""
 
+static func minimum_safe_orbit_altitude(body_name: String, body_radius: float) -> float:
+	var atmosphere_height := maxf(0.0, PlanetarySystem.planetary_atmosphere_height(body_name))
+	var atmosphere_margin := maxf(1000.0, atmosphere_height * 0.1) if atmosphere_height > 0.0 else 0.0
+	return maxf(maxf(1000.0, body_radius * 0.001), atmosphere_height + atmosphere_margin)
+
+
+static func maximum_stable_orbit_altitude(body_radius: float, sphere_of_influence: float) -> float:
+	if body_radius <= 0.0 or sphere_of_influence <= body_radius:
+		return 0.0
+	return maxf(0.0, sphere_of_influence * 0.45 - body_radius)
+
+
+static func orbit_radius_tolerance(target_radius: float) -> float:
+	return maxf(10.0, minf(4000.0, target_radius * 0.0005))
+
+
 static func orbital_state(position: Vector2, velocity: Vector2, mu: float = -1.0) -> Dictionary:
 	if mu < 0.0:
 		mu = EARTH_MU
@@ -304,9 +320,9 @@ static func departure_periapsis_direction(target_index: int, current_time: float
 	return periapsis_tangent.rotated(-direction_sign * PI * 0.5).normalized()
 
 
-static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float, target_altitude: float = 100000.0) -> Dictionary:
+static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float, target_altitude: float = 100000.0, minimum_safe_altitude: float = 1000.0) -> Dictionary:
 	var radius := position.length()
-	var target_radius := body_radius + maxf(70000.0, target_altitude)
+	var target_radius := body_radius + maxf(minimum_safe_altitude, target_altitude)
 	if radius < target_radius or body_mu <= 0.0:
 		return {"valid": false}
 	var capture := target_radius_burn(position, velocity, target_radius, body_mu)
@@ -485,7 +501,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				if closest_distance > target_soi:
 					continue
 				var target_mu := G * float(initial_target.mass)
-				var capture := arrival_capture_burn(closest_relative_position, closest_relative_velocity, target_mu, float(initial_target.radius), target_orbit_altitude)
+				var target_safe_altitude := minimum_safe_orbit_altitude(str(initial_target.get("name", "")), float(initial_target.radius))
+				var capture := arrival_capture_burn(closest_relative_position, closest_relative_velocity, target_mu, float(initial_target.radius), target_orbit_altitude, target_safe_altitude)
 				if not bool(capture.get("valid", false)):
 					continue
 				var capture_delta_v := float(capture.get("total_delta_v", INF))
@@ -524,7 +541,8 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 	if target_index == -2 or not _is_valid_target_index(target_index) or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Select a destination other than Earth and provide a positive manoeuvre budget."}
 	var radius := start_position.length()
-	if radius < EARTH_RADIUS + 70000.0:
+	var earth_minimum_orbit_altitude := minimum_safe_orbit_altitude("Earth", EARTH_RADIUS)
+	if radius < EARTH_RADIUS + earth_minimum_orbit_altitude:
 		return {"valid": false, "reason": "A stable Earth departure orbit is required."}
 	var mu := G * PlanetarySystem.EARTH_MASS
 	var initial_orbit := orbital_state(start_position, start_velocity, mu)
