@@ -857,9 +857,13 @@ func _update_guidance(dt: float) -> void:
 				var target_radial_speed: float = absf(float(orbit.get("radial_speed", 0.0)))
 				var target_bound: bool = bool(orbit.get("bound", false))
 				var target_periapsis: float = float(orbit.get("periapsis", 0.0))
+				var safe_target_orbit: bool = target_bound and target_periapsis > float(guidance_body.radius) + 70000.0
 				if target_distance_error < maxf(500.0, target_radius * 0.002) and target_radial_speed < 50.0:
 					autopilot_phase = "CIRCULARISE"
-				elif target_bound and target_periapsis > float(guidance_body.radius):
+				elif safe_target_orbit and target_radial_speed <= 10.0 and altitude > 70000.0:
+					autopilot_phase = "CIRCULARISE"
+					status_message = "AUTOPILOT  •  CORRECTING ORBIT AT APSIS"
+				elif safe_target_orbit:
 					status_message = "AUTOPILOT  •  APPROACHING TARGET RADIUS"
 				elif altitude > 70000.0 and propellant_available:
 					autopilot_phase = "CIRCULARISE"
