@@ -327,6 +327,9 @@ func _initialize() -> void:
 	route_sim.sim_time = 20.0
 	route_sim._update_guidance(0.01)
 	assert(route_sim.autopilot_phase == "ROUTE_BURN")
+	route_sim._physics_step(2.0)
+	assert(route_sim.autopilot_phase == "COMPLETE")
+	assert(route_sim.autopilot_complete)
 	route_sim.free()
 
 	var planner_sim: Variant = SimulationView.new()
@@ -373,6 +376,24 @@ func _initialize() -> void:
 	assert(planner_sim.autopilot_route_nodes.size() == 1)
 	assert(route_planner_window.autopilot_button.disabled)
 	assert(route_planner_window.autopilot_button.text == "ROUTE ACTIVE IN AUTOPILOT")
+	assert(route_planner_window.cancel_route_button.visible)
+	route_planner_window.cancel_route_button.emit_signal("pressed")
+	assert(not planner_sim.autopilot_enabled)
+	assert(planner_sim.autopilot_phase == "IDLE")
+	assert(planner_sim.autopilot_route_nodes.is_empty())
+	assert(not route_planner_window.cancel_route_button.visible)
+	assert(not route_planner_window.autopilot_button.disabled)
+	planner_sim.autopilot_enabled = true
+	planner_sim.autopilot_complete = true
+	planner_sim.autopilot_target_mode = "MANEUVER"
+	planner_sim.autopilot_phase = "COMPLETE"
+	route_planner_window._update_manoeuvre()
+	assert(route_planner_window.cancel_route_button.visible)
+	assert(route_planner_window.cancel_route_button.text == "CLEAR COMPLETED ROUTE")
+	route_planner_window.cancel_route_button.emit_signal("pressed")
+	assert(not planner_sim.autopilot_enabled)
+	assert(not planner_sim.autopilot_complete)
+	assert(planner_sim.autopilot_phase == "IDLE")
 	route_planner_window.free()
 	planner_sim.free()
 
