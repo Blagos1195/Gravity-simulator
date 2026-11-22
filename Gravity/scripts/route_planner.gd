@@ -46,8 +46,10 @@ var navigation_planet_dropdown: OptionButton
 var navigation_moon_dropdown: OptionButton
 var navigation_altitude_input: SpinBox
 var navigation_report: RichTextLabel
+var navigation_progress: Label
 var navigation_plot: OrbitPlot
 var navigation_engage_button: Button
+var navigation_cancel_button: Button
 var navigation_plan_valid := false
 var navigation_plan: Dictionary = {}
 
@@ -319,12 +321,20 @@ func _build_interface() -> void:
 	navigation_engage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	navigation_engage_button.pressed.connect(_send_destination_to_autopilot)
 	navigation_actions.add_child(navigation_engage_button)
+	navigation_cancel_button = Button.new()
+	navigation_cancel_button.text = "CANCEL MISSION"
+	navigation_cancel_button.visible = false
+	navigation_cancel_button.pressed.connect(_cancel_destination_autopilot)
+	navigation_actions.add_child(navigation_cancel_button)
 	navigation_report = RichTextLabel.new()
 	navigation_report.bbcode_enabled = false
 	navigation_report.fit_content = true
 	navigation_report.custom_minimum_size.y = 76
 	navigation_report.scroll_active = false
 	root.add_child(navigation_report)
+	navigation_progress = Label.new()
+	navigation_progress.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(navigation_progress)
 	navigation_plot = OrbitPlot.new()
 	navigation_plot.custom_minimum_size = Vector2(0, 250)
 	navigation_plot.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -635,6 +645,65 @@ func _update_navigation_plot() -> void:
 		str(navigation_plan.get("target_name", ""))
 	)
 
+func _refresh_navigation_state() -> void:
+	if not is_instance_valid(simulation) or not is_instance_valid(navigation_engage_button):
+		return
+	var autopilot_enabled := bool(simulation.get("autopilot_enabled"))
+	var target_mode := str(simulation.get("autopilot_target_mode"))
+	var autopilot_target_id := int(simulation.get("autopilot_planet_index"))
+	var phase := str(simulation.get("autopilot_phase"))
+	var destination_mission := target_mode == "ORBIT" and (autopilot_enabled or phase in ["COMPLETE", "FAILED", "ARRIVAL_PENDING"])
+	navigation_cancel_button.visible = destination_mission
+	navigation_cancel_button.text = "CANCEL DESTINATION MISSION" if autopilot_enabled else "CLEAR MISSION STATUS"
+	if autopilot_enabled:
+		navigation_engage_button.disabled = true
+		navigation_engage_button.text = "AUTOPILOT ACTIVE"
+	elif destination_mission:
+		navigation_engage_button.disabled = not navigation_plan_valid
+		navigation_engage_button.text = "SEND NEW PLAN"
+	else:
+		navigation_engage_button.disabled = not navigation_plan_valid
+		navigation_engage_button.text = "SEND TO AUTOPILOT"
+	if destination_mission:
+		var target_name := FlightComputer.target_body_name(autopilot_target_id)
+		var target_state: Dictionary = simulation.call("_surface_body_state", target_name)
+		var rocket_position: Vector2 = simulation.get("rocket_position")
+		var rocket_velocity: Vector2 = simulation.get("velocity")
+		var target_position: Vector2 = target_state.get("position", Vector2.ZERO)
+		var target_velocity: Vector2 = target_state.get("velocity", Vector2.ZERO)
+		var range_to_target := rocket_position.distance_to(target_position)
+		var relative_speed := (rocket_velocity - target_velocity).length()
+		navigation_progress.text = "MISSION: %s  •  PHASE: %s  •  RANGE: %.0f km  •  RELATIVE SPEED: %.0f m/s\n%s" % [
+			target_name.to_upper(),
+			phase.replace("_", " "),
+			range_to_target / 1000.0,
+			relative_speed,
+			str(simulation.get("status_message"))
+		]
+	elif autopilot_enabled:
+		navigation_progress.text = "ANOTHER AUTOPILOT MODE IS ACTIVE. Finish or cancel it before starting destination navigation."
+	else:
+		navigation_progress.text = "NO DESTINATION MISSION ACTIVE."
+	if navigation_plan_valid and not bool(navigation_plan.get("local", false)):
+		_update_navigation_plot()
+
+func _cancel_destination_autopilot() -> void:
+	if not is_instance_valid(simulation) or str(simulation.get("autopilot_target_mode")) != "ORBIT":
+		return
+	var was_active := bool(simulation.get("autopilot_enabled"))
+	simulation.set("autopilot_enabled", false)
+	simulation.set("guidance_enabled", false)
+	simulation.set("thrust_key_down", false)
+	simulation.set("autopilot_complete", false)
+	simulation.set("autopilot_phase", "IDLE")
+	simulation.set("autopilot_burn_remaining", 0.0)
+	simulation.set("autopilot_burn_direction", Vector2.ZERO)
+	simulation.set("autopilot_transfer_start_time", -1.0)
+	simulation.set("autopilot_transfer_duration", 0.0)
+	simulation.set("autopilot_precomputed_transfer_plan", {})
+	simulation.set("status_message", "FLIGHT COMPUTER  •  DESTINATION MISSION %s" % ("CANCELLED" if was_active else "STATUS CLEARED"))
+	_refresh_navigation_state()
+
 func _send_destination_to_autopilot() -> void:
 	if not navigation_plan_valid or not is_instance_valid(simulation) or bool(simulation.get("crashed")):
 		return
@@ -675,8 +744,9 @@ func _send_destination_to_autopilot() -> void:
 	simulation.set("thrust_key_down", bool(simulation.get("landed")) or not stable_orbit)
 	simulation.set("status_message", "FLIGHT COMPUTER  •  NAVIGATING TO %s" % target_name.to_upper())
 	navigation_engage_button.disabled = true
-	navigation_engage_button.text = "AUTOPILOT ENGAGED"
-	navigation_report.text += "\n\nAUTOPILOT ENGAGED. The flight computer has transferred the destination and orbit altitude to the live guidance system."
+	navigation_engage_button.text = "AUTOPILOT ACTIVE"
+	navigation_report.text += "\n\nAUTOPILOT ENGAGED. The calculated departure solution has been handed to the live guidance system."
+	_refresh_navigation_state()
 
 func _process(delta: float) -> void:
 	refresh_elapsed += delta
@@ -717,6 +787,7 @@ func _refresh_state() -> void:
 		_calculate_route()
 	else:
 		_update_manoeuvre()
+	_refresh_navigation_state()
 
 func _add_node() -> void:
 	if not is_instance_valid(simulation):
