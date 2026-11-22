@@ -439,8 +439,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
 	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index <= -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
-	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.25, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v * 0.8, maximum_delta_v]
-	var direction_count := 12 if coarse_search else 24
+	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v]
+	var direction_count := 12 if coarse_search else 16
 	var best_score := INF
 	var best_plan: Dictionary = {}
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
@@ -448,8 +448,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
-		var minimum_steps := 360 if coarse_search else 720
-		var maximum_steps := 1200 if coarse_search else 2400
+		var minimum_steps := 360
+		var maximum_steps := 1200 if coarse_search else 720
 		var integration_steps := clampi(int(ceil(flight_duration / 21600.0)), minimum_steps, maximum_steps)
 		var step_size := flight_duration / float(integration_steps)
 		var gravity_states: Array[Dictionary] = []
