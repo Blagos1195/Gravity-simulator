@@ -60,7 +60,11 @@ func _initialize() -> void:
 	assert(absf(mars_target_components[0] - expected_mars_components[0]) < 0.001)
 	assert(absf(mars_target_components[1] - expected_mars_components[1]) < 0.001)
 	var gravity_snapshot := PlanetarySystem.gravity_body_states(0.0)
-	assert(gravity_snapshot.get("bodies", []).size() == 9)
+	var expected_gravity_body_count := 9
+	for planet in PlanetarySystem.get_planet_catalog():
+		if str(planet.get("name", "")) != "Earth":
+			expected_gravity_body_count += planet.get("satellites", []).size()
+	assert(gravity_snapshot.get("bodies", []).size() == expected_gravity_body_count)
 	for body in gravity_snapshot.get("surface_bodies", []):
 		assert(body.get("position_components", PackedFloat64Array()) is PackedFloat64Array)
 		assert(body.get("velocity_components", PackedFloat64Array()) is PackedFloat64Array)
