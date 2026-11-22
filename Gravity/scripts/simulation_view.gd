@@ -324,10 +324,14 @@ func _physics_step(dt: float) -> void:
 func _small_body_collision(start_time: float, end_time: float, rocket_start_components: PackedFloat64Array, rocket_end_components: PackedFloat64Array, start_states: Dictionary, end_states: Dictionary) -> Dictionary:
 	var earth_start: PackedFloat64Array = start_states.get("earth_heliocentric_position_components", PackedFloat64Array([0.0, 0.0]))
 	var earth_end: PackedFloat64Array = end_states.get("earth_heliocentric_position_components", PackedFloat64Array([0.0, 0.0]))
-	var rocket_start := Vector2(earth_start[0] + rocket_start_components[0], earth_start[1] + rocket_start_components[1])
-	var rocket_end := Vector2(earth_end[0] + rocket_end_components[0], earth_end[1] + rocket_end_components[1])
-	var radial_min := minf(rocket_start.length(), rocket_end.length())
-	var radial_max := maxf(rocket_start.length(), rocket_end.length())
+	var rocket_start_x: float = earth_start[0] + rocket_start_components[0]
+	var rocket_start_y: float = earth_start[1] + rocket_start_components[1]
+	var rocket_end_x: float = earth_end[0] + rocket_end_components[0]
+	var rocket_end_y: float = earth_end[1] + rocket_end_components[1]
+	var radial_start := sqrt(rocket_start_x * rocket_start_x + rocket_start_y * rocket_start_y)
+	var radial_end := sqrt(rocket_end_x * rocket_end_x + rocket_end_y * rocket_end_y)
+	var radial_min := minf(radial_start, radial_end)
+	var radial_max := maxf(radial_start, radial_end)
 	var duration := maxf(0.000001, end_time - start_time)
 	for belt_variant in solar_belt_particles:
 		var belt: Dictionary = belt_variant
@@ -343,21 +347,26 @@ func _small_body_collision(start_time: float, end_time: float, rocket_start_comp
 			var angular_rate := float(particle.get("angular_rate", 0.0))
 			var start_angle := phase + angular_rate * start_time
 			var end_angle := phase + angular_rate * end_time
-			var asteroid_start := Vector2(cos(start_angle), sin(start_angle)) * body_radius
-			var asteroid_end := Vector2(cos(end_angle), sin(end_angle)) * body_radius
-			var relative_start := rocket_start - asteroid_start
-			var relative_delta := (rocket_end - asteroid_end) - relative_start
-			var denominator := relative_delta.length_squared()
+			var asteroid_start_x := cos(start_angle) * body_radius
+			var asteroid_start_y := sin(start_angle) * body_radius
+			var asteroid_end_x := cos(end_angle) * body_radius
+			var asteroid_end_y := sin(end_angle) * body_radius
+			var relative_start_x := rocket_start_x - asteroid_start_x
+			var relative_start_y := rocket_start_y - asteroid_start_y
+			var relative_delta_x := (rocket_end_x - asteroid_end_x) - relative_start_x
+			var relative_delta_y := (rocket_end_y - asteroid_end_y) - relative_start_y
+			var denominator := relative_delta_x * relative_delta_x + relative_delta_y * relative_delta_y
 			var closest_fraction := 0.0
 			if denominator > 0.0:
-				closest_fraction = clampf(-relative_start.dot(relative_delta) / denominator, 0.0, 1.0)
-			var closest_distance := (relative_start + relative_delta * closest_fraction).length()
+				closest_fraction = clampf(-(relative_start_x * relative_delta_x + relative_start_y * relative_delta_y) / denominator, 0.0, 1.0)
+			var closest_x := relative_start_x + relative_delta_x * closest_fraction
+			var closest_y := relative_start_y + relative_delta_y * closest_fraction
 			var collision_radius := float(particle.get("collision_radius_m", 0.0)) + 10.0
-			if closest_distance <= collision_radius:
+			if closest_x * closest_x + closest_y * closest_y <= collision_radius * collision_radius:
 				return {
 					"belt_name": belt.get("name", "Small-body belt"),
 					"particle_id": particle.get("id", -1),
-					"impact_speed_m_s": relative_delta.length() / duration
+					"impact_speed_m_s": sqrt(denominator) / duration
 				}
 	return {}
 
