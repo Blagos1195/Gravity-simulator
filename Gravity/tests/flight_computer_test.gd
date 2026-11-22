@@ -60,7 +60,11 @@ func _initialize() -> void:
 	assert(absf(mars_target_components[0] - expected_mars_components[0]) < 0.001)
 	assert(absf(mars_target_components[1] - expected_mars_components[1]) < 0.001)
 	var gravity_snapshot := PlanetarySystem.gravity_body_states(0.0)
-	assert(gravity_snapshot.get("bodies", []).size() == 9)
+	var expected_body_count := 9
+	for planet in PlanetarySystem.get_planet_catalog():
+		if str(planet.get("name", "")) != "Earth":
+			expected_body_count += planet.get("satellites", []).size()
+	assert(gravity_snapshot.get("bodies", []).size() == expected_body_count)
 	for body in gravity_snapshot.get("surface_bodies", []):
 		assert(body.get("position_components", PackedFloat64Array()) is PackedFloat64Array)
 		assert(body.get("velocity_components", PackedFloat64Array()) is PackedFloat64Array)
@@ -128,7 +132,7 @@ func _initialize() -> void:
 	) / 172800.0
 	var mars_velocity_error := numerical_mars_velocity.distance_to(PlanetarySystem.planet_velocity_relative_to_earth("Mars", ephemeris_time))
 	assert(mars_velocity_error < 5.0)
-	var mars_planet: Dictionary = PlanetarySystem._find_planet("Mars")
+	var mars_planet: Dictionary = PlanetarySystem._planet_data("Mars")
 	var precise_step := minf(float(mars_planet.orbital_period) * 86400.0 * 0.001, 86400.0)
 	var precise_before := PlanetarySystem._planet_relative_position_components(mars_planet, ephemeris_time - precise_step)
 	var precise_after := PlanetarySystem._planet_relative_position_components(mars_planet, ephemeris_time + precise_step)
@@ -274,9 +278,9 @@ func _initialize() -> void:
 	assert(is_equal_approx(float(earth_destination.get("mass", 0.0)), PlanetarySystem.EARTH_MASS))
 	var earth_orbit_radius := PlanetarySystem.EARTH_RADIUS + 3000000.0
 	var earth_orbit_speed := FlightComputer.circular_orbit_speed(earth_orbit_radius)
-	var local_transfer_plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, -2, 5000.0)
+	var local_transfer_plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, -2, 5000.0, 0.0, false, 3000000.0)
 	assert(bool(local_transfer_plan.get("valid", false)))
-	assert(float(local_transfer_plan.get("total_delta_v", INF)) < 100.0)
+	assert(float(local_transfer_plan.get("total_delta_v", INF)) < 100.0, "Local Earth-orbit transfer exceeded its expected delta-v: %s" % str(local_transfer_plan))
 	var invalid_transfer_plan := FlightComputer.simulated_transfer_search(Vector2.ZERO, Vector2.ZERO, 0.0, -3, 5000.0)
 	assert(not bool(invalid_transfer_plan.get("valid", true)))
 
@@ -323,6 +327,9 @@ func _initialize() -> void:
 	route_sim.sim_time = 20.0
 	route_sim._update_guidance(0.01)
 	assert(route_sim.autopilot_phase == "ROUTE_BURN")
+	route_sim._physics_step(2.0)
+	assert(route_sim.autopilot_phase == "COMPLETE")
+	assert(route_sim.autopilot_complete)
 	route_sim.free()
 
 	var planner_sim: Variant = SimulationView.new()
@@ -334,6 +341,22 @@ func _initialize() -> void:
 	root.add_child(route_planner_window)
 	route_planner_window.configure(planner_sim, RocketDesign.create_default())
 	assert(route_planner_window.interface_scroll is ScrollContainer)
+	assert(route_planner_window.target_x_input is SpinBox)
+	assert(route_planner_window.target_y_input is SpinBox)
+	assert(route_planner_window.route_time_input.max_value >= 8760.0)
+	route_planner_window.target_x_input.value = 8000.0
+	route_planner_window.target_y_input.value = 3000.0
+	route_planner_window._apply_target_coordinates()
+	assert(route_planner_window.has_route_target)
+	assert(route_planner_window.route_target.distance_to(Vector2(8000000.0, 3000000.0)) < 1.0)
+	assert(route_planner_window.route_status.begins_with("TRANSFER SOLVED"), route_planner_window.route_status)
+	assert(is_finite(route_planner_window.route_delta_v) and route_planner_window.route_delta_v > 0.0)
+	assert(route_planner_window.nodes.size() == 1)
+	assert(route_planner_window.route_report.text.contains("TARGET X 8000.0 km"))
+	route_planner_window._clear_route_target()
+	assert(not route_planner_window.has_route_target)
+	assert(is_zero_approx(route_planner_window.target_x_input.value))
+	assert(is_zero_approx(route_planner_window.target_y_input.value))
 	route_planner_window.add_node_button.emit_signal("pressed")
 	assert(route_planner_window.autopilot_button.disabled)
 	assert(route_planner_window.burn_report.text.contains("ADD A NON-ZERO BURN"))
@@ -353,6 +376,24 @@ func _initialize() -> void:
 	assert(planner_sim.autopilot_route_nodes.size() == 1)
 	assert(route_planner_window.autopilot_button.disabled)
 	assert(route_planner_window.autopilot_button.text == "ROUTE ACTIVE IN AUTOPILOT")
+	assert(route_planner_window.cancel_route_button.visible)
+	route_planner_window.cancel_route_button.emit_signal("pressed")
+	assert(not planner_sim.autopilot_enabled)
+	assert(planner_sim.autopilot_phase == "IDLE")
+	assert(planner_sim.autopilot_route_nodes.is_empty())
+	assert(not route_planner_window.cancel_route_button.visible)
+	assert(not route_planner_window.autopilot_button.disabled)
+	planner_sim.autopilot_enabled = true
+	planner_sim.autopilot_complete = true
+	planner_sim.autopilot_target_mode = "MANEUVER"
+	planner_sim.autopilot_phase = "COMPLETE"
+	route_planner_window._update_manoeuvre()
+	assert(route_planner_window.cancel_route_button.visible)
+	assert(route_planner_window.cancel_route_button.text == "CLEAR COMPLETED ROUTE")
+	route_planner_window.cancel_route_button.emit_signal("pressed")
+	assert(not planner_sim.autopilot_enabled)
+	assert(not planner_sim.autopilot_complete)
+	assert(planner_sim.autopilot_phase == "IDLE")
 	route_planner_window.free()
 	planner_sim.free()
 
@@ -360,7 +401,7 @@ func _initialize() -> void:
 	var analytical_moon_velocity: Vector2 = PlanetarySystem.moon_velocity(moon_velocity_time)
 	var numerical_moon_velocity: Vector2 = (PlanetarySystem.moon_position(moon_velocity_time + 3600.0) - PlanetarySystem.moon_position(moon_velocity_time - 3600.0)) / 7200.0
 	assert(analytical_moon_velocity.distance_to(numerical_moon_velocity) < 0.1)
-	assert(gravity_snapshot.get("surface_bodies", []).size() == 9)
+	assert(gravity_snapshot.get("surface_bodies", []).size() == expected_body_count)
 	var cached_simulation: Variant = SimulationView.new()
 	var cached_moon: Dictionary = cached_simulation._surface_body_state("Moon")
 	var interpolated_states: Dictionary = cached_simulation._ephemeris_states_at(5.0)

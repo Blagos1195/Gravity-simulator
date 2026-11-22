@@ -14,6 +14,7 @@ var radial_input: SpinBox
 var state_report: RichTextLabel
 var burn_report: Label
 var autopilot_button: Button
+var cancel_route_button: Button
 var current_body: Dictionary = {}
 var relative_position := Vector2.ZERO
 var relative_velocity := Vector2.ZERO
@@ -34,6 +35,9 @@ var route_status := "NO DESTINATION SELECTED"
 var route_time_input: SpinBox
 var route_report: Label
 var solve_route_button: Button
+var target_x_input: SpinBox
+var target_y_input: SpinBox
+var target_coordinates_loading := false
 var interface_scroll: ScrollContainer
 var node_editor: Control
 var add_node_button: Button
@@ -200,7 +204,7 @@ func _build_interface() -> void:
 	root.add_child(heading)
 
 	var description := Label.new()
-	description.text = "Click the map to choose a destination in the current body's sphere of influence. Add a burn node, select it, then edit its time and prograde/radial ΔV. SEND ROUTE stays below while you scroll. It is enabled when the spacecraft is in a safe orbit and the route fits the fuel budget."
+	description.text = "Choose any point inside the current body's sphere of influence by clicking the map or entering body-centred X/Y coordinates. The planner calculates a transfer, previews the path and creates the departure burn. Add or edit further manoeuvre nodes below. Transfers use a simplified two-body model."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
 
@@ -213,16 +217,43 @@ func _build_interface() -> void:
 	orbit_plot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(orbit_plot)
 
+	var target_coordinate_row := HBoxContainer.new()
+	target_coordinate_row.add_theme_constant_override("separation", 8)
+	root.add_child(target_coordinate_row)
+	var target_x_label := Label.new()
+	target_x_label.text = "X (KM)"
+	target_x_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	target_coordinate_row.add_child(target_x_label)
+	target_x_input = _create_coordinate_input()
+	target_x_input.tooltip_text = "Target X coordinate relative to the current body's centre."
+	target_coordinate_row.add_child(target_x_input)
+	var target_y_label := Label.new()
+	target_y_label.text = "Y (KM)"
+	target_y_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	target_coordinate_row.add_child(target_y_label)
+	target_y_input = _create_coordinate_input()
+	target_y_input.tooltip_text = "Target Y coordinate relative to the current body's centre."
+	target_coordinate_row.add_child(target_y_input)
+	var set_target_button := Button.new()
+	set_target_button.text = "SET DESTINATION"
+	set_target_button.pressed.connect(_apply_target_coordinates)
+	target_coordinate_row.add_child(set_target_button)
+
+	var coordinate_hint := Label.new()
+	coordinate_hint.text = "Coordinates are relative to the selected body's centre. X points right, Y points up. The destination must be outside the body and inside its sphere of influence."
+	coordinate_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(coordinate_hint)
+
 	var destination_row := HBoxContainer.new()
 	destination_row.add_theme_constant_override("separation", 8)
 	root.add_child(destination_row)
 	var duration_label := Label.new()
-	duration_label.text = "TRANSFER TIME (HOURS)"
+	duration_label.text = "TIME TO ARRIVAL (HOURS)"
 	duration_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	destination_row.add_child(duration_label)
 	route_time_input = SpinBox.new()
 	route_time_input.min_value = 0.1
-	route_time_input.max_value = 48.0
+	route_time_input.max_value = 8760.0
 	route_time_input.step = 0.5
 	route_time_input.value = route_duration / 3600.0
 	route_time_input.custom_minimum_size.x = 110.0
@@ -278,7 +309,7 @@ func _build_interface() -> void:
 	node_controls.add_child(timing_label)
 	time_input = SpinBox.new()
 	time_input.min_value = 0.0
-	time_input.max_value = 10080.0
+	time_input.max_value = 525600.0
 	time_input.step = 1.0
 	time_input.custom_minimum_size.x = 150.0
 	node_controls.add_child(time_input)
@@ -331,6 +362,11 @@ func _build_interface() -> void:
 	autopilot_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	autopilot_button.pressed.connect(_send_to_autopilot)
 	actions.add_child(autopilot_button)
+	cancel_route_button = Button.new()
+	cancel_route_button.text = "CANCEL ACTIVE ROUTE"
+	cancel_route_button.visible = false
+	cancel_route_button.pressed.connect(_cancel_route)
+	actions.add_child(cancel_route_button)
 	var close_button := Button.new()
 	close_button.text = "CLOSE"
 	close_button.pressed.connect(queue_free)
@@ -345,6 +381,14 @@ func _process(delta: float) -> void:
 	if refresh_elapsed >= 0.5 and is_instance_valid(simulation):
 		refresh_elapsed = 0.0
 		_refresh_state()
+
+func _create_coordinate_input() -> SpinBox:
+	var spin := SpinBox.new()
+	spin.min_value = -1000000000000.0
+	spin.max_value = 1000000000000.0
+	spin.step = 1.0
+	spin.custom_minimum_size.x = 150.0
+	return spin
 
 func _create_burn_input() -> SpinBox:
 	var spin := SpinBox.new()
@@ -412,6 +456,10 @@ func _change_route_duration(hours: float) -> void:
 			_calculate_route()
 
 func _clear_route_target() -> void:
+	target_coordinates_loading = true
+	target_x_input.value = 0.0
+	target_y_input.value = 0.0
+	target_coordinates_loading = false
 	has_route_target = false
 	route_solution_dirty = false
 	route_delta_v = 0.0
@@ -437,6 +485,10 @@ func _set_route_target(world_position: Vector2) -> void:
 		route_target = world_position
 		has_route_target = true
 	route_target = world_position
+	target_coordinates_loading = true
+	target_x_input.value = world_position.x / 1000.0
+	target_y_input.value = world_position.y / 1000.0
+	target_coordinates_loading = false
 	route_solution_dirty = false
 	var body_radius := float(current_body.get("radius", 0.0))
 	var sphere_of_influence := float(current_body.get("soi", INF))
@@ -451,6 +503,11 @@ func _set_route_target(world_position: Vector2) -> void:
 		_update_manoeuvre()
 		return
 	_calculate_route()
+
+func _apply_target_coordinates() -> void:
+	if target_coordinates_loading:
+		return
+	_set_route_target(Vector2(target_x_input.value, target_y_input.value) * 1000.0)
 
 func _stumpff_c(value: float) -> float:
 	if absf(value) < 0.0001:
@@ -806,6 +863,8 @@ func _update_manoeuvre() -> void:
 	var can_send := not landed_state and not crashed_state and stable_orbit and valid_nodes and not exceeds_delta_v and not route_active and not route_complete
 	autopilot_button.disabled = not can_send
 	autopilot_button.text = "ROUTE ACTIVE IN AUTOPILOT" if route_active else "ROUTE COMPLETE" if route_complete else "SEND ROUTE TO AUTOPILOT"
+	cancel_route_button.visible = route_active or route_complete
+	cancel_route_button.text = "CANCEL ACTIVE ROUTE" if route_active else "CLEAR COMPLETED ROUTE"
 	var send_block_reason := ""
 	if route_active:
 		send_block_reason = "A route is already running."
@@ -838,9 +897,28 @@ func _update_manoeuvre() -> void:
 	]
 	if is_instance_valid(route_report):
 		if has_route_target:
-			route_report.text = "%s   •   FLIGHT TIME %.2f HOURS   •   TARGET ALTITUDE %.1f km" % [route_status, route_duration / 3600.0, (route_target.length() - float(current_body.get("radius", 0.0))) / 1000.0]
+			route_report.text = "%s   •   TIME %.2f HOURS   •   TARGET X %.1f km, Y %.1f km   •   RANGE %.1f km" % [route_status, route_duration / 3600.0, route_target.x / 1000.0, route_target.y / 1000.0, route_target.length() / 1000.0]
 		else:
 			route_report.text = route_status
+
+func _cancel_route() -> void:
+	if not is_instance_valid(simulation):
+		return
+	var route_was_active := str(simulation.get("autopilot_phase")) in ["ROUTE_COAST", "ROUTE_BURN"]
+	var route_was_complete := str(simulation.get("autopilot_phase")) == "COMPLETE" and str(simulation.get("autopilot_target_mode")) == "MANEUVER"
+	if str(simulation.get("autopilot_target_mode")) != "MANEUVER" or not (route_was_active or route_was_complete):
+		return
+	simulation.set("autopilot_enabled", false)
+	simulation.set("guidance_enabled", false)
+	simulation.set("thrust_key_down", false)
+	simulation.set("autopilot_complete", false)
+	simulation.set("autopilot_phase", "IDLE")
+	var active_route_nodes: Array[Dictionary] = simulation.get("autopilot_route_nodes")
+	active_route_nodes.clear()
+	simulation.set("autopilot_route_node_index", 0)
+	simulation.set("autopilot_burn_remaining", 0.0)
+	simulation.set("status_message", "AUTOPILOT  •  ROUTE CANCELLED" if route_was_active else "AUTOPILOT  •  COMPLETED ROUTE CLEARED")
+	_update_manoeuvre()
 
 func _send_to_autopilot() -> void:
 	if not is_instance_valid(simulation) or autopilot_button.disabled:

@@ -76,17 +76,23 @@ A procedural 2D spaceflight simulator built with Godot 4.
 
 ## Development checks
 
-Run the calculation tests from the project directory:
+Run the full regression suite from the project directory using Godot 4.7:
 
 ```powershell
-godot --headless --path . --script res://tests/rocket_design_test.gd
-godot --headless --path . --script res://tests/flight_computer_test.gd
-godot --headless --path . --script res://tests/orbital_stability_test.gd
+godot --headless --path . --editor --quit
+godot --headless --path . --script res://tests/compile_simulation_view.gd --quit-after 1
+godot --headless --path . --script res://tests/rocket_design_test.gd --quit-after 1
+godot --headless --path . --script res://tests/flight_computer_test.gd --quit-after 1
+godot --headless --path . --script res://tests/orbital_stability_test.gd --quit-after 1
+godot --headless --path . --script res://tests/simulation_lifecycle_test.gd --quit-after 1
+godot --headless --path . --script res://tests/leo_autopilot_mission_test.gd --quit-after 1
 ```
+
+The checks run in this order in GitHub Actions. A script error, parse error, failed assertion, or resource leak fails the workflow.
 
 ## Flight computer
 
-The Flight Computer plans local manoeuvres from a safe, bound orbit. Click inside the orbital plot to choose a destination within the current body's sphere of influence, then use **ADD NODE** to create a burn. Select the node and edit its time and prograde/radial ΔV; the planner previews the resulting trajectory. The node editor scrolls when the window is too small, while **ADD NODE** and **SEND ROUTE TO AUTOPILOT** stay accessible at the bottom. Sending is enabled when the spacecraft is in a safe orbit and the planned burns fit the remaining ΔV budget; hover over the disabled button for the specific reason. Use the main Autopilot panel to launch or plan transfers between planets and moons.
+The Flight Computer plans local manoeuvres from a safe, bound orbit. Choose a destination by clicking the orbital plot or entering body-centred X/Y coordinates in kilometres; positive X points right and positive Y points up. The target must be outside the current body's physical radius and inside its sphere of influence. Set the time to arrival and solve the transfer to create the departure burn. The planner previews the predicted path and reports the target coordinates, arrival speed, required ΔV and vehicle budget. Add further manoeuvre nodes, select them to edit burn time and prograde/radial ΔV, or drag nodes on the plot to move their burn locations. The route solver and preview use a simplified single-revolution, two-body model around the current body. They do not calculate interplanetary or multi-body transfers; use the main Autopilot panel for transfers between planets and moons. Sending a route requires a safe bound orbit and sufficient remaining vehicle ΔV. Active routes can be cancelled from the Flight Computer, and completed routes can be cleared before planning another. Hover over the disabled send button for the specific reason.
 
 ## Controls
 

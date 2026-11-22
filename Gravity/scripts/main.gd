@@ -840,46 +840,63 @@ func _show_autopilot_panel() -> void:
 		calculate_simulated_transfer = false
 	)
 	root.add_child(safety)
-	var target_label := Label.new()
-	target_label.text = "DESTINATION BODY"
-	root.add_child(target_label)
-	var target := OptionButton.new()
-	var destination_target_indices: Array[int] = []
-	target.add_item("Earth", destination_target_indices.size())
-	destination_target_indices.append(-2)
-	target.add_item("Moon (Earth)", destination_target_indices.size())
-	destination_target_indices.append(-1)
+	var planet_label := Label.new()
+	planet_label.text = "DESTINATION PLANET"
+	root.add_child(planet_label)
+	var planet_dropdown := OptionButton.new()
+	planet_dropdown.add_item("Earth", -2)
 	for planet_index in range(FlightComputer.PLANET_TARGETS.size()):
-		target.add_item(str(FlightComputer.PLANET_TARGETS[planet_index].get("name", "Unknown")), destination_target_indices.size())
-		destination_target_indices.append(planet_index)
-	for satellite in FlightComputer.SATELLITE_TARGETS:
-		target.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), destination_target_indices.size())
-		destination_target_indices.append(int(satellite.get("id", -1)))
+		var planet: Dictionary = FlightComputer.PLANET_TARGETS[planet_index]
+		planet_dropdown.add_item(str(planet.get("name", "Unknown")), planet_index)
+	root.add_child(planet_dropdown)
+	var moon_label := Label.new()
+	moon_label.text = "MOON (OPTIONAL)"
+	root.add_child(moon_label)
+	var moon_dropdown := OptionButton.new()
+	root.add_child(moon_dropdown)
+	var rebuild_moon_options := func(parent_target_index: int) -> void:
+		moon_dropdown.clear()
+		moon_dropdown.add_item("Planet only", parent_target_index)
+		if parent_target_index == -2:
+			moon_dropdown.add_item("Moon")
+			moon_dropdown.set_item_id(moon_dropdown.item_count - 1, -1)
+		else:
+			var parent_name := FlightComputer.target_body_name(parent_target_index)
+			for satellite in FlightComputer.satellite_targets_for_host(parent_name):
+				moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
+		moon_dropdown.select(0)
+		moon_dropdown.disabled = moon_dropdown.item_count <= 1
 	var selected_target_index := func() -> int:
-		var selected_item_id := target.get_selected_id()
-		if selected_item_id < 0 or selected_item_id >= destination_target_indices.size():
-			return -2
-		return destination_target_indices[selected_item_id]
-	target.select(0)
-	root.add_child(target)
+		return moon_dropdown.get_selected_id()
+	planet_dropdown.select(0)
+	rebuild_moon_options.call(planet_dropdown.get_selected_id())
 	var orbit_altitude_label := Label.new()
 	orbit_altitude_label.text = "TARGET ORBIT ALTITUDE"
 	root.add_child(orbit_altitude_label)
 	var orbit_altitude := SpinBox.new()
-	orbit_altitude.min_value = 70.0
-	orbit_altitude.max_value = 50000.0
-	orbit_altitude.step = 10.0
+	orbit_altitude.min_value = 1.0
+	orbit_altitude.max_value = 1000000000.0
+	orbit_altitude.step = 1.0
 	orbit_altitude.value = 200.0
 	orbit_altitude.suffix = " km"
 	root.add_child(orbit_altitude)
+	var selected_orbit_feasible := true
+	var selected_minimum_altitude_km := 1.0
 	var update_orbit_altitude_limits := func():
 		var body_name := FlightComputer.target_body_name(selected_target_index.call())
 		var target_body: Dictionary = sim._surface_body_state(body_name)
-		var minimum_altitude_km: float = maxf(70.0, PlanetarySystem.planetary_atmosphere_height(body_name) / 1000.0 + 50.0)
-		var maximum_altitude_km: float = maxf(minimum_altitude_km, minf(50000.0, (float(target_body.get("soi", 0.0)) * 0.5 - float(target_body.get("radius", 0.0))) / 1000.0))
-		orbit_altitude.min_value = minimum_altitude_km
-		orbit_altitude.max_value = maximum_altitude_km
-		orbit_altitude.value = clampf(orbit_altitude.value, minimum_altitude_km, maximum_altitude_km)
+		if target_body.is_empty():
+			selected_orbit_feasible = false
+			return
+		var body_radius := float(target_body.get("radius", 0.0))
+		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(body_name, body_radius)
+		var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(target_body.get("soi", 0.0)))
+		selected_minimum_altitude_km = minimum_altitude / 1000.0
+		selected_orbit_feasible = maximum_altitude >= minimum_altitude
+		orbit_altitude.min_value = selected_minimum_altitude_km
+		orbit_altitude.max_value = maxf(selected_minimum_altitude_km, maximum_altitude / 1000.0)
+		orbit_altitude.editable = selected_orbit_feasible
+		orbit_altitude.value = clampf(orbit_altitude.value, orbit_altitude.min_value, orbit_altitude.max_value)
 	update_orbit_altitude_limits.call()
 	var report_scroll := ScrollContainer.new()
 	report_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -941,7 +958,7 @@ func _show_autopilot_panel() -> void:
 		var selected_id: int = selected_target_index.call()
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
 		landing.disabled = sim.crashed
-		autopilot.disabled = sim.crashed
+		autopilot.disabled = sim.crashed or not selected_orbit_feasible
 		var current_position: Vector2 = sim.rocket_position - current_body.position
 		var current_velocity: Vector2 = sim.velocity - current_body.velocity
 		var state := FlightComputer.orbital_state(current_position, current_velocity, FlightComputer.G * float(current_body.mass))
@@ -952,7 +969,8 @@ func _show_autopilot_panel() -> void:
 		var mission_valid := true
 		var has_estimated_plan := false
 		var within_current_sphere := float(current_body.get("distance", INF)) <= float(current_body.get("soi", 0.0))
-		var stable_departure_state := not within_current_sphere or (bool(state.get("bound", false)) and float(state.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0)
+		var current_minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(str(current_body.get("name", "")), float(current_body.get("radius", 0.0)))
+		var stable_departure_state := not within_current_sphere or (bool(state.get("bound", false)) and float(state.get("periapsis", 0.0)) > float(current_body.radius) + current_minimum_safe_altitude)
 		var destination_name := FlightComputer.target_body_name(selected_id)
 		var destination_is_local := within_current_sphere and str(current_body.get("name", "")) == destination_name
 		var target_altitude_m := orbit_altitude.value * 1000.0
@@ -969,6 +987,9 @@ func _show_autopilot_panel() -> void:
 		var target_body: Dictionary = sim._surface_body_state(destination_name)
 		var target_radius := float(target_body.get("radius", 0.0)) + target_altitude_m
 		text_lines.append("Circular speed: %.0f m/s" % FlightComputer.circular_orbit_speed(target_radius, FlightComputer.G * float(target_body.get("mass", 0.0))))
+		if not selected_orbit_feasible:
+			mission_valid = false
+			text_lines.append("NO STABLE ORBIT FITS INSIDE THIS BODY'S SPHERE OF INFLUENCE.")
 		if destination_is_local:
 			if stable_departure_state:
 				var local_orbit_plan := FlightComputer.target_radius_burn(current_position, current_velocity, target_radius, FlightComputer.G * float(current_body.mass))
@@ -978,8 +999,13 @@ func _show_autopilot_panel() -> void:
 			else:
 				text_lines.append("Autopilot will launch and insert into the selected orbit around the current body.")
 		elif not stable_departure_state:
-			text_lines.append("Autopilot will first establish a 200 km parking orbit around %s." % str(current_body.get("name", "the current body")))
-			text_lines.append("Calculate a transfer after reaching that parking orbit for a trajectory estimate.")
+			var current_maximum_stable_altitude := FlightComputer.maximum_stable_orbit_altitude(float(current_body.get("radius", 0.0)), float(current_body.get("soi", 0.0)))
+			if current_maximum_stable_altitude < current_minimum_safe_altitude:
+				text_lines.append("This body has no stable parking orbit inside its sphere of influence; autopilot will use direct escape.")
+			else:
+				var parking_altitude := clampf(200000.0, current_minimum_safe_altitude, current_maximum_stable_altitude)
+				text_lines.append("Autopilot will first establish a %.0f km parking orbit around %s." % [parking_altitude / 1000.0, str(current_body.get("name", "the current body"))])
+				text_lines.append("Calculate a transfer after reaching that parking orbit for a trajectory estimate.")
 		elif not calculate_simulated_transfer:
 			text_lines.append("Press CALCULATE FLIGHT PLAN to simulate trajectories from the current orbit.")
 		else:
@@ -1047,7 +1073,8 @@ func _show_autopilot_panel() -> void:
 		var relative_position: Vector2 = sim.rocket_position - body.position
 		var relative_velocity: Vector2 = sim.velocity - body.velocity
 		var orbit_state := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(body.mass))
-		if sim.landed or str(body.get("name", "")) != "Earth" or not bool(orbit_state.get("bound", false)) or float(orbit_state.get("periapsis", 0.0)) < FlightComputer.EARTH_RADIUS + 70000.0:
+		var earth_minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude("Earth", FlightComputer.EARTH_RADIUS)
+		if sim.landed or str(body.get("name", "")) != "Earth" or not bool(orbit_state.get("bound", false)) or float(orbit_state.get("periapsis", 0.0)) < FlightComputer.EARTH_RADIUS + earth_minimum_safe_altitude:
 			report.text += "\n\nLaunch-window scanning requires a stable Earth parking orbit."
 			return
 		launch_windows_button.disabled = true
@@ -1063,7 +1090,13 @@ func _show_autopilot_panel() -> void:
 			var destination := FlightComputer.target_body_name(destination_index)
 			report.text = "LAUNCH WINDOW SEARCH: %s\nDates sampled: %d\nBest refined departure: in %.1f days\nDeparture Δv: %.0f m/s\nCapture Δv: %.0f m/s\nTotal Δv: %.0f m/s\nTransfer time: %.1f days\n\nThis is the best of the sampled dates and burn candidates, not a guaranteed global optimum. Use CALCULATE FLIGHT PLAN at the selected date for a higher-resolution search." % [destination, int(windows.dates_checked), float(best.departure_wait_days), float(best.departure_delta_v), float(best.capture_delta_v), float(best.total_delta_v), float(best.transfer_time) / 86400.0]
 	)
-	target.item_selected.connect(func(_index: int):
+	planet_dropdown.item_selected.connect(func(_index: int):
+		rebuild_moon_options.call(planet_dropdown.get_selected_id())
+		update_orbit_altitude_limits.call()
+		calculate_simulated_transfer = false
+		update_report.call()
+	)
+	moon_dropdown.item_selected.connect(func(_index: int):
 		update_orbit_altitude_limits.call()
 		calculate_simulated_transfer = false
 		update_report.call()
@@ -1080,10 +1113,13 @@ func _show_autopilot_panel() -> void:
 		sim.autopilot_target_mode = "ORBIT"
 		sim.autopilot_planet_index = selected_id
 		sim.autopilot_burn_remaining = 0.0
+		sim.autopilot_apsis_correction_armed = true
+		sim.autopilot_apsis_correction_angle = 0.0
 		sim.autopilot_burn_direction = Vector2.ZERO
 		sim.autopilot_transfer_corrections = 0
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
 		var relative_position: Vector2 = sim.rocket_position - current_body.position
+		sim.autopilot_apsis_correction_angle = relative_position.angle()
 		var relative_velocity: Vector2 = sim.velocity - current_body.velocity
 		var current_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(current_body.mass))
 		var target_state: Dictionary = sim._autopilot_target_state()
@@ -1092,10 +1128,11 @@ func _show_autopilot_panel() -> void:
 		var destination_is_local := within_current_sphere and str(current_body.get("name", "")) == FlightComputer.target_body_name(selected_id)
 		var target_is_near: bool = not target_state.is_empty() and target_distance <= float(target_state.get("soi", 0.0)) and str(sim._nearest_body_state(sim.rocket_position).get("name", "")) == FlightComputer.target_body_name(selected_id)
 		var current_altitude := float(current_body.distance) - float(current_body.radius)
-		var stable_current_orbit := not within_current_sphere or (bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.radius) + 70000.0)
+		var current_minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(str(current_body.get("name", "")), float(current_body.get("radius", 0.0)))
+		var stable_current_orbit := not within_current_sphere or (bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.radius) + current_minimum_safe_altitude)
 		if target_is_near and not sim.landed and not stable_current_orbit:
 			sim.autopilot_phase = "ARRIVAL_APPROACH"
-		elif sim.landed or (current_altitude < PlanetarySystem.ATMOSPHERE_HEIGHT and not stable_current_orbit):
+		elif sim.landed or (current_altitude < current_minimum_safe_altitude and not stable_current_orbit):
 			sim.autopilot_phase = "ASCENT"
 		elif destination_is_local:
 			sim.autopilot_phase = "CIRCULARISE"

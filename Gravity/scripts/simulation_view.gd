@@ -50,6 +50,8 @@ var autopilot_target_altitude := 200000.0
 var autopilot_target_mode := "ORBIT"
 var autopilot_planet_index := -1
 var autopilot_burn_remaining := 0.0
+var autopilot_apsis_correction_armed := true
+var autopilot_apsis_correction_angle := 0.0
 var autopilot_throttle := 0.0
 var autopilot_transfer_start_time := -1.0
 var autopilot_transfer_duration := 0.0
@@ -245,9 +247,12 @@ func _physics_step(dt: float) -> void:
 	var thrust_impulse := thrust_direction * thrust_delta_v
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
 		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
-		if autopilot_burn_remaining <= 1.0:
+		if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
 			thrust_key_down = false
 			if autopilot_phase == "CIRCULARISE_BURN":
+				var apsis_body := _nearest_body_state(rocket_position, rocket_position_precise)
+				autopilot_apsis_correction_armed = false
+				autopilot_apsis_correction_angle = apsis_body.relative_position.angle()
 				autopilot_phase = "COAST_TO_TARGET"
 				status_message = "AUTOPILOT  •  COASTING TO TARGET ORBIT"
 			elif autopilot_phase == "TRANSFER_BURN":
@@ -258,7 +263,10 @@ func _physics_step(dt: float) -> void:
 				var arrival_position := _relative_position_to_body(arrival_state)
 				var arrival_velocity: Vector2 = velocity + thrust_impulse - arrival_state.velocity
 				var arrival_orbit := FlightComputer.orbital_state(arrival_position, arrival_velocity, G * float(arrival_state.mass))
-				if bool(arrival_orbit.get("bound", false)) and float(arrival_orbit.get("periapsis", 0.0)) > float(arrival_state.radius) + 50000.0:
+				var arrival_minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(str(arrival_state.get("name", "")), float(arrival_state.radius))
+				if bool(arrival_orbit.get("bound", false)) and float(arrival_orbit.get("periapsis", 0.0)) > float(arrival_state.radius) + arrival_minimum_safe_altitude:
+					autopilot_apsis_correction_armed = false
+					autopilot_apsis_correction_angle = _relative_position_to_body(arrival_state).angle()
 					autopilot_phase = "COAST_TO_TARGET"
 				else:
 					_fail_autopilot("ARRIVAL BURN DID NOT PRODUCE A SAFE ORBIT")
@@ -324,10 +332,14 @@ func _physics_step(dt: float) -> void:
 func _small_body_collision(start_time: float, end_time: float, rocket_start_components: PackedFloat64Array, rocket_end_components: PackedFloat64Array, start_states: Dictionary, end_states: Dictionary) -> Dictionary:
 	var earth_start: PackedFloat64Array = start_states.get("earth_heliocentric_position_components", PackedFloat64Array([0.0, 0.0]))
 	var earth_end: PackedFloat64Array = end_states.get("earth_heliocentric_position_components", PackedFloat64Array([0.0, 0.0]))
-	var rocket_start := Vector2(earth_start[0] + rocket_start_components[0], earth_start[1] + rocket_start_components[1])
-	var rocket_end := Vector2(earth_end[0] + rocket_end_components[0], earth_end[1] + rocket_end_components[1])
-	var radial_min := minf(rocket_start.length(), rocket_end.length())
-	var radial_max := maxf(rocket_start.length(), rocket_end.length())
+	var rocket_start_x: float = earth_start[0] + rocket_start_components[0]
+	var rocket_start_y: float = earth_start[1] + rocket_start_components[1]
+	var rocket_end_x: float = earth_end[0] + rocket_end_components[0]
+	var rocket_end_y: float = earth_end[1] + rocket_end_components[1]
+	var radial_start := sqrt(rocket_start_x * rocket_start_x + rocket_start_y * rocket_start_y)
+	var radial_end := sqrt(rocket_end_x * rocket_end_x + rocket_end_y * rocket_end_y)
+	var radial_min := minf(radial_start, radial_end)
+	var radial_max := maxf(radial_start, radial_end)
 	var duration := maxf(0.000001, end_time - start_time)
 	for belt_variant in solar_belt_particles:
 		var belt: Dictionary = belt_variant
@@ -343,21 +355,26 @@ func _small_body_collision(start_time: float, end_time: float, rocket_start_comp
 			var angular_rate := float(particle.get("angular_rate", 0.0))
 			var start_angle := phase + angular_rate * start_time
 			var end_angle := phase + angular_rate * end_time
-			var asteroid_start := Vector2(cos(start_angle), sin(start_angle)) * body_radius
-			var asteroid_end := Vector2(cos(end_angle), sin(end_angle)) * body_radius
-			var relative_start := rocket_start - asteroid_start
-			var relative_delta := (rocket_end - asteroid_end) - relative_start
-			var denominator := relative_delta.length_squared()
+			var asteroid_start_x := cos(start_angle) * body_radius
+			var asteroid_start_y := sin(start_angle) * body_radius
+			var asteroid_end_x := cos(end_angle) * body_radius
+			var asteroid_end_y := sin(end_angle) * body_radius
+			var relative_start_x := rocket_start_x - asteroid_start_x
+			var relative_start_y := rocket_start_y - asteroid_start_y
+			var relative_delta_x := (rocket_end_x - asteroid_end_x) - relative_start_x
+			var relative_delta_y := (rocket_end_y - asteroid_end_y) - relative_start_y
+			var denominator := relative_delta_x * relative_delta_x + relative_delta_y * relative_delta_y
 			var closest_fraction := 0.0
 			if denominator > 0.0:
-				closest_fraction = clampf(-relative_start.dot(relative_delta) / denominator, 0.0, 1.0)
-			var closest_distance := (relative_start + relative_delta * closest_fraction).length()
+				closest_fraction = clampf(-(relative_start_x * relative_delta_x + relative_start_y * relative_delta_y) / denominator, 0.0, 1.0)
+			var closest_x := relative_start_x + relative_delta_x * closest_fraction
+			var closest_y := relative_start_y + relative_delta_y * closest_fraction
 			var collision_radius := float(particle.get("collision_radius_m", 0.0)) + 10.0
-			if closest_distance <= collision_radius:
+			if closest_x * closest_x + closest_y * closest_y <= collision_radius * collision_radius:
 				return {
 					"belt_name": belt.get("name", "Small-body belt"),
 					"particle_id": particle.get("id", -1),
-					"impact_speed_m_s": relative_delta.length() / duration
+					"impact_speed_m_s": sqrt(denominator) / duration
 				}
 	return {}
 
@@ -377,6 +394,7 @@ func _adaptive_step_size() -> float:
 	var maximum_step: float = 0.25 if in_atmosphere else 1800.0
 	var travel_distance_limit: float = 250.0 if in_atmosphere else maxf(100000.0, radius * 0.01)
 	if bool(local_orbit.get("bound", false)) and not in_atmosphere:
+		maximum_step = minf(maximum_step, 0.5)
 		travel_distance_limit = minf(travel_distance_limit, maxf(1000.0, radius * 0.002))
 	if autopilot_enabled and autopilot_phase == "COAST_TO_TARGET":
 		maximum_step = minf(maximum_step, 10.0)
@@ -411,7 +429,11 @@ func _adaptive_step_size() -> float:
 	if autopilot_enabled and autopilot_phase == "COAST":
 		var coast_orbit: Dictionary = FlightComputer.orbital_state(body.relative_position, velocity - Vector2(body.velocity), G * float(body.mass))
 		var coast_radial_speed: float = absf(float(coast_orbit.get("radial_speed", 0.0)))
-		var coast_orbit_altitude := autopilot_target_altitude if str(body.get("name", "")) == _autopilot_target_body_name() and float(body.get("distance", INF)) <= float(body.get("soi", 0.0)) else 200000.0
+		var body_name := str(body.get("name", ""))
+		var body_minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(body_name, float(body.radius))
+		var body_maximum_stable_altitude := FlightComputer.maximum_stable_orbit_altitude(float(body.radius), float(body.get("soi", 0.0)))
+		var parking_altitude := clampf(200000.0, body_minimum_safe_altitude, maxf(body_minimum_safe_altitude, body_maximum_stable_altitude))
+		var coast_orbit_altitude := autopilot_target_altitude if body_name == _autopilot_target_body_name() and float(body.get("distance", INF)) <= float(body.get("soi", 0.0)) else parking_altitude
 		if bool(coast_orbit.get("bound", false)) and coast_radial_speed < 500.0 and float(coast_orbit.get("apoapsis", 0.0)) >= float(body.radius) + coast_orbit_altitude * 0.95:
 			step_limit = minf(step_limit, 10.0)
 	if autopilot_enabled and autopilot_phase == "ROUTE_COAST" and autopilot_route_node_index < autopilot_route_nodes.size():
@@ -575,14 +597,18 @@ func _fail_autopilot(reason: String) -> void:
 func _begin_arrival_capture(target_state: Dictionary) -> void:
 	var relative_position := _relative_position_to_body(target_state)
 	var relative_velocity: Vector2 = velocity - target_state.velocity
-	var capture := FlightComputer.arrival_capture_burn(relative_position, relative_velocity, G * float(target_state.mass), float(target_state.radius), autopilot_target_altitude)
+	var target_name := str(target_state.get("name", ""))
+	var minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(target_name, float(target_state.radius))
+	var capture := FlightComputer.arrival_capture_burn(relative_position, relative_velocity, G * float(target_state.mass), float(target_state.radius), autopilot_target_altitude, minimum_safe_altitude)
 	if not bool(capture.get("valid", false)):
 		_fail_autopilot("APPROACH CANNOT REACH SELECTED ORBIT")
 		return
 	autopilot_arrival_burn_vector = capture.burn_vector
 	autopilot_burn_direction = autopilot_arrival_burn_vector.normalized()
 	autopilot_burn_remaining = float(capture.delta_v)
-	if autopilot_burn_remaining < 1.0:
+	if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
+		autopilot_apsis_correction_armed = false
+		autopilot_apsis_correction_angle = relative_position.angle()
 		autopilot_phase = "COAST_TO_TARGET"
 	else:
 		autopilot_phase = "ARRIVAL_CAPTURE_BURN"
@@ -795,40 +821,51 @@ func _update_guidance(dt: float) -> void:
 	var altitude := maxf(0.0, float(guidance_body.distance) - float(guidance_body.radius))
 	var propellant_available := infinite_weightless_fuel or fuel > 0.0
 	var destination_is_local := float(guidance_body.get("distance", INF)) <= float(guidance_body.get("soi", 0.0)) and str(guidance_body.get("name", "")) == _autopilot_target_body_name()
-	var guidance_orbit_altitude := autopilot_target_altitude if destination_is_local else 200000.0
+	var guidance_body_name := str(guidance_body.get("name", ""))
+	var minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(guidance_body_name, float(guidance_body.radius))
+	var maximum_stable_altitude := FlightComputer.maximum_stable_orbit_altitude(float(guidance_body.radius), float(guidance_body.get("soi", 0.0)))
+	var parking_altitude := clampf(200000.0, minimum_safe_altitude, maxf(minimum_safe_altitude, maximum_stable_altitude))
+	var guidance_orbit_altitude := autopilot_target_altitude if destination_is_local else parking_altitude
 	var tangent := Vector2(-radial.y, radial.x)
-	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / 100000.0, 0.0, 1.0))
+	var atmosphere_height := PlanetarySystem.planetary_atmosphere_height(guidance_body_name)
+	var pitch_reference_altitude := maxf(maxf(5000.0, float(guidance_body.radius) * 0.01), atmosphere_height * 0.6)
+	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / pitch_reference_altitude, 0.0, 1.0))
 	if autopilot_enabled:
 		gimbal_angle = 0.0
 		var orbit := FlightComputer.orbital_state(guidance_position, guidance_velocity, G * float(guidance_body.mass))
 		var target_radius := float(guidance_body.radius) + guidance_orbit_altitude
+		var target_orbit_speed := FlightComputer.circular_orbit_speed(target_radius, G * float(guidance_body.mass))
+		var orbit_target_tolerance := FlightComputer.orbit_radius_tolerance(target_radius)
 		var prograde := guidance_velocity.normalized() if guidance_velocity.length() > 1.0 else tangent
 		match autopilot_phase:
 			"ASCENT":
 				status_message = "AUTOPILOT  •  ASCENT TO %.0f KM" % (guidance_orbit_altitude / 1000.0)
 				var ascent_orbit_periapsis := float(orbit.get("periapsis", 0.0))
 				var ascent_orbit_radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
-				var already_in_stable_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + 70000.0 and ascent_orbit_radial_speed < 100.0
-				var reached_parking_orbit := already_in_stable_orbit and float(orbit.get("apoapsis", 0.0)) >= target_radius - 25000.0
+				var already_in_stable_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and ascent_orbit_radial_speed < maxf(1.0, target_orbit_speed * 0.01)
+				var reached_parking_orbit := already_in_stable_orbit and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002))
 				if reached_parking_orbit and not destination_is_local:
 					thrust_key_down = false
 					autopilot_phase = "PLAN_TRANSFER"
-				elif reached_parking_orbit and destination_is_local and absf(guidance_position.length() - target_radius) < maxf(500.0, target_radius * 0.002):
+				elif reached_parking_orbit and destination_is_local and absf(guidance_position.length() - target_radius) < orbit_target_tolerance:
 					thrust_key_down = false
 					autopilot_phase = "COMPLETE"
 					autopilot_complete = true
 				elif already_in_stable_orbit:
 					thrust_key_down = false
 					autopilot_phase = "CIRCULARISE"
-				elif bool(orbit.get("bound", false)) and float(orbit.get("apoapsis", 0.0)) >= target_radius - 25000.0:
+				elif bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002)):
 					thrust_key_down = false
 					autopilot_phase = "COAST"
+				elif not bool(orbit.get("bound", false)) and float(orbit.get("radial_speed", 0.0)) > 0.0 and altitude > minimum_safe_altitude and not destination_is_local:
+					thrust_key_down = false
+					autopilot_phase = "PLAN_TRANSFER"
 				else:
 					var ascent_tangential_speed: float = absf(float(orbit.get("tangential_speed", 0.0)))
 					var surface_rotation_speed: float = absf(float(guidance_body.get("rotation_rate", 0.0))) * float(guidance_body.radius)
 					var ascent_speed_gain: float = maxf(0.0, ascent_tangential_speed - surface_rotation_speed)
-					var ascent_altitude_fraction: float = clampf((altitude - 1000.0) / 59000.0, 0.0, 1.0)
-					var ascent_speed_fraction: float = clampf(ascent_speed_gain / 7200.0, 0.0, 1.0)
+					var ascent_altitude_fraction: float = clampf(altitude / pitch_reference_altitude, 0.0, 1.0)
+					var ascent_speed_fraction: float = clampf(ascent_speed_gain / maxf(1.0, target_orbit_speed), 0.0, 1.0)
 					var altitude_pitch: float = lerpf(88.0, 4.0, ascent_altitude_fraction)
 					var speed_pitch: float = lerpf(88.0, 4.0, ascent_speed_fraction)
 					pitch_above_horizon = minf(altitude_pitch, speed_pitch)
@@ -838,7 +875,8 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
 				thrust_key_down = false
 				var coast_radial_speed: float = float(orbit.get("radial_speed", 0.0))
-				if absf(coast_radial_speed) <= 10.0 and altitude > 70000.0:
+				var coast_speed_tolerance := maxf(0.1, minf(10.0, target_orbit_speed * 0.01))
+				if absf(coast_radial_speed) <= coast_speed_tolerance and altitude > minimum_safe_altitude:
 					autopilot_phase = "CIRCULARISE"
 			"COAST_TO_TARGET":
 				status_message = "AUTOPILOT  •  COASTING TO TARGET ORBIT"
@@ -847,20 +885,46 @@ func _update_guidance(dt: float) -> void:
 				var target_radial_speed: float = absf(float(orbit.get("radial_speed", 0.0)))
 				var target_bound: bool = bool(orbit.get("bound", false))
 				var target_periapsis: float = float(orbit.get("periapsis", 0.0))
-				if target_distance_error < maxf(500.0, target_radius * 0.002) and target_radial_speed < 50.0:
+				var target_apoapsis: float = float(orbit.get("apoapsis", INF))
+				var safe_target_orbit: bool = target_bound and target_periapsis > float(guidance_body.radius) + minimum_safe_altitude
+				var target_alignment_window_radius := maxf(2.0, minf(50.0, target_radius * 0.00002))
+				var target_apsis_tolerance := target_alignment_window_radius
+				var target_alignment_speed_tolerance := maxf(0.05, minf(0.5, target_orbit_speed * 0.0001))
+				var apsis_speed_tolerance := maxf(0.05, minf(0.5, target_orbit_speed * 0.0001))
+				var target_alignment_window: bool = target_distance_error < target_alignment_window_radius and target_radial_speed < target_alignment_speed_tolerance
+				var periapsis_target_error: float = absf(target_periapsis - target_radius)
+				var apoapsis_target_error: float = absf(target_apoapsis - target_radius)
+				var orbit_completion_tolerance := maxf(1000.0, minf(5000.0, target_radius * 0.001))
+				var target_orbit_complete: bool = safe_target_orbit and periapsis_target_error <= orbit_completion_tolerance and apoapsis_target_error <= orbit_completion_tolerance
+				var angular_distance_since_correction := absf(wrapf(guidance_position.angle() - autopilot_apsis_correction_angle, -PI, PI))
+				if not autopilot_apsis_correction_armed and angular_distance_since_correction > deg_to_rad(150.0):
+					autopilot_apsis_correction_armed = true
+				var target_apsis_reached: bool = autopilot_apsis_correction_armed and target_radial_speed <= apsis_speed_tolerance and altitude > minimum_safe_altitude
+				var transfer_already_reaches_target: bool = target_bound and minf(periapsis_target_error, apoapsis_target_error) <= target_apsis_tolerance
+				var target_correction_needed := false
+				if target_apsis_reached and not transfer_already_reaches_target:
+					var coast_correction_plan: Dictionary = FlightComputer.target_radius_burn(guidance_position, guidance_velocity, target_radius, G * float(guidance_body.mass))
+					target_correction_needed = bool(coast_correction_plan.get("valid", false)) and float(coast_correction_plan.get("delta_v", INF)) > FlightComputer.BURN_COMPLETION_TOLERANCE
+				if target_orbit_complete:
+					autopilot_phase = "COMPLETE"
+					autopilot_complete = true
+					status_message = "AUTOPILOT  •  TARGET ORBIT ACHIEVED"
+				elif target_alignment_window:
 					autopilot_phase = "CIRCULARISE"
-				elif target_bound and target_periapsis > float(guidance_body.radius):
+				elif target_correction_needed:
+					autopilot_apsis_correction_armed = false
+					autopilot_apsis_correction_angle = guidance_position.angle()
+					autopilot_phase = "CIRCULARISE"
+					status_message = "AUTOPILOT  •  CORRECTING ORBIT AT APSIS"
+				elif safe_target_orbit or (altitude > minimum_safe_altitude and propellant_available):
 					status_message = "AUTOPILOT  •  APPROACHING TARGET RADIUS"
-				elif altitude > 70000.0 and propellant_available:
-					autopilot_phase = "CIRCULARISE"
-					status_message = "AUTOPILOT  •  CORRECTING LOW PERIAPSIS"
 				else:
 					_fail_autopilot("TARGET PERIAPSIS IS BELOW THE BODY")
 			"CIRCULARISE_BURN":
 				status_message = "AUTOPILOT  •  CIRCULARISING  %.0f M/S" % autopilot_burn_remaining
 				var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING CIRCULARISATION")
 			"CIRCULARISE":
@@ -870,8 +934,11 @@ func _update_guidance(dt: float) -> void:
 				var target_burn_delta_v: float = float(target_orbit_plan.get("delta_v", INF))
 				var circularised_velocity: Vector2 = target_orbit_plan.get("desired_velocity", guidance_velocity)
 				var circularised_orbit: Dictionary = FlightComputer.orbital_state(guidance_position, circularised_velocity, G * float(guidance_body.mass))
-				var safe_periapsis: float = float(guidance_body.radius) + 70000.0
-				var circularisation_complete: bool = bool(target_orbit_plan.get("valid", false)) and absf(guidance_position.length() - target_radius) < 500.0 and target_burn_delta_v <= 1.0 and bool(circularised_orbit.get("bound", false)) and float(circularised_orbit.get("periapsis", 0.0)) > safe_periapsis
+				var safe_periapsis: float = float(guidance_body.radius) + minimum_safe_altitude
+				var target_orbit_tolerance := FlightComputer.orbit_radius_tolerance(target_radius)
+				var circularised_periapsis: float = float(circularised_orbit.get("periapsis", 0.0))
+				var circularised_apoapsis: float = float(circularised_orbit.get("apoapsis", INF))
+				var circularisation_complete: bool = bool(target_orbit_plan.get("valid", false)) and target_burn_delta_v <= FlightComputer.BURN_COMPLETION_TOLERANCE and bool(circularised_orbit.get("bound", false)) and circularised_periapsis > safe_periapsis and absf(circularised_periapsis - target_radius) < target_orbit_tolerance and absf(circularised_apoapsis - target_radius) < target_orbit_tolerance
 				if not bool(target_orbit_plan.get("valid", false)):
 					thrust_key_down = false
 					_fail_autopilot("ORBIT INSERTION HAS AN INVALID STATE")
@@ -885,8 +952,10 @@ func _update_guidance(dt: float) -> void:
 				else:
 					autopilot_burn_direction = target_burn_vector.normalized()
 					autopilot_burn_remaining = target_burn_delta_v
-					if target_burn_delta_v <= 1.0:
+					if target_burn_delta_v <= FlightComputer.BURN_COMPLETION_TOLERANCE:
 						thrust_key_down = false
+						autopilot_apsis_correction_armed = false
+						autopilot_apsis_correction_angle = guidance_position.angle()
 						autopilot_phase = "COAST_TO_TARGET"
 					else:
 						autopilot_phase = "CIRCULARISE_BURN"
@@ -905,7 +974,7 @@ func _update_guidance(dt: float) -> void:
 					autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
 					autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
 					autopilot_transfer_start_time = -1.0
-					if autopilot_burn_remaining <= 1.0:
+					if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
 						autopilot_transfer_start_time = sim_time
 						autopilot_phase = "TRANSFER_COAST"
 					else:
@@ -928,7 +997,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0f M/S" % autopilot_burn_remaining
 				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING MANOEUVRE")
 			"ROUTE_COAST":
@@ -956,7 +1025,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0f M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
 				var route_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = propellant_available and autopilot_burn_remaining > 0.1 and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ROUTE BURN")
 			"TRANSFER_BURN":
@@ -964,7 +1033,7 @@ func _update_guidance(dt: float) -> void:
 				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 				var injection_rotation := injection_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING DEPARTURE BURN")
 			"TRANSFER_COAST":
@@ -991,14 +1060,15 @@ func _update_guidance(dt: float) -> void:
 				var approach_relative_velocity: Vector2 = velocity - approach_target_state.velocity
 				var arrival_orbit := FlightComputer.orbital_state(approach_relative_position, approach_relative_velocity, G * float(approach_target_state.mass))
 				var approach_radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
+				var approach_speed_tolerance := maxf(0.1, minf(10.0, FlightComputer.circular_orbit_speed(float(approach_target_state.radius) + autopilot_target_altitude, G * float(approach_target_state.mass)) * 0.001))
 				status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0f KM" % [str(approach_target_state.name).to_upper(), (approach_relative_position.length() - float(approach_target_state.radius)) / 1000.0]
-				if approach_radial_speed >= -10.0:
+				if approach_radial_speed >= -approach_speed_tolerance:
 					_begin_arrival_capture(approach_target_state)
 			"ARRIVAL_CAPTURE_BURN":
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
 				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, capture_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = propellant_available and autopilot_burn_remaining > 1.0 and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ARRIVAL CAPTURE")
 			"LANDING_DESCENT":
@@ -1699,6 +1769,8 @@ func get_save_data() -> Dictionary:
 		"autopilot_target_mode": autopilot_target_mode,
 		"autopilot_planet_index": autopilot_planet_index,
 		"autopilot_burn_remaining": autopilot_burn_remaining,
+		"autopilot_apsis_correction_armed": autopilot_apsis_correction_armed,
+		"autopilot_apsis_correction_angle": autopilot_apsis_correction_angle,
 		"autopilot_throttle": autopilot_throttle,
 		"autopilot_transfer_start_time": autopilot_transfer_start_time,
 		"autopilot_transfer_duration": autopilot_transfer_duration,
@@ -1809,6 +1881,8 @@ func load_save_data(data: Dictionary) -> bool:
 	autopilot_target_mode = str(data.get("autopilot_target_mode", "ORBIT"))
 	autopilot_planet_index = int(data.get("autopilot_planet_index", -1))
 	autopilot_burn_remaining = float(data.get("autopilot_burn_remaining", 0.0))
+	autopilot_apsis_correction_armed = bool(data.get("autopilot_apsis_correction_armed", true))
+	autopilot_apsis_correction_angle = float(data.get("autopilot_apsis_correction_angle", 0.0))
 	autopilot_throttle = float(data.get("autopilot_throttle", 0.0))
 	autopilot_transfer_start_time = float(data.get("autopilot_transfer_start_time", sim_time if str(data.get("autopilot_phase", "IDLE")) == "TRANSFER_COAST" else -1.0))
 	autopilot_transfer_duration = float(data.get("autopilot_transfer_duration", 0.0))
