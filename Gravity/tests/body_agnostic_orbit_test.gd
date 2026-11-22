@@ -114,11 +114,14 @@ func _validate_local_orbit_autopilot(body_name: String) -> void:
 		elapsed += step
 		iterations += 1
 		if simulation.autopilot_phase != previous_phase:
-			var phase_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
-			var phase_position: Vector2 = phase_body.relative_position
-			var phase_velocity: Vector2 = simulation.velocity - Vector2(phase_body.velocity)
-			var phase_orbit := FlightComputer.orbital_state(phase_position, phase_velocity, body_mu)
-			phase_transitions.append("%.1f %s>%s alt=%.1f radial=%.3f peri=%.1f apo=%.1f burn=%.3f" % [elapsed, previous_phase, simulation.autopilot_phase, float(phase_body.distance) - body_radius, float(phase_orbit.get("radial_speed", INF)), float(phase_orbit.get("periapsis", 0.0)) - body_radius, float(phase_orbit.get("apoapsis", INF)) - body_radius, simulation.autopilot_burn_remaining])
+			if phase_transitions.size() < 30:
+				var phase_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
+				var phase_position: Vector2 = phase_body.relative_position
+				var phase_velocity: Vector2 = simulation.velocity - Vector2(phase_body.velocity)
+				var phase_orbit := FlightComputer.orbital_state(phase_position, phase_velocity, body_mu)
+				phase_transitions.append("%.1f %s>%s alt=%.1f radial=%.3f peri=%.1f apo=%.1f burn=%.3f" % [elapsed, previous_phase, simulation.autopilot_phase, float(phase_body.distance) - body_radius, float(phase_orbit.get("radial_speed", INF)), float(phase_orbit.get("periapsis", 0.0)) - body_radius, float(phase_orbit.get("apoapsis", INF)) - body_radius, simulation.autopilot_burn_remaining])
+			elif phase_transitions.size() == 30:
+				phase_transitions.append("Further phase transitions omitted")
 			previous_phase = simulation.autopilot_phase
 		assert(iterations < 300000, "%s autopilot exceeded its step budget" % body_name)
 	var diagnostic_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
