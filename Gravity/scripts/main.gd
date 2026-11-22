@@ -1114,10 +1114,12 @@ func _show_autopilot_panel() -> void:
 		sim.autopilot_planet_index = selected_id
 		sim.autopilot_burn_remaining = 0.0
 		sim.autopilot_apsis_correction_armed = true
+		sim.autopilot_apsis_correction_angle = 0.0
 		sim.autopilot_burn_direction = Vector2.ZERO
 		sim.autopilot_transfer_corrections = 0
 		var current_body: Dictionary = sim._nearest_body_state(sim.rocket_position)
 		var relative_position: Vector2 = sim.rocket_position - current_body.position
+		sim.autopilot_apsis_correction_angle = relative_position.angle()
 		var relative_velocity: Vector2 = sim.velocity - current_body.velocity
 		var current_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(current_body.mass))
 		var target_state: Dictionary = sim._autopilot_target_state()
