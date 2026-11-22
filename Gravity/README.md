@@ -76,13 +76,19 @@ A procedural 2D spaceflight simulator built with Godot 4.
 
 ## Development checks
 
-Run the calculation tests from the project directory:
+Run the full regression suite from the project directory using Godot 4.7:
 
 ```powershell
-godot --headless --path . --script res://tests/rocket_design_test.gd
-godot --headless --path . --script res://tests/flight_computer_test.gd
-godot --headless --path . --script res://tests/orbital_stability_test.gd
+godot --headless --path . --editor --quit
+godot --headless --path . --script res://tests/compile_simulation_view.gd --quit-after 1
+godot --headless --path . --script res://tests/rocket_design_test.gd --quit-after 1
+godot --headless --path . --script res://tests/flight_computer_test.gd --quit-after 1
+godot --headless --path . --script res://tests/orbital_stability_test.gd --quit-after 1
+godot --headless --path . --script res://tests/simulation_lifecycle_test.gd --quit-after 1
+godot --headless --path . --script res://tests/leo_autopilot_mission_test.gd --quit-after 1
 ```
+
+The checks run in this order in GitHub Actions. A script error, parse error, failed assertion, or resource leak fails the workflow.
 
 ## Flight computer
 
