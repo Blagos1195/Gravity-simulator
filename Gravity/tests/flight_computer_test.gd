@@ -280,7 +280,7 @@ func _initialize() -> void:
 	var earth_orbit_speed := FlightComputer.circular_orbit_speed(earth_orbit_radius)
 	var local_transfer_plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, -2, 5000.0)
 	assert(bool(local_transfer_plan.get("valid", false)))
-	assert(float(local_transfer_plan.get("total_delta_v", INF)) < 100.0)
+	assert(float(local_transfer_plan.get("total_delta_v", INF)) < 100.0, "Local Earth-orbit transfer exceeded its expected delta-v: %s" % str(local_transfer_plan))
 	var invalid_transfer_plan := FlightComputer.simulated_transfer_search(Vector2.ZERO, Vector2.ZERO, 0.0, -3, 5000.0)
 	assert(not bool(invalid_transfer_plan.get("valid", true)))
 
