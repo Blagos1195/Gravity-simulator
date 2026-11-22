@@ -66,6 +66,14 @@ static func _satellite_target_data(target_index: int) -> Dictionary:
 		return {}
 	return SATELLITE_TARGETS[satellite_index]
 
+static func satellite_targets_for_host(host_name: String) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for satellite in SATELLITE_TARGETS:
+		if str(satellite.get("host_name", "")) == host_name:
+			result.append(satellite.duplicate(true))
+	return result
+
+
 static func _is_satellite_target(target_index: int) -> bool:
 	return not _satellite_target_data(target_index).is_empty()
 
