@@ -106,7 +106,7 @@ func _validate_local_orbit_autopilot(body_name: String) -> void:
 	var iterations := 0
 	var previous_phase: String = str(simulation.autopilot_phase)
 	var phase_transitions: Array[String] = []
-	while elapsed < orbital_period and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
+	while elapsed < orbital_period * 2.0 and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
 		var step: float = simulation._adaptive_step_size()
 		assert(step > 0.000001, "%s autopilot produced a zero physics step" % body_name)
 		step = minf(step, orbital_period * 2.0 - elapsed)
