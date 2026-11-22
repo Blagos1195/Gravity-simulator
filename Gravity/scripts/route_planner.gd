@@ -517,19 +517,24 @@ func _calculate_destination_plan() -> void:
 		navigation_plan["target_id"] = target_id
 		navigation_plan["target_name"] = target_name
 		navigation_plan["target_altitude"] = target_altitude
+		navigation_plan["planned_at_time"] = float(simulation.get("sim_time"))
+		navigation_plan["planned_position"] = Vector2(simulation.get("rocket_position"))
+		navigation_plan["planned_velocity"] = Vector2(simulation.get("velocity"))
 		navigation_plan["local"] = false
 	navigation_plan_valid = true
 	navigation_engage_button.disabled = false
 	if bool(navigation_plan.get("local", false)):
 		navigation_report.text = "ORBIT CHANGE SOLVED  •  %s\nTarget altitude: %.1f km\nRequired ΔV: %.0f m/s\nThis plan will circularise around the current body." % [target_name, target_altitude / 1000.0, float(navigation_plan.get("delta_v", 0.0))]
 	else:
-		navigation_report.text = "TRANSFER SOLVED  •  %s\nDeparture ΔV: %.0f m/s\nArrival capture ΔV: %.0f m/s\nTotal estimated ΔV: %.0f m/s\nFlight time: %.1f days\nClosest approach: %.0f km\nCandidate trajectories: %d\nFinite-burn losses and mid-course correction errors are not included." % [
+		navigation_report.text = "TRANSFER SOLVED  •  %s\nDeparture: CURRENT ORBIT  •  T+ %.1f s\nDeparture ΔV: %.0f m/s\nArrival capture ΔV: %.0f m/s\nTotal estimated ΔV: %.0f m/s\nFlight time: %.1f days\nClosest approach: %.0f km\nArrival speed: %.0f m/s\nCandidate trajectories: %d\nThe exact departure solution will be handed to autopilot. Finite-burn losses and mid-course corrections remain approximate." % [
 			target_name,
+			float(navigation_plan.get("planned_at_time", 0.0)),
 			float(navigation_plan.get("departure_delta_v", 0.0)),
 			float(navigation_plan.get("capture_delta_v", 0.0)),
 			float(navigation_plan.get("total_delta_v", 0.0)),
 			float(navigation_plan.get("transfer_time", 0.0)) / 86400.0,
 			float(navigation_plan.get("closest_approach", 0.0)) / 1000.0,
+			float(navigation_plan.get("arrival_speed", 0.0)),
 			int(navigation_plan.get("search_candidates", 0))
 		]
 
@@ -540,6 +545,16 @@ func _send_destination_to_autopilot() -> void:
 	var target_name := str(navigation_plan.get("target_name", ""))
 	if target_id == -999 or target_name.is_empty():
 		return
+	if not bool(navigation_plan.get("local", false)):
+		var planned_position: Vector2 = navigation_plan.get("planned_position", Vector2.INF)
+		var planned_velocity: Vector2 = navigation_plan.get("planned_velocity", Vector2.INF)
+		var current_position: Vector2 = simulation.get("rocket_position")
+		var current_velocity: Vector2 = simulation.get("velocity")
+		var plan_age: float = absf(float(simulation.get("sim_time")) - float(navigation_plan.get("planned_at_time", -INF)))
+		if plan_age > 2.0 or planned_position.distance_to(current_position) > 20000.0 or planned_velocity.distance_to(current_velocity) > 5.0:
+			_calculate_destination_plan()
+			if not navigation_plan_valid:
+				return
 	var current: Dictionary = simulation.call("_nearest_body_state", simulation.get("rocket_position"))
 	var current_name := str(current.get("name", ""))
 	var relative_position: Vector2 = Vector2(simulation.get("rocket_position")) - Vector2(current.get("position", Vector2.ZERO))
@@ -555,6 +570,7 @@ func _send_destination_to_autopilot() -> void:
 	simulation.set("autopilot_burn_remaining", 0.0)
 	simulation.set("autopilot_burn_direction", Vector2.ZERO)
 	simulation.set("autopilot_transfer_corrections", 0)
+	simulation.set("autopilot_precomputed_transfer_plan", navigation_plan.duplicate(true) if not bool(navigation_plan.get("local", false)) else {})
 	simulation.set("autopilot_apsis_correction_armed", true)
 	simulation.set("autopilot_apsis_correction_angle", relative_position.angle())
 	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if bool(simulation.get("landed")) or not stable_orbit else "PLAN_TRANSFER")
