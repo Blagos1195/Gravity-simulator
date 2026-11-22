@@ -111,7 +111,7 @@ func _validate_surface_contact() -> void:
 func _validate_small_body_collision() -> void:
 	var simulation: Variant = SimulationView.new()
 	var au: float = PlanetarySystem.ASTRONOMICAL_UNIT
-	simulation.solar_belt_particles = [{
+	var test_belts: Array[Dictionary] = [{
 		"name": "Test belt",
 		"inner_radius_m": au - 100.0,
 		"outer_radius_m": au + 100.0,
@@ -124,6 +124,7 @@ func _validate_small_body_collision() -> void:
 			"collision_radius_m": 5.0
 		}]
 	}]
+	simulation.solar_belt_particles = test_belts
 	var stationary_earth := {
 		"earth_heliocentric_position_components": PackedFloat64Array([0.0, 0.0])
 	}
