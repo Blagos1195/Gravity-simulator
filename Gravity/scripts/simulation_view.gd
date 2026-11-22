@@ -39,6 +39,7 @@ var rocket_position: Vector2:
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
 var fuel := 300000.0
+var infinite_fuel_stage_remaining := 300000.0
 var stage_index := 0
 var discarded_stage_mass := 0.0
 var discarded_propellant_mass := 0.0
@@ -106,6 +107,7 @@ func set_rocket_design(design: Dictionary) -> void:
 	payload_mass = float(design.get("payload_mass", 500.0))
 	stage_index = 0
 	fuel = float(rocket_stages[0].get("fuel_capacity", 0.0))
+	infinite_fuel_stage_remaining = fuel
 
 func _active_stage_data() -> Dictionary:
 	return rocket_stages[clampi(stage_index, 0, rocket_stages.size() - 1)]
@@ -229,7 +231,7 @@ func _physics_step(dt: float) -> void:
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 	var propellant_available := infinite_weightless_fuel or fuel > 0.0
 	throttle = autopilot_throttle if autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if thrust_key_down and propellant_available else 0.0)
-	var fuel_used := minf(fuel, total_flow * throttle * dt) if total_flow > 0.0 else 0.0
+	var fuel_used := minf(fuel, total_flow * throttle * dt) if total_flow > 0.0 and not infinite_weightless_fuel else 0.0
 	var mass_before := maxf(1.0, _current_vehicle_mass())
 	var mass_after := maxf(1.0, mass_before - fuel_used)
 	var mass_mid := (mass_before + mass_after) * 0.5
@@ -242,6 +244,7 @@ func _physics_step(dt: float) -> void:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
 	elif infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
 		thrust_delta_v = thrust_force / mass_before * dt
+		infinite_fuel_stage_remaining = maxf(0.0, infinite_fuel_stage_remaining - total_flow * dt)
 	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var thrust_impulse := thrust_direction * thrust_delta_v
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
@@ -302,7 +305,9 @@ func _physics_step(dt: float) -> void:
 	fuel = maxf(0.0, fuel - fuel_used)
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
-	if fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
+	if infinite_weightless_fuel and infinite_fuel_stage_remaining <= 0.0001 and stage_index < rocket_stages.size() - 1:
+		_separate_stage()
+	elif not infinite_weightless_fuel and fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
 	_handle_body_contact()
 	if simulate_belt_collisions and not crashed and not landed:
@@ -407,7 +412,8 @@ func _adaptive_step_size() -> float:
 	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and (infinite_weightless_fuel or fuel > 0.0) else 0.0
 	var thrust_limit := 0.08 * maxf(100.0, speed) / engine_acceleration if engine_acceleration > 0.01 else maximum_step
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	var burnout_limit := fuel / total_flow if thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
+	var burnout_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else fuel
+	var burnout_limit := burnout_fuel / total_flow if thrust_key_down and burnout_fuel > 0.0 and total_flow > 0.0 else maximum_step
 	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, maximum_step)
 	var step_limit := minf(physics_limit, burnout_limit)
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and not thrust_key_down:
@@ -575,6 +581,7 @@ func _separate_stage() -> void:
 	velocity += Vector2.UP.rotated(rotation_angle) * 2.0
 	stage_index += 1
 	fuel = float(_active_stage_data().get("fuel_capacity", 0.0))
+	infinite_fuel_stage_remaining = fuel
 	thrust_key_down = false
 
 func _autopilot_target_body_name() -> String:
@@ -1765,6 +1772,7 @@ func get_save_data() -> Dictionary:
 		"velocity": [velocity.x, velocity.y],
 		"rotation_angle": rotation_angle,
 		"fuel": fuel,
+		"infinite_fuel_stage_remaining": infinite_fuel_stage_remaining,
 		"stage_index": stage_index,
 		"discarded_stage_mass": discarded_stage_mass,
 		"discarded_propellant_mass": discarded_propellant_mass,
@@ -1880,6 +1888,7 @@ func load_save_data(data: Dictionary) -> bool:
 	velocity = Vector2(float(v[0]), float(v[1]))
 	rotation_angle = float(data.get("rotation_angle", 0.0))
 	fuel = float(data.get("fuel", _active_stage_data().get("fuel_capacity", 0.0)))
+	infinite_fuel_stage_remaining = clampf(float(data.get("infinite_fuel_stage_remaining", fuel)), 0.0, float(_active_stage_data().get("fuel_capacity", 0.0)))
 	discarded_stage_mass = float(data.get("discarded_stage_mass", 0.0))
 	discarded_propellant_mass = float(data.get("discarded_propellant_mass", 0.0))
 	gimbal_angle = float(data.get("gimbal_angle", 0.0))
