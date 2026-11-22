@@ -55,6 +55,7 @@ var autopilot_apsis_correction_angle := 0.0
 var autopilot_throttle := 0.0
 var autopilot_transfer_start_time := -1.0
 var autopilot_transfer_duration := 0.0
+var autopilot_precomputed_transfer_plan: Dictionary = {}
 var autopilot_transfer_corrections := 0
 var autopilot_speed_priority := 0.35
 var autopilot_safety_margin := 0.10
@@ -960,9 +961,12 @@ func _update_guidance(dt: float) -> void:
 			"PLAN_TRANSFER":
 				status_message = "AUTOPILOT  •  SIMULATING TRANSFER TRAJECTORIES"
 				thrust_key_down = false
-				var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
-				var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
-				var transfer_plan := FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
+				var transfer_plan: Dictionary = autopilot_precomputed_transfer_plan.duplicate(true)
+				autopilot_precomputed_transfer_plan.clear()
+				if transfer_plan.is_empty():
+					var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
+					var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
+					transfer_plan = FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
 				if not bool(transfer_plan.get("valid", false)):
 					_fail_autopilot("TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY")))
 				else:
