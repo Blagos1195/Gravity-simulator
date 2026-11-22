@@ -37,7 +37,7 @@ func _validate_leo_autopilot_mission() -> void:
 		iterations += 1
 		assert(iterations < 100000, "LEO mission exceeded its iteration budget: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f step=%.4f" % [simulation.autopilot_phase, simulation.status_message, elapsed, simulation._nearest_body_state(simulation.rocket_position).distance - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel, step])
 	assert(not simulation.crashed, "LEO ascent crashed: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f" % [simulation.autopilot_phase, simulation.status_message, elapsed, simulation._nearest_body_state(simulation.rocket_position).distance - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel])
-	assert(simulation.autopilot_complete)
+	assert(simulation.autopilot_complete, "LEO mission did not complete: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f landed=%s crashed=%s" % [simulation.autopilot_phase, simulation.status_message, elapsed, simulation._nearest_body_state(simulation.rocket_position).distance - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel, simulation.landed, simulation.crashed])
 	assert(simulation.autopilot_phase == "COMPLETE")
 	assert(not simulation.landed)
 	var earth_state: Dictionary = simulation._surface_body_state("Earth")
