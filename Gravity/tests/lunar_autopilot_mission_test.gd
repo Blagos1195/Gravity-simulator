@@ -55,15 +55,20 @@ func _run_lunar_mission(design: Dictionary, infinite_propellant: bool, start_pos
 			var relative_position: Vector2 = simulation._relative_position_to_body(moon_state)
 			var relative_velocity: Vector2 = simulation.velocity - Vector2(moon_state.get("velocity", Vector2.ZERO))
 			var moon_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(moon_state.get("mass", 0.0)))
+			var earth_orbit: Dictionary = FlightComputer.orbital_state(simulation.rocket_position, simulation.velocity, FlightComputer.G * PlanetarySystem.EARTH_MASS)
 			if phase_transitions.size() < 40:
-				phase_transitions.append("%.2f d %s>%s range=%.0f km radial=%.1f speed=%.1f burn=%.1f" % [
+				phase_transitions.append("%.2f d %s>%s range=%.0f km radial=%.1f speed=%.1f burn=%.1f dir=%.1f vel=%.1f earth_peri=%.0f km earth_apo=%.0f km" % [
 					elapsed / 86400.0,
 					previous_phase,
 					simulation.autopilot_phase,
 					relative_position.length() / 1000.0,
 					float(moon_orbit.get("radial_speed", INF)),
 					relative_velocity.length(),
-					simulation.autopilot_burn_remaining
+					simulation.autopilot_burn_remaining,
+					rad_to_deg(simulation.autopilot_burn_direction.angle()),
+					rad_to_deg(simulation.velocity.angle()),
+					float(earth_orbit.get("periapsis", 0.0)) / 1000.0,
+					float(earth_orbit.get("apoapsis", INF)) / 1000.0
 				])
 			previous_phase = simulation.autopilot_phase
 		if iterations >= 100000:
