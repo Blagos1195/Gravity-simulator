@@ -1063,9 +1063,6 @@ func _show_autopilot_panel() -> void:
 	)
 	launch_windows_button.pressed.connect(func():
 		var destination_index: int = selected_target_index.call()
-		if destination_index == -2:
-			report.text += "\n\nLaunch-window scanning is only available for planetary transfers."
-			return
 		var body: Dictionary = sim._nearest_body_state(sim.rocket_position)
 		var relative_position: Vector2 = sim.rocket_position - body.position
 		var relative_velocity: Vector2 = sim.velocity - body.velocity
