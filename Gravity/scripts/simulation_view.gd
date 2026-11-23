@@ -1245,12 +1245,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			if show_solar_system:
 				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
 			else:
-				camera_zoom = minf(0.0025, camera_zoom * 1.2)
+				camera_zoom = minf(0.02, camera_zoom * 1.2)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			if show_solar_system:
 				solar_map_zoom = maxf(0.25, solar_map_zoom / 1.2)
 			else:
-				camera_zoom = maxf(0.0000005, camera_zoom / 1.2)
+				camera_zoom = maxf(0.00000000002, camera_zoom / 1.2)
 
 func _draw_atmosphere(center: Vector2, planet_radius: float, atmosphere_height: float, atmosphere_color: Color) -> void:
 	if atmosphere_height <= 0.0:
@@ -1330,6 +1330,11 @@ func _draw() -> void:
 		_draw_solar_system(view_center)
 		_draw_hud()
 		return
+	if camera_zoom <= 0.0000000002:
+		_draw_full_system_zoom(view_center)
+		_draw_offscreen_body_indicators(view_center, altitude_visual_scale)
+		_draw_hud()
+		return
 
 	if show_grid:
 		_draw_grid(view_center)
@@ -1380,6 +1385,8 @@ func _draw() -> void:
 		if soi_pixels > destination_radius and soi_pixels < 1200.0:
 			draw_arc(destination_screen, soi_pixels, 0.0, TAU, 100, Color(0.35, 0.72, 1.0, 0.22), 1.0)
 
+	_draw_offscreen_body_indicators(rocket_screen, altitude_visual_scale)
+
 	if show_orbit:
 		_draw_orbit(rocket_screen, world_scale_factor)
 
@@ -1405,6 +1412,84 @@ func _draw() -> void:
 		draw_string(ThemeDB.fallback_font, velocity_end + Vector2(6, 0), "V", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.25, 0.9, 0.55))
 
 	_draw_hud()
+
+
+func _draw_full_system_zoom(view_center: Vector2) -> void:
+	var states: Dictionary = _ephemeris_states_at(sim_time)
+	var bodies: Array = states.get("bodies", [])
+	var scale := camera_zoom * _visual_scale()
+	var sun_position := Vector2.ZERO
+	for body_variant in bodies:
+		var body: Dictionary = body_variant
+		if str(body.get("name", "")) == "Sun":
+			sun_position = Vector2(body.get("position", Vector2.ZERO))
+			break
+	var sun_screen := view_center + (sun_position - rocket_position) * scale
+	for planet in PlanetarySystem.PLANETS:
+		var orbit_radius := float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT * scale
+		if orbit_radius > 2.0 and orbit_radius < maxf(size.x, size.y) * 1.5:
+			draw_arc(sun_screen, orbit_radius, 0.0, TAU, 160, Color(0.28, 0.43, 0.58, 0.28), 1.0)
+	for body_variant in bodies:
+		var body: Dictionary = body_variant
+		var body_name := str(body.get("name", ""))
+		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+		var screen_position := view_center + (body_position - rocket_position) * scale
+		if screen_position.x < -24.0 or screen_position.x > size.x + 24.0 or screen_position.y < -24.0 or screen_position.y > size.y + 24.0:
+			continue
+		var body_radius := clampf(float(body.get("radius", 1.0)) * scale, 1.5, 9.0)
+		var body_color: Color
+		if body_name == "Sun":
+			body_color = PlanetarySystem.system_visual_color()
+			draw_circle(screen_position, body_radius + 5.0, Color(body_color.r, body_color.g, body_color.b, 0.14))
+		else:
+			body_color = PlanetarySystem.planet_visual_data(body_name).get("color", Color(0.72, 0.78, 0.86))
+		draw_circle(screen_position, body_radius, body_color)
+		if body_radius >= 2.0 or body_name in ["Sun", "Earth", "Moon"]:
+			var label_position := screen_position + Vector2(body_radius + 4.0, 3.0)
+			draw_string(ThemeDB.fallback_font, label_position, body_name.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, body_color.lightened(0.2))
+	draw_circle(view_center, 3.0, Color(0.3, 1.0, 0.65))
+	draw_string(ThemeDB.fallback_font, view_center + Vector2(7.0, -7.0), "ROCKET", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.4, 1.0, 0.72))
+	draw_string(ThemeDB.fallback_font, Vector2(18.0, 20.0), "SOLAR SYSTEM  •  ROCKET-CENTRED VIEW", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.8, 1.0))
+
+func _draw_offscreen_body_indicators(view_center: Vector2, scale: float) -> void:
+	var states: Dictionary = _ephemeris_states_at(sim_time)
+	var candidates: Array[Dictionary] = []
+	for body_variant in states.get("bodies", []):
+		var body: Dictionary = body_variant
+		var body_name := str(body.get("name", ""))
+		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+		var screen_position := view_center + (body_position - rocket_position) * scale
+		if screen_position.x >= 0.0 and screen_position.x <= size.x and screen_position.y >= 0.0 and screen_position.y <= size.y:
+			continue
+		var distance := body_position.distance_to(rocket_position)
+		var color: Color = PlanetarySystem.system_visual_color() if body_name == "Sun" else PlanetarySystem.planet_visual_data(body_name).get("color", Color(0.72, 0.78, 0.86))
+		candidates.append({"name": body_name, "distance": distance, "direction": (screen_position - view_center).normalized(), "color": color})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.distance) < float(b.distance))
+	var count := mini(4, candidates.size())
+	for index in range(count):
+		var candidate: Dictionary = candidates[index]
+		var direction: Vector2 = candidate.direction
+		if direction.length_squared() < 0.0001:
+			continue
+		var half_size := size * 0.5 - Vector2(34.0, 34.0)
+		var edge_distance := INF
+		if absf(direction.x) > 0.0001:
+			edge_distance = minf(edge_distance, half_size.x / absf(direction.x))
+		if absf(direction.y) > 0.0001:
+			edge_distance = minf(edge_distance, half_size.y / absf(direction.y))
+		var edge_position := view_center + direction * edge_distance
+		edge_position.y = clampf(edge_position.y + (float(index) - float(count - 1) * 0.5) * 24.0, 28.0, size.y - 28.0)
+		var color: Color = candidate.color
+		var side := direction
+		var tip := edge_position + side * 9.0
+		var base := edge_position - side * 7.0
+		var perpendicular := Vector2(-side.y, side.x)
+		draw_colored_polygon(PackedVector2Array([tip, base + perpendicular * 6.0, base - perpendicular * 6.0]), color)
+		var distance_text := "%.2f AU" % (float(candidate.distance) / PlanetarySystem.ASTRONOMICAL_UNIT) if float(candidate.distance) >= 1000000000.0 else _format_distance(float(candidate.distance))
+		var label := "%s  %s" % [str(candidate.name).to_upper(), distance_text]
+		var label_offset := Vector2(12.0, 4.0) if direction.x < 0.7 else Vector2(-150.0, 4.0)
+		draw_string(ThemeDB.fallback_font, edge_position + label_offset, label, HORIZONTAL_ALIGNMENT_LEFT, 145, 10, color)
+
 
 func _draw_solar_label(label: String, anchor: Vector2, font_size: int, color: Color, occupied: Array[Rect2]) -> void:
 	var font: Font = ThemeDB.fallback_font
