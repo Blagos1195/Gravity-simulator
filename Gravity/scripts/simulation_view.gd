@@ -981,12 +981,11 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  SIMULATING TRANSFER TRAJECTORIES"
 				thrust_key_down = false
 				var wait_for_lunar_window := false
-				if autopilot_planet_index == -1:
-					var lunar_orbit := FlightComputer.orbital_state(rocket_position, velocity, G * PlanetarySystem.EARTH_MASS)
-					var lunar_departure_direction := FlightComputer.departure_periapsis_direction(-1, sim_time, rocket_position.length())
-					var lunar_orbit_is_circular := bool(lunar_orbit.get("bound", false)) and float(lunar_orbit.get("eccentricity", 1.0)) <= 0.05
-					if lunar_orbit_is_circular and lunar_departure_direction.length_squared() > 0.5 and rocket_position.normalized().dot(lunar_departure_direction) < cos(deg_to_rad(1.5)):
-						wait_for_lunar_window = true
+				var earth_departure_orbit := FlightComputer.orbital_state(rocket_position, velocity, G * PlanetarySystem.EARTH_MASS)
+				var earth_departure_is_stable := bool(earth_departure_orbit.get("bound", false)) and float(earth_departure_orbit.get("eccentricity", 1.0)) <= 0.05 and float(earth_departure_orbit.get("periapsis", 0.0)) > EARTH_RADIUS + FlightComputer.minimum_safe_orbit_altitude("Earth", EARTH_RADIUS)
+				if earth_departure_is_stable:
+					var remaining_departure_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
+					wait_for_lunar_window = remaining_departure_window > 3600.0
 				if wait_for_lunar_window:
 					autopilot_phase = "WAIT_WINDOW"
 					status_message = "AUTOPILOT  •  WAITING FOR LUNAR DEPARTURE WINDOW"
@@ -1019,7 +1018,8 @@ func _update_guidance(dt: float) -> void:
 							autopilot_phase = "TRANSFER_BURN"
 						status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2f KM/S" % (autopilot_burn_remaining / 1000.0)
 			"WAIT_WINDOW":
-				var remaining_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
+				var planned_departure_time := float(autopilot_precomputed_transfer_plan.get("departure_time_seconds", -1.0))
+				var remaining_window := maxf(0.0, planned_departure_time - sim_time) if planned_departure_time >= 0.0 else FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
 				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1f DAYS" % (remaining_window / 86400.0)
 				thrust_key_down = false
 				if remaining_window <= 3600.0:
@@ -1028,12 +1028,14 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  ALIGNING DEPARTURE ORBIT"
 				thrust_key_down = false
 				var desired_radial := FlightComputer.departure_periapsis_direction(autopilot_planet_index, sim_time, guidance_position.length())
-				if desired_radial.length_squared() > 0.5 and guidance_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)):
-					if autopilot_planet_index == -1:
-						autopilot_phase = "PLAN_TRANSFER"
-					else:
-						autopilot_burn_direction = tangent * autopilot_transfer_direction
-						autopilot_phase = "TRANSFER_BURN"
+				var planned_departure_time := float(autopilot_precomputed_transfer_plan.get("departure_time_seconds", -1.0))
+				var departure_time_reached := planned_departure_time < 0.0 or sim_time >= planned_departure_time - 600.0
+				if desired_radial.length_squared() > 0.5 and guidance_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)) and departure_time_reached:
+					autopilot_precomputed_transfer_plan.clear()
+					autopilot_phase = "PLAN_TRANSFER"
+				elif planned_departure_time >= 0.0 and sim_time > planned_departure_time + 7200.0:
+					autopilot_precomputed_transfer_plan.clear()
+					autopilot_phase = "WAIT_WINDOW"
 			"MANEUVER_BURN":
 				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0f M/S" % autopilot_burn_remaining
 				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
