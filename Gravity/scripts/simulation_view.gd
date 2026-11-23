@@ -1786,7 +1786,7 @@ func _format_time(value: float) -> String:
 	return "%02d:%02d:%02d" % [total / 3600, (total / 60) % 60, total % 60]
 
 func _saved_departure_plan() -> Dictionary:
-	if autopilot_precomputed_transfer_plan.is_empty():
+	if autopilot_precomputed_transfer_plan.is_empty() or not autopilot_precomputed_transfer_plan.has("departure_time_seconds"):
 		return {}
 	var plan := autopilot_precomputed_transfer_plan
 	var position: Vector2 = plan.get("planned_position", Vector2.ZERO)
@@ -1958,7 +1958,7 @@ func load_save_data(data: Dictionary) -> bool:
 			if not (value is float or value is int) or not is_finite(float(value)):
 				departure_plan_valid = false
 				break
-		if departure_plan_valid and int(saved_departure_plan.target_id) == autopilot_planet_index and is_equal_approx(float(saved_departure_plan.target_altitude), autopilot_target_altitude) and float(saved_departure_plan.departure_time_seconds) >= sim_time - 2.0 and float(saved_departure_plan.departure_delta_v) >= 0.0 and float(saved_departure_plan.transfer_time) > 0.0:
+		if departure_plan_valid and str(data.get("autopilot_phase", "IDLE")) == "WAIT_WINDOW" and int(saved_departure_plan.target_id) == autopilot_planet_index and is_equal_approx(float(saved_departure_plan.target_altitude), autopilot_target_altitude) and float(saved_departure_plan.departure_time_seconds) >= sim_time - 2.0 and float(saved_departure_plan.departure_delta_v) >= 0.0 and float(saved_departure_plan.transfer_time) > 0.0:
 			autopilot_precomputed_transfer_plan = {
 				"valid": true,
 				"target_id": int(saved_departure_plan.target_id),
