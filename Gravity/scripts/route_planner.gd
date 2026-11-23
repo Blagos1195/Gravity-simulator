@@ -754,7 +754,7 @@ func _send_destination_to_autopilot() -> void:
 	simulation.set("autopilot_apsis_correction_angle", relative_position.angle())
 	var infinite_propellant := bool(simulation.get("infinite_weightless_fuel"))
 	var departure_time := float(navigation_plan.get("departure_time_seconds", -1.0))
-	var waiting_for_window := bool(navigation_plan.get("window_wait_only", false)) and departure_time > float(simulation.get("sim_time")) + 3600.0
+	var waiting_for_window := bool(navigation_plan.get("window_wait_only", false)) and departure_time > float(simulation.get("sim_time")) + 60.0
 	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if bool(simulation.get("landed")) or (not stable_orbit and not infinite_propellant) else "WAIT_WINDOW" if waiting_for_window else "PLAN_TRANSFER")
 	simulation.set("guidance_enabled", true)
 	simulation.set("thrust_key_down", bool(simulation.get("landed")) or str(simulation.get("autopilot_phase")) == "ASCENT")
