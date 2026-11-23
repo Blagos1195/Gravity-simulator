@@ -76,7 +76,7 @@ func _run_lunar_mission(design: Dictionary, infinite_propellant: bool, start_pos
 				var departure_orbit := FlightComputer.orbital_state(simulation.rocket_position, simulation.velocity, FlightComputer.G * PlanetarySystem.EARTH_MASS)
 				assert(bool(departure_orbit.get("bound", false)), "Lunar departure waiting lost the Earth parking orbit.")
 				assert(float(departure_orbit.get("eccentricity", 1.0)) < 0.001, "Lunar departure waiting destabilised the Earth parking orbit.")
-				var transfer_time := float(FlightComputer.hohmann_transfer(simulation.rocket_position.length(), PlanetarySystem.EARTH_RADIUS + PlanetarySystem.MOON_TRANSFER_ORBIT_RADIUS).get("transfer_time", 0.0))
+				var transfer_time := float(FlightComputer.hohmann_transfer(simulation.rocket_position.length(), PlanetarySystem.EARTH_RADIUS + PlanetarySystem.MOON_ORBIT_RADIUS).get("transfer_time", 0.0))
 				var moon_at_arrival := PlanetarySystem.moon_position(simulation.sim_time + transfer_time)
 				var departure_phase_error := wrapf(moon_at_arrival.angle() - simulation.rocket_position.angle() - PI, -PI, PI)
 				assert(absf(departure_phase_error) < deg_to_rad(0.1), "Lunar departure alignment error is %.3f degrees." % rad_to_deg(departure_phase_error))
