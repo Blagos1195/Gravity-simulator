@@ -410,7 +410,7 @@ func _adaptive_step_size() -> float:
 	if bool(local_orbit.get("bound", false)) and not in_atmosphere and not lunar_transfer_coast:
 		maximum_step = minf(maximum_step, 0.5)
 		travel_distance_limit = minf(travel_distance_limit, maxf(1000.0, radius * 0.002))
-	if autopilot_enabled and autopilot_phase == "COAST_TO_TARGET":
+	if autopilot_enabled and autopilot_phase in ["COAST_TO_TARGET", "ALIGN_DEPARTURE"]:
 		maximum_step = minf(maximum_step, 10.0)
 	if deep_space:
 		travel_distance_limit = maxf(50000000.0, radius * 0.01)
