@@ -905,6 +905,17 @@ func _build_flight_hud() -> void:
 	slot_picker.item_selected.connect(func(index: int): save_slot = index + 1)
 	right.add_child(slot_picker)
 
+	var vehicle_label := Label.new()
+	vehicle_label.text = "ACTIVE SPACECRAFT"
+	vehicle_label.add_theme_color_override("font_color", Color(0.45, 0.78, 1))
+	right.add_child(vehicle_label)
+	vehicle_selector = OptionButton.new()
+	vehicle_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vehicle_selector.item_selected.connect(_switch_vehicle)
+	right.add_child(vehicle_selector)
+	_refresh_vehicle_selector()
+	_add_button(right, "LAUNCH NEW VEHICLE", _add_new_vehicle)
+
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
 	_add_button(right, "VELOCITY VECTOR  [V]", func(): sim.show_vectors = not sim.show_vectors)
 	_add_button(right, "AUTOPILOT", _show_autopilot_panel)
@@ -1345,9 +1356,11 @@ func _show_flight_computer() -> void:
 
 func _pause_simulation() -> void:
 	if sim:
-		sim.paused = not sim.paused
+		var pause_state := not sim.paused
+		for vehicle in fleet_sims:
+			vehicle.paused = pause_state
 		if status_label:
-			status_label.text = "PAUSED" if sim.paused else "FLIGHT ACTIVE"
+			status_label.text = "PAUSED" if pause_state else "FLIGHT ACTIVE"
 
 func _confirm_menu() -> void:
 	_save_game(true)
@@ -1376,6 +1389,14 @@ func _save_game(automatic: bool) -> void:
 		return
 
 	var data: Dictionary = sim.get_save_data()
+	var saved_vehicles: Array[Dictionary] = []
+	for vehicle in fleet_sims:
+		saved_vehicles.append({
+			"name": vehicle.vehicle_name,
+			"state": vehicle.get_save_data()
+		})
+	data["vehicles"] = saved_vehicles
+	data["active_vehicle_index"] = active_vehicle_index
 	data["realism"] = realism
 	data["world_scale"] = world_scale
 	data["career_enabled"] = career_enabled
@@ -1427,7 +1448,55 @@ func _load_game_from_path(path: String) -> void:
 		return
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	file.close()
-	if parsed is Dictionary and sim:
+	if not parsed is Dictionary or not sim:
+		if status_label:
+			status_label.text = "SAVE DATA IS INVALID  •  SLOT %02d" % save_slot
+		return
+	var loaded_realism := str(parsed.get("realism", realism))
+	var loaded_world_scale := str(parsed.get("world_scale", world_scale))
+	var loaded_career := bool(parsed.get("career_enabled", career_enabled))
+	var saved_vehicles: Variant = parsed.get("vehicles", null)
+	if saved_vehicles is Array and not saved_vehicles.is_empty():
+		var loaded_fleet: Array = []
+		for entry in saved_vehicles:
+			if not entry is Dictionary or not entry.get("state", {}) is Dictionary:
+				for vehicle in loaded_fleet:
+					vehicle.queue_free()
+				if status_label:
+					status_label.text = "SAVE CONTAINS INVALID VEHICLE DATA"
+				return
+			var state: Dictionary = entry.state
+			var saved_design: Variant = state.get("rocket_design", null)
+			if not saved_design is Dictionary or not RocketDesign.validation_errors(saved_design).is_empty():
+				for vehicle in loaded_fleet:
+					vehicle.queue_free()
+				if status_label:
+					status_label.text = "SAVE CONTAINS AN INVALID VEHICLE DESIGN"
+				return
+			realism = loaded_realism
+			world_scale = loaded_world_scale
+			career_enabled = loaded_career
+			var vehicle := _create_vehicle(saved_design, str(entry.get("name", "Vehicle %d" % (loaded_fleet.size() + 1))), state)
+			if vehicle == null:
+				for loaded_vehicle in loaded_fleet:
+					loaded_vehicle.queue_free()
+				realism = str(parsed.get("realism", realism))
+				world_scale = str(parsed.get("world_scale", world_scale))
+				career_enabled = bool(parsed.get("career_enabled", career_enabled))
+				if status_label:
+					status_label.text = "SAVE CONTAINS INVALID VEHICLE STATE"
+				return
+			loaded_fleet.append(vehicle)
+		for vehicle in fleet_sims:
+			vehicle.queue_free()
+		fleet_sims = loaded_fleet
+		active_vehicle_index = clampi(int(parsed.get("active_vehicle_index", 0)), 0, fleet_sims.size() - 1)
+		realism = loaded_realism
+		world_scale = loaded_world_scale
+		career_enabled = loaded_career
+		fleet_time_backlog = 0.0
+		_switch_vehicle(active_vehicle_index)
+	else:
 		var saved_design: Variant = parsed.get("rocket_design", null)
 		if not saved_design is Dictionary or not RocketDesign.validation_errors(saved_design).is_empty():
 			if status_label:
@@ -1437,15 +1506,22 @@ func _load_game_from_path(path: String) -> void:
 			if status_label:
 				status_label.text = "SAVE DATA IS INVALID  •  SLOT %02d" % save_slot
 			return
-		infinite_weightless_fuel = sim.infinite_weightless_fuel
-		realism = str(parsed.get("realism", realism))
-		world_scale = str(parsed.get("world_scale", world_scale))
-		career_enabled = bool(parsed.get("career_enabled", career_enabled))
+		realism = loaded_realism
+		world_scale = loaded_world_scale
+		career_enabled = loaded_career
 		rocket_design = saved_design
-		if status_label:
-			status_label.text = "LOADED  •  SLOT %02d" % save_slot
-	elif status_label:
-		status_label.text = "SAVE DATA IS INVALID  •  SLOT %02d" % save_slot
+		sim.vehicle_name = str(parsed.get("vehicle_name", "Vehicle 1"))
+		fleet_sims = [sim]
+		active_vehicle_index = 0
+		_switch_vehicle(0)
+	infinite_weightless_fuel = sim.infinite_weightless_fuel
+	for vehicle in fleet_sims:
+		vehicle.realism = realism
+		vehicle.world_scale = world_scale
+		vehicle.career_enabled = career_enabled
+		vehicle.time_warp = sim.time_warp
+	if status_label:
+		status_label.text = "LOADED  •  SLOT %02d  •  %d VEHICLES" % [save_slot, fleet_sims.size()]
 
 func _add_button(parent: Node, text_value: String, callback: Callable) -> void:
 	var button := Button.new()
