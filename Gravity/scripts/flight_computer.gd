@@ -190,6 +190,25 @@ static func target_radius_burn(position: Vector2, velocity: Vector2, target_radi
 		"safe_periapsis": safe_periapsis
 	}
 
+static func manoeuvre_burn_guidance(position: Vector2, velocity: Vector2, prograde_delta_v: float, radial_delta_v: float) -> Dictionary:
+	var radius := position.length()
+	if radius <= 0.0:
+		return {"valid": false}
+	var radial := position / radius
+	var tangent := Vector2(-radial.y, radial.x)
+	if position.cross(velocity) < 0.0:
+		tangent = -tangent
+	var burn_vector := tangent * prograde_delta_v + radial * radial_delta_v
+	return {
+		"valid": true,
+		"burn_vector": burn_vector,
+		"delta_v": burn_vector.length(),
+		"direction": burn_vector.normalized() if burn_vector.length() > 0.001 else Vector2.ZERO,
+		"prograde": prograde_delta_v,
+		"radial": radial_delta_v,
+		"angle_from_prograde": atan2(radial_delta_v, prograde_delta_v)
+	}
+
 static func hohmann_transfer(origin_radius: float, target_radius: float, mu: float = -1.0) -> Dictionary:
 	if mu < 0.0:
 		mu = EARTH_MU
