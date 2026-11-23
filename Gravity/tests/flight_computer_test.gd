@@ -460,16 +460,8 @@ func _initialize() -> void:
 	var unstable_orbit := FlightComputer.orbital_state(Vector2(0.0, -unstable_radius), unstable_sim.velocity)
 	assert(bool(unstable_orbit.get("bound", false)))
 	assert(float(unstable_orbit.get("apoapsis", 0.0)) > unstable_radius + FlightComputer.maximum_stable_orbit_altitude(PlanetarySystem.EARTH_RADIUS, PlanetarySystem.EARTH_SOI_RADIUS))
-	var unstable_states: Dictionary = PlanetarySystem.gravity_body_states(0.0)
-	for body_variant in unstable_states.get("surface_bodies", []):
-		var body: Dictionary = body_variant
-		if str(body.get("name", "")) == "Earth":
-			var helper_orbit := FlightComputer.orbital_state(Vector2(0.0, -unstable_radius), unstable_sim.velocity - Vector2(body.get("velocity", Vector2.ZERO)), FlightComputer.G * float(body.get("mass", 0.0)))
-			print("UNSTABLE ORBIT DEBUG ", helper_orbit, " soi=", body.get("soi"), " radius=", body.get("radius"))
 	assert(not FlightComputer._has_safe_parking_orbit_at(PackedFloat64Array([0.0, -unstable_radius]), unstable_sim.velocity, 0.0, "Earth"))
 	unstable_sim._update_guidance(0.1)
-	var unstable_guidance_body: Dictionary = unstable_sim._nearest_body_state(unstable_sim.rocket_position, unstable_sim.rocket_position_precise)
-	print("ASCENT DEBUG phase=", unstable_sim.autopilot_phase, " body=", unstable_guidance_body, " thrust=", unstable_sim.thrust_key_down)
 	assert(unstable_sim.autopilot_phase == "ASCENT", "Unstable high-apoapsis orbit was accepted as a safe parking orbit")
 	assert(unstable_sim.thrust_key_down)
 	unstable_sim.free()
