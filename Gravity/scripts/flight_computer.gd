@@ -439,6 +439,29 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	if initial_target.is_empty():
 		return {"valid": false, "reason": "Destination state unavailable."}
 	var initial_target_components: PackedFloat64Array = initial_target.position_components
+	if target_index == -2:
+		var local_relative_position := Vector2(start_position_components[0] - initial_target_components[0], start_position_components[1] - initial_target_components[1])
+		var local_relative_velocity: Vector2 = start_velocity - Vector2(initial_target.velocity)
+		var local_orbit := orbital_state(local_relative_position, local_relative_velocity, G * float(initial_target.mass))
+		var local_target_radius := float(initial_target.radius) + maxf(minimum_safe_orbit_altitude("Earth", float(initial_target.radius)), target_orbit_altitude)
+		var local_tolerance := orbit_radius_tolerance(local_target_radius)
+		if bool(local_orbit.get("bound", false)) and float(local_orbit.get("periapsis", 0.0)) > float(initial_target.radius) + minimum_safe_orbit_altitude("Earth", float(initial_target.radius)) and absf(float(local_orbit.get("periapsis", 0.0)) - local_target_radius) <= local_tolerance and absf(float(local_orbit.get("apoapsis", INF)) - local_target_radius) <= local_tolerance:
+			return {
+				"valid": true,
+				"departure_delta_v": 0.0,
+				"departure_direction": Vector2.ZERO,
+				"capture_delta_v": 0.0,
+				"capture_direction": Vector2.ZERO,
+				"total_delta_v": 0.0,
+				"transfer_time": 0.0,
+				"closest_approach": local_relative_position.length(),
+				"arrival_speed": local_relative_velocity.length(),
+				"target_position": initial_target_components.duplicate(),
+				"trajectory": PackedVector2Array([Vector2(start_position_components[0], start_position_components[1])]),
+				"target_soi": float(initial_target.get("soi", 0.0)),
+				"simulated_steps": 0,
+				"search_candidates": 1
+			}
 	var initial_dx: float = start_position_components[0] - initial_target_components[0]
 	var initial_dy: float = start_position_components[1] - initial_target_components[1]
 	var initial_distance := sqrt(initial_dx * initial_dx + initial_dy * initial_dy)
