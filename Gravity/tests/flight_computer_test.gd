@@ -385,6 +385,41 @@ func _initialize() -> void:
 	manoeuvre_sim._physics_step(1.0)
 	assert(manoeuvre_sim.autopilot_phase == "COMPLETE")
 	assert(manoeuvre_sim.autopilot_complete)
+	var manual_tracking_sim: Variant = SimulationView.new()
+	manual_tracking_sim.set_rocket_design(RocketDesign.create_default())
+	manual_tracking_sim.landed = false
+	manual_tracking_sim.infinite_weightless_fuel = true
+	manual_tracking_sim._set_rocket_position_components(0.0, -manoeuvre_radius)
+	manual_tracking_sim.velocity = Vector2(manoeuvre_speed, 0.0)
+	manual_tracking_sim.rotation_angle = Vector2.RIGHT.angle() - Vector2.UP.angle()
+	manual_tracking_sim.manual_burn_tracking_enabled = true
+	manual_tracking_sim.manual_burn_target_vector = Vector2.RIGHT * 100.0
+	manual_tracking_sim.manual_burn_accumulated_vector = Vector2.ZERO
+	manual_tracking_sim.thrust_key_down = true
+	manual_tracking_sim._physics_step(0.1)
+	assert(manual_tracking_sim.manual_burn_accumulated_vector.dot(Vector2.RIGHT) > 0.0, "Manual burn tracking did not record actual thrust impulse")
+	assert(not manual_tracking_sim.autopilot_enabled, "Manual burn tracking unexpectedly engaged autopilot")
+	manual_tracking_sim.manual_flight_plan = {
+		"active": true,
+		"target_name": "Mars",
+		"phase": "DEPARTURE_BURN",
+		"departure_time": 10.0,
+		"transfer_time": 1000.0,
+		"departure_delta_v": 100.0,
+		"target_altitude": 200000.0,
+		"burn_delta_v": 100.0,
+		"departure_direction": Vector2.RIGHT,
+		"burn_vector": Vector2.RIGHT * 100.0
+	}
+	var manual_save_data: Dictionary = manual_tracking_sim.get_save_data()
+	var restored_manual_sim: Variant = SimulationView.new()
+	assert(restored_manual_sim.load_save_data(manual_save_data), "Manual flight plan save could not be restored")
+	assert(bool(restored_manual_sim.manual_flight_plan.get("active", false)), "Manual flight plan was lost on save/load")
+	assert(str(restored_manual_sim.manual_flight_plan.get("phase", "")) == "DEPARTURE_BURN")
+	assert(Vector2(restored_manual_sim.manual_flight_plan.get("burn_vector", Vector2.ZERO)).distance_to(Vector2.RIGHT * 100.0) < 0.001)
+	assert(restored_manual_sim.manual_burn_tracking_enabled)
+	manual_tracking_sim.free()
+	restored_manual_sim.free()
 	var route_sim: Variant = SimulationView.new()
 	route_sim.set_rocket_design(RocketDesign.create_default())
 	route_sim.landed = false
