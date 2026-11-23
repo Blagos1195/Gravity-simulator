@@ -1238,7 +1238,6 @@ func _start_manual_destination_plan() -> void:
 	simulation.set("guidance_enabled", false)
 	simulation.set("thrust_key_down", false)
 	manual_guidance_node_index = -1
-	simulation.set("manual_burn_tracking_enabled", false)
 	_refresh_navigation_state()
 	_update_manual_guidance()
 
