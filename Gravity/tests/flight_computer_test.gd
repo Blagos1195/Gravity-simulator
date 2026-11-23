@@ -425,6 +425,22 @@ func _initialize() -> void:
 	assert(surface_sim.autopilot_phase == "ASCENT")
 	surface_planner_window.free()
 	surface_sim.free()
+	var escape_sim: Variant = SimulationView.new()
+	escape_sim.set_rocket_design(RocketDesign.create_default())
+	escape_sim.landed = false
+	escape_sim._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 500000.0)
+	escape_sim.velocity = Vector2(0.0, -12000.0)
+	escape_sim.autopilot_enabled = true
+	escape_sim.guidance_enabled = true
+	escape_sim.autopilot_planet_index = -1
+	escape_sim.autopilot_target_altitude = 300000.0
+	escape_sim.autopilot_phase = "ASCENT"
+	var escaping_orbit := FlightComputer.orbital_state(Vector2(0.0, -PlanetarySystem.EARTH_RADIUS - 500000.0), escape_sim.velocity)
+	assert(not bool(escaping_orbit.get("bound", true)), "Direct-escape ascent regression did not begin on an unbound trajectory")
+	escape_sim._update_guidance(0.1)
+	assert(escape_sim.autopilot_phase == "ASCENT", "Autopilot left ascent before establishing a safe parking orbit")
+	assert(escape_sim.thrust_key_down, "Autopilot did not continue thrusting to establish a parking orbit")
+	escape_sim.free()
 	route_planner_window.target_x_input.value = 8000.0
 	route_planner_window.target_y_input.value = 3000.0
 	route_planner_window._apply_target_coordinates()
