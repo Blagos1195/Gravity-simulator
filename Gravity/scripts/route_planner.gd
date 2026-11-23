@@ -1126,6 +1126,11 @@ func _start_manual_destination_plan() -> void:
 	if not stable_orbit:
 		manual_guidance_report.text = "MANUAL DESTINATION FLIGHT REQUIRES A SAFE PARKING ORBIT. Establish one first; manual ascent and escape guidance are not included yet."
 		return
+	manual_guidance_node_index = -1
+	manual_guidance_completed = false
+	simulation.set("manual_burn_tracking_enabled", false)
+	simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
+	simulation.set("thrust_key_down", false)
 	var plan := navigation_plan.duplicate(true)
 	if not bool(plan.get("local", false)):
 		var now_for_plan := float(simulation.get("sim_time"))
@@ -1170,9 +1175,6 @@ func _start_manual_destination_plan() -> void:
 		if float(manual_plan["departure_time"]) <= now + 2.0:
 			_arm_manual_plan_burn(manual_plan, "DEPARTURE_BURN", Vector2(manual_plan["departure_direction"]) * float(manual_plan["departure_delta_v"]), float(manual_plan["departure_delta_v"]))
 	simulation.set("manual_flight_plan", manual_plan)
-	simulation.set("manual_burn_tracking_enabled", false)
-	manual_guidance_node_index = -1
-	manual_guidance_completed = false
 	simulation.set("autopilot_enabled", false)
 	simulation.set("guidance_enabled", false)
 	simulation.set("thrust_key_down", false)
