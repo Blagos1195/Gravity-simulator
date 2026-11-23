@@ -16,6 +16,7 @@ var rocket_stages: Array = []
 var payload_mass := 500.0
 var vehicle_name := "Vehicle 1"
 var input_enabled := true
+var docked_mass := 0.0
 
 var realism := "Realistic"
 var world_scale := "Compressed"
@@ -130,6 +131,7 @@ func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
 	var active := _active_stage_data()
 	var mass := float(active.get("dry_mass", 0.0)) + _remaining_stack_mass()
 	mass += fuel if fuel_amount < 0.0 else fuel_amount
+	mass += docked_mass
 	return mass
 
 func _ready() -> void:
