@@ -441,6 +441,29 @@ func _initialize() -> void:
 	assert(escape_sim.autopilot_phase == "ASCENT", "Autopilot left ascent before establishing a safe parking orbit")
 	assert(escape_sim.thrust_key_down, "Autopilot did not continue thrusting to establish a parking orbit")
 	escape_sim.free()
+	var mars_surface_sim: Variant = SimulationView.new()
+	mars_surface_sim.set_rocket_design(RocketDesign.create_default())
+	mars_surface_sim.landed = true
+	mars_surface_sim.landed_body_name = "Mars"
+	mars_surface_sim.landed_surface_normal = Vector2.UP
+	var mars_surface_state: Dictionary = mars_surface_sim._surface_body_state("Mars")
+	mars_surface_sim._set_rocket_position_relative_to_body(mars_surface_state, Vector2.UP * (float(mars_surface_state.radius) + 0.5))
+	mars_surface_sim.velocity = Vector2(mars_surface_state.get("velocity", Vector2.ZERO))
+	var mars_planner_window: Window = RoutePlanner.new()
+	root.add_child(mars_planner_window)
+	mars_planner_window.configure(mars_surface_sim, RocketDesign.create_default())
+	mars_planner_window.navigation_planet_dropdown.select(0)
+	mars_planner_window._rebuild_navigation_moons(-2)
+	mars_planner_window.navigation_moon_dropdown.select(0)
+	mars_planner_window.navigation_altitude_input.value = 300.0
+	mars_planner_window._calculate_destination_plan()
+	assert(mars_planner_window.navigation_plan_valid, "Mars surface destination plan failed: %s" % mars_planner_window.navigation_report.text)
+	assert(bool(mars_planner_window.navigation_plan.get("needs_parking_orbit", false)), "Mars surface plan did not request a parking orbit")
+	mars_planner_window._send_destination_to_autopilot()
+	assert(mars_surface_sim.autopilot_enabled)
+	assert(mars_surface_sim.autopilot_phase == "ASCENT")
+	mars_planner_window.free()
+	mars_surface_sim.free()
 	route_planner_window.target_x_input.value = 8000.0
 	route_planner_window.target_y_input.value = 3000.0
 	route_planner_window._apply_target_coordinates()
