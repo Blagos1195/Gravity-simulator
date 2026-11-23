@@ -52,7 +52,8 @@ A procedural 2D spaceflight simulator built with Godot 4.
 - Optional small-body encounter mode: deterministic belt test particles follow individual Sun-centered paths and can collide with the spacecraft; mutual asteroid gravity is intentionally omitted
 - Predicted rocket trajectory overlay using current flight state and engine settings
 - Rocket and launch-pad graphics scale with camera zoom
-- Extended close-up and far-out zoom range, including independent solar-system map zoom
+- Continuous camera zoom from close orbital views through a rocket-centred full-solar-system view, with a wider close-up range
+- Edge-of-screen direction indicators identify the nearest off-screen celestial bodies
 - Resizable window with a minimum supported size and expanded viewport scaling
 - Save-aware main menu with Continue, New Game, Game Load and global Settings
 - New-game setup for physics preset, universe scale, optional career mode and per-save infinite propellant
