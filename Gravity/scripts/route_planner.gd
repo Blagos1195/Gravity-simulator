@@ -960,9 +960,8 @@ func _update_manual_guidance() -> void:
 		return
 	var node: Dictionary = nodes[manual_guidance_node_index]
 	var node_time := maxf(0.0, float(node.get("time_offset", 0.0)))
-	var elapsed := maxf(0.0, float(simulation.get("sim_time")) - manual_guidance_start_time)
-	var remaining_time := node_time - elapsed
-	var predicted_state := _manual_node_state(node_time)
+	var remaining_time := manual_guidance_start_time + node_time - float(simulation.get("sim_time"))
+	var predicted_state := _manual_node_state(maxf(0.0, remaining_time))
 	var guidance := FlightComputer.manoeuvre_burn_guidance(
 		Vector2(predicted_state.get("position", relative_position)),
 		Vector2(predicted_state.get("velocity", relative_velocity)),
