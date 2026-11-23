@@ -19,6 +19,11 @@ For example, this adds another payload choice, engine-count choice and tank size
   "schema_version": 1,
   "rocket": {
     "builder_options": {
+      "payload_mass_limits": {
+        "minimum": 10,
+        "maximum": 100000,
+        "step": 10
+      },
       "payloads_add": [
         {
           "id": "mapping_probe",
@@ -76,7 +81,7 @@ Stage parts are reusable components. Presets are vehicle designs made from stage
 }
 ```
 
-The workshop reads payload, engine-count and tank-scale choices from `rocket.builder_options`. Add choices with `payloads_add`, `engine_counts_add` and `tank_scales_add`. Engine counts must be whole numbers from 1 to 8. Tank scales must be positive and no greater than 4, and the list must retain a 1.0 standard scale.
+The workshop reads payload, engine-count and tank-scale choices from `rocket.builder_options`. Add choices with `payloads_add`, `engine_counts_add` and `tank_scales_add`. Set `payload_mass_limits.minimum`, `maximum` and `step` to control the editable payload-mass field. Engine counts must be whole numbers from 1 to 8. Tank scales must be positive and no greater than 4, and the list must retain a 1.0 standard scale.
 
 ## Adding celestial bodies
 
