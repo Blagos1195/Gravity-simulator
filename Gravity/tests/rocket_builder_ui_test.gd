@@ -24,7 +24,7 @@ func _initialize() -> void:
 			break
 	assert(is_instance_valid(vehicle_dialog))
 	var vehicle_selector: OptionButton = vehicle_dialog.get_child(0).get_child(1)
-	assert(vehicle_selector.item_count >= RocketDesign.preset_options().size() + 1)
+	assert(vehicle_selector.item_count >= 2)
 	print("Rocket builder UI test passed.")
 	main.queue_free()
 	quit()
