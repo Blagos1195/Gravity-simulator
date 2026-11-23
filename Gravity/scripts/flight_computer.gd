@@ -475,7 +475,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 			gravity_states.append(sample_states)
 			target_states.append(_simulated_target_state(target_index, sample_time, sample_states))
 		for direction_index in range(direction_count):
-			var angle := TAU * float(direction_index) / float(direction_count)
+			var angle := start_velocity.angle() + TAU * float(direction_index) / float(direction_count)
 			var burn_direction := Vector2(cos(angle), sin(angle))
 			for magnitude_value in magnitudes:
 				var departure_delta_v: float = float(magnitude_value)
