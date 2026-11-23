@@ -444,6 +444,25 @@ func _initialize() -> void:
 	escape_sim._update_guidance(0.1)
 	assert(escape_sim.autopilot_phase == "FAILED", "Ascent did not fail cleanly after exhausting propellant before parking orbit")
 	escape_sim.free()
+	var unstable_sim: Variant = SimulationView.new()
+	unstable_sim.set_rocket_design(RocketDesign.create_default())
+	unstable_sim.landed = false
+	var unstable_radius := PlanetarySystem.EARTH_RADIUS + 200000.0
+	var unstable_speed := FlightComputer.circular_orbit_speed(unstable_radius) * 1.4141
+	unstable_sim._set_rocket_position_components(0.0, -unstable_radius)
+	unstable_sim.velocity = Vector2(unstable_speed, 0.0)
+	unstable_sim.autopilot_enabled = true
+	unstable_sim.guidance_enabled = true
+	unstable_sim.autopilot_planet_index = -1
+	unstable_sim.autopilot_target_altitude = 300000.0
+	unstable_sim.autopilot_phase = "ASCENT"
+	var unstable_orbit := FlightComputer.orbital_state(Vector2(0.0, -unstable_radius), unstable_sim.velocity)
+	assert(bool(unstable_orbit.get("bound", false)))
+	assert(float(unstable_orbit.get("apoapsis", 0.0)) > unstable_radius + FlightComputer.maximum_stable_orbit_altitude(PlanetarySystem.EARTH_RADIUS, FlightComputer.EARTH_SOI))
+	unstable_sim._update_guidance(0.1)
+	assert(unstable_sim.autopilot_phase == "ASCENT", "Unstable high-apoapsis orbit was accepted as a safe parking orbit")
+	assert(unstable_sim.thrust_key_down)
+	unstable_sim.free()
 	var mars_surface_sim: Variant = SimulationView.new()
 	mars_surface_sim.set_rocket_design(RocketDesign.create_default())
 	mars_surface_sim.landed = true
