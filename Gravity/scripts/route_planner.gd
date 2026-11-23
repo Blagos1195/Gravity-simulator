@@ -1306,6 +1306,7 @@ func _update_manual_flight_plan() -> void:
 		var target_state: Dictionary = simulation.call("_surface_body_state", target_name)
 		if target_state.is_empty():
 			plan["phase"] = "FAILED"
+			plan["active"] = false
 			plan["reason"] = "Destination body data became unavailable."
 		else:
 			var target_position: Vector2 = simulation.get("rocket_position") - Vector2(target_state.get("position", Vector2.ZERO))
@@ -1313,14 +1314,25 @@ func _update_manual_flight_plan() -> void:
 			var target_distance := target_position.length()
 			var target_soi := float(target_state.get("soi", 0.0))
 			var target_orbit := FlightComputer.orbital_state(target_position, target_velocity, FlightComputer.G * float(target_state.get("mass", 0.0)))
-			if target_distance <= target_soi and float(target_orbit.get("radial_speed", 0.0)) < 0.0:
-				var capture := FlightComputer.arrival_capture_burn(target_position, target_velocity, FlightComputer.G * float(target_state.get("mass", 0.0)), float(target_state.get("radius", 0.0)), float(plan.get("target_altitude", 100000.0)), FlightComputer.minimum_safe_orbit_altitude(target_name, float(target_state.get("radius", 0.0))))
-				if bool(capture.get("valid", false)):
-					_arm_manual_plan_burn(plan, "ARRIVAL_BURN", Vector2(capture.get("burn_vector", Vector2.ZERO)), float(capture.get("delta_v", INF)))
-					plan["target_radius"] = float(capture.get("target_radius", 0.0))
+			var arrival_radial_speed := float(target_orbit.get("radial_speed", 0.0))
+			if target_distance <= target_soi:
+				if arrival_radial_speed < 0.0:
+					var capture := FlightComputer.arrival_capture_burn(target_position, target_velocity, FlightComputer.G * float(target_state.get("mass", 0.0)), float(target_state.get("radius", 0.0)), float(plan.get("target_altitude", 100000.0)), FlightComputer.minimum_safe_orbit_altitude(target_name, float(target_state.get("radius", 0.0))))
+					if bool(capture.get("valid", false)):
+						_arm_manual_plan_burn(plan, "ARRIVAL_BURN", Vector2(capture.get("burn_vector", Vector2.ZERO)), float(capture.get("delta_v", INF)))
+						plan["target_radius"] = float(capture.get("target_radius", 0.0))
+					else:
+						plan["phase"] = "FAILED"
+						plan["active"] = false
+						plan["reason"] = str(capture.get("reason", "No safe arrival capture solution exists."))
 				else:
 					plan["phase"] = "FAILED"
-					plan["reason"] = str(capture.get("reason", "No safe arrival capture solution exists."))
+					plan["active"] = false
+					plan["reason"] = "The spacecraft passed the destination's capture region. A mid-course correction is required."
+			elif float(plan.get("transfer_time", 0.0)) > 0.0 and now - float(plan.get("transfer_start_time", now)) > float(plan.get("transfer_time", 0.0)) * 1.5:
+				plan["phase"] = "FAILED"
+				plan["active"] = false
+				plan["reason"] = "The predicted arrival window was missed. A mid-course correction is required."
 		simulation.set("manual_flight_plan", plan)
 		phase = str(plan.get("phase", ""))
 	if phase == "ARRIVAL_COAST":
