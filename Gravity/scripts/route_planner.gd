@@ -688,6 +688,7 @@ func _calculate_destination_plan() -> void:
 				navigation_plan["planned_position"] = Vector2(simulation.get("rocket_position"))
 				navigation_plan["planned_velocity"] = Vector2(simulation.get("velocity"))
 				navigation_plan["local"] = false
+	navigation_plan["deep_space_start"] = deep_space_start
 	navigation_plan_valid = true
 	navigation_engage_button.disabled = false
 	navigation_plot.visible = not bool(navigation_plan.get("local", false))
@@ -1123,8 +1124,9 @@ func _start_manual_destination_plan() -> void:
 	var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(str(current.get("name", "")), float(current.get("radius", 0.0)))
 	var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(float(current.get("radius", 0.0)), float(current.get("soi", 0.0)))
 	var stable_orbit := float(current.get("distance", INF)) <= float(current.get("soi", 0.0)) and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + minimum_altitude and float(current_orbit.get("apoapsis", INF)) < float(current.get("radius", 0.0)) + maximum_altitude
-	if not stable_orbit:
-		manual_guidance_report.text = "MANUAL DESTINATION FLIGHT REQUIRES A SAFE PARKING ORBIT. Establish one first; manual ascent and escape guidance are not included yet."
+	var deep_space_start := bool(navigation_plan.get("deep_space_start", false)) and not bool(navigation_plan.get("needs_parking_orbit", false)) and not bool(navigation_plan.get("needs_window_search", false))
+	if not stable_orbit and not deep_space_start:
+		manual_guidance_report.text = "MANUAL DESTINATION FLIGHT REQUIRES A SAFE PARKING ORBIT OR A VALID DEEP-SPACE TRANSFER SOLUTION. Establish a parking orbit first if the current trajectory needs recovery."
 		return
 	manual_guidance_node_index = -1
 	manual_guidance_completed = false
