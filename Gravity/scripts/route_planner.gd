@@ -1149,6 +1149,7 @@ func _start_manual_destination_plan() -> void:
 		if not bool(local_burn.get("valid", false)):
 			manual_guidance_report.text = "THE LOCAL ORBIT CHANGE HAS NO VALID MANUAL BURN SOLUTION."
 			return
+		manual_plan["target_radius"] = float(local_burn.get("target_radius", 0.0))
 		_arm_manual_plan_burn(manual_plan, "LOCAL_BURN", Vector2(local_burn.get("burn_vector", Vector2.ZERO)), float(local_burn.get("delta_v", 0.0)))
 	else:
 		if Vector2(manual_plan["departure_direction"]) == Vector2.ZERO or float(manual_plan["departure_delta_v"]) <= 0.0:
@@ -1205,7 +1206,7 @@ func _update_manual_flight_plan() -> void:
 		else:
 			manual_guidance_report.text = "MANUAL FLIGHT PLAN  •  %s\nDEPARTURE WINDOW OPENS IN %.1f DAYS. No automatic steering or thrust will occur." % [str(plan.get("target_name", "TARGET")).to_upper(), wait_remaining / 86400.0]
 			return
-	if phase in ["DEPARTURE_BURN", "LOCAL_BURN", "ARRIVAL_BURN", "ARRIVAL_CIRCULARISE"]:
+	if phase in ["DEPARTURE_BURN", "LOCAL_BURN", "LOCAL_CIRCULARISE", "ARRIVAL_BURN", "ARRIVAL_CIRCULARISE"]:
 		var target_vector: Vector2 = simulation.get("manual_burn_target_vector")
 		var target_delta_v := float(plan.get("burn_delta_v", 0.0))
 		var accumulated: Vector2 = simulation.get("manual_burn_accumulated_vector")
@@ -1220,15 +1221,28 @@ func _update_manual_flight_plan() -> void:
 			if phase == "DEPARTURE_BURN":
 				plan["phase"] = "TRANSFER_COAST"
 				plan["transfer_start_time"] = now
+			elif phase == "LOCAL_BURN":
+				plan["phase"] = "LOCAL_COAST"
 			elif phase == "ARRIVAL_BURN":
 				plan["phase"] = "ARRIVAL_COAST"
-				plan["previous_radial_speed"] = -0.001
-			elif phase == "ARRIVAL_CIRCULARISE":
-				plan["phase"] = "COMPLETE"
-				plan["active"] = false
-			else:
-				plan["phase"] = "COMPLETE"
-				plan["active"] = false
+			elif phase in ["LOCAL_CIRCULARISE", "ARRIVAL_CIRCULARISE"]:
+				var body_state: Dictionary = simulation.call("_surface_body_state", str(plan.get("target_name", "")))
+				var body_position: Vector2 = simulation.get("rocket_position") - Vector2(body_state.get("position", Vector2.ZERO))
+				var body_velocity: Vector2 = simulation.get("velocity") - Vector2(body_state.get("velocity", Vector2.ZERO))
+				var body_mu := FlightComputer.G * float(body_state.get("mass", 0.0))
+				var final_orbit := FlightComputer.orbital_state(body_position, body_velocity, body_mu)
+				var target_radius := float(plan.get("target_radius", 0.0))
+				var orbit_tolerance := maxf(5000.0, target_radius * 0.001)
+				var orbit_complete := bool(final_orbit.get("bound", false)) and absf(float(final_orbit.get("periapsis", INF)) - target_radius) <= orbit_tolerance and absf(float(final_orbit.get("apoapsis", INF)) - target_radius) <= orbit_tolerance
+				if orbit_complete:
+					plan["phase"] = "COMPLETE"
+					plan["active"] = false
+				elif bool(final_orbit.get("bound", false)) and float(final_orbit.get("periapsis", 0.0)) > float(body_state.get("radius", 0.0)) + FlightComputer.minimum_safe_orbit_altitude(str(plan.get("target_name", "")), float(body_state.get("radius", 0.0))):
+					plan["phase"] = "LOCAL_COAST" if phase == "LOCAL_CIRCULARISE" else "ARRIVAL_COAST"
+				else:
+					plan["phase"] = "FAILED"
+					plan["active"] = false
+					plan["reason"] = "The executed burn did not establish a safe bound orbit."
 			simulation.set("manual_flight_plan", plan)
 			phase = str(plan.get("phase", ""))
 		else:
@@ -1244,6 +1258,34 @@ func _update_manual_flight_plan() -> void:
 				heading_error
 			]
 			return
+	if phase == "LOCAL_COAST":
+		var local_state: Dictionary = simulation.call("_nearest_body_state", simulation.get("rocket_position"))
+		var local_name := str(plan.get("target_name", ""))
+		if str(local_state.get("name", "")) != local_name:
+			plan["phase"] = "FAILED"
+			plan["active"] = false
+			plan["reason"] = "The spacecraft left the planned local body's sphere of influence."
+		else:
+			var local_position: Vector2 = simulation.get("rocket_position") - Vector2(local_state.get("position", Vector2.ZERO))
+			var local_velocity: Vector2 = simulation.get("velocity") - Vector2(local_state.get("velocity", Vector2.ZERO))
+			var local_mu := FlightComputer.G * float(local_state.get("mass", 0.0))
+			var local_orbit := FlightComputer.orbital_state(local_position, local_velocity, local_mu)
+			var target_radius := float(plan.get("target_radius", 0.0))
+			var apsis_tolerance := FlightComputer.orbit_radius_tolerance(target_radius)
+			var radial_tolerance := maxf(0.5, FlightComputer.circular_orbit_speed(target_radius, local_mu) * 0.0002)
+			if not bool(local_orbit.get("bound", false)) or float(local_orbit.get("periapsis", 0.0)) <= float(local_state.get("radius", 0.0)):
+				plan["phase"] = "FAILED"
+				plan["active"] = false
+				plan["reason"] = "The local transfer orbit became unsafe or unbound."
+			elif absf(local_position.length() - target_radius) <= apsis_tolerance and absf(float(local_orbit.get("radial_speed", 0.0))) <= radial_tolerance:
+				var local_circularise := FlightComputer.target_radius_burn(local_position, local_velocity, target_radius, local_mu)
+				if bool(local_circularise.get("valid", false)) and float(local_circularise.get("delta_v", INF)) > FlightComputer.BURN_COMPLETION_TOLERANCE:
+					_arm_manual_plan_burn(plan, "LOCAL_CIRCULARISE", Vector2(local_circularise.get("burn_vector", Vector2.ZERO)), float(local_circularise.get("delta_v", INF)))
+				else:
+					plan["phase"] = "COMPLETE"
+					plan["active"] = false
+		simulation.set("manual_flight_plan", plan)
+		phase = str(plan.get("phase", ""))
 	if phase == "TRANSFER_COAST":
 		var target_name := str(plan.get("target_name", ""))
 		var target_state: Dictionary = simulation.call("_surface_body_state", target_name)
