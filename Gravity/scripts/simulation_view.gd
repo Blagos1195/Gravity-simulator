@@ -178,9 +178,13 @@ func _process(delta: float) -> void:
 			var step_delta: float = minf(simulation_time_backlog, _adaptive_step_size())
 			if step_delta <= 0.000001:
 				break
+			var previous_sim_time := sim_time
 			_physics_step(step_delta)
-			simulation_time_backlog = maxf(0.0, simulation_time_backlog - step_delta)
+			var advanced_time := maxf(0.0, sim_time - previous_sim_time)
+			simulation_time_backlog = maxf(0.0, simulation_time_backlog - advanced_time)
 			iterations += 1
+			if advanced_time <= 0.000001:
+				break
 	else:
 		simulation_time_backlog = 0.0
 	if show_predicted_trajectory:
@@ -225,6 +229,9 @@ func _physics_step(dt: float) -> void:
 	var altitude := maxf(0.0, float(local_body.get("distance", EARTH_RADIUS)) - float(local_body.get("radius", EARTH_RADIUS)))
 	if guidance_enabled:
 		_update_guidance(dt)
+	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"]:
+		dt = minf(dt, _adaptive_step_size())
+		end_time = sim_time + dt
 	if autopilot_enabled and autopilot_phase in ["COAST", "COAST_TO_TARGET", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "ROUTE_COAST", "COMPLETE", "FAILED"]:
 		thrust_key_down = false
 	var active := _active_stage_data()
