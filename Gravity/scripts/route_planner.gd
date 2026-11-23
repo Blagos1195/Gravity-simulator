@@ -646,11 +646,29 @@ func _calculate_destination_plan() -> void:
 			navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "local": true, "needs_parking_orbit": true}
 		elif stable_orbit:
 			var local_plan := FlightComputer.target_radius_burn(current_position, current_velocity, target_radius, current_mu)
-			if not bool(local_plan.get("valid", false)) or float(local_plan.get("delta_v", INF)) > available:
+			if not bool(local_plan.get("valid", false)):
 				_invalidate_navigation_plan()
 				navigation_report.text = "NO FEASIBLE LOCAL ORBIT CHANGE. Check the target orbit and remaining ΔV budget."
 				return
-			navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "delta_v": float(local_plan.get("delta_v", 0.0)), "local": true}
+			var transfer_axis := (current_position.length() + target_radius) * 0.5
+			var transfer_speed_at_target := sqrt(current_mu * (2.0 / target_radius - 1.0 / transfer_axis))
+			var target_circular_speed := FlightComputer.circular_orbit_speed(target_radius, current_mu)
+			var circularisation_delta_v := absf(target_circular_speed - transfer_speed_at_target)
+			var total_local_delta_v := float(local_plan.get("delta_v", 0.0)) + circularisation_delta_v
+			if total_local_delta_v > available:
+				_invalidate_navigation_plan()
+				navigation_report.text = "NO FEASIBLE LOCAL ORBIT CHANGE. Both transfer and circularisation burns exceed the remaining ΔV budget."
+				return
+			navigation_plan = {
+				"valid": true,
+				"target_id": target_id,
+				"target_name": target_name,
+				"target_altitude": target_altitude,
+				"delta_v": float(local_plan.get("delta_v", 0.0)),
+				"circularisation_delta_v": circularisation_delta_v,
+				"total_delta_v": total_local_delta_v,
+				"local": true
+			}
 		elif recovery_is_feasible:
 			navigation_plan = {
 				"valid": true,
@@ -706,7 +724,7 @@ func _calculate_destination_plan() -> void:
 	if bool(navigation_plan.get("needs_parking_orbit", false)):
 		navigation_report.text = "AUTOPILOT READY  •  %s\nThe vehicle will first establish a safe parking orbit, then calculate the destination transfer." % target_name
 	elif bool(navigation_plan.get("local", false)):
-		navigation_report.text = "ORBIT CHANGE SOLVED  •  %s\nTarget altitude: %.1f km\nRequired ΔV: %.0f m/s\nThis plan will circularise around the current body." % [target_name, target_altitude / 1000.0, float(navigation_plan.get("delta_v", 0.0))]
+		navigation_report.text = "ORBIT CHANGE SOLVED  •  %s\nTarget altitude: %.1f km\nTRANSFER BURN: %.0f m/s  •  CIRCULARISATION: %.0f m/s\nTOTAL REQUIRED ΔV: %.0f m/s\nThe manual flight computer guides both burns and the coast to the target apsis." % [target_name, target_altitude / 1000.0, float(navigation_plan.get("delta_v", 0.0)), float(navigation_plan.get("circularisation_delta_v", 0.0)), float(navigation_plan.get("total_delta_v", 0.0))]
 	else:
 		navigation_report.text = "TRANSFER SOLVED  •  %s\nDeparture: CURRENT ORBIT  •  T+ %.1f s\nDeparture ΔV: %.0f m/s\nArrival capture ΔV: %.0f m/s\nTotal estimated ΔV: %.0f m/s\nFlight time: %.1f days\nClosest approach: %.0f km\nArrival speed: %.0f m/s\nCandidate trajectories: %d\nChoose FLY MANUALLY to execute departure and arrival burns yourself, or SEND TO AUTOPILOT. Finite-burn losses and mid-course corrections remain approximate." % [
 			target_name,
@@ -1208,6 +1226,7 @@ func _start_manual_destination_plan() -> void:
 		"target_id": int(plan.get("target_id", -999)),
 		"target_name": str(plan.get("target_name", "")),
 		"target_altitude": float(plan.get("target_altitude", 200000.0)),
+		"total_delta_v": float(plan.get("total_delta_v", plan.get("delta_v", 0.0))),
 		"phase": "LOCAL_BURN" if bool(plan.get("local", false)) else "WAIT_DEPARTURE",
 		"departure_time": float(plan.get("departure_time_seconds", plan.get("planned_at_time", now))),
 		"transfer_time": float(plan.get("transfer_time", 0.0)),
