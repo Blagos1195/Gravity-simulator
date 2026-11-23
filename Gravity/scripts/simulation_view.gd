@@ -1928,6 +1928,20 @@ func _saved_departure_plan() -> Dictionary:
 		"transfer_time": float(plan.get("transfer_time", 0.0))
 	}
 
+func _saved_manual_flight_plan() -> Dictionary:
+	if manual_flight_plan.is_empty():
+		return {}
+	var plan := manual_flight_plan.duplicate(true)
+	var departure_direction: Vector2 = plan.get("departure_direction", Vector2.ZERO)
+	var burn_vector: Vector2 = plan.get("burn_vector", Vector2.ZERO)
+	plan.erase("departure_direction")
+	plan.erase("burn_vector")
+	plan["departure_direction_x"] = departure_direction.x
+	plan["departure_direction_y"] = departure_direction.y
+	plan["burn_vector_x"] = burn_vector.x
+	plan["burn_vector_y"] = burn_vector.y
+	return plan
+
 func get_save_data() -> Dictionary:
 	return {
 		"sim_time": sim_time,
@@ -1969,6 +1983,12 @@ func get_save_data() -> Dictionary:
 		"autopilot_burn_direction_y": autopilot_burn_direction.y,
 		"autopilot_route_nodes": autopilot_route_nodes.duplicate(true),
 		"autopilot_route_node_index": autopilot_route_node_index,
+		"manual_flight_plan": _saved_manual_flight_plan(),
+		"manual_burn_tracking_enabled": manual_burn_tracking_enabled,
+		"manual_burn_target_x": manual_burn_target_vector.x,
+		"manual_burn_target_y": manual_burn_target_vector.y,
+		"manual_burn_accumulated_x": manual_burn_accumulated_vector.x,
+		"manual_burn_accumulated_y": manual_burn_accumulated_vector.y,
 		"autopilot_complete": autopilot_complete,
 		"autopilot_phase": autopilot_phase,
 		"heat_shield_temperature": heat_shield_temperature,
@@ -2096,6 +2116,22 @@ func load_save_data(data: Dictionary) -> bool:
 	autopilot_safety_margin = clampf(float(data.get("autopilot_safety_margin", 0.10)), 0.0, 0.4)
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
 	autopilot_arrival_burn_vector = Vector2(float(data.get("autopilot_arrival_burn_x", 0.0)), float(data.get("autopilot_arrival_burn_y", 0.0)))
+	manual_flight_plan.clear()
+	var saved_manual_plan: Variant = data.get("manual_flight_plan", {})
+	if saved_manual_plan is Dictionary and not saved_manual_plan.is_empty():
+		var manual_plan_valid := str(saved_manual_plan.get("target_name", "")).length() > 0 and str(saved_manual_plan.get("phase", "")) in ["WAIT_DEPARTURE", "DEPARTURE_BURN", "TRANSFER_COAST", "ARRIVAL_BURN", "ARRIVAL_COAST", "ARRIVAL_CIRCULARISE", "LOCAL_BURN", "COMPLETE", "FAILED"]
+		for key in ["departure_time", "transfer_time", "departure_delta_v", "target_altitude", "burn_delta_v", "departure_direction_x", "departure_direction_y", "burn_vector_x", "burn_vector_y"]:
+			var value: Variant = saved_manual_plan.get(key, 0.0)
+			if not (value is float or value is int) or not is_finite(float(value)):
+				manual_plan_valid = false
+				break
+		if manual_plan_valid:
+			manual_flight_plan = saved_manual_plan.duplicate(true)
+			manual_flight_plan["departure_direction"] = Vector2(float(saved_manual_plan.get("departure_direction_x", 0.0)), float(saved_manual_plan.get("departure_direction_y", 0.0)))
+			manual_flight_plan["burn_vector"] = Vector2(float(saved_manual_plan.get("burn_vector_x", 0.0)), float(saved_manual_plan.get("burn_vector_y", 0.0)))
+	manual_burn_tracking_enabled = bool(data.get("manual_burn_tracking_enabled", false)) and not manual_flight_plan.is_empty() and str(manual_flight_plan.get("phase", "")) in ["DEPARTURE_BURN", "ARRIVAL_BURN", "ARRIVAL_CIRCULARISE", "LOCAL_BURN"]
+	manual_burn_target_vector = Vector2(float(data.get("manual_burn_target_x", 0.0)), float(data.get("manual_burn_target_y", 0.0)))
+	manual_burn_accumulated_vector = Vector2(float(data.get("manual_burn_accumulated_x", 0.0)), float(data.get("manual_burn_accumulated_y", 0.0)))
 	landed = bool(data.get("landed", false))
 	crashed = bool(data.get("crashed", false))
 	landed_body_name = str(data.get("landed_body_name", "Earth"))
