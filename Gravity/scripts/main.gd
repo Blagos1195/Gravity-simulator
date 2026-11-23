@@ -864,6 +864,14 @@ func _add_new_vehicle() -> void:
 func _switch_vehicle(index: int) -> void:
 	if index < 0 or index >= fleet_sims.size():
 		return
+	var requested_name := fleet_sims[index].vehicle_name
+	for link in docking_links:
+		if str(link.get("child_name", "")) == requested_name:
+			for parent_index in range(fleet_sims.size()):
+				if fleet_sims[parent_index].vehicle_name == str(link.get("parent_name", "")):
+					index = parent_index
+					break
+			break
 	if is_instance_valid(sim):
 		if not sim.autopilot_enabled:
 			sim.thrust_key_down = false
@@ -998,6 +1006,7 @@ func _undock_vehicle(target_name: String) -> bool:
 			child.input_enabled = child == sim
 			child.docked_mass = 0.0
 		_update_docked_masses()
+		_sync_docked_vehicles()
 		return true
 	return false
 
