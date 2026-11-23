@@ -560,7 +560,8 @@ func _calculate_destination_plan() -> void:
 	var current_orbit := FlightComputer.orbital_state(current_position, current_velocity, current_mu)
 	var current_minimum := FlightComputer.minimum_safe_orbit_altitude(current_name, float(current.get("radius", 0.0)))
 	var inside_current_soi := float(current.get("distance", INF)) <= float(current.get("soi", 0.0))
-	var stable_orbit := inside_current_soi and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + current_minimum
+	var current_maximum := FlightComputer.maximum_stable_orbit_altitude(float(current.get("radius", 0.0)), float(current.get("soi", 0.0)))
+	var stable_orbit := inside_current_soi and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + current_minimum and float(current_orbit.get("apoapsis", INF)) < float(current.get("radius", 0.0)) + current_maximum
 	var landed_start := bool(simulation.get("landed"))
 	var deep_space_start := not inside_current_soi
 	if current_name == target_name and inside_current_soi:
@@ -579,10 +580,6 @@ func _calculate_destination_plan() -> void:
 				return
 			navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "delta_v": float(local_plan.get("delta_v", 0.0)), "local": true}
 	else:
-		if not stable_orbit and not landed_start and not deep_space_start:
-			_invalidate_navigation_plan()
-			navigation_report.text = "A SAFE PARKING ORBIT AROUND %s IS REQUIRED BEFORE A DESTINATION TRANSFER CAN BE CALCULATED." % current_name.to_upper()
-			return
 		if landed_start:
 			navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "local": false, "needs_parking_orbit": true}
 		else:
@@ -755,7 +752,7 @@ func _send_destination_to_autopilot() -> void:
 	simulation.set("autopilot_precomputed_transfer_plan", navigation_plan.duplicate(true) if not bool(navigation_plan.get("local", false)) else {})
 	simulation.set("autopilot_apsis_correction_armed", true)
 	simulation.set("autopilot_apsis_correction_angle", relative_position.angle())
-	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if landed_start or (not stable_orbit and inside_current_soi) else "PLAN_TRANSFER")
+	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if landed_start or bool(navigation_plan.get("needs_parking_orbit", false)) else "PLAN_TRANSFER")
 	simulation.set("guidance_enabled", true)
 	simulation.set("thrust_key_down", landed_start or (not stable_orbit and inside_current_soi))
 	simulation.set("status_message", "FLIGHT COMPUTER  •  NAVIGATING TO %s" % target_name.to_upper())
