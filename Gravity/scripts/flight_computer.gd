@@ -689,7 +689,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 			continue
 		var future_components: PackedFloat64Array = future_state.position_components
 		var future_position := Vector2(future_components[0], future_components[1])
-		var plan := simulated_transfer_search_precise(future_components, future_state.velocity, start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
+		var plan := simulated_transfer_search_precise(future_components, future_state.velocity, float(refinement_seed.departure_time_seconds) + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
 		if not bool(plan.get("valid", false)):
 			continue
 		plan["departure_wait_days"] = wait_days
