@@ -21,14 +21,14 @@ func _initialize() -> void:
 	assert(int(configured_first_stage.engine_count) == 1)
 	assert(is_equal_approx(float(configured_first_stage.fuel_capacity), 375000.0))
 	assert(is_equal_approx(float(configured_first_stage.dry_mass), 37500.0))
-	var configured_upper_stage := RocketDesign.configure_stage("explorer_upper_stage", 4, 1.0)
+	var configured_upper_stage := RocketDesign.configure_stage("explorer_upper_stage", 2, 1.0)
 	assert(not configured_upper_stage.is_empty())
 	var configured_design := design.duplicate(true)
 	configured_design["stages"][0] = configured_first_stage
 	configured_design["stages"][1] = configured_upper_stage
 	assert(RocketDesign.validation_errors(configured_design).is_empty())
 	var engine_variant := design.duplicate(true)
-	engine_variant["stages"][1] = RocketDesign.configure_stage("explorer_upper_stage", 4, 1.0)
+	engine_variant["stages"][1] = RocketDesign.configure_stage("explorer_upper_stage", 2, 1.0)
 	assert(is_equal_approx(RocketDesign.total_delta_v(engine_variant), RocketDesign.total_delta_v(design)))
 	assert(RocketDesign.total_initial_mass(configured_design) > RocketDesign.total_initial_mass(design))
 	assert(RocketDesign.configure_stage("explorer_first_stage", 5, 1.0).is_empty())
