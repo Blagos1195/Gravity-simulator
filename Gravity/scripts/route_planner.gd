@@ -53,6 +53,9 @@ var navigation_engage_button: Button
 var navigation_cancel_button: Button
 var navigation_plan_valid := false
 var navigation_plan: Dictionary = {}
+var manual_guidance_report: Label
+var manual_guidance_node_index := -1
+var manual_guidance_start_time := 0.0
 
 class OrbitPlot extends Control:
 	signal node_dragged(index: int, world_position: Vector2)
@@ -483,6 +486,10 @@ func _build_interface() -> void:
 	var node_actions := HBoxContainer.new()
 	node_actions.add_theme_constant_override("separation", 8)
 	node_controls.add_child(node_actions)
+	var guide_button := Button.new()
+	guide_button.text = "GUIDE SELECTED BURN"
+	guide_button.pressed.connect(_arm_manual_guidance)
+	node_actions.add_child(guide_button)
 	var remove_button := Button.new()
 	remove_button.text = "REMOVE SELECTED NODE"
 	remove_button.pressed.connect(_remove_node)
@@ -492,6 +499,10 @@ func _build_interface() -> void:
 	burn_report = Label.new()
 	burn_report.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(burn_report)
+	manual_guidance_report = Label.new()
+	manual_guidance_report.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	manual_guidance_report.text = "MANUAL BURN GUIDANCE  •  Select a manoeuvre node and guide its burn here. The flight computer will not steer or fire the engines."
+	root.add_child(manual_guidance_report)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
@@ -880,6 +891,62 @@ func _refresh_state() -> void:
 	else:
 		_update_manoeuvre()
 	_refresh_navigation_state()
+
+func _arm_manual_guidance() -> void:
+	if not is_instance_valid(simulation) or selected_node_index < 0 or selected_node_index >= nodes.size():
+		return
+	manual_guidance_node_index = selected_node_index
+	manual_guidance_start_time = float(simulation.get("sim_time"))
+	_update_manual_guidance()
+
+func _manual_node_state(node_time: float) -> Dictionary:
+	if node_time <= 0.0 or planned_path.size() < 3 or planned_path_times.size() != planned_path.size():
+		return {"position": relative_position, "velocity": relative_velocity}
+	var nearest_index := 0
+	var nearest_difference := INF
+	for index in range(planned_path_times.size()):
+		var difference := absf(planned_path_times[index] - node_time)
+		if difference < nearest_difference:
+			nearest_difference = difference
+			nearest_index = index
+	var before_index := maxi(0, nearest_index - 1)
+	var after_index := mini(planned_path.size() - 1, nearest_index + 1)
+	var duration := planned_path_times[after_index] - planned_path_times[before_index]
+	var predicted_velocity := relative_velocity
+	if duration > 0.001:
+		predicted_velocity = (planned_path[after_index] - planned_path[before_index]) / duration
+	return {"position": planned_path[nearest_index], "velocity": predicted_velocity}
+
+func _update_manual_guidance() -> void:
+	if not is_instance_valid(manual_guidance_report):
+		return
+	if not is_instance_valid(simulation) or manual_guidance_node_index < 0 or manual_guidance_node_index >= nodes.size():
+		manual_guidance_report.text = "MANUAL BURN GUIDANCE  •  Select a manoeuvre node and press GUIDE SELECTED BURN. No autopilot is engaged."
+		return
+	var node: Dictionary = nodes[manual_guidance_node_index]
+	var node_time := maxf(0.0, float(node.get("time_offset", 0.0)))
+	var elapsed := maxf(0.0, float(simulation.get("sim_time")) - manual_guidance_start_time)
+	var remaining_time := node_time - elapsed
+	var predicted_state := _manual_node_state(node_time)
+	var guidance := FlightComputer.manoeuvre_burn_guidance(
+		Vector2(predicted_state.get("position", relative_position)),
+		Vector2(predicted_state.get("velocity", relative_velocity)),
+		float(node.get("prograde", 0.0)),
+		float(node.get("radial", 0.0))
+	)
+	if not bool(guidance.get("valid", false)):
+		manual_guidance_report.text = "MANUAL BURN GUIDANCE  •  Unable to calculate the selected node's burn direction."
+		return
+	var timing := "BURN WINDOW OPEN" if remaining_time <= 0.0 else "BURN IN %.1f s" % remaining_time
+	var angle_degrees := rad_to_deg(float(guidance.get("angle_from_prograde", 0.0)))
+	manual_guidance_report.text = "MANUAL NODE %d  •  %s\nTARGET ΔV: %.1f m/s  •  PROGRADE: %+.1f m/s  •  RADIAL: %+.1f m/s\nBURN VECTOR: %.1f° from prograde towards radial. Point the rocket along this vector and use manual thrust; stop when the planned ΔV is reached. No automatic steering or thrust is used." % [
+		manual_guidance_node_index + 1,
+		timing,
+		float(guidance.get("delta_v", 0.0)),
+		float(guidance.get("prograde", 0.0)),
+		float(guidance.get("radial", 0.0)),
+		angle_degrees
+	]
 
 func _add_node() -> void:
 	if not is_instance_valid(simulation):
@@ -1373,6 +1440,7 @@ func _update_manoeuvre() -> void:
 			route_report.text = "%s   •   TIME %.2f HOURS   •   TARGET X %.1f km, Y %.1f km   •   RANGE %.1f km" % [route_status, route_duration / 3600.0, route_target.x / 1000.0, route_target.y / 1000.0, route_target.length() / 1000.0]
 		else:
 			route_report.text = route_status
+	_update_manual_guidance()
 
 func _cancel_route() -> void:
 	if not is_instance_valid(simulation):
