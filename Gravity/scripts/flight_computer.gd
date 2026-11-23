@@ -337,8 +337,8 @@ static func parking_orbit_recovery_plan(position: Vector2, velocity: Vector2, bo
 	var current_radius := position.length()
 	if maximum_altitude <= minimum_altitude:
 		return {"valid": false, "reason": "The current body has no safe parking-orbit band."}
-	if current_radius <= body_radius + minimum_altitude or current_radius >= body_radius + maximum_altitude:
-		return {"valid": false, "reason": "The spacecraft is outside the safe parking-orbit altitude band for this recovery manoeuvre."}
+	if current_radius <= body_radius:
+		return {"valid": false, "reason": "The spacecraft is below the body's surface."}
 	var orbit_margin := orbit_radius_tolerance(body_radius + maximum_altitude)
 	var minimum_target_altitude := minimum_altitude + orbit_radius_tolerance(body_radius + minimum_altitude)
 	var maximum_target_altitude := maximum_altitude - orbit_margin
@@ -352,10 +352,17 @@ static func parking_orbit_recovery_plan(position: Vector2, velocity: Vector2, bo
 	var recovered_orbit := orbital_state(position, Vector2(burn.get("desired_velocity", velocity)), body_mu)
 	var periapsis := float(recovered_orbit.get("periapsis", 0.0))
 	var apoapsis := float(recovered_orbit.get("apoapsis", INF))
-	if not bool(recovered_orbit.get("bound", false)) or periapsis <= body_radius + minimum_altitude or apoapsis >= body_radius + maximum_altitude:
-		return {"valid": false, "reason": "The recovery burn would not produce a safe, stable parking orbit."}
+	var lower_safe_radius := body_radius + minimum_altitude
+	var upper_safe_radius := body_radius + maximum_altitude
+	var atmospheric_floor := body_radius + maxf(1000.0, PlanetarySystem.planetary_atmosphere_height(body_name))
+	var staged_from_high_orbit := current_radius > upper_safe_radius and periapsis > lower_safe_radius and absf(apoapsis - current_radius) <= orbit_radius_tolerance(current_radius)
+	var staged_from_low_orbit := current_radius < lower_safe_radius and current_radius > atmospheric_floor and apoapsis < upper_safe_radius and absf(apoapsis - target_radius) <= orbit_radius_tolerance(target_radius)
+	var already_safe := periapsis > lower_safe_radius and apoapsis < upper_safe_radius
+	if not bool(recovered_orbit.get("bound", false)) or not (already_safe or staged_from_high_orbit or staged_from_low_orbit):
+		return {"valid": false, "reason": "No safe direct or staged recovery orbit can be created from the current state."}
 	return {
 		"valid": true,
+		"staged": not already_safe,
 		"burn_vector": Vector2(burn.get("burn_vector", Vector2.ZERO)),
 		"desired_velocity": Vector2(burn.get("desired_velocity", velocity)),
 		"delta_v": float(burn.get("delta_v", INF)),
