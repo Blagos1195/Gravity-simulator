@@ -672,6 +672,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 	if best_window.is_empty():
 		return {"valid": false, "reason": "No propagated departure date produced a feasible transfer within the available delta-v.", "dates_checked": dates_checked}
 	var coarse_best_day := float(best_window.departure_wait_days)
+	var refinement_seed: Dictionary = best_window.duplicate(true)
 	var refinement_spacing := maxf(1.0, float(interval_days) / 4.0)
 	for refinement_index in range(-2, 3):
 		var wait_days := clampf(coarse_best_day + float(refinement_index) * refinement_spacing, 0.0, float(scan_days))
@@ -680,9 +681,9 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		if wait_days < coarse_best_day:
 			continue
 		var wait_seconds := (wait_days - coarse_best_day) * 86400.0
-		var best_position: PackedFloat64Array = best_window.planned_position_precise
-		var best_velocity: Vector2 = best_window.planned_velocity
-		var future_state := _propagate_wait_state(best_position, best_velocity, float(best_window.departure_time_seconds), wait_seconds)
+		var best_position: PackedFloat64Array = refinement_seed.planned_position_precise
+		var best_velocity: Vector2 = refinement_seed.planned_velocity
+		var future_state := _propagate_wait_state(best_position, best_velocity, float(refinement_seed.departure_time_seconds), wait_seconds)
 		dates_checked += 1
 		if not bool(future_state.get("valid", false)):
 			continue
