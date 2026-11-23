@@ -933,6 +933,8 @@ func _update_docked_masses() -> void:
 			parent.docked_mass += child._current_vehicle_mass()
 
 func _sync_docked_vehicles() -> void:
+	for vehicle in fleet_sims:
+		vehicle.docked_visuals.clear()
 	for link in docking_links:
 		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
 		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
@@ -940,6 +942,11 @@ func _sync_docked_vehicles() -> void:
 			continue
 		var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
 		var world_offset := local_offset.rotated(parent.rotation_angle)
+		parent.docked_visuals.append({
+			"name": child.vehicle_name,
+			"direction": world_offset.normalized(),
+			"rotation": parent.rotation_angle
+		})
 		child.rocket_position = parent.rocket_position + world_offset
 		child.velocity = parent.velocity
 		child.rotation_angle = parent.rotation_angle
