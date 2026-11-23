@@ -339,7 +339,12 @@ static func parking_orbit_recovery_plan(position: Vector2, velocity: Vector2, bo
 		return {"valid": false, "reason": "The current body has no safe parking-orbit band."}
 	if current_radius <= body_radius + minimum_altitude or current_radius >= body_radius + maximum_altitude:
 		return {"valid": false, "reason": "The spacecraft is outside the safe parking-orbit altitude band for this recovery manoeuvre."}
-	var target_altitude := clampf(requested_altitude, minimum_altitude, maximum_altitude - orbit_radius_tolerance(body_radius + maximum_altitude))
+	var orbit_margin := orbit_radius_tolerance(body_radius + maximum_altitude)
+	var minimum_target_altitude := minimum_altitude + orbit_radius_tolerance(body_radius + minimum_altitude)
+	var maximum_target_altitude := maximum_altitude - orbit_margin
+	if maximum_target_altitude <= minimum_target_altitude:
+		return {"valid": false, "reason": "The current body has no parking-orbit band with adequate safety margins."}
+	var target_altitude := clampf(requested_altitude, minimum_target_altitude, maximum_target_altitude)
 	var target_radius := body_radius + target_altitude
 	var burn := target_radius_burn(position, velocity, target_radius, body_mu)
 	if not bool(burn.get("valid", false)):
