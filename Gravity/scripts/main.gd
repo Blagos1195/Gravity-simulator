@@ -145,6 +145,16 @@ func _advance_fleet(delta: float) -> void:
 	for vehicle in fleet_sims:
 		vehicle.time_warp = sim.time_warp
 		vehicle.paused = sim.paused
+		vehicle.prediction_timer += delta
+		if vehicle.show_predicted_trajectory and vehicle.prediction_timer >= 0.35:
+			vehicle.prediction_timer = 0.0
+			vehicle._calculate_predicted_trajectory()
+		vehicle.trail_timer += delta
+		if vehicle.trail_timer >= 0.12:
+			vehicle.trail_timer = 0.0
+			vehicle.trail.append(vehicle.rocket_position)
+			if vehicle.trail.size() > 450:
+				vehicle.trail.pop_front()
 	if sim.paused:
 		fleet_time_backlog = 0.0
 	else:
@@ -185,6 +195,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _build_menu() -> void:
 	mode = "menu"
+	fleet_sims.clear()
+	sim = null
+	vehicle_selector = null
+	fleet_time_backlog = 0.0
 	rebinding_action = ""
 	rebinding_button = null
 	for child in get_children():
@@ -842,7 +856,8 @@ func _switch_vehicle(index: int) -> void:
 	if index < 0 or index >= fleet_sims.size():
 		return
 	if is_instance_valid(sim):
-		sim.thrust_key_down = false
+		if not sim.autopilot_enabled:
+			sim.thrust_key_down = false
 		sim.input_enabled = false
 		sim.visible = false
 	active_vehicle_index = index
