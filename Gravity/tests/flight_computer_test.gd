@@ -513,6 +513,24 @@ func _initialize() -> void:
 	assert(recovery_sim.autopilot_phase == "CIRCULARISE", "Unbound local trajectory did not enter the recovery burn phase")
 	recovery_planner_window.free()
 	recovery_sim.free()
+	var low_altitude_sim: Variant = SimulationView.new()
+	low_altitude_sim.set_rocket_design(RocketDesign.create_default())
+	low_altitude_sim.landed = false
+	var low_altitude_radius := PlanetarySystem.EARTH_RADIUS + 50000.0
+	low_altitude_sim._set_rocket_position_components(0.0, -low_altitude_radius)
+	low_altitude_sim.velocity = Vector2(FlightComputer.circular_orbit_speed(low_altitude_radius) * 0.8, 0.0)
+	var low_altitude_planner: Window = RoutePlanner.new()
+	root.add_child(low_altitude_planner)
+	low_altitude_planner.configure(low_altitude_sim, RocketDesign.create_default())
+	low_altitude_planner.navigation_moon_dropdown.select(1)
+	low_altitude_planner.navigation_altitude_input.value = 300.0
+	low_altitude_planner._calculate_destination_plan()
+	assert(low_altitude_planner.navigation_plan_valid, "Low-altitude recovery to a planetary transfer was rejected: %s" % low_altitude_planner.navigation_report.text)
+	assert(bool(low_altitude_planner.navigation_plan.get("recovery_ascent", false)), "Low-altitude recovery did not select ascent guidance")
+	low_altitude_planner._send_destination_to_autopilot()
+	assert(low_altitude_sim.autopilot_phase == "ASCENT", "Low-altitude recovery did not enter ascent guidance")
+	low_altitude_planner.free()
+	low_altitude_sim.free()
 	var mars_surface_sim: Variant = SimulationView.new()
 	mars_surface_sim.set_rocket_design(RocketDesign.create_default())
 	mars_surface_sim.landed = true
