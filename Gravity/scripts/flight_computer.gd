@@ -468,7 +468,9 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
 	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index == -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
-	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.2, maximum_delta_v * 0.25, maximum_delta_v * 0.3, maximum_delta_v * 0.35, maximum_delta_v * 0.4, maximum_delta_v * 0.5, maximum_delta_v * 0.65, maximum_delta_v * 0.8, maximum_delta_v]
+	if target_index == -1 and not coarse_search:
+		durations = [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 1.5, nominal_time * 2.5]
+	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.2, maximum_delta_v * 0.2133, maximum_delta_v * 0.25, maximum_delta_v * 0.3, maximum_delta_v * 0.35, maximum_delta_v * 0.4, maximum_delta_v * 0.5, maximum_delta_v * 0.65, maximum_delta_v * 0.8, maximum_delta_v]
 	var direction_count := 12 if coarse_search else 24
 	if not refinement_center.is_empty():
 		var center_time := maxf(3600.0, float(refinement_center.get("transfer_time", nominal_time)))
@@ -486,7 +488,9 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var first_capture_failure := ""
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
 	var time_weight := 1.0 - fuel_weight
-	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
+	var maximum_flight_duration := 0.0
+	for duration_value in durations:
+		maximum_flight_duration = maxf(maximum_flight_duration, float(duration_value))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
 		var minimum_steps := 360 if coarse_search else 720
