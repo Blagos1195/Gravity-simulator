@@ -73,6 +73,7 @@ class OrbitPlot extends Control:
 	var zoom_factor := 1.0
 	var solar_system_mode := false
 	var solar_system_bodies: Array[Dictionary] = []
+	var solar_system_body_tracks: Array[Dictionary] = []
 	var solar_system_target_name := ""
 
 	func _gui_input(event: InputEvent) -> void:
@@ -140,10 +141,11 @@ class OrbitPlot extends Control:
 		has_target = destination_enabled
 		queue_redraw()
 
-	func set_solar_system_path(path: PackedVector2Array, initial_position: Vector2, destination: Vector2, bodies: Array[Dictionary], destination_name: String) -> void:
+	func set_solar_system_path(path: PackedVector2Array, initial_position: Vector2, destination: Vector2, bodies: Array[Dictionary], destination_name: String, body_tracks: Array[Dictionary] = []) -> void:
 		solar_system_mode = true
 		solar_system_target_name = destination_name
 		solar_system_bodies = bodies.duplicate(true)
+		solar_system_body_tracks = body_tracks.duplicate(true)
 		current_path = PackedVector2Array([initial_position])
 		planned_path = path
 		node_positions.clear()
@@ -165,6 +167,17 @@ class OrbitPlot extends Control:
 			path_screen.append(center + Vector2(point.x, -point.y) * scale_value)
 		if path_screen.size() > 1:
 			draw_polyline(path_screen, Color(0.25, 0.9, 0.68), 2.2, true)
+		for track in solar_system_body_tracks:
+			var track_name := str(track.get("name", ""))
+			var positions: PackedVector2Array = track.get("positions", PackedVector2Array())
+			var track_screen := PackedVector2Array()
+			for body_position in positions:
+				track_screen.append(center + Vector2(body_position.x, -body_position.y) * scale_value)
+			var track_color := Color(0.92, 0.76, 0.35, 0.55) if track_name == "Sun" else Color(0.25, 0.78, 1.0, 0.55) if track_name == solar_system_target_name else Color(0.55, 0.68, 0.82, 0.4)
+			if track_screen.size() > 1:
+				draw_polyline(track_screen, track_color, 1.0, true)
+			if not track_screen.is_empty():
+				draw_circle(track_screen[track_screen.size() - 1], 3.0, track_color)
 		for body in solar_system_bodies:
 			var body_name := str(body.get("name", ""))
 			var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
@@ -662,30 +675,62 @@ func _update_navigation_plot() -> void:
 	if trajectory.size() < 2 or target_components.size() < 2:
 		navigation_plot.visible = false
 		return
-	var body_states: Dictionary = PlanetarySystem.gravity_body_states(float(simulation.get("sim_time")))
+	var current_time := float(simulation.get("sim_time"))
+	var departure_time := float(navigation_plan.get("departure_time_seconds", navigation_plan.get("planned_at_time", current_time)))
+	var transfer_time := maxf(0.0, float(navigation_plan.get("transfer_time", 0.0)))
+	var initial_states: Dictionary = PlanetarySystem.gravity_body_states(departure_time)
+	var body_names: Array[String] = []
 	var bodies: Array[Dictionary] = []
-	for body_variant in body_states.get("surface_bodies", []):
+	for body_variant in initial_states.get("surface_bodies", []):
 		var body: Dictionary = body_variant
+		var body_name := str(body.get("name", "Unknown"))
+		body_names.append(body_name)
 		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
 		var components: PackedFloat64Array = body.get("position_components", PackedFloat64Array())
 		if components.size() >= 2:
 			body_position = Vector2(components[0], components[1])
-		bodies.append({"name": str(body.get("name", "Unknown")), "position": body_position, "radius": float(body.get("radius", 0.0))})
-	for body_variant in body_states.get("bodies", []):
+		bodies.append({"name": body_name, "position": body_position, "radius": float(body.get("radius", 0.0))})
+	for body_variant in initial_states.get("bodies", []):
 		var body: Dictionary = body_variant
 		if str(body.get("name", "")) == "Sun":
 			var sun_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
 			var sun_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array())
 			if sun_components.size() >= 2:
 				sun_position = Vector2(sun_components[0], sun_components[1])
+			body_names.append("Sun")
 			bodies.append({"name": "Sun", "position": sun_position, "radius": float(body.get("radius", 0.0))})
 			break
+	var body_tracks: Array[Dictionary] = []
+	for body_name in body_names:
+		body_tracks.append({"name": body_name, "positions": PackedVector2Array()})
+	for point_index in range(trajectory.size()):
+		var fraction := float(point_index) / float(maxi(1, trajectory.size() - 1))
+		var states_at_time: Dictionary = PlanetarySystem.gravity_body_states(departure_time + transfer_time * fraction)
+		var positions_by_name: Dictionary = {}
+		for body_variant in states_at_time.get("surface_bodies", []):
+			var body: Dictionary = body_variant
+			var components: PackedFloat64Array = body.get("position_components", PackedFloat64Array())
+			if components.size() >= 2:
+				positions_by_name[str(body.get("name", ""))] = Vector2(components[0], components[1])
+		for body_variant in states_at_time.get("bodies", []):
+			var body: Dictionary = body_variant
+			if str(body.get("name", "")) == "Sun":
+				var components: PackedFloat64Array = body.get("position_components", PackedFloat64Array())
+				if components.size() >= 2:
+					positions_by_name["Sun"] = Vector2(components[0], components[1])
+		for track_index in range(body_tracks.size()):
+			var track: Dictionary = body_tracks[track_index]
+			var track_positions: PackedVector2Array = track.get("positions", PackedVector2Array())
+			track_positions.append(positions_by_name.get(str(track.get("name", "")), Vector2.ZERO))
+			track["positions"] = track_positions
+			body_tracks[track_index] = track
 	navigation_plot.set_solar_system_path(
 		trajectory,
 		Vector2(simulation.get("rocket_position")),
 		Vector2(target_components[0], target_components[1]),
 		bodies,
-		str(navigation_plan.get("target_name", ""))
+		str(navigation_plan.get("target_name", "")),
+		body_tracks
 	)
 
 func _refresh_navigation_state() -> void:
