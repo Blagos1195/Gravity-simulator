@@ -405,6 +405,30 @@ func _show_vehicle_editor() -> void:
 				_update_design_stats()
 		)
 		stage_row.add_child(tank_selector)
+		var move_up_button := Button.new()
+		move_up_button.text = "↑"
+		move_up_button.tooltip_text = "Move this stage closer to the payload"
+		move_up_button.disabled = stage_index == rocket_design["stages"].size() - 1
+		move_up_button.pressed.connect(func():
+			var stages: Array = rocket_design["stages"]
+			var moved_stage: Dictionary = stages[stage_index]
+			stages.remove_at(stage_index)
+			stages.insert(stage_index + 1, moved_stage)
+			_show_vehicle_editor()
+		)
+		stage_row.add_child(move_up_button)
+		var move_down_button := Button.new()
+		move_down_button.text = "↓"
+		move_down_button.tooltip_text = "Move this stage closer to the launch pad"
+		move_down_button.disabled = stage_index == 0
+		move_down_button.pressed.connect(func():
+			var stages: Array = rocket_design["stages"]
+			var moved_stage: Dictionary = stages[stage_index]
+			stages.remove_at(stage_index)
+			stages.insert(stage_index - 1, moved_stage)
+			_show_vehicle_editor()
+		)
+		stage_row.add_child(move_down_button)
 		var remove_button := Button.new()
 		remove_button.text = "REMOVE"
 		remove_button.disabled = rocket_design["stages"].size() <= RocketDesign.MIN_STAGES
