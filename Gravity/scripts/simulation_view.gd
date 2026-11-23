@@ -65,6 +65,10 @@ var autopilot_arrival_burn_vector := Vector2.ZERO
 var autopilot_burn_direction := Vector2.ZERO
 var autopilot_route_nodes: Array[Dictionary] = []
 var autopilot_route_node_index := 0
+var manual_burn_tracking_enabled := false
+var manual_burn_target_vector := Vector2.ZERO
+var manual_burn_accumulated_vector := Vector2.ZERO
+var manual_flight_plan: Dictionary = {}
 var autopilot_complete := false
 var autopilot_phase := "IDLE"
 var heat_flux_mw := 0.0
@@ -249,6 +253,8 @@ func _physics_step(dt: float) -> void:
 		infinite_fuel_stage_remaining = maxf(0.0, infinite_fuel_stage_remaining - fuel_used)
 	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var thrust_impulse := thrust_direction * thrust_delta_v
+	if manual_burn_tracking_enabled and not autopilot_enabled and thrust_delta_v > 0.0:
+		manual_burn_accumulated_vector += thrust_impulse
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
 		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
 		if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
