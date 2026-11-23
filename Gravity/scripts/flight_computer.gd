@@ -333,14 +333,16 @@ static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: 
 	var radius := position.length()
 	var target_radius := body_radius + maxf(minimum_safe_altitude, target_altitude)
 	if body_mu <= 0.0 or radius <= body_radius + minimum_safe_altitude:
-		return {"valid": false}
+		return {"valid": false, "reason": "Encounter is below the minimum safe altitude."}
 	if radius < target_radius:
 		if target_radius - radius > orbit_radius_tolerance(target_radius):
-			return {"valid": false}
+			return {"valid": false, "reason": "Encounter is below the requested target-orbit radius."}
 		target_radius = radius
 	var capture := target_radius_burn(position, velocity, target_radius, body_mu)
-	if not bool(capture.get("valid", false)) or float(capture.get("periapsis", 0.0)) < target_radius * 0.999:
-		return {"valid": false}
+	if not bool(capture.get("valid", false)):
+		return {"valid": false, "reason": "Capture burn does not produce a bound orbit."}
+	if float(capture.get("periapsis", 0.0)) < target_radius * 0.999:
+		return {"valid": false, "reason": "Capture periapsis is below the requested orbit radius."}
 	var transfer_axis := (radius + target_radius) * 0.5
 	var transfer_speed_at_periapsis := sqrt(body_mu * (2.0 / target_radius - 1.0 / transfer_axis))
 	var circular_speed := sqrt(body_mu / target_radius)
@@ -451,6 +453,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var rejected_soi := 0
 	var rejected_capture := 0
 	var rejected_delta_v := 0
+	var first_capture_failure := ""
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
 	var time_weight := 1.0 - fuel_weight
 	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
@@ -547,6 +550,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				var capture := arrival_capture_burn(closest_relative_position, closest_relative_velocity, target_mu, float(initial_target.radius), target_orbit_altitude, target_safe_altitude)
 				if not bool(capture.get("valid", false)):
 					rejected_capture += 1
+					if first_capture_failure.is_empty():
+						first_capture_failure = str(capture.get("reason", "Unspecified capture rejection"))
 					continue
 				var capture_delta_v := float(capture.get("total_delta_v", INF))
 				var total_delta_v := departure_delta_v + capture_delta_v
@@ -581,7 +586,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	if best_plan.is_empty():
 		return {
 			"valid": false,
-			"reason": "No feasible candidate. Rejected: collision=%d, outside_soi=%d, unsafe_capture=%d, delta_v=%d." % [rejected_collisions, rejected_soi, rejected_capture, rejected_delta_v],
+			"reason": "No feasible candidate. Rejected: collision=%d, outside_soi=%d, unsafe_capture=%d, delta_v=%d. First capture rejection: %s" % [rejected_collisions, rejected_soi, rejected_capture, rejected_delta_v, first_capture_failure],
 			"search_candidates": direction_count * magnitudes.size() * durations.size()
 		}
 	return best_plan
