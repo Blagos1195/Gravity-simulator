@@ -712,7 +712,7 @@ static func _propagate_wait_state(start_position_components: PackedFloat64Array,
 
 static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 30, target_orbit_altitude: float = 100000.0, start_position_components: PackedFloat64Array = PackedFloat64Array()) -> Dictionary:
 	if not _is_valid_target_index(target_index) or maximum_delta_v <= 0.0 or scan_days <= 0 or interval_days <= 0:
-		return {"valid": false, "reason": "Select a destination other than Earth and provide a positive manoeuvre budget and scan interval."}
+		return {"valid": false, "reason": "Select a valid destination and provide a positive manoeuvre budget and scan interval."}
 	var initial_position := start_position_components if start_position_components.size() >= 2 else PackedFloat64Array([start_position.x, start_position.y])
 	var initial_states: Dictionary = PlanetarySystem.gravity_body_states(start_time)
 	var nearest_body: Dictionary = {}
