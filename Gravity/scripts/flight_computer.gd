@@ -443,7 +443,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var initial_dy: float = start_position_components[1] - initial_target_components[1]
 	var initial_distance := sqrt(initial_dx * initial_dx + initial_dy * initial_dy)
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
-	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index <= -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
+	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index == -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
 	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v]
 	var direction_count := 12 if coarse_search else 16
