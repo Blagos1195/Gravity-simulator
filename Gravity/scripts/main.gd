@@ -370,6 +370,7 @@ func _show_vehicle_editor() -> void:
 		)
 		stage_row.add_child(part_selector)
 		var engine_selector := OptionButton.new()
+		engine_selector.tooltip_text = "Splits the stage's total thrust and fuel flow across this many smaller engines."
 		for engine_count in [1, 2, 3, 4, 6, 8]:
 			engine_selector.add_item("%d engine%s" % [engine_count, "" if engine_count == 1 else "s"])
 			engine_selector.set_item_metadata(engine_selector.item_count - 1, engine_count)
