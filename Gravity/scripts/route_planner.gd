@@ -581,7 +581,7 @@ func _calculate_destination_plan() -> void:
 			return
 		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_propellant else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
 		var transfer: Dictionary = {}
-		if stable_orbit and current_name == "Earth" and target_id == -1:
+		if stable_orbit and float(current_orbit.get("eccentricity", 1.0)) <= 0.05 and current_name == "Earth" and target_id == -1:
 			var current_time := float(simulation.get("sim_time"))
 			var wait_seconds := FlightComputer.departure_wait_time(target_id, current_time, current_position)
 			var parking_orbital_rate := sqrt(current_mu / pow(current_position.length(), 3.0))
@@ -595,7 +595,7 @@ func _calculate_destination_plan() -> void:
 			transfer["departure_wait_days"] = wait_seconds / 86400.0
 			transfer["departure_time_seconds"] = current_time + wait_seconds
 			transfer["window_wait_only"] = true
-		elif stable_orbit and current_name == "Earth":
+		elif stable_orbit and float(current_orbit.get("eccentricity", 1.0)) <= 0.05 and current_name == "Earth":
 			var windows: Dictionary = FlightComputer.scan_launch_windows(current_position, current_velocity, float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), 540, 30, target_altitude)
 			if not bool(windows.get("valid", false)):
 				_invalidate_navigation_plan()
