@@ -854,6 +854,9 @@ func _update_guidance(dt: float) -> void:
 				var ascent_orbit_periapsis := float(orbit.get("periapsis", 0.0))
 				var ascent_orbit_radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
 				var already_in_stable_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and ascent_orbit_radial_speed < maxf(1.0, target_orbit_speed * 0.01)
+				if not propellant_available and not already_in_stable_orbit:
+					_fail_autopilot("OUT OF PROPELLANT BEFORE SAFE PARKING ORBIT")
+					return
 				var reached_parking_orbit := already_in_stable_orbit and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002))
 				if reached_parking_orbit and not destination_is_local:
 					thrust_key_down = false
