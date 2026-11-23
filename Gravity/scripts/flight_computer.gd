@@ -494,6 +494,10 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 			direction_count = 12 if coarse_search else 16
 	var best_score := INF
 	var best_plan: Dictionary = {}
+	var best_approach_distance := INF
+	var trajectories_reached_soi := 0
+	var safe_capture_candidates := 0
+	var delta_v_rejections := 0
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
 	var time_weight := 1.0 - fuel_weight
 	var maximum_flight_duration := 0.0
@@ -566,16 +570,20 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				if collided:
 					continue
 				var target_soi := float(initial_target.soi)
+				best_approach_distance = minf(best_approach_distance, closest_distance)
 				if closest_distance > target_soi:
 					continue
+				trajectories_reached_soi += 1
 				var target_mu := G * float(initial_target.mass)
 				var target_safe_altitude := minimum_safe_orbit_altitude(str(initial_target.get("name", "")), float(initial_target.radius))
 				var capture := arrival_capture_burn(closest_relative_position, closest_relative_velocity, target_mu, float(initial_target.radius), target_orbit_altitude, target_safe_altitude)
 				if not bool(capture.get("valid", false)):
 					continue
+				safe_capture_candidates += 1
 				var capture_delta_v := float(capture.get("total_delta_v", INF))
 				var total_delta_v := departure_delta_v + capture_delta_v
 				if total_delta_v > maximum_delta_v:
+					delta_v_rejections += 1
 					continue
 				var fuel_cost := total_delta_v / maxf(1.0, maximum_delta_v)
 				var time_cost := closest_time / maxf(1.0, maximum_flight_duration)
@@ -605,7 +613,13 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	if best_plan.is_empty():
 		return {
 			"valid": false,
-			"reason": "No sampled trajectory reached the destination sphere of influence within the available delta-v.",
+			"reason": "No feasible transfer: %d trajectories reached the destination SOI, %d produced safe capture solutions, and %d exceeded the delta-v budget. Closest approach: %.0f km (SOI %.0f km)." % [
+				trajectories_reached_soi,
+				safe_capture_candidates,
+				delta_v_rejections,
+				best_approach_distance / 1000.0,
+				float(initial_target.soi) / 1000.0
+			],
 			"search_candidates": direction_count * magnitudes.size() * durations.size()
 		}
 	return best_plan
