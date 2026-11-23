@@ -460,6 +460,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var durations: Array
 	var magnitudes: Array
 	var direction_count: int
+	var lunar_fine_direction_search := false
 	var high_accuracy_lunar_search := false
 	if target_index == -1:
 		var lunar_transfer_time := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("transfer_time", 5.0 * 86400.0))
@@ -468,13 +469,14 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 		durations = [lunar_transfer_time * 0.8, lunar_transfer_time * 0.9, lunar_transfer_time, lunar_transfer_time * 1.1, lunar_transfer_time * 1.2]
 		if safe_parking_orbit:
 			high_accuracy_lunar_search = true
+			lunar_fine_direction_search = true
 			var lunar_reference_delta_v := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("departure_delta_v", 0.0))
 			magnitudes = [0.0]
-			for offset in range(-1000, 1001, 25):
+			for offset in range(-500, 501, 50):
 				var candidate_delta_v := maxf(0.0, lunar_reference_delta_v + float(offset))
 				if candidate_delta_v <= maximum_delta_v:
 					magnitudes.append(candidate_delta_v)
-			direction_count = 1
+			direction_count = 7
 		else:
 			magnitudes = [0.0]
 			for candidate_delta_v in [250.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0, 3500.0, 4000.0, 5000.0, 7000.0, 10000.0, 15000.0, 20000.0, 30000.0, 50000.0, 75000.0, 100000.0]:
@@ -519,7 +521,11 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 			gravity_states.append(sample_states)
 			target_states.append(_simulated_target_state(target_index, sample_time, sample_states))
 		for direction_index in range(direction_count):
-			var angle := start_velocity.angle() + TAU * float(direction_index) / float(direction_count)
+			var direction_offset := TAU * float(direction_index) / float(direction_count)
+			if lunar_fine_direction_search:
+				var lunar_direction_offsets := [-1.0, -0.5, -0.25, 0.0, 0.25, 0.5, 1.0]
+				direction_offset = deg_to_rad(float(lunar_direction_offsets[direction_index]))
+			var angle := start_velocity.angle() + direction_offset
 			var burn_direction := Vector2(cos(angle), sin(angle))
 			for magnitude_value in magnitudes:
 				var departure_delta_v: float = float(magnitude_value)
