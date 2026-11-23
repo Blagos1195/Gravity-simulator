@@ -61,6 +61,9 @@ func _initialize() -> void:
 	assert(main.active_vehicle_index == 1)
 	assert(main.sim.vehicle_name == "Vehicle 2")
 	assert(is_equal_approx(main.fleet_sims[0].sim_time, main.fleet_sims[1].sim_time))
+	for i in range(12):
+		main._add_new_vehicle()
+	assert(main.fleet_sims.size() == 14)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Multi-vehicle simulation test passed.")
 	main.queue_free()
