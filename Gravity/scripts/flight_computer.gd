@@ -461,14 +461,12 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var magnitudes: Array
 	var direction_count: int
 	var lunar_fine_direction_search := false
-	var high_accuracy_lunar_search := false
 	if target_index == -1:
 		var lunar_transfer_time := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("transfer_time", 5.0 * 86400.0))
 		var starting_orbit := orbital_state(Vector2(start_position_components[0], start_position_components[1]), start_velocity, EARTH_MU)
 		var safe_parking_orbit := bool(starting_orbit.get("bound", false)) and float(starting_orbit.get("eccentricity", 1.0)) <= 0.05 and float(starting_orbit.get("periapsis", 0.0)) > EARTH_RADIUS + minimum_safe_orbit_altitude("Earth", EARTH_RADIUS)
 		durations = [lunar_transfer_time * 0.8, lunar_transfer_time * 0.9, lunar_transfer_time, lunar_transfer_time * 1.1, lunar_transfer_time * 1.2]
 		if safe_parking_orbit:
-			high_accuracy_lunar_search = true
 			lunar_fine_direction_search = true
 			var lunar_reference_delta_v := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("departure_delta_v", 0.0))
 			magnitudes = [0.0]
@@ -509,14 +507,22 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 		maximum_flight_duration = maxf(maximum_flight_duration, float(duration_value))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
-		var minimum_steps := 1440 if high_accuracy_lunar_search else 360
-		var maximum_steps := 1440 if high_accuracy_lunar_search else (1200 if coarse_search else 720)
-		var integration_steps := clampi(int(ceil(flight_duration / 21600.0)), minimum_steps, maximum_steps)
-		var step_size := flight_duration / float(integration_steps)
+		var near_earth_departure := Vector2(start_position_components[0], start_position_components[1]).length() < 1.0e8
+		var integration_step_sizes: Array[float] = []
+		var sample_times: Array[float] = [start_time]
+		var elapsed_flight_time := 0.0
+		while elapsed_flight_time < flight_duration:
+			var maximum_sample_step := 300.0 if near_earth_departure and elapsed_flight_time < 86400.0 else (1800.0 if target_index == -1 else 7200.0)
+			if coarse_search:
+				maximum_sample_step *= 2.0
+			var sample_step := minf(maximum_sample_step, flight_duration - elapsed_flight_time)
+			integration_step_sizes.append(sample_step)
+			elapsed_flight_time += sample_step
+			sample_times.append(start_time + elapsed_flight_time)
+		var integration_steps := integration_step_sizes.size()
 		var gravity_states: Array[Dictionary] = []
 		var target_states: Array[Dictionary] = []
-		for step_index in range(integration_steps + 1):
-			var sample_time := start_time + float(step_index) * step_size
+		for sample_time in sample_times:
 			var sample_states: Dictionary = PlanetarySystem.gravity_body_states(sample_time)
 			gravity_states.append(sample_states)
 			target_states.append(_simulated_target_state(target_index, sample_time, sample_states))
@@ -540,6 +546,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				var candidate_trajectory := PackedVector2Array([Vector2(position[0], position[1])])
 				var collided := false
 				for step_index in range(integration_steps):
+					var step_size := integration_step_sizes[step_index]
 					var initial_acceleration := PlanetarySystem.gravity_acceleration_from_precise_states(position, gravity_states[step_index])
 					var half_velocity := velocity + initial_acceleration * (step_size * 0.5)
 					var next_position := PackedFloat64Array([
@@ -573,7 +580,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 						closest_relative_position = Vector2(relative_x, relative_y)
 						closest_relative_velocity = velocity - Vector2(target_state.velocity)
 						closest_target_position = target_position.duplicate()
-						closest_time = float(step_index + 1) * step_size
+						closest_time = sample_times[step_index + 1] - start_time
 						closest_trajectory_index = candidate_trajectory.size() - 1
 				if collided:
 					continue
