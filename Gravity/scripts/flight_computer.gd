@@ -445,14 +445,23 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var direction_count: int
 	if target_index == -1:
 		var lunar_transfer_time := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("transfer_time", 5.0 * 86400.0))
+		var starting_orbit := orbital_state(Vector2(start_position_components[0], start_position_components[1]), start_velocity, EARTH_MU)
+		var safe_parking_orbit := bool(starting_orbit.get("bound", false)) and float(starting_orbit.get("eccentricity", 1.0)) <= 0.05 and float(starting_orbit.get("periapsis", 0.0)) > EARTH_RADIUS + minimum_safe_orbit_altitude("Earth", EARTH_RADIUS)
 		durations = [lunar_transfer_time * 0.8, lunar_transfer_time * 0.9, lunar_transfer_time, lunar_transfer_time * 1.1, lunar_transfer_time * 1.2]
-		var lunar_reference_delta_v := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("departure_delta_v", 0.0))
-		magnitudes = [0.0]
-		for offset in range(-150, 151, 10):
-			var candidate_delta_v := maxf(0.0, lunar_reference_delta_v + float(offset))
-			if candidate_delta_v <= maximum_delta_v:
-				magnitudes.append(candidate_delta_v)
-		direction_count = 1
+		if safe_parking_orbit:
+			var lunar_reference_delta_v := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("departure_delta_v", 0.0))
+			magnitudes = [0.0]
+			for offset in range(-150, 151, 10):
+				var candidate_delta_v := maxf(0.0, lunar_reference_delta_v + float(offset))
+				if candidate_delta_v <= maximum_delta_v:
+					magnitudes.append(candidate_delta_v)
+			direction_count = 1
+		else:
+			magnitudes = [0.0]
+			for candidate_delta_v in [250.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0, 3500.0, 4000.0, 5000.0, 7000.0, 10000.0, 15000.0, 20000.0, 30000.0, 50000.0, 75000.0, 100000.0]:
+				if candidate_delta_v <= maximum_delta_v:
+					magnitudes.append(candidate_delta_v)
+			direction_count = 24
 	else:
 		durations = [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
 		magnitudes = [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v]
