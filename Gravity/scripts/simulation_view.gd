@@ -1132,8 +1132,7 @@ func _update_guidance(dt: float) -> void:
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING LANDING")
 			"ARRIVAL_PENDING":
-				status_message = "ARRIVAL WINDOW MISSED  •  TARGET OUTSIDE CAPTURE REGION"
-				thrust_key_down = false
+				_fail_autopilot("ARRIVAL WINDOW MISSED  •  TARGET OUTSIDE CAPTURE REGION")
 			"COMPLETE":
 				status_message = "AUTOPILOT  •  TARGET ORBIT ACHIEVED"
 				thrust_key_down = false
