@@ -543,7 +543,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 		var integration_step_sizes: Array[float] = []
 		var sample_times: Array[float] = [start_time]
 		var elapsed_flight_time := 0.0
-		while elapsed_flight_time < flight_duration:
+		while elapsed_flight_time < flight_duration - 0.001:
 			var high_resolution_segment := target_index == -2 or (near_earth_departure and elapsed_flight_time < 86400.0) or elapsed_flight_time > flight_duration - 86400.0
 			var maximum_sample_step := minf(300.0, maxf(10.0, flight_duration / 360.0)) if high_resolution_segment else (1800.0 if target_index == -1 else 7200.0)
 			if coarse_search and not high_resolution_segment:
@@ -552,6 +552,10 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 			integration_step_sizes.append(sample_step)
 			elapsed_flight_time += sample_step
 			sample_times.append(start_time + elapsed_flight_time)
+		var final_remainder := flight_duration - elapsed_flight_time
+		if final_remainder > 0.0:
+			integration_step_sizes.append(final_remainder)
+			sample_times.append(start_time + flight_duration)
 		var integration_steps := integration_step_sizes.size()
 		var gravity_states: Array[Dictionary] = []
 		var target_states: Array[Dictionary] = []
