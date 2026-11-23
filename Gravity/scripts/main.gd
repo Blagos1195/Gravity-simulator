@@ -961,11 +961,11 @@ func _dock_vehicle(target_name: String) -> bool:
 		return false
 	if _is_vehicle_docked(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
 		return false
-	var separation := target.rocket_position.distance_to(sim.rocket_position)
-	var relative_speed := (target.velocity - sim.velocity).length()
+	var separation: float = target.rocket_position.distance_to(sim.rocket_position)
+	var relative_speed: float = (target.velocity - sim.velocity).length()
 	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED:
 		return false
-	var local_offset := (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
+	var local_offset: Vector2 = (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
 	docking_links.append({
 		"parent_name": sim.vehicle_name,
 		"child_name": target.vehicle_name,
@@ -1516,7 +1516,7 @@ func _show_docking_panel() -> void:
 	intro.text = "Rendezvous with another spacecraft, match its velocity and dock within the capture limits."
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(intro)
-	var parent_name := sim.vehicle_name
+	var parent_name: String = str(sim.vehicle_name)
 	var target_label := Label.new()
 	target_label.text = "OTHER SPACECRAFT"
 	target_label.add_theme_color_override("font_color", Color(0.45, 0.78, 1))
@@ -1584,10 +1584,10 @@ func _show_docking_panel() -> void:
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			return
-		var separation := sim.rocket_position.distance_to(target.rocket_position)
-		var relative_speed := (sim.velocity - target.velocity).length()
+		var separation: float = sim.rocket_position.distance_to(target.rocket_position)
+		var relative_speed: float = (sim.velocity - target.velocity).length()
 		var docked := _are_docked(parent_name, target_name)
-		var available_to_dock := not docked and not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
+		var available_to_dock: bool = not docked and not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
 		if docked:
 			status.text = "DOCKED  •  %s\nCombined mass is included in the parent spacecraft's flight dynamics." % target_name
 		elif available_to_dock:
