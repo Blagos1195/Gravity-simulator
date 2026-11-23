@@ -15,6 +15,16 @@ func _initialize() -> void:
 	assert(is_instance_valid(main.design_error_label))
 	assert(main.design_stats_label.text.contains("IDEAL ΔV"))
 	assert(main.design_error_label.text == "DESIGN VALID")
+	main._start_flight()
+	main._show_new_vehicle_dialog()
+	var vehicle_dialog: Window
+	for child in main.get_children():
+		if child is Window:
+			vehicle_dialog = child
+			break
+	assert(is_instance_valid(vehicle_dialog))
+	var vehicle_selector: OptionButton = vehicle_dialog.get_child(0).get_child(1)
+	assert(vehicle_selector.item_count >= RocketDesign.preset_options().size() + 1)
 	print("Rocket builder UI test passed.")
 	main.queue_free()
 	quit()
