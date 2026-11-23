@@ -38,7 +38,7 @@ func _initialize() -> void:
 
 
 func _find_spinbox(node: Node) -> SpinBox:
-	if node is SpinBox:
+	if node is SpinBox and node.tooltip_text == "Set the payload mass directly in kilograms.":
 		return node
 	for child in node.get_children():
 		var found := _find_spinbox(child)
