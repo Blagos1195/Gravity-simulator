@@ -50,6 +50,9 @@ jobs:
           run_check compile_simulation_view
           if echo "$changed_files" | grep -Eq 'rocket_design|main.gd|content_catalog'; then
             run_check rocket_design_test
+            if echo "$changed_files" | grep -Eq 'main.gd'; then
+              run_check rocket_builder_ui_test
+            fi
           fi
           if echo "$changed_files" | grep -Eq 'flight_computer|route_planner'; then
             run_check flight_computer_test
@@ -73,6 +76,7 @@ jobs:
           }
           run_check compile_simulation_view
           run_check rocket_design_test
+          run_check rocket_builder_ui_test
           run_check flight_computer_test
           run_check orbital_stability_test
           run_check simulation_lifecycle_test
