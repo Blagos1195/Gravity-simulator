@@ -446,12 +446,12 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	if target_index == -1:
 		var lunar_transfer_time := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("transfer_time", 5.0 * 86400.0))
 		durations = [lunar_transfer_time * 0.8, lunar_transfer_time * 0.9, lunar_transfer_time, lunar_transfer_time * 1.1, lunar_transfer_time * 1.2]
+		var lunar_reference_delta_v := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("departure_delta_v", 0.0))
 		magnitudes = [0.0]
-		for delta_v_step in range(8, 25):
-			var candidate_delta_v := float(delta_v_step) * 250.0
-			if candidate_delta_v < maximum_delta_v:
+		for offset in [-150.0, -100.0, -50.0, -25.0, 0.0, 25.0, 50.0, 100.0, 150.0]:
+			var candidate_delta_v := maxf(0.0, lunar_reference_delta_v + float(offset))
+			if candidate_delta_v <= maximum_delta_v:
 				magnitudes.append(candidate_delta_v)
-		magnitudes.append(maximum_delta_v)
 		direction_count = 32
 	else:
 		durations = [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
