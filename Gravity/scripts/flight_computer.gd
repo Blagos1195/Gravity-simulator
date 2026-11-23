@@ -564,8 +564,27 @@ static func _propagate_wait_state(start_position_components: PackedFloat64Array,
 	var position := start_position_components.duplicate()
 	var velocity := start_velocity
 	var elapsed := 0.0
+	var initial_states: Dictionary = PlanetarySystem.gravity_body_states(start_time)
+	var maximum_step := 1800.0
+	var nearest_distance := INF
+	for body_variant in initial_states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var dx: float = position[0] - body_components[0]
+		var dy: float = position[1] - body_components[1]
+		var distance := sqrt(dx * dx + dy * dy)
+		if distance > float(body.get("soi", 0.0)) or distance >= nearest_distance:
+			continue
+		nearest_distance = distance
+		var relative_position := Vector2(dx, dy)
+		var relative_velocity := velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var orbit := orbital_state(relative_position, relative_velocity, G * float(body.get("mass", 0.0)))
+		if bool(orbit.get("bound", false)) and float(orbit.get("semi_major_axis", 0.0)) > 0.0:
+			var period := TAU * sqrt(pow(float(orbit.semi_major_axis), 3.0) / (G * float(body.get("mass", 0.0))))
+			maximum_step = clampf(period / 48.0, 5.0, 1800.0)
 	while elapsed < wait_seconds:
-		var step_size := minf(1800.0, wait_seconds - elapsed)
+		var step_size := minf(maximum_step, wait_seconds - elapsed)
 		var initial_states: Dictionary = PlanetarySystem.gravity_body_states(start_time + elapsed)
 		var final_states: Dictionary = PlanetarySystem.gravity_body_states(start_time + elapsed + step_size)
 		var initial_acceleration: Vector2 = PlanetarySystem.gravity_acceleration_from_precise_states(position, initial_states)
@@ -621,13 +640,19 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 	var dates_checked := 0
 	var coarse_windows: Array[Dictionary] = []
 	var samples := maxi(2, int(ceil(float(scan_days) / float(interval_days))) + 1)
+	var propagated_position := initial_position.duplicate()
+	var propagated_velocity := start_velocity
+	var propagated_days := 0.0
 	for sample_index in range(samples):
-		var wait_days := mini(scan_days, sample_index * interval_days)
-		var wait_seconds := float(wait_days) * 86400.0
-		var future_state := _propagate_wait_state(initial_position, start_velocity, start_time, wait_seconds)
+		var wait_days := float(mini(scan_days, sample_index * interval_days))
+		var wait_seconds := wait_days * 86400.0
+		var future_state := _propagate_wait_state(propagated_position, propagated_velocity, start_time + propagated_days * 86400.0, (wait_days - propagated_days) * 86400.0)
 		dates_checked += 1
 		if not bool(future_state.get("valid", false)):
 			continue
+		propagated_position = future_state.position_components
+		propagated_velocity = future_state.velocity
+		propagated_days = wait_days
 		var future_components: PackedFloat64Array = future_state.position_components
 		var future_position := Vector2(future_components[0], future_components[1])
 		var plan := simulated_transfer_search_precise(future_components, future_state.velocity, start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
@@ -652,8 +677,12 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		var wait_days := clampf(coarse_best_day + float(refinement_index) * refinement_spacing, 0.0, float(scan_days))
 		if absf(wait_days - coarse_best_day) < 0.01:
 			continue
-		var wait_seconds := wait_days * 86400.0
-		var future_state := _propagate_wait_state(initial_position, start_velocity, start_time, wait_seconds)
+		if wait_days < coarse_best_day:
+			continue
+		var wait_seconds := (wait_days - coarse_best_day) * 86400.0
+		var best_position: PackedFloat64Array = best_window.planned_position_precise
+		var best_velocity: Vector2 = best_window.planned_velocity
+		var future_state := _propagate_wait_state(best_position, best_velocity, float(best_window.departure_time_seconds), wait_seconds)
 		dates_checked += 1
 		if not bool(future_state.get("valid", false)):
 			continue
@@ -674,18 +703,18 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 			best_window = plan
 	var final_wait_days := float(best_window.departure_wait_days)
 	var final_wait_seconds := final_wait_days * 86400.0
-	var final_state := _propagate_wait_state(initial_position, start_velocity, start_time, final_wait_seconds)
-	if bool(final_state.get("valid", false)):
-		var final_components: PackedFloat64Array = final_state.position_components
-		var final_position := Vector2(final_components[0], final_components[1])
-		var final_plan := simulated_transfer_search_precise(final_components, final_state.velocity, start_time + final_wait_seconds, target_index, maximum_delta_v, speed_priority, false, target_orbit_altitude)
+	var final_components: PackedFloat64Array = best_window.planned_position_precise
+	var final_velocity: Vector2 = best_window.planned_velocity
+	var final_position := Vector2(final_components[0], final_components[1])
+	var final_plan := simulated_transfer_search_precise(final_components, final_velocity, start_time + final_wait_seconds, target_index, maximum_delta_v, speed_priority, false, target_orbit_altitude)
+	if bool(final_plan.get("valid", false)):
 		if bool(final_plan.get("valid", false)):
 			final_plan["departure_wait_days"] = final_wait_days
 			final_plan["departure_time_seconds"] = start_time + final_wait_seconds
 			final_plan["planned_at_time"] = start_time + final_wait_seconds
 			final_plan["planned_position"] = final_position
 			final_plan["planned_position_precise"] = final_components
-			final_plan["planned_velocity"] = final_state.velocity
+			final_plan["planned_velocity"] = final_velocity
 			best_window = final_plan
 	return {"valid": true, "best": best_window, "windows": coarse_windows, "dates_checked": dates_checked, "refined": true}
 
