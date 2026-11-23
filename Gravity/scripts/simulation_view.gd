@@ -988,7 +988,7 @@ func _update_guidance(dt: float) -> void:
 					wait_for_lunar_window = remaining_departure_window > 3600.0
 				if wait_for_lunar_window:
 					autopilot_phase = "WAIT_WINDOW"
-					status_message = "AUTOPILOT  •  WAITING FOR LUNAR DEPARTURE WINDOW"
+					status_message = "AUTOPILOT  •  WAITING FOR TRANSFER DEPARTURE WINDOW"
 				else:
 					var transfer_plan: Dictionary = autopilot_precomputed_transfer_plan.duplicate(true)
 					autopilot_precomputed_transfer_plan.clear()
