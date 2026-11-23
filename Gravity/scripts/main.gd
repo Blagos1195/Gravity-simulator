@@ -7,6 +7,8 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
 const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
+const DOCKING_CAPTURE_DISTANCE := 100.0
+const DOCKING_CAPTURE_SPEED := 2.5
 
 var mode := "menu"
 var realism := "Realistic"
@@ -20,6 +22,7 @@ var fleet_sims: Array = []
 var active_vehicle_index := 0
 var fleet_time_backlog := 0.0
 var vehicle_selector: OptionButton
+var docking_links: Array[Dictionary] = []
 var autosave_elapsed := 0.0
 var autosave_enabled := true
 var rebinding_action := ""
@@ -168,14 +171,18 @@ func _advance_fleet(delta: float) -> void:
 		fleet_time_backlog += effective_warp * delta
 		var iterations := 0
 		var physics_budget_start_usec: int = Time.get_ticks_usec()
+		_update_docked_masses()
 		while fleet_time_backlog > 0.000001 and iterations < SimulationView.MAX_PHYSICS_STEPS_PER_FRAME and Time.get_ticks_usec() - physics_budget_start_usec < SimulationView.MAX_PHYSICS_BUDGET_USEC:
 			var step_delta := fleet_time_backlog
 			for vehicle in fleet_sims:
-				step_delta = minf(step_delta, vehicle._adaptive_step_size())
+				if not _is_docked_child(vehicle.vehicle_name):
+					step_delta = minf(step_delta, vehicle._adaptive_step_size())
 			if step_delta <= 0.000001:
 				break
 			for vehicle in fleet_sims:
-				vehicle._physics_step(step_delta)
+				if not _is_docked_child(vehicle.vehicle_name):
+					vehicle._physics_step(step_delta)
+			_sync_docked_vehicles()
 			fleet_time_backlog = maxf(0.0, fleet_time_backlog - step_delta)
 			iterations += 1
 	for vehicle in fleet_sims:
@@ -199,6 +206,7 @@ func _build_menu() -> void:
 	sim = null
 	vehicle_selector = null
 	fleet_time_backlog = 0.0
+	docking_links.clear()
 	rebinding_action = ""
 	rebinding_button = null
 	for child in get_children():
@@ -826,6 +834,7 @@ func _start_flight() -> void:
 	fleet_sims.clear()
 	active_vehicle_index = 0
 	fleet_time_backlog = 0.0
+	docking_links.clear()
 	vehicle_selector = null
 	mode = "flight"
 	autosave_elapsed = 0.0
@@ -855,6 +864,14 @@ func _add_new_vehicle() -> void:
 func _switch_vehicle(index: int) -> void:
 	if index < 0 or index >= fleet_sims.size():
 		return
+	var requested_name: String = str(fleet_sims[index].vehicle_name)
+	for link in docking_links:
+		if str(link.get("child_name", "")) == requested_name:
+			for parent_index in range(fleet_sims.size()):
+				if fleet_sims[parent_index].vehicle_name == str(link.get("parent_name", "")):
+					index = parent_index
+					break
+			break
 	if is_instance_valid(sim):
 		if not sim.autopilot_enabled:
 			sim.thrust_key_down = false
@@ -862,7 +879,7 @@ func _switch_vehicle(index: int) -> void:
 		sim.visible = false
 	active_vehicle_index = index
 	sim = fleet_sims[index]
-	sim.input_enabled = true
+	sim.input_enabled = not _is_docked_child(sim.vehicle_name)
 	sim.visible = true
 	sim.time_warp = fleet_sims[0].time_warp
 	rocket_design = {
@@ -872,6 +889,11 @@ func _switch_vehicle(index: int) -> void:
 	}
 	_refresh_vehicle_selector()
 	if status_label:
+		if _is_docked_child(sim.vehicle_name):
+			for link in docking_links:
+				if str(link.get("child_name", "")) == sim.vehicle_name:
+					status_label.text = "%s  •  DOCKED TO %s" % [sim.vehicle_name.to_upper(), str(link.get("parent_name", "")).to_upper()]
+					return
 		status_label.text = "%s  •  %s" % [sim.vehicle_name.to_upper(), sim.status_message]
 
 func _refresh_vehicle_selector() -> void:
@@ -882,6 +904,129 @@ func _refresh_vehicle_selector() -> void:
 		var vehicle: SimulationView = fleet_sims[index]
 		vehicle_selector.add_item("%02d  •  %s" % [index + 1, vehicle.vehicle_name])
 	vehicle_selector.select(active_vehicle_index)
+
+func _find_vehicle_by_name(vehicle_name: String) -> SimulationView:
+	for vehicle in fleet_sims:
+		if vehicle.vehicle_name == vehicle_name:
+			return vehicle
+	return null
+
+func _is_docked_child(vehicle_name: String) -> bool:
+	for link in docking_links:
+		if str(link.get("child_name", "")) == vehicle_name:
+			return true
+	return false
+
+func _is_vehicle_docked(vehicle_name: String) -> bool:
+	for link in docking_links:
+		if str(link.get("parent_name", "")) == vehicle_name or str(link.get("child_name", "")) == vehicle_name:
+			return true
+	return false
+
+func _are_docked(first_name: String, second_name: String) -> bool:
+	for link in docking_links:
+		var parent_name := str(link.get("parent_name", ""))
+		var child_name := str(link.get("child_name", ""))
+		if (parent_name == first_name and child_name == second_name) or (parent_name == second_name and child_name == first_name):
+			return true
+	return false
+
+func _update_docked_masses() -> void:
+	for vehicle in fleet_sims:
+		vehicle.docked_mass = 0.0
+	for link in docking_links:
+		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
+		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		if parent != null and child != null:
+			parent.docked_mass += child._current_vehicle_mass()
+
+func _sync_docked_vehicles() -> void:
+	for vehicle in fleet_sims:
+		vehicle.docked_visuals.clear()
+	for link in docking_links:
+		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
+		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		if parent == null or child == null:
+			continue
+		var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
+		var world_offset := local_offset.rotated(parent.rotation_angle)
+		parent.docked_visuals.append({
+			"name": child.vehicle_name,
+			"direction": world_offset.normalized(),
+			"rotation": parent.rotation_angle
+		})
+		child.rocket_position = parent.rocket_position + world_offset
+		child.velocity = parent.velocity
+		child.rotation_angle = parent.rotation_angle
+		child.sim_time = parent.sim_time
+		child.landed = parent.landed
+		child.crashed = parent.crashed
+		child.landed_body_name = parent.landed_body_name
+		child.landed_surface_normal = parent.landed_surface_normal
+		child.autopilot_enabled = false
+		child.guidance_enabled = false
+		child.thrust_key_down = false
+		child.docked_mass = 0.0
+
+func _dock_vehicle(target_name: String) -> bool:
+	var target := _find_vehicle_by_name(target_name)
+	if target == null or sim == null or target == sim:
+		return false
+	if sim.landed or sim.crashed or target.landed or target.crashed:
+		return false
+	if _is_vehicle_docked(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
+		return false
+	var separation: float = target.rocket_position.distance_to(sim.rocket_position)
+	var relative_speed: float = (target.velocity - sim.velocity).length()
+	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED:
+		return false
+	var local_offset: Vector2 = (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
+	docking_links.append({
+		"parent_name": sim.vehicle_name,
+		"child_name": target.vehicle_name,
+		"offset_x": local_offset.x,
+		"offset_y": local_offset.y
+	})
+	target.autopilot_enabled = false
+	target.guidance_enabled = false
+	target.thrust_key_down = false
+	target.input_enabled = false
+	_update_docked_masses()
+	_sync_docked_vehicles()
+	return true
+
+func _undock_vehicle(target_name: String) -> bool:
+	for index in range(docking_links.size()):
+		var link: Dictionary = docking_links[index]
+		if not ((str(link.parent_name) == sim.vehicle_name and str(link.child_name) == target_name) or (str(link.parent_name) == target_name and str(link.child_name) == sim.vehicle_name)):
+			continue
+		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		docking_links.remove_at(index)
+		if child != null:
+			child.input_enabled = child == sim
+			child.docked_mass = 0.0
+		_update_docked_masses()
+		_sync_docked_vehicles()
+		return true
+	return false
+
+func _transfer_fuel(from_name: String, to_name: String) -> float:
+	if not _are_docked(from_name, to_name):
+		return 0.0
+	var donor := _find_vehicle_by_name(from_name)
+	var recipient := _find_vehicle_by_name(to_name)
+	if donor == null or recipient == null or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel:
+		return 0.0
+	var capacity := float(recipient._active_stage_data().get("fuel_capacity", 0.0))
+	var available_space := maxf(0.0, capacity - recipient.fuel)
+	var amount := minf(donor.fuel, available_space)
+	if amount <= 0.0:
+		return 0.0
+	donor.fuel -= amount
+	recipient.fuel += amount
+	_update_docked_masses()
+	_sync_docked_vehicles()
+	return amount
 
 func _build_flight_hud() -> void:
 	hud_root = Control.new()
@@ -930,6 +1075,7 @@ func _build_flight_hud() -> void:
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
 	_add_button(right, "LAUNCH NEW VEHICLE", _add_new_vehicle)
+	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
 	_add_button(right, "VELOCITY VECTOR  [V]", func(): sim.show_vectors = not sim.show_vectors)
@@ -1369,6 +1515,165 @@ func _show_flight_computer() -> void:
 	planner.position = Vector2i(maxi(20, screen_size.x - planner.size.x - 24), 40)
 	planner.popup()
 
+func _show_docking_panel() -> void:
+	var window := Window.new()
+	window.title = "DOCKING AND FUEL TRANSFER"
+	window.size = Vector2i(500, 520)
+	window.min_size = Vector2i(420, 420)
+	window.transient = true
+	window.exclusive = true
+	add_child(window)
+	window.close_requested.connect(window.queue_free)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 12)
+	window.add_child(layout)
+	var intro := Label.new()
+	intro.text = "Rendezvous with another spacecraft, match its velocity and dock within the capture limits."
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(intro)
+	var parent_name: String = str(sim.vehicle_name)
+	var target_label := Label.new()
+	target_label.text = "OTHER SPACECRAFT"
+	target_label.add_theme_color_override("font_color", Color(0.45, 0.78, 1))
+	layout.add_child(target_label)
+	var target_selector := OptionButton.new()
+	target_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for vehicle in fleet_sims:
+		if vehicle.vehicle_name != parent_name:
+			target_selector.add_item(vehicle.vehicle_name)
+			target_selector.set_item_metadata(target_selector.item_count - 1, vehicle.vehicle_name)
+	layout.add_child(target_selector)
+	var status := Label.new()
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.custom_minimum_size.y = 72
+	layout.add_child(status)
+	var dock_button := Button.new()
+	dock_button.text = "DOCK"
+	dock_button.custom_minimum_size.y = 44
+	layout.add_child(dock_button)
+	var undock_button := Button.new()
+	undock_button.text = "UNDOCK"
+	undock_button.custom_minimum_size.y = 44
+	layout.add_child(undock_button)
+	var fuel_heading := Label.new()
+	fuel_heading.text = "FUEL TRANSFER"
+	fuel_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1))
+	layout.add_child(fuel_heading)
+	var fuel_direction := OptionButton.new()
+	fuel_direction.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.add_child(fuel_direction)
+	var transfer_button := Button.new()
+	transfer_button.text = "TRANSFER AVAILABLE FUEL"
+	transfer_button.custom_minimum_size.y = 44
+	layout.add_child(transfer_button)
+	var fuel_status := Label.new()
+	fuel_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(fuel_status)
+	var refresh_fuel_direction := func(target_name: String) -> void:
+		fuel_direction.clear()
+		fuel_direction.add_item("%s  →  %s" % [parent_name, target_name])
+		fuel_direction.set_item_metadata(0, {"from": parent_name, "to": target_name})
+		fuel_direction.add_item("%s  →  %s" % [target_name, parent_name])
+		fuel_direction.set_item_metadata(1, {"from": target_name, "to": parent_name})
+		fuel_direction.select(0)
+	var refresh_panel := func() -> void:
+		if sim.vehicle_name != parent_name:
+			status.text = "The selected spacecraft changed. Close this panel and reopen it for the new vehicle."
+			dock_button.disabled = true
+			undock_button.disabled = true
+			transfer_button.disabled = true
+			fuel_direction.disabled = true
+			return
+		if target_selector.item_count == 0:
+			status.text = "Launch another vehicle before attempting to dock."
+			dock_button.disabled = true
+			undock_button.disabled = true
+			transfer_button.disabled = true
+			fuel_direction.disabled = true
+			return
+		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
+		var target := _find_vehicle_by_name(target_name)
+		if target == null:
+			status.text = "The selected spacecraft is no longer available."
+			dock_button.disabled = true
+			undock_button.disabled = true
+			transfer_button.disabled = true
+			return
+		var separation: float = sim.rocket_position.distance_to(target.rocket_position)
+		var relative_speed: float = (sim.velocity - target.velocity).length()
+		var docked := _are_docked(parent_name, target_name)
+		var available_to_dock: bool = not docked and not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
+		if docked:
+			status.text = "DOCKED  •  %s\nCombined mass is included in the parent spacecraft's flight dynamics." % target_name
+		elif available_to_dock:
+			status.text = "DOCKING CONDITIONS MET\nRange: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
+		else:
+			status.text = "Range: %.1f m / %.0f m\nRelative speed: %.2f / %.2f m/s\nBoth spacecraft must be free-flying and undocked." % [separation, DOCKING_CAPTURE_DISTANCE, relative_speed, DOCKING_CAPTURE_SPEED]
+		dock_button.disabled = not available_to_dock
+		undock_button.disabled = not docked
+		fuel_direction.disabled = not docked
+		transfer_button.disabled = not docked
+		if docked and fuel_direction.item_count > 0:
+			var direction: Dictionary = fuel_direction.get_item_metadata(fuel_direction.selected)
+			var donor := _find_vehicle_by_name(str(direction.get("from", "")))
+			var recipient := _find_vehicle_by_name(str(direction.get("to", "")))
+			if donor == null or recipient == null:
+				transfer_button.disabled = true
+				fuel_status.text = "Fuel transfer unavailable."
+			else:
+				var room := maxf(0.0, float(recipient._active_stage_data().get("fuel_capacity", 0.0)) - recipient.fuel)
+				var amount := minf(donor.fuel, room)
+				transfer_button.disabled = amount <= 0.0 or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel
+				fuel_status.text = "Available: %.0f kg  •  Receiver tank space: %.0f kg" % [donor.fuel, room]
+		else:
+			fuel_status.text = "Dock spacecraft to enable transfer. Transfers use the active tank on each vehicle."
+	var target_changed := func(_index: int) -> void:
+		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
+		refresh_fuel_direction.call(target_name)
+		refresh_panel.call()
+	target_selector.item_selected.connect(target_changed)
+	fuel_direction.item_selected.connect(func(_index: int): refresh_panel.call())
+	dock_button.pressed.connect(func():
+		if sim.vehicle_name != parent_name:
+			refresh_panel.call()
+			return
+		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
+		if _dock_vehicle(target_name):
+			fuel_status.text = "Docking complete."
+		refresh_panel.call()
+	)
+	undock_button.pressed.connect(func():
+		if sim.vehicle_name != parent_name:
+			refresh_panel.call()
+			return
+		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
+		if _undock_vehicle(target_name):
+			fuel_status.text = "Spacecraft undocked."
+		refresh_panel.call()
+	)
+	transfer_button.pressed.connect(func():
+		if sim.vehicle_name != parent_name:
+			refresh_panel.call()
+			return
+		var direction: Dictionary = fuel_direction.get_item_metadata(fuel_direction.selected)
+		var amount := _transfer_fuel(str(direction.get("from", "")), str(direction.get("to", "")))
+		fuel_status.text = "Transferred %.0f kg of propellant." % amount if amount > 0.0 else "No fuel could be transferred."
+		refresh_panel.call()
+	)
+	if target_selector.item_count > 0:
+		target_selector.select(0)
+		refresh_fuel_direction.call(str(target_selector.get_item_metadata(0)))
+	else:
+		fuel_direction.disabled = true
+	refresh_panel.call()
+	var refresh_timer := Timer.new()
+	refresh_timer.wait_time = 0.25
+	refresh_timer.timeout.connect(refresh_panel)
+	window.add_child(refresh_timer)
+	refresh_timer.start()
+	window.popup_centered()
+
 func _pause_simulation() -> void:
 	if sim:
 		var pause_state: bool = not bool(sim.paused)
@@ -1412,6 +1717,7 @@ func _save_game(automatic: bool) -> void:
 		})
 	data["vehicles"] = saved_vehicles
 	data["active_vehicle_index"] = active_vehicle_index
+	data["docking_links"] = docking_links.duplicate(true)
 	data["realism"] = realism
 	data["world_scale"] = world_scale
 	data["career_enabled"] = career_enabled
@@ -1529,6 +1835,38 @@ func _load_game_from_path(path: String) -> void:
 		fleet_sims = [sim]
 		active_vehicle_index = 0
 		_switch_vehicle(0)
+	docking_links.clear()
+	var saved_docking_links: Variant = parsed.get("docking_links", [])
+	if saved_docking_links is Array:
+		var linked_names: Dictionary = {}
+		for saved_link in saved_docking_links:
+			if not saved_link is Dictionary:
+				continue
+			var parent_name := str(saved_link.get("parent_name", ""))
+			var child_name := str(saved_link.get("child_name", ""))
+			var offset_x: Variant = saved_link.get("offset_x", null)
+			var offset_y: Variant = saved_link.get("offset_y", null)
+			if parent_name.is_empty() or child_name.is_empty() or parent_name == child_name:
+				continue
+			if _find_vehicle_by_name(parent_name) == null or _find_vehicle_by_name(child_name) == null:
+				continue
+			if linked_names.has(parent_name) or linked_names.has(child_name):
+				continue
+			if not (offset_x is float or offset_x is int) or not (offset_y is float or offset_y is int):
+				continue
+			if not is_finite(float(offset_x)) or not is_finite(float(offset_y)):
+				continue
+			docking_links.append({
+				"parent_name": parent_name,
+				"child_name": child_name,
+				"offset_x": float(offset_x),
+				"offset_y": float(offset_y)
+			})
+			linked_names[parent_name] = true
+			linked_names[child_name] = true
+	_update_docked_masses()
+	_sync_docked_vehicles()
+	_switch_vehicle(active_vehicle_index)
 	infinite_weightless_fuel = sim.infinite_weightless_fuel
 	for vehicle in fleet_sims:
 		vehicle.realism = realism

@@ -16,6 +16,8 @@ var rocket_stages: Array = []
 var payload_mass := 500.0
 var vehicle_name := "Vehicle 1"
 var input_enabled := true
+var docked_mass := 0.0
+var docked_visuals: Array[Dictionary] = []
 
 var realism := "Realistic"
 var world_scale := "Compressed"
@@ -130,6 +132,7 @@ func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
 	var active := _active_stage_data()
 	var mass := float(active.get("dry_mass", 0.0)) + _remaining_stack_mass()
 	mass += fuel if fuel_amount < 0.0 else fuel_amount
+	mass += docked_mass
 	return mass
 
 func _ready() -> void:
@@ -1353,10 +1356,12 @@ func _draw() -> void:
 
 	if show_solar_system:
 		_draw_solar_system(view_center)
+		_draw_docked_visuals(view_center, clampf(camera_zoom * world_scale_factor / 0.000045, 0.12, 5.0))
 		_draw_hud()
 		return
 	if camera_zoom <= 0.0000000002:
 		_draw_full_system_zoom(view_center)
+		_draw_docked_visuals(view_center, clampf(camera_zoom * world_scale_factor / 0.000045, 0.12, 5.0))
 		_draw_offscreen_body_indicators(view_center, altitude_visual_scale)
 		_draw_hud()
 		return
@@ -1431,6 +1436,7 @@ func _draw() -> void:
 		draw_line(rocket_screen + Vector2(-18.0, 13.0) * object_scale, rocket_screen + Vector2(-18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
 		draw_line(rocket_screen + Vector2(18.0, 13.0) * object_scale, rocket_screen + Vector2(18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
 	_draw_rocket(rocket_screen + Vector2.UP.rotated(rotation_angle) * 14.0 * object_scale, object_scale)
+	_draw_docked_visuals(rocket_screen, object_scale)
 	if show_vectors:
 		var velocity_end := rocket_screen + velocity.normalized() * 65.0
 		draw_line(rocket_screen, velocity_end, Color(0.25, 0.9, 0.55), 2.0)
@@ -1438,6 +1444,19 @@ func _draw() -> void:
 
 	_draw_hud()
 
+
+func _draw_docked_visuals(rocket_screen: Vector2, object_scale: float) -> void:
+	for attached in docked_visuals:
+		var direction: Vector2 = attached.get("direction", Vector2.RIGHT)
+		if direction.length_squared() < 0.0001:
+			direction = Vector2.RIGHT
+		direction = direction.normalized()
+		var child_screen := rocket_screen + direction * 38.0 * object_scale
+		draw_line(rocket_screen, child_screen, Color(0.55, 0.82, 1.0, 0.9), 2.0 * object_scale)
+		draw_circle(child_screen, 3.5 * object_scale, Color(0.55, 0.82, 1.0))
+		var child_rotation := float(attached.get("rotation", rotation_angle))
+		_draw_rocket(child_screen + Vector2.UP.rotated(child_rotation) * 10.0 * object_scale, object_scale * 0.72)
+		draw_string(ThemeDB.fallback_font, child_screen + Vector2(10.0, 4.0) * object_scale, str(attached.get("name", "DOCKED")), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.68, 0.84, 1.0))
 
 func _draw_full_system_zoom(view_center: Vector2) -> void:
 	var states: Dictionary = _ephemeris_states_at(sim_time)
