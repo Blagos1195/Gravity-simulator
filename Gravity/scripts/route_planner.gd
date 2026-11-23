@@ -564,31 +564,56 @@ func _calculate_destination_plan() -> void:
 	var stable_orbit := inside_current_soi and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + current_minimum and float(current_orbit.get("apoapsis", INF)) < float(current.get("radius", 0.0)) + current_maximum
 	var landed_start := bool(simulation.get("landed"))
 	var deep_space_start := not inside_current_soi
+	var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
+	var recovery_plan: Dictionary = {}
+	var recovery_is_feasible := false
+	if not landed_start and inside_current_soi and not stable_orbit:
+		var recovery_altitude := target_altitude if current_name == target_name else clampf(200000.0, current_minimum, maxf(current_minimum, current_maximum))
+		recovery_plan = FlightComputer.parking_orbit_recovery_plan(current_position, current_velocity, current_mu, float(current.get("radius", 0.0)), float(current.get("soi", 0.0)), current_name, recovery_altitude)
+		recovery_is_feasible = bool(recovery_plan.get("valid", false)) and float(recovery_plan.get("delta_v", INF)) <= available
 	if current_name == target_name and inside_current_soi:
-		if not stable_orbit and landed_start:
+		if landed_start:
 			navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "local": true, "needs_parking_orbit": true}
-		elif not stable_orbit:
-			_invalidate_navigation_plan()
-			navigation_report.text = "ESTABLISH A SAFE ORBIT AROUND %s BEFORE CALCULATING AN ORBIT CHANGE." % target_name.to_upper()
-			return
-		else:
+		elif stable_orbit:
 			var local_plan := FlightComputer.target_radius_burn(current_position, current_velocity, target_radius, current_mu)
-			var local_available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
-			if not bool(local_plan.get("valid", false)) or float(local_plan.get("delta_v", INF)) > local_available:
+			if not bool(local_plan.get("valid", false)) or float(local_plan.get("delta_v", INF)) > available:
 				_invalidate_navigation_plan()
 				navigation_report.text = "NO FEASIBLE LOCAL ORBIT CHANGE. Check the target orbit and remaining ΔV budget."
 				return
 			navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "delta_v": float(local_plan.get("delta_v", 0.0)), "local": true}
+		elif recovery_is_feasible:
+			navigation_plan = {
+				"valid": true,
+				"target_id": target_id,
+				"target_name": target_name,
+				"target_altitude": target_altitude,
+				"local": true,
+				"needs_parking_orbit": true,
+				"recovery_delta_v": float(recovery_plan.delta_v)
+			}
+		else:
+			_invalidate_navigation_plan()
+			navigation_report.text = "NO SAFE ORBIT RECOVERY FOUND. " + str(recovery_plan.get("reason", "The current trajectory cannot be captured into the requested orbit within the remaining ΔV."))
+			return
 	else:
 		if landed_start:
 			navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "local": false, "needs_parking_orbit": true}
+		elif recovery_is_feasible:
+			navigation_plan = {
+				"valid": true,
+				"target_id": target_id,
+				"target_name": target_name,
+				"target_altitude": target_altitude,
+				"local": false,
+				"needs_parking_orbit": true,
+				"recovery_delta_v": float(recovery_plan.delta_v)
+			}
 		else:
-			var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
 			var transfer: Dictionary = FlightComputer.simulated_transfer_search_precise(simulation.get("rocket_position_precise"), simulation.get("velocity"), float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
 			if not bool(transfer.get("valid", false)):
 				if not deep_space_start:
 					_invalidate_navigation_plan()
-					navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
+					navigation_report.text = "NO FEASIBLE TRANSFER FOUND\\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
 					return
 				navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "local": false, "needs_window_search": true}
 			else:
