@@ -871,7 +871,7 @@ func _update_guidance(dt: float) -> void:
 				elif already_in_stable_orbit:
 					thrust_key_down = false
 					autopilot_phase = "CIRCULARISE"
-				elif bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002)):
+				elif safe_parking_orbit and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002)):
 					thrust_key_down = false
 					autopilot_phase = "COAST"
 				else:
