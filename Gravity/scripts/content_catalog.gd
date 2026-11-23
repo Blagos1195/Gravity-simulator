@@ -46,6 +46,10 @@ static func _merge_overlay(base: Dictionary, overlay: Dictionary) -> Dictionary:
 				merged[target_key] = _merge_array_items(existing, additions)
 			elif existing is Dictionary and additions is Dictionary:
 				merged[target_key] = _merge_overlay(existing, additions)
+			elif existing == null and additions is Array:
+				merged[target_key] = _merge_array_items([], additions)
+			elif existing == null and additions is Dictionary:
+				merged[target_key] = _merge_overlay({}, additions)
 			else:
 				push_error("Ignoring unsupported mod extension field: %s" % key)
 		elif merged.get(key) is Dictionary and overlay[raw_key] is Dictionary:
@@ -71,7 +75,7 @@ static func _merge_array_items(base: Array, additions: Array) -> Array:
 		if match_index >= 0:
 				merged[match_index] = _merge_overlay(merged[match_index], addition)
 		else:
-			merged.append(addition.duplicate(true) if addition is Dictionary or addition is Array else addition)
+			merged.append(_merge_overlay({}, addition) if addition is Dictionary else addition.duplicate(true) if addition is Array else addition)
 	return merged
 
 static func _read_catalog(path: String) -> Dictionary:
