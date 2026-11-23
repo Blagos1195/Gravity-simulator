@@ -299,7 +299,10 @@ func _initialize() -> void:
 	manoeuvre_sim.autopilot_burn_remaining = 10.0
 	manoeuvre_sim._update_guidance(0.01)
 	assert(manoeuvre_sim.thrust_key_down)
-	manoeuvre_sim._physics_step(1.0)
+	for iteration in range(100):
+		if manoeuvre_sim.autopilot_phase == "COMPLETE":
+			break
+		manoeuvre_sim._physics_step(manoeuvre_sim._adaptive_step_size())
 	assert(manoeuvre_sim.autopilot_phase == "COMPLETE")
 	assert(manoeuvre_sim.autopilot_complete)
 	var route_sim: Variant = SimulationView.new()
@@ -321,13 +324,19 @@ func _initialize() -> void:
 	route_sim.sim_time = 10.0
 	route_sim._update_guidance(0.01)
 	assert(route_sim.autopilot_phase == "ROUTE_BURN")
-	route_sim._physics_step(2.0)
+	for iteration in range(100):
+		if route_sim.autopilot_phase != "ROUTE_BURN":
+			break
+		route_sim._physics_step(route_sim._adaptive_step_size())
 	assert(route_sim.autopilot_phase == "ROUTE_COAST")
 	assert(route_sim.autopilot_route_node_index == 1)
 	route_sim.sim_time = 20.0
 	route_sim._update_guidance(0.01)
 	assert(route_sim.autopilot_phase == "ROUTE_BURN")
-	route_sim._physics_step(2.0)
+	for iteration in range(100):
+		if route_sim.autopilot_phase != "ROUTE_BURN":
+			break
+		route_sim._physics_step(route_sim._adaptive_step_size())
 	assert(route_sim.autopilot_phase == "COMPLETE")
 	assert(route_sim.autopilot_complete)
 	route_sim.free()
