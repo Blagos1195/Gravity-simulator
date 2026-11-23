@@ -2,6 +2,8 @@ name: Godot checks
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "Gravity/**"
       - ".github/workflows/godot-tests.yml"
@@ -17,6 +19,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.7.0
@@ -24,19 +28,53 @@ jobs:
           include-templates: false
       - name: Import and parse project
         run: |
+          output="$(godot --headless --path Gravity --editor --quit 2>&1)" || { printf '%s\\n' "$output"; exit 1; }
+          printf '%s\\n' "$output"
+          if printf '%s\\n' "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
+            exit 1
+          fi
+      - name: Run focused pull request checks
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch origin "$BASE_REF"
+          changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
           run_check() {
-            local output
-            output="$(godot "$@" 2>&1)" || { printf '%s\n' "$output"; return 1; }
-            printf '%s\n' "$output"
-            if printf '%s\n' "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
-              return 1
+            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { printf '%s\\n' "$output"; exit 1; }
+            printf '%s\\n' "$output"
+            if printf '%s\\n' "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
+              exit 1
             fi
           }
-          run_check --headless --path Gravity --editor --quit
-          run_check --headless --path Gravity --script res://tests/compile_simulation_view.gd --quit-after 1
-          run_check --headless --path Gravity --script res://tests/rocket_design_test.gd --quit-after 1
-          run_check --headless --path Gravity --script res://tests/flight_computer_test.gd --quit-after 1
-          run_check --headless --path Gravity --script res://tests/orbital_stability_test.gd --quit-after 1
-          run_check --headless --path Gravity --script res://tests/simulation_lifecycle_test.gd --quit-after 1
-          run_check --headless --path Gravity --script res://tests/leo_autopilot_mission_test.gd --quit-after 1
-          run_check --headless --path Gravity --script res://tests/body_agnostic_orbit_test.gd --quit-after 1
+          run_check compile_simulation_view
+          if printf '%s\\n' "$changed_files" | grep -Eq 'rocket_design|main.gd|content_catalog'; then
+            run_check rocket_design_test
+          fi
+          if printf '%s\\n' "$changed_files" | grep -Eq 'flight_computer|route_planner'; then
+            run_check flight_computer_test
+            run_check leo_autopilot_mission_test
+            run_check body_agnostic_orbit_test
+          fi
+          if printf '%s\\n' "$changed_files" | grep -Eq 'simulation_view|planetary_system'; then
+            run_check simulation_lifecycle_test
+            run_check orbital_stability_test
+            run_check body_agnostic_orbit_test
+          fi
+      - name: Run full regression suite
+        if: github.event_name != 'pull_request'
+        run: |
+          run_check() {
+            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { printf '%s\\n' "$output"; exit 1; }
+            printf '%s\\n' "$output"
+            if printf '%s\\n' "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
+              exit 1
+            fi
+          }
+          run_check compile_simulation_view
+          run_check rocket_design_test
+          run_check flight_computer_test
+          run_check orbital_stability_test
+          run_check simulation_lifecycle_test
+          run_check leo_autopilot_mission_test
+          run_check body_agnostic_orbit_test
