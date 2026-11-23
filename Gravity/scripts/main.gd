@@ -1509,6 +1509,7 @@ func _show_docking_panel() -> void:
 	add_child(window)
 	window.close_requested.connect(window.queue_free)
 	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layout.add_theme_constant_override("separation", 12)
 	window.add_child(layout)
 	var intro := Label.new()
