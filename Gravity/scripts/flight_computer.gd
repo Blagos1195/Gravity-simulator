@@ -710,6 +710,28 @@ static func _propagate_wait_state(start_position_components: PackedFloat64Array,
 	return {"valid": true, "position_components": position, "velocity": velocity}
 
 
+static func _has_safe_parking_orbit_at(position_components: PackedFloat64Array, velocity: Vector2, time_seconds: float, body_name: String) -> bool:
+	if position_components.size() < 2 or body_name.is_empty():
+		return false
+	var states: Dictionary = PlanetarySystem.gravity_body_states(time_seconds)
+	for body_variant in states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
+		if str(body.get("name", "")) != body_name:
+			continue
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var relative_position := Vector2(position_components[0] - body_components[0], position_components[1] - body_components[1])
+		if relative_position.length() > float(body.get("soi", 0.0)):
+			return false
+		var relative_velocity := velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var radius := float(body.get("radius", 0.0))
+		var orbit := orbital_state(relative_position, relative_velocity, G * float(body.get("mass", 0.0)))
+		var minimum_altitude := minimum_safe_orbit_altitude(body_name, radius)
+		var maximum_altitude := maximum_stable_orbit_altitude(radius, float(body.get("soi", 0.0)))
+		return bool(orbit.get("bound", false)) and float(orbit.get("periapsis", 0.0)) > radius + minimum_altitude and float(orbit.get("apoapsis", INF)) < radius + maximum_altitude
+	return false
+
+
 static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 30, target_orbit_altitude: float = 100000.0, start_position_components: PackedFloat64Array = PackedFloat64Array()) -> Dictionary:
 	if not _is_valid_target_index(target_index) or maximum_delta_v <= 0.0 or scan_days <= 0 or interval_days <= 0:
 		return {"valid": false, "reason": "Select a valid destination and provide a positive manoeuvre budget and scan interval."}
@@ -741,6 +763,7 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		var maximum_altitude := maximum_stable_orbit_altitude(body_radius, float(nearest_body.get("soi", 0.0)))
 		if not bool(orbit.get("bound", false)) or float(orbit.get("periapsis", 0.0)) <= body_radius + safe_altitude or float(orbit.get("apoapsis", INF)) >= body_radius + maximum_altitude:
 			return {"valid": false, "reason": "A safe, stable parking orbit around the current body is required before scanning departure windows."}
+	var parking_body_name := str(nearest_body.get("name", ""))
 	var best_window: Dictionary = {}
 	var best_score := INF
 	var dates_checked := 0
@@ -755,6 +778,8 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		var future_state := _propagate_wait_state(propagated_position, propagated_velocity, start_time + propagated_days * 86400.0, (wait_days - propagated_days) * 86400.0)
 		dates_checked += 1
 		if not bool(future_state.get("valid", false)):
+			continue
+		if not parking_body_name.is_empty() and not _has_safe_parking_orbit_at(future_state.position_components, future_state.velocity, start_time + wait_seconds, parking_body_name):
 			continue
 		propagated_position = future_state.position_components
 		propagated_velocity = future_state.velocity
@@ -792,6 +817,8 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		var future_state := _propagate_wait_state(best_position, best_velocity, float(refinement_seed.departure_time_seconds), wait_seconds)
 		dates_checked += 1
 		if not bool(future_state.get("valid", false)):
+			continue
+		if not parking_body_name.is_empty() and not _has_safe_parking_orbit_at(future_state.position_components, future_state.velocity, float(refinement_seed.departure_time_seconds) + wait_seconds, parking_body_name):
 			continue
 		var future_components: PackedFloat64Array = future_state.position_components
 		var future_position := Vector2(future_components[0], future_components[1])
