@@ -14,6 +14,8 @@ const MAX_PHYSICS_STEPS_PER_FRAME := 4000
 
 var rocket_stages: Array = []
 var payload_mass := 500.0
+var vehicle_name := "Vehicle 1"
+var input_enabled := true
 
 var realism := "Realistic"
 var world_scale := "Compressed"
@@ -1197,7 +1199,7 @@ func _update_guidance(dt: float) -> void:
 	rotation_angle = lerp_angle(rotation_angle, manual_target_rotation, clampf(dt * 0.08, 0.0, 1.0))
 
 func _input(event: InputEvent) -> void:
-	if not event is InputEventKey or not event.pressed or event.echo:
+	if not input_enabled or not event is InputEventKey or not event.pressed or event.echo:
 		return
 	var ignite_pressed: bool = event.is_action_pressed("engine_toggle") or event.keycode == KEY_W or event.physical_keycode == KEY_W
 	var cutoff_pressed: bool = event.is_action_pressed("throttle_cutoff") or event.keycode == KEY_S or event.physical_keycode == KEY_S
@@ -1222,6 +1224,8 @@ func _notification(what: int) -> void:
 		throttle_cutoff_key_down = false
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not input_enabled:
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.is_action_pressed("rotate_left"):
 			rotation_angle -= 0.12
@@ -2005,7 +2009,8 @@ func get_save_data() -> Dictionary:
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
-		"rocket_design": {"payload_mass": payload_mass, "stages": rocket_stages.duplicate(true)}
+		"rocket_design": {"payload_mass": payload_mass, "stages": rocket_stages.duplicate(true)},
+		"vehicle_name": vehicle_name
 	}
 
 func load_save_data(data: Dictionary) -> bool:
@@ -2072,6 +2077,7 @@ func load_save_data(data: Dictionary) -> bool:
 		push_error("Save fuel amount is outside the active stage capacity.")
 		return false
 	set_rocket_design(saved_design)
+	vehicle_name = str(data.get("vehicle_name", vehicle_name))
 	stage_index = clampi(int(data.get("stage_index", 0)), 0, maxi(0, rocket_stages.size() - 1))
 	sim_time = float(data.get("sim_time", 0.0))
 	var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 2.0])
