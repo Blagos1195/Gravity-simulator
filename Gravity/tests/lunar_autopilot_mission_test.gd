@@ -72,6 +72,10 @@ func _run_lunar_mission(design: Dictionary, infinite_propellant: bool, start_pos
 		elapsed += maxf(0.0, simulation.sim_time - previous_sim_time)
 		iterations += 1
 		if simulation.autopilot_phase != previous_phase:
+			if previous_phase == "ALIGN_DEPARTURE" and simulation.autopilot_phase == "PLAN_TRANSFER":
+				var departure_orbit := FlightComputer.orbital_state(simulation.rocket_position, simulation.velocity, FlightComputer.G * PlanetarySystem.EARTH_MASS)
+				assert(bool(departure_orbit.get("bound", false)), "Lunar departure waiting lost the Earth parking orbit.")
+				assert(float(departure_orbit.get("eccentricity", 1.0)) < 0.001, "Lunar departure waiting destabilised the Earth parking orbit.")
 			var moon_state: Dictionary = simulation._surface_body_state("Moon")
 			var relative_position: Vector2 = simulation._relative_position_to_body(moon_state)
 			var relative_velocity: Vector2 = simulation.velocity - Vector2(moon_state.get("velocity", Vector2.ZERO))
