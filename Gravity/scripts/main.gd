@@ -881,6 +881,11 @@ func _switch_vehicle(index: int) -> void:
 	}
 	_refresh_vehicle_selector()
 	if status_label:
+		if _is_docked_child(sim.vehicle_name):
+			for link in docking_links:
+				if str(link.get("child_name", "")) == sim.vehicle_name:
+					status_label.text = "%s  •  DOCKED TO %s" % [sim.vehicle_name.to_upper(), str(link.get("parent_name", "")).to_upper()]
+					return
 		status_label.text = "%s  •  %s" % [sim.vehicle_name.to_upper(), sim.status_message]
 
 func _refresh_vehicle_selector() -> void:
@@ -1611,6 +1616,7 @@ func _show_docking_panel() -> void:
 		refresh_fuel_direction.call(target_name)
 		refresh_panel.call()
 	target_selector.item_selected.connect(target_changed)
+	fuel_direction.item_selected.connect(func(_index: int): refresh_panel.call())
 	dock_button.pressed.connect(func():
 		if sim.vehicle_name != parent_name:
 			refresh_panel.call()
