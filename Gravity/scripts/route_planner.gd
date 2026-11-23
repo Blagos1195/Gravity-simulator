@@ -58,6 +58,10 @@ var navigation_plan: Dictionary = {}
 var manual_guidance_report: Label
 var manual_guidance_node_index := -1
 var manual_guidance_start_time := 0.0
+var manual_guidance_burn_vector := Vector2.ZERO
+var manual_guidance_target_delta_v := 0.0
+var manual_guidance_angle_from_prograde := 0.0
+var manual_guidance_completed := false
 
 class OrbitPlot extends Control:
 	signal node_dragged(index: int, world_position: Vector2)
@@ -941,8 +945,12 @@ func _arm_manual_guidance() -> void:
 		return
 	manual_guidance_node_index = selected_node_index
 	manual_guidance_start_time = float(simulation.get("sim_time"))
+	manual_guidance_burn_vector = Vector2(guidance.get("burn_vector", Vector2.ZERO))
+	manual_guidance_target_delta_v = float(guidance.get("delta_v", 0.0))
+	manual_guidance_angle_from_prograde = float(guidance.get("angle_from_prograde", 0.0))
+	manual_guidance_completed = false
 	simulation.set("manual_burn_tracking_enabled", false)
-	simulation.set("manual_burn_target_vector", Vector2(guidance.get("burn_vector", Vector2.ZERO)))
+	simulation.set("manual_burn_target_vector", manual_guidance_burn_vector)
 	simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
 	simulation.set("thrust_key_down", false)
 	_update_manual_guidance()
@@ -968,7 +976,7 @@ func _update_manual_guidance() -> void:
 	if not is_instance_valid(manual_guidance_report) or not is_instance_valid(simulation):
 		return
 	var manual_plan: Dictionary = simulation.get("manual_flight_plan")
-	if not manual_plan.is_empty() and bool(manual_plan.get("active", false)):
+	if not manual_plan.is_empty():
 		_update_manual_flight_plan()
 		return
 	if manual_guidance_node_index < 0 or manual_guidance_node_index >= nodes.size():
@@ -977,20 +985,10 @@ func _update_manual_guidance() -> void:
 	var node: Dictionary = nodes[manual_guidance_node_index]
 	var node_time := maxf(0.0, float(node.get("time_offset", 0.0)))
 	var remaining_time := manual_guidance_start_time + node_time - float(simulation.get("sim_time"))
-	var predicted_state := _manual_node_state(maxf(0.0, remaining_time))
-	var guidance := FlightComputer.manoeuvre_burn_guidance(
-		Vector2(predicted_state.get("position", relative_position)),
-		Vector2(predicted_state.get("velocity", relative_velocity)),
-		float(node.get("prograde", 0.0)),
-		float(node.get("radial", 0.0))
-	)
-	if not bool(guidance.get("valid", false)):
-		manual_guidance_report.text = "MANUAL BURN GUIDANCE  •  Unable to calculate the selected node's burn direction."
-		return
-	var burn_vector: Vector2 = guidance.get("burn_vector", Vector2.ZERO)
-	var target_delta_v := float(guidance.get("delta_v", 0.0))
+	var burn_vector := manual_guidance_burn_vector
+	var target_delta_v := manual_guidance_target_delta_v
 	var tracking := bool(simulation.get("manual_burn_tracking_enabled"))
-	if remaining_time <= 0.0 and not tracking:
+	if remaining_time <= 0.0 and not tracking and not manual_guidance_completed:
 		simulation.set("manual_burn_target_vector", burn_vector)
 		simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
 		simulation.set("manual_burn_tracking_enabled", true)
@@ -1005,6 +1003,9 @@ func _update_manual_guidance() -> void:
 	var burn_status := "CUT THRUST  •  TARGET ΔV REACHED" if achieved >= target_delta_v - tolerance else "BURN TRACKING" if tracking else "READY"
 	if not bool(simulation.get("thrust_key_down")) and achieved >= target_delta_v - tolerance:
 		simulation.set("manual_burn_tracking_enabled", false)
+		manual_guidance_completed = true
+		burn_status = "NODE BURN COMPLETE"
+	if manual_guidance_completed:
 		burn_status = "NODE BURN COMPLETE"
 	manual_guidance_report.text = "MANUAL NODE %d  •  %s  •  %s\nREQUIRED ΔV: %.1f m/s  •  DELIVERED: %.1f m/s  •  CROSS-TRACK: %.1f m/s\nHEADING ERROR: %+.1f°  •  BURN VECTOR: %.1f° FROM PROGRADE\nRotate with Q/E to reduce heading error, press W to thrust and S to cut off. The computer never steers or fires the engine." % [
 		manual_guidance_node_index + 1,
@@ -1014,8 +1015,9 @@ func _update_manual_guidance() -> void:
 		achieved,
 		cross_track,
 		heading_error,
-		rad_to_deg(float(guidance.get("angle_from_prograde", 0.0)))
+		manual_guidance_angle_from_prograde
 	]
+
 
 func _toggle_manual_destination_plan() -> void:
 	if not is_instance_valid(simulation):
@@ -1107,7 +1109,9 @@ func _arm_manual_plan_burn(plan: Dictionary, phase: String, burn_vector: Vector2
 
 func _update_manual_flight_plan() -> void:
 	var plan: Dictionary = simulation.get("manual_flight_plan")
-	if plan.is_empty() or not bool(plan.get("active", false)):
+	if plan.is_empty():
+		return
+	if not bool(plan.get("active", false)) and str(plan.get("phase", "")) not in ["COMPLETE", "FAILED"]:
 		return
 	var now := float(simulation.get("sim_time"))
 	var phase := str(plan.get("phase", ""))
@@ -1234,6 +1238,8 @@ func _remove_node() -> void:
 	if selected_node_index < 0 or selected_node_index >= nodes.size():
 		return
 	manual_guidance_node_index = -1
+	manual_guidance_completed = false
+	simulation.set("manual_burn_tracking_enabled", false)
 	if selected_node_index == 0:
 		_invalidate_route_solution()
 	nodes.remove_at(selected_node_index)
@@ -1444,6 +1450,8 @@ func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
 	if index < 0 or index >= nodes.size() or planned_path.size() < 2 or planned_path_times.size() != planned_path.size():
 		return
 	manual_guidance_node_index = -1
+	manual_guidance_completed = false
+	simulation.set("manual_burn_tracking_enabled", false)
 	if index == 0:
 		_invalidate_route_solution()
 	var nearest_index := 0
@@ -1510,6 +1518,8 @@ func _update_selected_node(_value: float = 0.0) -> void:
 	if loading_node or selected_node_index < 0 or selected_node_index >= nodes.size():
 		return
 	manual_guidance_node_index = -1
+	manual_guidance_completed = false
+	simulation.set("manual_burn_tracking_enabled", false)
 	if selected_node_index == 0:
 		_invalidate_route_solution()
 	var node: Dictionary = nodes[selected_node_index]
