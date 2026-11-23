@@ -299,7 +299,7 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		return "The rocket section needs default_design, presets and stage_parts."
 	var presets: Variant = rocket.get("presets")
 	var stage_parts: Variant = rocket.get("stage_parts")
-	if not presets is Dictionary or not stage_parts is Array or stage_parts.is_empty():
+	if not presets is Dictionary or presets.is_empty() or not stage_parts is Array or stage_parts.is_empty():
 		return "The rocket presets or stage_parts have an invalid type."
 	var part_ids := {}
 	for part_variant in stage_parts:
