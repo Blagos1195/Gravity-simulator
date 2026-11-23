@@ -96,7 +96,7 @@ func _run_lunar_mission(design: Dictionary, infinite_propellant: bool, start_pos
 					float(earth_orbit.get("apoapsis", INF)) / 1000.0
 				])
 			previous_phase = simulation.autopilot_phase
-		if iterations >= 30000:
+		if iterations >= 15000:
 			break
 	var moon_state: Dictionary = simulation._surface_body_state("Moon")
 	var relative_position: Vector2 = simulation._relative_position_to_body(moon_state)
