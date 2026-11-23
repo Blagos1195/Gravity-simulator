@@ -916,7 +916,8 @@ func _update_guidance(dt: float) -> void:
 				var target_apsis_reached: bool = autopilot_apsis_correction_armed and target_radial_speed <= apsis_speed_tolerance and altitude > minimum_safe_altitude
 				var transfer_already_reaches_target: bool = target_bound and minf(periapsis_target_error, apoapsis_target_error) <= target_apsis_tolerance
 				var target_correction_needed := false
-				if target_apsis_reached and not transfer_already_reaches_target:
+				var spacecraft_at_target_apsis := absf(guidance_position.length() - target_radius) <= orbit_completion_tolerance
+				if target_apsis_reached and (not transfer_already_reaches_target or spacecraft_at_target_apsis):
 					var coast_correction_plan: Dictionary = FlightComputer.target_radius_burn(guidance_position, guidance_velocity, target_radius, G * float(guidance_body.mass))
 					target_correction_needed = bool(coast_correction_plan.get("valid", false)) and float(coast_correction_plan.get("delta_v", INF)) > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if target_orbit_complete:
