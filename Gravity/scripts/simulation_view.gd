@@ -13,6 +13,7 @@ const MAX_PHYSICS_BUDGET_USEC := 6000
 const MAX_PHYSICS_STEPS_PER_FRAME := 4000
 
 var rocket_stages: Array = []
+var stage_fuel_remaining: Array[float] = []
 var payload_mass := 500.0
 var vehicle_name := "Vehicle 1"
 var input_enabled := true
@@ -114,7 +115,10 @@ func set_rocket_design(design: Dictionary) -> void:
 		rocket_stages = RocketDesign.create_default()["stages"].duplicate(true)
 	payload_mass = float(design.get("payload_mass", 500.0))
 	stage_index = 0
-	fuel = float(rocket_stages[0].get("fuel_capacity", 0.0))
+	stage_fuel_remaining.clear()
+	for stage in rocket_stages:
+		stage_fuel_remaining.append(float(stage.get("fuel_capacity", 0.0)))
+	fuel = stage_fuel_remaining[0]
 	infinite_fuel_stage_remaining = fuel
 
 func _active_stage_data() -> Dictionary:
@@ -125,8 +129,53 @@ func _remaining_stack_mass() -> float:
 	for i in range(stage_index + 1, rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[i]
 		mass += float(stage.get("dry_mass", 0.0))
-		mass += float(stage.get("fuel_capacity", 0.0))
+		mass += stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else float(stage.get("fuel_capacity", 0.0))
 	return mass
+
+func total_propellant_remaining() -> float:
+	var total := 0.0
+	for i in range(stage_index, rocket_stages.size()):
+		total += fuel if i == stage_index else (stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else float(rocket_stages[i].get("fuel_capacity", 0.0)))
+	return total
+
+func total_propellant_capacity() -> float:
+	var total := 0.0
+	for i in range(stage_index, rocket_stages.size()):
+		total += float(rocket_stages[i].get("fuel_capacity", 0.0))
+	return total
+
+func remove_propellant(amount: float) -> float:
+	var remaining := maxf(0.0, amount)
+	var requested := remaining
+	for i in range(stage_index, rocket_stages.size()):
+		var available := fuel if i == stage_index else stage_fuel_remaining[i]
+		var taken := minf(available, remaining)
+		if i == stage_index:
+			fuel = maxf(0.0, fuel - taken)
+			stage_fuel_remaining[i] = fuel
+		else:
+			stage_fuel_remaining[i] = maxf(0.0, stage_fuel_remaining[i] - taken)
+		remaining -= taken
+		if remaining <= 0.000001:
+			break
+	return requested - remaining
+
+func add_propellant(amount: float) -> float:
+	var remaining := maxf(0.0, amount)
+	var requested := remaining
+	for i in range(stage_index, rocket_stages.size()):
+		var capacity := float(rocket_stages[i].get("fuel_capacity", 0.0))
+		var current := fuel if i == stage_index else stage_fuel_remaining[i]
+		var added := minf(maxf(0.0, capacity - current), remaining)
+		if i == stage_index:
+			fuel += added
+			stage_fuel_remaining[i] = fuel
+		else:
+			stage_fuel_remaining[i] += added
+		remaining -= added
+		if remaining <= 0.000001:
+			break
+	return requested - remaining
 
 func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
 	var active := _active_stage_data()
@@ -317,6 +366,8 @@ func _physics_step(dt: float) -> void:
 	sim_time = end_time
 	if not infinite_weightless_fuel:
 		fuel = maxf(0.0, fuel - fuel_used)
+		if stage_index < stage_fuel_remaining.size():
+			stage_fuel_remaining[stage_index] = fuel
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
 	if infinite_weightless_fuel and infinite_fuel_stage_remaining <= 0.0001 and stage_index < rocket_stages.size() - 1:
@@ -594,9 +645,11 @@ func _separate_stage() -> void:
 		return
 	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0))
 	discarded_propellant_mass += fuel
+	if stage_index < stage_fuel_remaining.size():
+		stage_fuel_remaining[stage_index] = 0.0
 	velocity += Vector2.UP.rotated(rotation_angle) * 2.0
 	stage_index += 1
-	fuel = float(_active_stage_data().get("fuel_capacity", 0.0))
+	fuel = stage_fuel_remaining[stage_index]
 	infinite_fuel_stage_remaining = fuel
 	thrust_key_down = false
 
@@ -1704,11 +1757,12 @@ func _calculate_predicted_trajectory() -> void:
 	var position_components := rocket_position_precise.duplicate()
 	var predicted_velocity := velocity
 	var predicted_fuel := fuel
+	var predicted_stage_fuel_remaining := stage_fuel_remaining.duplicate()
 	var predicted_stage := stage_index
 	var dt := 5.0
 	for i in range(360):
 		var step_time := sim_time + float(i) * dt
-		var mass := payload_mass
+		var mass := payload_mass + docked_mass
 		var active: Dictionary = {}
 		var total_flow := 0.0
 		var thrust_force := 0.0
@@ -1720,7 +1774,7 @@ func _calculate_predicted_trajectory() -> void:
 			for j in range(predicted_stage + 1, rocket_stages.size()):
 				var upper: Dictionary = rocket_stages[j]
 				mass += float(upper.get("dry_mass", 0.0))
-				mass += float(upper.get("fuel_capacity", 0.0))
+				mass += predicted_stage_fuel_remaining[j] if j < predicted_stage_fuel_remaining.size() else float(upper.get("fuel_capacity", 0.0))
 			total_flow = float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 			if not infinite_weightless_fuel:
 				burn = minf(predicted_fuel, total_flow * throttle * dt)
@@ -1752,9 +1806,11 @@ func _calculate_predicted_trajectory() -> void:
 		position = next_position
 		if not infinite_weightless_fuel:
 			predicted_fuel = maxf(0.0, predicted_fuel - burn)
+			predicted_stage_fuel_remaining[predicted_stage] = predicted_fuel
 		if not infinite_weightless_fuel and predicted_fuel <= 0.0001 and predicted_stage < rocket_stages.size() - 1:
+			predicted_stage_fuel_remaining[predicted_stage] = 0.0
 			predicted_stage += 1
-			predicted_fuel = float(rocket_stages[predicted_stage].get("fuel_capacity", 0.0))
+			predicted_fuel = predicted_stage_fuel_remaining[predicted_stage]
 		predicted_path.append(position)
 		var impacted := false
 		for body in final_gravity_states.get("surface_bodies", []):
@@ -1981,6 +2037,7 @@ func get_save_data() -> Dictionary:
 		"velocity": [velocity.x, velocity.y],
 		"rotation_angle": rotation_angle,
 		"fuel": fuel,
+		"stage_fuel_remaining": stage_fuel_remaining.duplicate(),
 		"infinite_fuel_stage_remaining": infinite_fuel_stage_remaining,
 		"stage_index": stage_index,
 		"discarded_stage_mass": discarded_stage_mass,
@@ -2095,6 +2152,30 @@ func load_save_data(data: Dictionary) -> bool:
 	if saved_fuel < 0.0 or saved_fuel > active_fuel_capacity:
 		push_error("Save fuel amount is outside the active stage capacity.")
 		return false
+	var saved_stage_fuel: Variant = data.get("stage_fuel_remaining", null)
+	var validated_stage_fuel: Array[float] = []
+	if saved_stage_fuel is Array:
+		if saved_stage_fuel.size() != saved_stages.size():
+			push_error("Save stage fuel data does not match the vehicle stages.")
+			return false
+		for i in range(saved_stages.size()):
+			var stage_fuel_value: Variant = saved_stage_fuel[i]
+			var stage_capacity := float(saved_stages[i].get("fuel_capacity", 0.0))
+			if not (stage_fuel_value is float or stage_fuel_value is int) or not is_finite(float(stage_fuel_value)) or float(stage_fuel_value) < 0.0 or float(stage_fuel_value) > stage_capacity:
+				push_error("Save contains an invalid stage fuel amount.")
+				return false
+			validated_stage_fuel.append(float(stage_fuel_value))
+		if not is_equal_approx(validated_stage_fuel[stage_index], saved_fuel):
+			push_error("Save active tank fuel does not match its stage fuel record.")
+			return false
+	else:
+		for i in range(saved_stages.size()):
+			if i < stage_index:
+				validated_stage_fuel.append(0.0)
+			elif i == stage_index:
+				validated_stage_fuel.append(saved_fuel)
+			else:
+				validated_stage_fuel.append(float(saved_stages[i].get("fuel_capacity", 0.0)))
 	set_rocket_design(saved_design)
 	vehicle_name = str(data.get("vehicle_name", vehicle_name))
 	stage_index = clampi(int(data.get("stage_index", 0)), 0, maxi(0, rocket_stages.size() - 1))
@@ -2106,6 +2187,7 @@ func load_save_data(data: Dictionary) -> bool:
 	velocity = Vector2(float(v[0]), float(v[1]))
 	rotation_angle = float(data.get("rotation_angle", 0.0))
 	fuel = float(data.get("fuel", _active_stage_data().get("fuel_capacity", 0.0)))
+	stage_fuel_remaining = validated_stage_fuel
 	infinite_fuel_stage_remaining = clampf(float(data.get("infinite_fuel_stage_remaining", fuel)), 0.0, float(_active_stage_data().get("fuel_capacity", 0.0)))
 	discarded_stage_mass = float(data.get("discarded_stage_mass", 0.0))
 	discarded_propellant_mass = float(data.get("discarded_propellant_mass", 0.0))

@@ -1017,13 +1017,15 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 	var recipient := _find_vehicle_by_name(to_name)
 	if donor == null or recipient == null or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel:
 		return 0.0
-	var capacity := float(recipient._active_stage_data().get("fuel_capacity", 0.0))
-	var available_space := maxf(0.0, capacity - recipient.fuel)
-	var amount := minf(donor.fuel, available_space)
+	var available_space := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
+	var amount := minf(donor.total_propellant_remaining(), available_space)
 	if amount <= 0.0:
 		return 0.0
-	donor.fuel -= amount
-	recipient.fuel += amount
+	var removed := donor.remove_propellant(amount)
+	var added := recipient.add_propellant(removed)
+	if added < removed:
+		donor.add_propellant(removed - added)
+	amount = added
 	_update_docked_masses()
 	_sync_docked_vehicles()
 	return amount
@@ -1622,12 +1624,13 @@ func _show_docking_panel() -> void:
 				transfer_button.disabled = true
 				fuel_status.text = "Fuel transfer unavailable."
 			else:
-				var room := maxf(0.0, float(recipient._active_stage_data().get("fuel_capacity", 0.0)) - recipient.fuel)
-				var amount := minf(donor.fuel, room)
+				var available := donor.total_propellant_remaining()
+				var room := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
+				var amount := minf(available, room)
 				transfer_button.disabled = amount <= 0.0 or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel
-				fuel_status.text = "Available: %.0f kg  •  Receiver tank space: %.0f kg" % [donor.fuel, room]
+				fuel_status.text = "Available: %.0f kg  •  Receiver space: %.0f kg across remaining stages" % [available, room]
 		else:
-			fuel_status.text = "Dock spacecraft to enable transfer. Transfers use the active tank on each vehicle."
+			fuel_status.text = "Dock spacecraft to enable transfer. Transfers fill the receiver's active tank first, then its later stages."
 	var target_changed := func(_index: int) -> void:
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
 		refresh_fuel_direction.call(target_name)
