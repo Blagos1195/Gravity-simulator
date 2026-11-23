@@ -574,11 +574,12 @@ func _calculate_destination_plan() -> void:
 			return
 		navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "delta_v": float(local_plan.get("delta_v", 0.0)), "local": true}
 	else:
-		if not stable_orbit:
+		var infinite_propellant := bool(simulation.get("infinite_weightless_fuel"))
+		if not stable_orbit and not infinite_propellant:
 			_invalidate_navigation_plan()
-			navigation_report.text = "A SAFE PARKING ORBIT AROUND %s IS REQUIRED BEFORE A DESTINATION TRANSFER CAN BE CALCULATED." % current_name.to_upper()
+			navigation_report.text = "A SAFE PARKING ORBIT AROUND %s IS REQUIRED BEFORE A FINITE-PROPELLANT TRANSFER CAN BE CALCULATED." % current_name.to_upper()
 			return
-		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
+		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_propellant else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
 		var transfer: Dictionary = FlightComputer.simulated_transfer_search_precise(simulation.get("rocket_position_precise"), simulation.get("velocity"), float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
 		if not bool(transfer.get("valid", false)):
 			_invalidate_navigation_plan()
@@ -740,7 +741,8 @@ func _send_destination_to_autopilot() -> void:
 	simulation.set("autopilot_precomputed_transfer_plan", navigation_plan.duplicate(true) if not bool(navigation_plan.get("local", false)) else {})
 	simulation.set("autopilot_apsis_correction_armed", true)
 	simulation.set("autopilot_apsis_correction_angle", relative_position.angle())
-	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if bool(simulation.get("landed")) or not stable_orbit else "PLAN_TRANSFER")
+	var infinite_propellant := bool(simulation.get("infinite_weightless_fuel"))
+	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if bool(simulation.get("landed")) or (not stable_orbit and not infinite_propellant) else "PLAN_TRANSFER")
 	simulation.set("guidance_enabled", true)
 	simulation.set("thrust_key_down", bool(simulation.get("landed")) or not stable_orbit)
 	simulation.set("status_message", "FLIGHT COMPUTER  •  NAVIGATING TO %s" % target_name.to_upper())
