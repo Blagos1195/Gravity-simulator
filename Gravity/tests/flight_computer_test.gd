@@ -29,6 +29,14 @@ func _initialize() -> void:
 
 	var burn := FlightComputer.circularisation_burn(Vector2(radius, 0.0), Vector2(120.0, circular_speed * 0.9))
 	assert(float(burn.get("delta_v", 0.0)) > 0.0)
+	var manual_burn := FlightComputer.manoeuvre_burn_guidance(Vector2(radius, 0.0), Vector2(0.0, circular_speed), 100.0, 50.0)
+	assert(bool(manual_burn.get("valid", false)))
+	var manual_burn_vector: Vector2 = manual_burn.get("burn_vector", Vector2.ZERO)
+	assert(manual_burn_vector.distance_to(Vector2(50.0, 100.0)) < 0.001)
+	assert(absf(float(manual_burn.get("delta_v", 0.0)) - sqrt(12500.0)) < 0.001)
+	assert(absf(rad_to_deg(float(manual_burn.get("angle_from_prograde", 0.0))) - 26.565051) < 0.001)
+	var retrograde_manual_burn := FlightComputer.manoeuvre_burn_guidance(Vector2(radius, 0.0), Vector2(0.0, -circular_speed), 100.0, 50.0)
+	assert(Vector2(retrograde_manual_burn.get("burn_vector", Vector2.ZERO)).distance_to(Vector2(50.0, -100.0)) < 0.001)
 	var corrected_orbit := FlightComputer.orbital_state(Vector2(radius, 0.0), Vector2(120.0, circular_speed * 0.9) + Vector2(burn.get("burn_vector", Vector2.ZERO)))
 	assert(bool(corrected_orbit.get("bound", false)))
 	assert(absf(float(corrected_orbit.get("eccentricity", 1.0))) < 0.000001)
@@ -377,6 +385,41 @@ func _initialize() -> void:
 	manoeuvre_sim._physics_step(1.0)
 	assert(manoeuvre_sim.autopilot_phase == "COMPLETE")
 	assert(manoeuvre_sim.autopilot_complete)
+	var manual_tracking_sim: Variant = SimulationView.new()
+	manual_tracking_sim.set_rocket_design(RocketDesign.create_default())
+	manual_tracking_sim.landed = false
+	manual_tracking_sim.infinite_weightless_fuel = true
+	manual_tracking_sim._set_rocket_position_components(0.0, -manoeuvre_radius)
+	manual_tracking_sim.velocity = Vector2(manoeuvre_speed, 0.0)
+	manual_tracking_sim.rotation_angle = Vector2.RIGHT.angle() - Vector2.UP.angle()
+	manual_tracking_sim.manual_burn_tracking_enabled = true
+	manual_tracking_sim.manual_burn_target_vector = Vector2.RIGHT * 100.0
+	manual_tracking_sim.manual_burn_accumulated_vector = Vector2.ZERO
+	manual_tracking_sim.thrust_key_down = true
+	manual_tracking_sim._physics_step(0.1)
+	assert(manual_tracking_sim.manual_burn_accumulated_vector.dot(Vector2.RIGHT) > 0.0, "Manual burn tracking did not record actual thrust impulse")
+	assert(not manual_tracking_sim.autopilot_enabled, "Manual burn tracking unexpectedly engaged autopilot")
+	manual_tracking_sim.manual_flight_plan = {
+		"active": true,
+		"target_name": "Mars",
+		"phase": "DEPARTURE_BURN",
+		"departure_time": 10.0,
+		"transfer_time": 1000.0,
+		"departure_delta_v": 100.0,
+		"target_altitude": 200000.0,
+		"burn_delta_v": 100.0,
+		"departure_direction": Vector2.RIGHT,
+		"burn_vector": Vector2.RIGHT * 100.0
+	}
+	var manual_save_data: Dictionary = manual_tracking_sim.get_save_data()
+	var restored_manual_sim: Variant = SimulationView.new()
+	assert(restored_manual_sim.load_save_data(manual_save_data), "Manual flight plan save could not be restored")
+	assert(bool(restored_manual_sim.manual_flight_plan.get("active", false)), "Manual flight plan was lost on save/load")
+	assert(str(restored_manual_sim.manual_flight_plan.get("phase", "")) == "DEPARTURE_BURN")
+	assert(Vector2(restored_manual_sim.manual_flight_plan.get("burn_vector", Vector2.ZERO)).distance_to(Vector2.RIGHT * 100.0) < 0.001)
+	assert(restored_manual_sim.manual_burn_tracking_enabled)
+	manual_tracking_sim.free()
+	restored_manual_sim.free()
 	var route_sim: Variant = SimulationView.new()
 	route_sim.set_rocket_design(RocketDesign.create_default())
 	route_sim.landed = false
@@ -428,6 +471,61 @@ func _initialize() -> void:
 	assert(route_planner_window.navigation_plan_valid)
 	assert(float(route_planner_window.navigation_plan.get("delta_v", INF)) > 0.0)
 	assert(route_planner_window.navigation_report.text.contains("ORBIT CHANGE SOLVED"))
+	assert(route_planner_window.manual_navigation_button is Button)
+	route_planner_window.manual_navigation_button.emit_signal("pressed")
+	assert(bool(planner_sim.manual_flight_plan.get("active", false)), "Manual local-orbit plan was not created")
+	assert(planner_sim.manual_flight_plan.get("phase", "") == "LOCAL_BURN")
+	assert(planner_sim.manual_burn_tracking_enabled)
+	assert(not planner_sim.autopilot_enabled, "Manual flight-computer mode engaged autopilot")
+	planner_sim.manual_burn_accumulated_vector = planner_sim.manual_burn_target_vector
+	planner_sim.thrust_key_down = false
+	route_planner_window._update_manual_flight_plan()
+	assert(planner_sim.manual_flight_plan.get("phase", "") == "LOCAL_COAST", "Manual local transfer did not coast to its target apsis")
+	var manual_target_radius: float = float(planner_sim.manual_flight_plan.get("target_radius", 0.0))
+	planner_sim._set_rocket_position_components(0.0, -manual_target_radius)
+	planner_sim.velocity = Vector2(FlightComputer.circular_orbit_speed(manual_target_radius) * 1.1, 0.0)
+	route_planner_window._update_manual_flight_plan()
+	assert(planner_sim.manual_flight_plan.get("phase", "") == "LOCAL_CIRCULARISE", "Manual local transfer did not arm its circularisation burn")
+	assert(planner_sim.manual_burn_tracking_enabled)
+	route_planner_window.manual_navigation_button.emit_signal("pressed")
+	assert(planner_sim.manual_flight_plan.is_empty(), "Manual plan cancellation did not clear the plan")
+	var mars_target_id := -1
+	for target_index in range(FlightComputer.PLANET_TARGETS.size()):
+		if str(FlightComputer.PLANET_TARGETS[target_index].get("name", "")) == "Mars":
+			mars_target_id = target_index
+	assert(mars_target_id >= 0)
+	route_planner_window.navigation_plan = {
+		"valid": true,
+		"target_id": mars_target_id,
+		"target_name": "Mars",
+		"target_altitude": 200000.0,
+		"local": false,
+		"deep_space_start": false,
+		"planned_at_time": planner_sim.sim_time,
+		"planned_position": planner_sim.rocket_position,
+		"planned_velocity": planner_sim.velocity,
+		"departure_direction": Vector2.RIGHT,
+		"departure_delta_v": 100.0,
+		"capture_delta_v": 500.0,
+		"total_delta_v": 600.0,
+		"transfer_time": 86400.0
+	}
+	route_planner_window.navigation_plan_valid = true
+	route_planner_window._refresh_navigation_state()
+	route_planner_window.manual_navigation_button.emit_signal("pressed")
+	assert(planner_sim.manual_flight_plan.get("phase", "") == "DEPARTURE_BURN", "Manual interplanetary departure burn was not armed")
+	assert(planner_sim.manual_burn_tracking_enabled)
+	assert(not planner_sim.autopilot_enabled, "Manual interplanetary plan engaged autopilot")
+	planner_sim.manual_burn_accumulated_vector = planner_sim.manual_burn_target_vector
+	planner_sim.thrust_key_down = false
+	route_planner_window._update_manual_flight_plan()
+	assert(planner_sim.manual_flight_plan.get("phase", "") == "TRANSFER_COAST", "Manual departure burn did not transition to transfer coast")
+	route_planner_window._refresh_navigation_state()
+	assert(not route_planner_window.replan_button.disabled, "Mid-course replan was not offered during manual transfer coast")
+	route_planner_window.manual_navigation_button.emit_signal("pressed")
+	assert(planner_sim.manual_flight_plan.is_empty(), "Manual interplanetary plan cancellation did not clear the plan")
+	route_planner_window._calculate_destination_plan()
+	assert(route_planner_window.navigation_plan_valid and bool(route_planner_window.navigation_plan.get("local", false)))
 	route_planner_window._send_destination_to_autopilot()
 	assert(planner_sim.autopilot_enabled)
 	assert(planner_sim.autopilot_target_mode == "ORBIT")

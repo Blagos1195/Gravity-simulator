@@ -206,20 +206,20 @@ func _show_vehicle_editor() -> void:
 	add_child(bg)
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 10)
-	root.offset_left = 28
-	root.offset_right = -28
-	root.offset_top = 22
-	root.offset_bottom = -22
+	root.offset_left = 26
+	root.offset_right = -26
+	root.offset_top = 18
+	root.offset_bottom = -18
+	root.add_theme_constant_override("separation", 12)
 	add_child(root)
 	var heading := Label.new()
-	heading.text = "VEHICLE ASSEMBLY"
+	heading.text = "VEHICLE WORKSHOP"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 32)
 	heading.add_theme_color_override("font_color", Color(0.78, 0.9, 1.0))
 	root.add_child(heading)
 	var subtitle := Label.new()
-	subtitle.text = "CONFIGURE A MULTI-STAGE LAUNCH VEHICLE  •  2–8 STAGES"
+	subtitle.text = "ASSEMBLE STAGES AND PAYLOADS  •  PERFORMANCE IS CALCULATED AUTOMATICALLY"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_color_override("font_color", Color(0.35, 0.66, 0.82))
 	root.add_child(subtitle)
@@ -235,6 +235,7 @@ func _show_vehicle_editor() -> void:
 	preset_row.add_child(preset_selector)
 	var preset_description := Label.new()
 	preset_description.text = RocketDesign.preset_description("LEO_CARGO")
+	preset_description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preset_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	preset_description.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
 	root.add_child(preset_description)
@@ -247,38 +248,112 @@ func _show_vehicle_editor() -> void:
 		rocket_design = RocketDesign.create_preset(selected_preset_id)
 		_show_vehicle_editor()
 	)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(scroll)
-	var columns := VBoxContainer.new()
-	columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columns.add_theme_constant_override("separation", 24)
-	scroll.add_child(columns)
-	var stage_actions := HBoxContainer.new()
-	stage_actions.add_theme_constant_override("separation", 10)
-	columns.add_child(stage_actions)
-	_add_button(stage_actions, "ADD STAGE", _add_rocket_stage)
-	_add_button(stage_actions, "REMOVE LAST STAGE", _remove_rocket_stage)
+	var workspace := HBoxContainer.new()
+	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	workspace.add_theme_constant_override("separation", 18)
+	root.add_child(workspace)
+	var preview_panel := PanelContainer.new()
+	preview_panel.custom_minimum_size.x = 390
+	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	workspace.add_child(preview_panel)
+	var preview_column := VBoxContainer.new()
+	preview_column.add_theme_constant_override("separation", 10)
+	preview_panel.add_child(preview_column)
+	var preview_title := Label.new()
+	preview_title.text = "VEHICLE PREVIEW"
+	preview_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	preview_title.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	preview_column.add_child(preview_title)
+	design_preview = RocketPreview.new()
+	design_preview.design = rocket_design
+	design_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	design_preview.custom_minimum_size = Vector2(330, 390)
+	preview_column.add_child(design_preview)
+	design_stats_label = Label.new()
+	design_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	design_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	preview_column.add_child(design_stats_label)
+	design_error_label = Label.new()
+	design_error_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	design_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	design_error_label.add_theme_color_override("font_color", Color(1.0, 0.48, 0.35))
+	preview_column.add_child(design_error_label)
+	var assembly_panel := PanelContainer.new()
+	assembly_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	assembly_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	workspace.add_child(assembly_panel)
+	var assembly := VBoxContainer.new()
+	assembly.add_theme_constant_override("separation", 10)
+	assembly_panel.add_child(assembly)
+	var vehicle_name_label := Label.new()
+	vehicle_name_label.text = "VEHICLE NAME"
+	vehicle_name_label.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	assembly.add_child(vehicle_name_label)
+	var vehicle_name := LineEdit.new()
+	vehicle_name.text = str(rocket_design.get("name", "Custom Vehicle"))
+	vehicle_name.placeholder_text = "Vehicle name"
+	vehicle_name.text_changed.connect(func(value: String):
+		rocket_design["name"] = value
+		design_preview.queue_redraw()
+	)
+	assembly.add_child(vehicle_name)
+	var payload_label := Label.new()
+	payload_label.text = "PAYLOAD"
+	payload_label.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	assembly.add_child(payload_label)
+	var payload_selector := OptionButton.new()
+	payload_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var payload_options := [
+		{"id": "custom", "label": "Custom payload · %.1f t" % (float(rocket_design.get("payload_mass", 500.0)) / 1000.0), "mass": float(rocket_design.get("payload_mass", 500.0))},
+		{"id": "satellite", "label": "Small satellite · 150 kg", "mass": 150.0},
+		{"id": "probe", "label": "Science probe · 1.8 t", "mass": 1800.0},
+		{"id": "crew", "label": "Crew capsule · 6.5 t", "mass": 6500.0},
+		{"id": "cargo", "label": "Cargo module · 8 t", "mass": 8000.0},
+		{"id": "heavy_cargo", "label": "Heavy cargo · 12 t", "mass": 12000.0}
+	]
+	var selected_payload := 0
+	for payload_index in range(payload_options.size()):
+		var payload_option: Dictionary = payload_options[payload_index]
+		payload_selector.add_item(str(payload_option.label))
+		payload_selector.set_item_metadata(payload_index, payload_option)
+		if is_equal_approx(float(payload_option.mass), float(rocket_design.get("payload_mass", 500.0))):
+			selected_payload = payload_index
+	payload_selector.select(selected_payload)
+	rocket_design["payload_type"] = str(payload_options[selected_payload].id)
+	payload_selector.item_selected.connect(func(index: int):
+		var selected_payload_option: Dictionary = payload_selector.get_item_metadata(index)
+		rocket_design["payload_mass"] = float(selected_payload_option.mass)
+		rocket_design["payload_type"] = str(selected_payload_option.id)
+		_update_design_stats()
+	)
+	assembly.add_child(payload_selector)
+	var stages_heading := Label.new()
+	stages_heading.text = "STAGE STACK  •  FIRST STAGE AT THE BOTTOM"
+	stages_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	assembly.add_child(stages_heading)
+	var stage_scroll := ScrollContainer.new()
+	stage_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stage_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	assembly.add_child(stage_scroll)
+	var stage_list := VBoxContainer.new()
+	stage_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stage_list.add_theme_constant_override("separation", 8)
+	stage_scroll.add_child(stage_list)
+	var stage_part_options := RocketDesign.stage_part_options()
 	for stage_index in range(rocket_design["stages"].size()):
-		var panel := PanelContainer.new()
-		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		columns.add_child(panel)
-		var fields := VBoxContainer.new()
-		fields.add_theme_constant_override("separation", 8)
-		panel.add_child(fields)
 		var stage: Dictionary = rocket_design["stages"][stage_index]
-		var stage_title := Label.new()
-		stage_title.text = "STAGE %02d" % (stage_index + 1)
-		stage_title.add_theme_font_size_override("font_size", 20)
-		stage_title.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
-		fields.add_child(stage_title)
-		var part_row := HBoxContainer.new()
-		var part_label := Label.new()
-		part_label.text = "Stage part template"
-		part_row.add_child(part_label)
+		var stage_panel := PanelContainer.new()
+		stage_list.add_child(stage_panel)
+		var stage_row := HBoxContainer.new()
+		stage_row.add_theme_constant_override("separation", 8)
+		stage_panel.add_child(stage_row)
+		var stage_number := Label.new()
+		stage_number.text = "STAGE %02d" % (stage_index + 1)
+		stage_number.custom_minimum_size.x = 90
+		stage_number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		stage_row.add_child(stage_number)
 		var part_selector := OptionButton.new()
 		part_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var stage_part_options := RocketDesign.stage_part_options()
 		var selected_part_index := 0
 		for part_index in range(stage_part_options.size()):
 			var part_option: Dictionary = stage_part_options[part_index]
@@ -295,55 +370,37 @@ func _show_vehicle_editor() -> void:
 				rocket_design["stages"][stage_index] = replacement_stage
 				_show_vehicle_editor()
 		)
-		part_row.add_child(part_selector)
-		fields.add_child(part_row)
-		_add_design_field(fields, stage_index, "dry_mass", "Dry mass (kg)", 500.0, 200000.0, 100.0)
-		_add_design_field(fields, stage_index, "fuel_capacity", "Propellant capacity (kg)", 500.0, 1000000.0, 1000.0)
-		_add_design_field(fields, stage_index, "thrust", "Sea-level thrust (N)", 100000.0, 20000000.0, 100000.0)
-		_add_design_field(fields, stage_index, "vacuum_thrust", "Vacuum thrust (N)", 100000.0, 22000000.0, 100000.0)
-		_add_design_field(fields, stage_index, "flow", "Fuel flow per engine (kg/s)", 20.0, 8000.0, 10.0)
-		_add_design_field(fields, stage_index, "engine_count", "Engine count", 1.0, 8.0, 1.0)
-	var payload_panel := PanelContainer.new()
-	payload_panel.custom_minimum_size.x = 230
-	payload_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columns.add_child(payload_panel)
-	var payload_fields := VBoxContainer.new()
-	payload_panel.add_child(payload_fields)
-	var payload_title := Label.new()
-	payload_title.text = "PAYLOAD"
-	payload_title.add_theme_font_size_override("font_size", 20)
-	payload_title.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
-	payload_fields.add_child(payload_title)
-	var payload_label := Label.new()
-	payload_label.text = "Payload mass (kg)"
-	payload_fields.add_child(payload_label)
-	var payload := SpinBox.new()
-	payload.min_value = 1.0
-	payload.max_value = 100000.0
-	payload.step = 10.0
-	payload.value = float(rocket_design.get("payload_mass", 500.0))
-	payload.value_changed.connect(func(value: float):
-		rocket_design["payload_mass"] = value
-		_update_design_stats()
+		stage_row.add_child(part_selector)
+		var remove_button := Button.new()
+		remove_button.text = "REMOVE"
+		remove_button.disabled = rocket_design["stages"].size() <= RocketDesign.MIN_STAGES
+		remove_button.pressed.connect(func():
+			rocket_design["stages"].remove_at(stage_index)
+			_show_vehicle_editor()
+		)
+		stage_row.add_child(remove_button)
+	var component_row := HBoxContainer.new()
+	component_row.add_theme_constant_override("separation", 8)
+	assembly.add_child(component_row)
+	var new_stage_selector := OptionButton.new()
+	new_stage_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for part_option in stage_part_options:
+		new_stage_selector.add_item(str(part_option.label))
+		new_stage_selector.set_item_metadata(new_stage_selector.item_count - 1, str(part_option.id))
+	_add_button(component_row, "ADD STAGE", func():
+		if rocket_design["stages"].size() >= RocketDesign.MAX_STAGES:
+			return
+		var new_stage := RocketDesign.create_stage_part(str(new_stage_selector.get_item_metadata(new_stage_selector.selected)))
+		if not new_stage.is_empty():
+			rocket_design["stages"].append(new_stage)
+			_show_vehicle_editor()
 	)
-	payload_fields.add_child(payload)
-	design_preview = RocketPreview.new()
-	design_preview.design = rocket_design
-	design_preview.custom_minimum_size = Vector2(210, 280)
-	payload_fields.add_child(design_preview)
-	design_stats_label = Label.new()
-	design_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	payload_fields.add_child(design_stats_label)
-	design_error_label = Label.new()
-	design_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	design_error_label.add_theme_color_override("font_color", Color(1.0, 0.48, 0.35))
-	payload_fields.add_child(design_error_label)
-	_update_design_stats()
+	component_row.add_child(new_stage_selector)
 	var actions := HBoxContainer.new()
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 12)
+	actions.add_theme_constant_override("separation", 10)
 	root.add_child(actions)
-	_add_button(actions, "RESET DESIGN", func():
+	_add_button(actions, "RESET", func():
 		rocket_design = RocketDesign.create_default()
 		_show_vehicle_editor()
 	)
@@ -351,39 +408,7 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "SAVE DESIGN", _save_rocket_design)
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _show_new_game_setup)
-
-func _add_rocket_stage() -> void:
-	var stages: Array = rocket_design["stages"]
-	if stages.size() >= 8:
-		return
-	var stage := RocketDesign.default_stage_part()
-	stage["name"] = "STAGE %02d" % (stages.size() + 1)
-	stages.append(stage)
-	_show_vehicle_editor()
-
-func _remove_rocket_stage() -> void:
-	var stages: Array = rocket_design["stages"]
-	if stages.size() <= 2:
-		return
-	stages.pop_back()
-	_show_vehicle_editor()
-
-func _add_design_field(parent: VBoxContainer, stage_index: int, key: String, label_text: String, minimum: float, maximum: float, step: float) -> void:
-	var label := Label.new()
-	label.text = label_text
-	parent.add_child(label)
-	var spin := SpinBox.new()
-	spin.min_value = minimum
-	spin.max_value = maximum
-	spin.step = step
-	spin.allow_greater = false
-	spin.allow_lesser = false
-	spin.value = float(rocket_design["stages"][stage_index].get(key, minimum))
-	spin.value_changed.connect(func(value: float):
-		rocket_design["stages"][stage_index][key] = value
-		_update_design_stats()
-	)
-	parent.add_child(spin)
+	_update_design_stats()
 
 func _update_design_stats() -> void:
 	if not is_instance_valid(design_stats_label) or not is_instance_valid(design_error_label):
@@ -1280,28 +1305,56 @@ func _quit_game() -> void:
 class RocketPreview:
 	extends Control
 	var design: Dictionary = {}
+
 	func _draw() -> void:
 		var stages: Array = design.get("stages", [])
 		if stages.is_empty():
 			return
 		var center_x := size.x * 0.5
-		var top := 14.0
-		var width := minf(48.0, size.x * 0.24)
-		var stage_height := minf(48.0, (size.y - 65.0) / float(maxi(1, stages.size())))
-		var payload_height := 25.0
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(center_x, top),
-			Vector2(center_x - width * 0.5, top + payload_height),
-			Vector2(center_x + width * 0.5, top + payload_height)
-		]), Color(0.75, 0.84, 0.94))
+		var top := 18.0
+		var available_height := maxf(100.0, size.y - 70.0)
+		var payload_height := clampf(available_height * 0.13, 32.0, 52.0)
+		var total_stage_mass := 0.0
+		for stage in stages:
+			total_stage_mass += float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
+		var stage_heights: Array[float] = []
+		for stage in stages:
+			var stage_mass := float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
+			stage_heights.append(clampf((available_height - payload_height) * stage_mass / maxf(1.0, total_stage_mass), 34.0, 86.0))
+		var total_height := payload_height
+		for stage_height in stage_heights:
+			total_height += stage_height
+		var scale_height := minf(1.0, available_height / maxf(1.0, total_height))
+		payload_height *= scale_height
+		for index in range(stage_heights.size()):
+			stage_heights[index] *= scale_height
+		var rocket_width := minf(92.0, size.x * 0.34)
+		var payload_type := str(design.get("payload_type", "probe"))
+		var payload_rect := Rect2(center_x - rocket_width * 0.32, top + 16.0, rocket_width * 0.64, payload_height - 16.0)
+		if payload_type == "satellite":
+			draw_rect(Rect2(center_x - rocket_width * 0.72, top + 22.0, rocket_width * 0.4, 12.0), Color(0.16, 0.42, 0.72))
+			draw_rect(Rect2(center_x + rocket_width * 0.32, top + 22.0, rocket_width * 0.4, 12.0), Color(0.16, 0.42, 0.72))
+			draw_rect(payload_rect, Color(0.78, 0.7, 0.42))
+		elif payload_type == "crew":
+			draw_colored_polygon(PackedVector2Array([Vector2(center_x, top), Vector2(center_x - rocket_width * 0.32, top + payload_height), Vector2(center_x + rocket_width * 0.32, top + payload_height)]), Color(0.82, 0.86, 0.92))
+			draw_circle(Vector2(center_x, top + payload_height * 0.62), 7.0, Color(0.2, 0.52, 0.72))
+		else:
+			draw_colored_polygon(PackedVector2Array([Vector2(center_x, top), Vector2(center_x - rocket_width * 0.32, top + payload_height), Vector2(center_x + rocket_width * 0.32, top + payload_height)]), Color(0.78, 0.84, 0.9))
+			draw_rect(Rect2(center_x - 8.0, top + payload_height * 0.62, 16.0, 10.0), Color(0.22, 0.52, 0.72))
 		var y := top + payload_height
 		for i in range(stages.size() - 1, -1, -1):
-			var stage_width := width * (1.0 + float(i) * 0.08)
-			draw_rect(Rect2(center_x - stage_width * 0.5, y, stage_width, stage_height), Color(0.36 + float(i) * 0.025, 0.62, 0.78))
-			draw_rect(Rect2(center_x - stage_width * 0.5, y + stage_height * 0.68, stage_width, stage_height * 0.2), Color(0.92, 0.65, 0.22))
+			var stage: Dictionary = stages[i]
+			var stage_height: float = stage_heights[i]
+			var stage_width := rocket_width * (0.9 - 0.18 * float(i) / float(maxi(1, stages.size() - 1)))
+			var stage_rect := Rect2(center_x - stage_width * 0.5, y, stage_width, stage_height)
+			draw_rect(stage_rect, Color(0.34, 0.57, 0.72))
+			draw_rect(Rect2(stage_rect.position + Vector2(5.0, 5.0), Vector2(stage_width - 10.0, stage_height * 0.58)), Color(0.48, 0.68, 0.78))
+			draw_rect(Rect2(center_x - stage_width * 0.5, y + stage_height * 0.76, stage_width, stage_height * 0.12), Color(0.88, 0.65, 0.28))
+			draw_string(ThemeDB.fallback_font, Vector2(center_x + stage_width * 0.5 + 8.0, y + stage_height * 0.58), "S%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.65, 0.8, 0.92))
+			var nozzle_width := stage_width * 0.18
+			draw_colored_polygon(PackedVector2Array([Vector2(center_x - nozzle_width, y + stage_height), Vector2(center_x + nozzle_width, y + stage_height), Vector2(center_x + nozzle_width * 0.65, y + stage_height + 12.0), Vector2(center_x - nozzle_width * 0.65, y + stage_height + 12.0)]), Color(0.58, 0.62, 0.7))
 			y += stage_height
-
-		draw_string(ThemeDB.fallback_font, Vector2(12, size.y - 8), str(design.get("name", "CUSTOM VEHICLE")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.65, 0.8, 0.92))
+		draw_string(ThemeDB.fallback_font, Vector2(12.0, size.y - 12.0), str(design.get("name", "CUSTOM VEHICLE")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.65, 0.8, 0.92))
 
 class Starfield:
 	extends Control
