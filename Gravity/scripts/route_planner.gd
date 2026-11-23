@@ -613,7 +613,7 @@ func _calculate_destination_plan() -> void:
 			if not bool(transfer.get("valid", false)):
 				if not deep_space_start:
 					_invalidate_navigation_plan()
-					navigation_report.text = "NO FEASIBLE TRANSFER FOUND\\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
+					navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
 					return
 				navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "local": false, "needs_window_search": true}
 			else:
@@ -780,7 +780,7 @@ func _send_destination_to_autopilot() -> void:
 	var needs_parking_orbit := bool(navigation_plan.get("needs_parking_orbit", false))
 	simulation.set("autopilot_phase", "ASCENT" if landed_start else "CIRCULARISE" if needs_parking_orbit or (current_name == target_name and stable_orbit) else "ASCENT" if not stable_orbit and inside_current_soi else "PLAN_TRANSFER")
 	simulation.set("guidance_enabled", true)
-	simulation.set("thrust_key_down", landed_start or (not stable_orbit and inside_current_soi))
+	simulation.set("thrust_key_down", landed_start or (not needs_parking_orbit and not stable_orbit and inside_current_soi))
 	simulation.set("status_message", "FLIGHT COMPUTER  •  NAVIGATING TO %s" % target_name.to_upper())
 	navigation_engage_button.disabled = true
 	navigation_engage_button.text = "AUTOPILOT ACTIVE"
