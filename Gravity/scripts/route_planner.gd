@@ -298,7 +298,7 @@ func _build_interface() -> void:
 	navigation_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 	root.add_child(navigation_heading)
 	var navigation_description := Label.new()
-	navigation_description.text = "Plan a transfer to any modeled planet or moon and enter a target orbit. This uses the same trajectory search and autopilot as the main destination controls."
+	navigation_description.text = "Plan a transfer to any modeled planet or moon. Choose the fuel-versus-time trade-off, scan future departure windows, then either fly the burns manually with live guidance or hand the route to autopilot."
 	navigation_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(navigation_description)
 	var navigation_row := HBoxContainer.new()
@@ -698,7 +698,7 @@ func _calculate_destination_plan() -> void:
 	elif bool(navigation_plan.get("local", false)):
 		navigation_report.text = "ORBIT CHANGE SOLVED  •  %s\nTarget altitude: %.1f km\nRequired ΔV: %.0f m/s\nThis plan will circularise around the current body." % [target_name, target_altitude / 1000.0, float(navigation_plan.get("delta_v", 0.0))]
 	else:
-		navigation_report.text = "TRANSFER SOLVED  •  %s\nDeparture: CURRENT ORBIT  •  T+ %.1f s\nDeparture ΔV: %.0f m/s\nArrival capture ΔV: %.0f m/s\nTotal estimated ΔV: %.0f m/s\nFlight time: %.1f days\nClosest approach: %.0f km\nArrival speed: %.0f m/s\nCandidate trajectories: %d\nThe exact departure solution will be handed to autopilot. Finite-burn losses and mid-course corrections remain approximate." % [
+		navigation_report.text = "TRANSFER SOLVED  •  %s\nDeparture: CURRENT ORBIT  •  T+ %.1f s\nDeparture ΔV: %.0f m/s\nArrival capture ΔV: %.0f m/s\nTotal estimated ΔV: %.0f m/s\nFlight time: %.1f days\nClosest approach: %.0f km\nArrival speed: %.0f m/s\nCandidate trajectories: %d\nChoose FLY MANUALLY to execute departure and arrival burns yourself, or SEND TO AUTOPILOT. Finite-burn losses and mid-course corrections remain approximate." % [
 			target_name,
 			float(navigation_plan.get("planned_at_time", 0.0)),
 			float(navigation_plan.get("departure_delta_v", 0.0)),
@@ -1006,8 +1006,10 @@ func _update_manual_guidance() -> void:
 	var heading_error := rad_to_deg(angle_difference(float(simulation.get("rotation_angle")), desired_rotation))
 	var timing := "BURN IN %.1f s" % remaining_time if remaining_time > 0.0 else "BURN WINDOW OPEN"
 	var tolerance := maxf(0.5, target_delta_v * 0.01)
-	var burn_status := "CUT THRUST  •  TARGET ΔV REACHED" if achieved >= target_delta_v - tolerance else "BURN TRACKING" if tracking else "READY"
-	if not bool(simulation.get("thrust_key_down")) and achieved >= target_delta_v - tolerance:
+	var cross_track_tolerance := maxf(1.0, target_delta_v * 0.03)
+	var vector_complete := achieved >= target_delta_v - tolerance and cross_track <= cross_track_tolerance
+	var burn_status := "CUT THRUST  •  TARGET ΔV REACHED" if vector_complete else "OFF-AXIS  •  CORRECT BURN VECTOR" if achieved >= target_delta_v - tolerance else "BURN TRACKING" if tracking else "READY"
+	if not bool(simulation.get("thrust_key_down")) and vector_complete:
 		simulation.set("manual_burn_tracking_enabled", false)
 		manual_guidance_completed = true
 		burn_status = "NODE BURN COMPLETE"
@@ -1210,7 +1212,9 @@ func _update_manual_flight_plan() -> void:
 		var achieved := maxf(0.0, accumulated.dot(direction))
 		var cross_track := absf(accumulated.cross(direction))
 		var tolerance := maxf(0.5, target_delta_v * 0.01)
-		if not bool(simulation.get("thrust_key_down")) and achieved >= target_delta_v - tolerance:
+		var vector_tolerance := maxf(1.0, target_delta_v * 0.03)
+		var vector_complete := achieved >= target_delta_v - tolerance and cross_track <= vector_tolerance
+		if not bool(simulation.get("thrust_key_down")) and vector_complete:
 			simulation.set("manual_burn_tracking_enabled", false)
 			if phase == "DEPARTURE_BURN":
 				plan["phase"] = "TRANSFER_COAST"
@@ -1229,7 +1233,7 @@ func _update_manual_flight_plan() -> void:
 		else:
 			var desired_rotation := target_vector.angle() - Vector2.UP.angle()
 			var heading_error := rad_to_deg(angle_difference(float(simulation.get("rotation_angle")), desired_rotation))
-			var burn_status := "CUT THRUST  •  TARGET ΔV REACHED" if achieved >= target_delta_v - tolerance else "BURN IN PROGRESS"
+			var burn_status := "CUT THRUST  •  TARGET ΔV REACHED" if vector_complete else "OFF-AXIS  •  CORRECT BURN VECTOR" if achieved >= target_delta_v - tolerance and cross_track > vector_tolerance else "BURN IN PROGRESS"
 			manual_guidance_report.text = "MANUAL FLIGHT PLAN  •  %s\n%s  •  REQUIRED ΔV %.1f m/s  •  DELIVERED %.1f m/s  •  CROSS-TRACK %.1f m/s\nHEADING ERROR %+.1f°. Rotate with Q/E, thrust with W and cut off with S. Engine control remains entirely manual." % [
 				str(plan.get("target_name", "TARGET")).to_upper(),
 				burn_status,
