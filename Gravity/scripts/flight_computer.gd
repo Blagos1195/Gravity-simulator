@@ -447,6 +447,10 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var direction_count := 12 if coarse_search else 16
 	var best_score := INF
 	var best_plan: Dictionary = {}
+	var rejected_collisions := 0
+	var rejected_soi := 0
+	var rejected_capture := 0
+	var rejected_delta_v := 0
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
 	var time_weight := 1.0 - fuel_weight
 	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
@@ -532,18 +536,22 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 						closest_time = (float(step_index) + closest_fraction) * step_size
 						closest_trajectory_index = candidate_trajectory.size() - 1
 				if collided:
+					rejected_collisions += 1
 					continue
 				var target_soi := float(initial_target.soi)
 				if closest_distance > target_soi:
+					rejected_soi += 1
 					continue
 				var target_mu := G * float(initial_target.mass)
 				var target_safe_altitude := minimum_safe_orbit_altitude(str(initial_target.get("name", "")), float(initial_target.radius))
 				var capture := arrival_capture_burn(closest_relative_position, closest_relative_velocity, target_mu, float(initial_target.radius), target_orbit_altitude, target_safe_altitude)
 				if not bool(capture.get("valid", false)):
+					rejected_capture += 1
 					continue
 				var capture_delta_v := float(capture.get("total_delta_v", INF))
 				var total_delta_v := departure_delta_v + capture_delta_v
 				if total_delta_v > maximum_delta_v:
+					rejected_delta_v += 1
 					continue
 				var fuel_cost := total_delta_v / maxf(1.0, maximum_delta_v)
 				var time_cost := closest_time / maxf(1.0, maximum_flight_duration)
@@ -573,7 +581,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	if best_plan.is_empty():
 		return {
 			"valid": false,
-			"reason": "No sampled trajectory reached the destination sphere of influence within the available delta-v.",
+			"reason": "No feasible candidate. Rejected: collision=%d, outside_soi=%d, unsafe_capture=%d, delta_v=%d." % [rejected_collisions, rejected_soi, rejected_capture, rejected_delta_v],
 			"search_candidates": direction_count * magnitudes.size() * durations.size()
 		}
 	return best_plan
