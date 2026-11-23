@@ -413,12 +413,16 @@ func _adaptive_step_size() -> float:
 	var maximum_step: float = 0.25 if in_atmosphere else 1800.0
 	var travel_distance_limit: float = 250.0 if in_atmosphere else maxf(100000.0, radius * 0.01)
 	var lunar_transfer_coast := autopilot_enabled and autopilot_phase == "TRANSFER_COAST" and autopilot_planet_index == -1 and float(local_orbit.get("eccentricity", 1.0)) > 0.05
-	var lunar_departure_window_coast := autopilot_enabled and autopilot_planet_index == -1 and autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"] and bool(local_orbit.get("bound", false)) and float(local_orbit.get("eccentricity", 1.0)) <= 0.05
-	if lunar_departure_window_coast:
+	var lunar_departure_wait_coast := autopilot_enabled and autopilot_planet_index == -1 and autopilot_phase == "WAIT_WINDOW" and bool(local_orbit.get("bound", false)) and float(local_orbit.get("eccentricity", 1.0)) <= 0.05
+	var lunar_departure_alignment := autopilot_enabled and autopilot_planet_index == -1 and autopilot_phase == "ALIGN_DEPARTURE" and bool(local_orbit.get("bound", false)) and float(local_orbit.get("eccentricity", 1.0)) <= 0.05
+	if lunar_departure_wait_coast:
 		orbital_limit = maxf(orbital_limit, 10.0)
 		maximum_step = minf(maximum_step, 10.0)
 		travel_distance_limit = maxf(travel_distance_limit, radius * 0.02)
-	if bool(local_orbit.get("bound", false)) and not in_atmosphere and not lunar_transfer_coast and not lunar_departure_window_coast:
+	if lunar_departure_alignment:
+		orbital_limit = maxf(orbital_limit, 1.0)
+		maximum_step = minf(maximum_step, 1.0)
+	if bool(local_orbit.get("bound", false)) and not in_atmosphere and not lunar_transfer_coast and not lunar_departure_wait_coast and not lunar_departure_alignment:
 		maximum_step = minf(maximum_step, 0.5)
 		travel_distance_limit = minf(travel_distance_limit, maxf(1000.0, radius * 0.002))
 	if autopilot_enabled and autopilot_phase in ["COAST_TO_TARGET", "ALIGN_DEPARTURE"]:
@@ -1044,8 +1048,9 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = false
 				var desired_radial := FlightComputer.departure_periapsis_direction(autopilot_planet_index, sim_time, guidance_position.length())
 				var planned_departure_time := float(autopilot_precomputed_transfer_plan.get("departure_time_seconds", -1.0))
-				var departure_time_reached := planned_departure_time < 0.0 or sim_time >= planned_departure_time - 60.0
-				if desired_radial.length_squared() > 0.5 and guidance_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)) and departure_time_reached:
+				var departure_time_reached := planned_departure_time < 0.0 or sim_time >= planned_departure_time - 5.0
+				var alignment_tolerance := deg_to_rad(0.1) if autopilot_planet_index == -1 else deg_to_rad(1.5)
+				if desired_radial.length_squared() > 0.5 and guidance_position.normalized().dot(desired_radial) >= cos(alignment_tolerance) and departure_time_reached:
 					autopilot_precomputed_transfer_plan.clear()
 					autopilot_phase = "PLAN_TRANSFER"
 				elif planned_departure_time >= 0.0 and sim_time > planned_departure_time + 7200.0:
