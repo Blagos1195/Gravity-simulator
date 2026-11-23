@@ -864,7 +864,7 @@ func _add_new_vehicle() -> void:
 func _switch_vehicle(index: int) -> void:
 	if index < 0 or index >= fleet_sims.size():
 		return
-	var requested_name := fleet_sims[index].vehicle_name
+	var requested_name: String = str(fleet_sims[index].vehicle_name)
 	for link in docking_links:
 		if str(link.get("child_name", "")) == requested_name:
 			for parent_index in range(fleet_sims.size()):
