@@ -1081,7 +1081,7 @@ func _show_autopilot_panel() -> void:
 		report.text = "SCANNING FUTURE DEPARTURE DATES...\nThis simulates coarse candidate transfers and may take a little while."
 		await get_tree().process_frame
 		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if sim.infinite_weightless_fuel else FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel) * (1.0 - sim.autopilot_safety_margin)
-		var windows := FlightComputer.scan_launch_windows(sim.rocket_position, relative_velocity, sim.sim_time, destination_index, available, sim.autopilot_speed_priority, 540, 30, orbit_altitude.value * 1000.0, sim.rocket_position_precise)
+		var windows := FlightComputer.scan_launch_windows(sim.rocket_position, sim.velocity, sim.sim_time, destination_index, available, sim.autopilot_speed_priority, 540, 30, orbit_altitude.value * 1000.0, sim.rocket_position_precise)
 		launch_windows_button.disabled = false
 		if not bool(windows.get("valid", false)):
 			report.text = "NO FEASIBLE WINDOWS FOUND\n" + str(windows.get("reason", "No valid transfer was found."))
