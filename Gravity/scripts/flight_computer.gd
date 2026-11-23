@@ -545,7 +545,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 		var elapsed_flight_time := 0.0
 		while elapsed_flight_time < flight_duration - 0.001:
 			var high_resolution_segment := target_index == -2 or (near_earth_departure and elapsed_flight_time < 86400.0) or elapsed_flight_time > flight_duration - 86400.0
-			var maximum_sample_step := minf(300.0, maxf(10.0, flight_duration / 360.0)) if high_resolution_segment else (1800.0 if target_index == -1 else 7200.0)
+			var maximum_sample_step := minf(300.0, maxf(10.0, flight_duration / 360.0)) if high_resolution_segment else (600.0 if target_index == -1 else 7200.0)
 			if coarse_search and not high_resolution_segment:
 				maximum_sample_step *= 2.0
 			var sample_step := minf(maximum_sample_step, flight_duration - elapsed_flight_time)
