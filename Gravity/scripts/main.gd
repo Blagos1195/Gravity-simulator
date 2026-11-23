@@ -1592,8 +1592,8 @@ func _show_docking_panel() -> void:
 		transfer_button.disabled = not docked
 		if docked and fuel_direction.item_count > 0:
 			var direction: Dictionary = fuel_direction.get_item_metadata(fuel_direction.selected)
-			var donor := _find_vehicle_by_name(str(direction.from))
-			var recipient := _find_vehicle_by_name(str(direction.to))
+			var donor := _find_vehicle_by_name(str(direction.get("from", "")))
+			var recipient := _find_vehicle_by_name(str(direction.get("to", "")))
 			if donor == null or recipient == null:
 				transfer_button.disabled = true
 				fuel_status.text = "Fuel transfer unavailable."
@@ -1610,18 +1610,27 @@ func _show_docking_panel() -> void:
 		refresh_panel.call()
 	target_selector.item_selected.connect(target_changed)
 	dock_button.pressed.connect(func():
+		if sim.vehicle_name != parent_name:
+			refresh_panel.call()
+			return
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
 		if _dock_vehicle(target_name):
 			fuel_status.text = "Docking complete."
 		refresh_panel.call()
 	)
 	undock_button.pressed.connect(func():
+		if sim.vehicle_name != parent_name:
+			refresh_panel.call()
+			return
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
 		if _undock_vehicle(target_name):
 			fuel_status.text = "Spacecraft undocked."
 		refresh_panel.call()
 	)
 	transfer_button.pressed.connect(func():
+		if sim.vehicle_name != parent_name:
+			refresh_panel.call()
+			return
 		var direction: Dictionary = fuel_direction.get_item_metadata(fuel_direction.selected)
 		var amount := _transfer_fuel(str(direction.from), str(direction.to))
 		fuel_status.text = "Transferred %.0f kg of propellant." % amount if amount > 0.0 else "No fuel could be transferred."
@@ -1795,6 +1804,38 @@ func _load_game_from_path(path: String) -> void:
 		fleet_sims = [sim]
 		active_vehicle_index = 0
 		_switch_vehicle(0)
+	docking_links.clear()
+	var saved_docking_links: Variant = parsed.get("docking_links", [])
+	if saved_docking_links is Array:
+		var linked_names: Dictionary = {}
+		for saved_link in saved_docking_links:
+			if not saved_link is Dictionary:
+				continue
+			var parent_name := str(saved_link.get("parent_name", ""))
+			var child_name := str(saved_link.get("child_name", ""))
+			var offset_x: Variant = saved_link.get("offset_x", null)
+			var offset_y: Variant = saved_link.get("offset_y", null)
+			if parent_name.is_empty() or child_name.is_empty() or parent_name == child_name:
+				continue
+			if _find_vehicle_by_name(parent_name) == null or _find_vehicle_by_name(child_name) == null:
+				continue
+			if linked_names.has(parent_name) or linked_names.has(child_name):
+				continue
+			if not (offset_x is float or offset_x is int) or not (offset_y is float or offset_y is int):
+				continue
+			if not is_finite(float(offset_x)) or not is_finite(float(offset_y)):
+				continue
+			docking_links.append({
+				"parent_name": parent_name,
+				"child_name": child_name,
+				"offset_x": float(offset_x),
+				"offset_y": float(offset_y)
+			})
+			linked_names[parent_name] = true
+			linked_names[child_name] = true
+	_update_docked_masses()
+	_sync_docked_vehicles()
+	_switch_vehicle(active_vehicle_index)
 	infinite_weightless_fuel = sim.infinite_weightless_fuel
 	for vehicle in fleet_sims:
 		vehicle.realism = realism
