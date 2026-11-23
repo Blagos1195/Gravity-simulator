@@ -2,6 +2,7 @@ extends SceneTree
 
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
+const ContentCatalog = preload("res://scripts/content_catalog.gd")
 
 func _initialize() -> void:
 	var design := RocketDesign.create_default()
@@ -59,5 +60,47 @@ func _initialize() -> void:
 	assert(is_equal_approx(RocketDesign.total_initial_mass(odyssey), 448500.0))
 	assert(RocketDesign.total_delta_v(odyssey) < RocketDesign.MAX_TOTAL_DELTA_V)
 	assert(RocketDesign.total_delta_v(odyssey) > RocketDesign.MIN_TOTAL_DELTA_V)
+	assert(RocketDesign.engine_count_options().has(5) == false)
+	assert(RocketDesign.payload_options().size() >= 5)
+	assert(RocketDesign.tank_scale_options().size() >= 3)
+	var mod_overlay := {
+		"schema_version": 1,
+		"rocket": {
+			"stage_parts_add": [{
+				"id": "test_mod_stage",
+				"label": "Test Mod Stage",
+				"name": "MOD STAGE",
+				"dry_mass": 4000.0,
+				"fuel_capacity": 30000.0,
+				"thrust": 200000.0,
+				"vacuum_thrust": 250000.0,
+				"flow": 63.3,
+				"engine_count": 1
+			}],
+			"presets_add": {
+				"TEST_MOD_PRESET": {
+					"name": "Test Mod Vehicle",
+					"payload_mass": 500.0,
+					"stages": ["explorer_first_stage", "test_mod_stage"]
+				}
+			},
+			"builder_options": {
+				"engine_counts_add": [5],
+				"payloads_add": [{"id": "test_payload", "label": "Test payload · 2 t", "mass": 2000.0}],
+				"tank_scales_add": [{"label": "Test tank", "scale": 1.5}]
+			}
+		}
+	}
+	var merged_catalog := ContentCatalog._merge_overlay(ContentCatalog.get_catalog(), mod_overlay)
+	var merged_rocket: Dictionary = merged_catalog.rocket
+	assert(merged_rocket.stage_parts.size() == ContentCatalog.get_catalog().rocket.stage_parts.size() + 1)
+	assert(merged_rocket.presets.has("TEST_MOD_PRESET"))
+	assert(merged_rocket.builder_options.engine_counts.has(5))
+	assert(merged_rocket.builder_options.payloads.any(func(option: Dictionary): return str(option.id) == "test_payload"))
+	assert(merged_rocket.builder_options.tank_scales.any(func(option: Dictionary): return is_equal_approx(float(option.scale), 1.5)))
+	var modded_stage := RocketDesign.configure_stage("explorer_first_stage", 5, 1.5)
+	assert(not modded_stage.is_empty())
+	assert(int(modded_stage.engine_count) == 5)
+	assert(is_equal_approx(float(modded_stage.fuel_capacity), 450000.0))
 	print("Rocket design tests passed.")
 	quit()
