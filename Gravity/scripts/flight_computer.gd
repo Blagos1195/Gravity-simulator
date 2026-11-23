@@ -444,7 +444,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var magnitudes: Array
 	var direction_count: int
 	if target_index == -1:
-		durations = [3.5 * 86400.0, 4.5 * 86400.0, 5.5 * 86400.0, 6.5 * 86400.0, 7.5 * 86400.0]
+		var lunar_transfer_time := float(hohmann_transfer(start_velocity.length() * 0.0 + sqrt(start_position_components[0] * start_position_components[0] + start_position_components[1] * start_position_components[1]), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("transfer_time", 5.0 * 86400.0))
+		durations = [lunar_transfer_time * 0.8, lunar_transfer_time * 0.9, lunar_transfer_time, lunar_transfer_time * 1.1, lunar_transfer_time * 1.2]
 		magnitudes = [0.0]
 		for delta_v_step in range(8, 25):
 			var candidate_delta_v := float(delta_v_step) * 250.0
@@ -460,7 +461,9 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var best_plan: Dictionary = {}
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
 	var time_weight := 1.0 - fuel_weight
-	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
+	var maximum_flight_duration := 0.0
+	for duration_value in durations:
+		maximum_flight_duration = maxf(maximum_flight_duration, float(duration_value))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
 		var minimum_steps := 360
