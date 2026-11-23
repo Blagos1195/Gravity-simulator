@@ -987,7 +987,7 @@ func _show_new_vehicle_dialog() -> void:
 		description.text = str(options[0].get("description", ""))
 	else:
 		launch_button.disabled = true
-	window.popup_centered()
+	window.call_deferred("popup_centered")
 
 func _switch_vehicle(index: int) -> void:
 	if index < 0 or index >= fleet_sims.size():
