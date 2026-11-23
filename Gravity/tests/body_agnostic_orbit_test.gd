@@ -226,7 +226,7 @@ func _validate_unbound_recovery_to_orbit() -> void:
 	var body_mu := FlightComputer.G * float(body_state.get("mass", 0.0))
 	var initial_radius := body_radius + 200000.0
 	var target_radius := body_radius + 300000.0
-	var initial_speed := FlightComputer.circular_orbit_speed(initial_radius, body_mu) * 1.4141
+	var initial_speed := FlightComputer.circular_orbit_speed(initial_radius, body_mu) * 1.5
 	simulation._set_rocket_position_relative_to_body(body_state, Vector2.UP * initial_radius)
 	simulation.velocity = Vector2(body_state.get("velocity", Vector2.ZERO)) + Vector2.RIGHT * initial_speed
 	var initial_orbit := FlightComputer.orbital_state(Vector2.UP * initial_radius, Vector2.RIGHT * initial_speed, body_mu)
