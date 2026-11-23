@@ -320,7 +320,7 @@ func _initialize() -> void:
 	tracking_sim.autopilot_burn_tracks_orbit = true
 	tracking_sim.rotation_angle = 0.0
 	tracking_sim._update_guidance(0.1)
-	assert(tracking_sim.autopilot_burn_direction.distance_to(Vector2.UP) < 0.000001)
+	assert(tracking_sim.autopilot_burn_direction.distance_to(Vector2.UP) < 0.000001, "Burn direction=%s position=%s phase=%s body=%s" % [str(tracking_sim.autopilot_burn_direction), str(tracking_sim.rocket_position), tracking_sim.autopilot_phase, str(tracking_sim._nearest_body_state(tracking_sim.rocket_position).get("name", ""))])
 	tracking_sim.free()
 	var route_sim: Variant = SimulationView.new()
 	route_sim.set_rocket_design(RocketDesign.create_default())
