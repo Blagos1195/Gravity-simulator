@@ -580,7 +580,18 @@ func _calculate_destination_plan() -> void:
 			navigation_report.text = "A SAFE PARKING ORBIT AROUND %s IS REQUIRED BEFORE A FINITE-PROPELLANT TRANSFER CAN BE CALCULATED." % current_name.to_upper()
 			return
 		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_propellant else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
-		var transfer: Dictionary = FlightComputer.simulated_transfer_search_precise(simulation.get("rocket_position_precise"), simulation.get("velocity"), float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
+		var transfer: Dictionary = {}
+		if stable_orbit and current_name == "Earth":
+			var windows: Dictionary = FlightComputer.scan_launch_windows(current_position, current_velocity, float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), 540, 30, target_altitude)
+			if not bool(windows.get("valid", false)):
+				_invalidate_navigation_plan()
+				navigation_report.text = "NO FEASIBLE DEPARTURE WINDOW FOUND\n" + str(windows.get("reason", "No sampled departure date produced a feasible transfer."))
+				return
+			transfer = Dictionary(windows.get("best", {})).duplicate(true)
+			transfer["departure_time_seconds"] = float(simulation.get("sim_time")) + float(transfer.get("departure_wait_days", 0.0)) * 86400.0
+			transfer["window_wait_only"] = true
+		else:
+			transfer = FlightComputer.simulated_transfer_search_precise(simulation.get("rocket_position_precise"), simulation.get("velocity"), float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
 		if not bool(transfer.get("valid", false)):
 			_invalidate_navigation_plan()
 			navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
@@ -742,7 +753,9 @@ func _send_destination_to_autopilot() -> void:
 	simulation.set("autopilot_apsis_correction_armed", true)
 	simulation.set("autopilot_apsis_correction_angle", relative_position.angle())
 	var infinite_propellant := bool(simulation.get("infinite_weightless_fuel"))
-	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if bool(simulation.get("landed")) or (not stable_orbit and not infinite_propellant) else "PLAN_TRANSFER")
+	var departure_time := float(navigation_plan.get("departure_time_seconds", -1.0))
+	var waiting_for_window := bool(navigation_plan.get("window_wait_only", false)) and departure_time > float(simulation.get("sim_time")) + 3600.0
+	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if bool(simulation.get("landed")) or (not stable_orbit and not infinite_propellant) else "WAIT_WINDOW" if waiting_for_window else "PLAN_TRANSFER")
 	simulation.set("guidance_enabled", true)
 	simulation.set("thrust_key_down", bool(simulation.get("landed")) or not stable_orbit)
 	simulation.set("status_message", "FLIGHT COMPUTER  •  NAVIGATING TO %s" % target_name.to_upper())
