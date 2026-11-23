@@ -304,7 +304,8 @@ func _physics_step(dt: float) -> void:
 	final_atmosphere["relative_velocity"] = Vector2(final_atmosphere.get("relative_velocity", Vector2.ZERO)) + velocity - half_velocity
 	_set_rocket_position_components(next_position_components[0], next_position_components[1])
 	sim_time = end_time
-	fuel = maxf(0.0, fuel - fuel_used)
+	if not infinite_weightless_fuel:
+		fuel = maxf(0.0, fuel - fuel_used)
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
 	if infinite_weightless_fuel and infinite_fuel_stage_remaining <= 0.0001 and stage_index < rocket_stages.size() - 1:
