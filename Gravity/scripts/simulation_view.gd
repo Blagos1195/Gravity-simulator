@@ -936,12 +936,26 @@ func _update_guidance(dt: float) -> void:
 				else:
 					_fail_autopilot("TARGET PERIAPSIS IS BELOW THE BODY")
 			"CIRCULARISE_BURN":
-				status_message = "AUTOPILOT  •  CIRCULARISING  %.0f M/S" % autopilot_burn_remaining
-				var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-				rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
-				if not propellant_available and stage_index >= rocket_stages.size() - 1:
-					_fail_autopilot("OUT OF PROPELLANT DURING CIRCULARISATION")
+				var updated_recovery_plan: Dictionary = FlightComputer.target_radius_burn(guidance_position, guidance_velocity, target_radius, G * float(guidance_body.mass))
+				if not bool(updated_recovery_plan.get("valid", false)):
+					thrust_key_down = false
+					_fail_autopilot("ORBIT RECOVERY BECAME UNSTABLE")
+				else:
+					var updated_burn_vector: Vector2 = updated_recovery_plan.get("burn_vector", Vector2.ZERO)
+					autopilot_burn_direction = updated_burn_vector.normalized()
+					autopilot_burn_remaining = float(updated_recovery_plan.get("delta_v", INF))
+					status_message = "AUTOPILOT  •  RECOVERING ORBIT  %.0f M/S" % autopilot_burn_remaining
+					if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
+						thrust_key_down = false
+						autopilot_apsis_correction_armed = false
+						autopilot_apsis_correction_angle = guidance_position.angle()
+						autopilot_phase = "COAST_TO_TARGET"
+					else:
+						var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
+						rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
+						thrust_key_down = propellant_available and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
+					if not propellant_available and stage_index >= rocket_stages.size() - 1:
+						_fail_autopilot("OUT OF PROPELLANT DURING CIRCULARISATION")
 			"CIRCULARISE":
 				status_message = "AUTOPILOT  •  ORBITAL CIRCULARISATION"
 				var target_orbit_plan: Dictionary = FlightComputer.target_radius_burn(guidance_position, guidance_velocity, target_radius, G * float(guidance_body.mass))
