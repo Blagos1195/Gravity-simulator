@@ -16,6 +16,17 @@ func _initialize() -> void:
 	multi_engine["stages"][0]["flow"] = float(multi_engine["stages"][0]["flow"]) / 3.0
 	assert(RocketDesign.validation_errors(multi_engine).is_empty())
 	assert(is_equal_approx(RocketDesign.total_delta_v(multi_engine), RocketDesign.total_delta_v(design)))
+	var configured_stage := RocketDesign.configure_stage("explorer_first_stage", 4, 1.25)
+	assert(not configured_stage.is_empty())
+	assert(int(configured_stage.engine_count) == 4)
+	assert(is_equal_approx(float(configured_stage.fuel_capacity), 375000.0))
+	assert(is_equal_approx(float(configured_stage.dry_mass), 37500.0))
+	var configured_design := design.duplicate(true)
+	configured_design["stages"][0] = configured_stage
+	assert(RocketDesign.validation_errors(configured_design).is_empty())
+	assert(RocketDesign.total_delta_v(configured_design) > RocketDesign.total_delta_v(design))
+	assert(RocketDesign.configure_stage("explorer_first_stage", 5, 1.0).is_empty())
+	assert(RocketDesign.configure_stage("explorer_first_stage", 2, 1.1).is_empty())
 	var heavier := design.duplicate(true)
 	heavier["payload_mass"] = 5000.0
 	assert(RocketDesign.total_delta_v(heavier) < RocketDesign.total_delta_v(design))
