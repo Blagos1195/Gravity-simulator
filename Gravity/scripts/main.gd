@@ -844,15 +844,25 @@ func _start_flight() -> void:
 	_switch_vehicle(0)
 
 func _add_new_vehicle() -> void:
-	if fleet_sims.is_empty() or fleet_sims.size() >= 12:
-		if status_label:
-			status_label.text = "VEHICLE LIMIT REACHED"
+	if not is_instance_valid(sim):
 		return
 	var design := {
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
 		"stages": sim.rocket_stages.duplicate(true)
 	}
+	_launch_vehicle_design(design)
+
+func _launch_vehicle_design(design: Dictionary) -> void:
+	if fleet_sims.is_empty() or fleet_sims.size() >= 12:
+		if status_label:
+			status_label.text = "VEHICLE LIMIT REACHED"
+		return
+	var errors := RocketDesign.validation_errors(design)
+	if not errors.is_empty():
+		if status_label:
+			status_label.text = "VEHICLE DESIGN IS INVALID"
+		return
 	var new_name := "Vehicle %d" % (fleet_sims.size() + 1)
 	var vehicle := _create_vehicle(design, new_name)
 	vehicle.sim_time = sim.sim_time
@@ -860,6 +870,93 @@ func _add_new_vehicle() -> void:
 	fleet_sims.append(vehicle)
 	_refresh_vehicle_selector()
 	_switch_vehicle(fleet_sims.size() - 1)
+
+func _show_new_vehicle_dialog() -> void:
+	if not is_instance_valid(sim):
+		return
+	var options: Array[Dictionary] = []
+	var current_design := {
+		"name": sim.vehicle_name,
+		"payload_mass": sim.payload_mass,
+		"stages": sim.rocket_stages.duplicate(true)
+	}
+	options.append({
+		"id": "current",
+		"label": "Current vehicle design",
+		"description": "Launch another copy of the currently selected spacecraft.",
+		"design": current_design
+	})
+	for preset in RocketDesign.preset_options():
+		var preset_id := str(preset.get("id", ""))
+		var preset_design := RocketDesign.create_preset(preset_id)
+		if RocketDesign.validation_errors(preset_design).is_empty():
+			options.append({
+				"id": preset_id,
+				"label": str(preset.get("label", preset_id)),
+				"description": RocketDesign.preset_description(preset_id),
+				"design": preset_design
+			})
+	var saved_design_path := "user://rocket_design.json"
+	if FileAccess.file_exists(saved_design_path):
+		var saved_file := FileAccess.open(saved_design_path, FileAccess.READ)
+		if saved_file != null:
+			var saved_design: Variant = JSON.parse_string(saved_file.get_as_text())
+			saved_file.close()
+			if saved_design is Dictionary and RocketDesign.validation_errors(saved_design).is_empty():
+				options.append({
+					"id": "saved",
+					"label": "Saved custom design",
+					"description": "Launch the custom vehicle saved in the workshop.",
+					"design": saved_design
+				})
+	var window := Window.new()
+	window.title = "BUILD OR SELECT A VEHICLE"
+	window.size = Vector2i(500, 360)
+	window.min_size = Vector2i(420, 300)
+	window.transient = true
+	window.exclusive = true
+	add_child(window)
+	window.close_requested.connect(window.queue_free)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 12)
+	window.add_child(layout)
+	var heading := Label.new()
+	heading.text = "SELECT A VEHICLE DESIGN"
+	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1))
+	layout.add_child(heading)
+	var selector := OptionButton.new()
+	selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for option in options:
+		selector.add_item(str(option.label))
+		selector.set_item_metadata(selector.item_count - 1, option)
+	layout.add_child(selector)
+	var description := Label.new()
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	description.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(description)
+	var launch_button := Button.new()
+	launch_button.text = "LAUNCH SELECTED VEHICLE"
+	launch_button.custom_minimum_size.y = 44
+	layout.add_child(launch_button)
+	selector.item_selected.connect(func(index: int):
+		var selected: Dictionary = selector.get_item_metadata(index)
+		description.text = str(selected.get("description", ""))
+	)
+	launch_button.pressed.connect(func():
+		if selector.item_count == 0:
+			return
+		var selected: Dictionary = selector.get_item_metadata(selector.selected)
+		var selected_design: Dictionary = selected.get("design", {}).duplicate(true)
+		_launch_vehicle_design(selected_design)
+		window.queue_free()
+	)
+	if not options.is_empty():
+		selector.select(0)
+		description.text = str(options[0].get("description", ""))
+	else:
+		launch_button.disabled = true
+	window.popup_centered()
 
 func _switch_vehicle(index: int) -> void:
 	if index < 0 or index >= fleet_sims.size():
@@ -1076,7 +1173,7 @@ func _build_flight_hud() -> void:
 	vehicle_selector.item_selected.connect(_switch_vehicle)
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
-	_add_button(right, "LAUNCH NEW VEHICLE", _add_new_vehicle)
+	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
