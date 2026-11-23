@@ -518,20 +518,43 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 					var relative_start_y: float = previous_position[1] - previous_target_position[1]
 					var relative_end_x: float = position[0] - target_position[0]
 					var relative_end_y: float = position[1] - target_position[1]
-					var relative_segment_x := relative_end_x - relative_start_x
-					var relative_segment_y := relative_end_y - relative_start_y
-					var relative_segment_length_squared := relative_segment_x * relative_segment_x + relative_segment_y * relative_segment_y
+					var relative_start_velocity: Vector2 = previous_velocity - Vector2(previous_target_state.velocity)
+					var relative_end_velocity: Vector2 = velocity - Vector2(target_state.velocity)
+					var segment_closest_distance := INF
 					var closest_fraction := 0.0
-					if relative_segment_length_squared > 0.0:
-						closest_fraction = clampf(-(relative_start_x * relative_segment_x + relative_start_y * relative_segment_y) / relative_segment_length_squared, 0.0, 1.0)
-					var closest_relative_x := relative_start_x + relative_segment_x * closest_fraction
-					var closest_relative_y := relative_start_y + relative_segment_y * closest_fraction
-					var distance_squared := closest_relative_x * closest_relative_x + closest_relative_y * closest_relative_y
+					var closest_relative_x := relative_start_x
+					var closest_relative_y := relative_start_y
+					var interpolated_relative_velocity := relative_start_velocity
+					for refinement_sample in range(9):
+						var fraction := float(refinement_sample) / 8.0
+						var fraction_squared := fraction * fraction
+						var fraction_cubed := fraction_squared * fraction
+						var h00 := 2.0 * fraction_cubed - 3.0 * fraction_squared + 1.0
+						var h10 := fraction_cubed - 2.0 * fraction_squared + fraction
+						var h01 := -2.0 * fraction_cubed + 3.0 * fraction_squared
+						var h11 := fraction_cubed - fraction_squared
+						var sample_x := h00 * relative_start_x + h10 * step_size * relative_start_velocity.x + h01 * relative_end_x + h11 * step_size * relative_end_velocity.x
+						var sample_y := h00 * relative_start_y + h10 * step_size * relative_start_velocity.y + h01 * relative_end_y + h11 * step_size * relative_end_velocity.y
+						var sample_distance := sqrt(sample_x * sample_x + sample_y * sample_y)
+						if sample_distance >= segment_closest_distance:
+							continue
+						segment_closest_distance = sample_distance
+						closest_fraction = fraction
+						closest_relative_x = sample_x
+						closest_relative_y = sample_y
+						var dh00 := 6.0 * fraction_squared - 6.0 * fraction
+						var dh10 := 3.0 * fraction_squared - 4.0 * fraction + 1.0
+						var dh01 := -6.0 * fraction_squared + 6.0 * fraction
+						var dh11 := 3.0 * fraction_squared - 2.0 * fraction
+						interpolated_relative_velocity = Vector2(
+							(dh00 * relative_start_x + dh01 * relative_end_x) / step_size + dh10 * relative_start_velocity.x + dh11 * relative_end_velocity.x,
+							(dh00 * relative_start_y + dh01 * relative_end_y) / step_size + dh10 * relative_start_velocity.y + dh11 * relative_end_velocity.y
+						)
+					var distance_squared := segment_closest_distance * segment_closest_distance
 					if distance_squared < closest_distance * closest_distance:
-						closest_distance = sqrt(distance_squared)
+						closest_distance = segment_closest_distance
 						closest_relative_position = Vector2(closest_relative_x, closest_relative_y)
-						var interpolated_target_velocity: Vector2 = Vector2(previous_target_state.velocity).lerp(Vector2(target_state.velocity), closest_fraction)
-						closest_relative_velocity = previous_velocity.lerp(velocity, closest_fraction) - interpolated_target_velocity
+						closest_relative_velocity = interpolated_relative_velocity
 						closest_target_position = PackedFloat64Array([
 							lerpf(previous_target_position[0], target_position[0], closest_fraction),
 							lerpf(previous_target_position[1], target_position[1], closest_fraction)
