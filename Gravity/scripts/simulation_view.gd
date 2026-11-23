@@ -228,7 +228,10 @@ func _physics_step(dt: float) -> void:
 	var local_body := _nearest_body_state(rocket_position)
 	var altitude := maxf(0.0, float(local_body.get("distance", EARTH_RADIUS)) - float(local_body.get("radius", EARTH_RADIUS)))
 	if guidance_enabled:
-		_update_guidance(dt)
+		var guidance_dt := dt
+		if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"]:
+			guidance_dt = minf(guidance_dt, _adaptive_step_size())
+		_update_guidance(guidance_dt)
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"]:
 		dt = minf(dt, _adaptive_step_size())
 		end_time = sim_time + dt
