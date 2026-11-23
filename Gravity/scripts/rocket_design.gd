@@ -64,6 +64,9 @@ static func configure_stage(part_id: String, engine_count: int, tank_scale: floa
 	stage["tank_scale"] = tank_scale
 	stage["dry_mass"] = float(stage["dry_mass"]) * tank_scale
 	stage["fuel_capacity"] = float(stage["fuel_capacity"]) * tank_scale
+	stage["thrust"] = float(stage["thrust"]) / float(engine_count)
+	stage["vacuum_thrust"] = float(stage["vacuum_thrust"]) / float(engine_count)
+	stage["flow"] = float(stage["flow"]) / float(engine_count)
 	return stage
 
 static func default_stage_part() -> Dictionary:
