@@ -1955,18 +1955,25 @@ func load_save_data(data: Dictionary) -> bool:
 	autopilot_precomputed_transfer_plan.clear()
 	var saved_departure_plan: Variant = data.get("autopilot_departure_plan", {})
 	if saved_departure_plan is Dictionary and not saved_departure_plan.is_empty():
-		autopilot_precomputed_transfer_plan = {
-			"valid": true,
-			"target_id": int(saved_departure_plan.get("target_id", autopilot_planet_index)),
-			"target_altitude": float(saved_departure_plan.get("target_altitude", autopilot_target_altitude)),
-			"departure_time_seconds": float(saved_departure_plan.get("departure_time_seconds", -1.0)),
-			"planned_at_time": float(saved_departure_plan.get("planned_at_time", -1.0)),
-			"planned_position": Vector2(float(saved_departure_plan.get("planned_position_x", 0.0)), float(saved_departure_plan.get("planned_position_y", 0.0))),
-			"planned_velocity": Vector2(float(saved_departure_plan.get("planned_velocity_x", 0.0)), float(saved_departure_plan.get("planned_velocity_y", 0.0))),
-			"departure_direction": Vector2(float(saved_departure_plan.get("departure_direction_x", 0.0)), float(saved_departure_plan.get("departure_direction_y", 0.0))),
-			"departure_delta_v": float(saved_departure_plan.get("departure_delta_v", 0.0)),
-			"transfer_time": float(saved_departure_plan.get("transfer_time", 0.0))
-		}
+		var departure_plan_valid := true
+		for key in ["target_id", "target_altitude", "departure_time_seconds", "planned_at_time", "planned_position_x", "planned_position_y", "planned_velocity_x", "planned_velocity_y", "departure_direction_x", "departure_direction_y", "departure_delta_v", "transfer_time"]:
+			var value: Variant = saved_departure_plan.get(key, null)
+			if not (value is float or value is int) or not is_finite(float(value)):
+				departure_plan_valid = false
+				break
+		if departure_plan_valid and int(saved_departure_plan.target_id) == autopilot_planet_index and is_equal_approx(float(saved_departure_plan.target_altitude), autopilot_target_altitude) and float(saved_departure_plan.departure_time_seconds) >= sim_time - 2.0 and float(saved_departure_plan.departure_delta_v) >= 0.0 and float(saved_departure_plan.transfer_time) > 0.0:
+			autopilot_precomputed_transfer_plan = {
+				"valid": true,
+				"target_id": int(saved_departure_plan.target_id),
+				"target_altitude": float(saved_departure_plan.target_altitude),
+				"departure_time_seconds": float(saved_departure_plan.departure_time_seconds),
+				"planned_at_time": float(saved_departure_plan.planned_at_time),
+				"planned_position": Vector2(float(saved_departure_plan.planned_position_x), float(saved_departure_plan.planned_position_y)),
+				"planned_velocity": Vector2(float(saved_departure_plan.planned_velocity_x), float(saved_departure_plan.planned_velocity_y)),
+				"departure_direction": Vector2(float(saved_departure_plan.departure_direction_x), float(saved_departure_plan.departure_direction_y)),
+				"departure_delta_v": float(saved_departure_plan.departure_delta_v),
+				"transfer_time": float(saved_departure_plan.transfer_time)
+			}
 	autopilot_speed_priority = clampf(float(data.get("autopilot_speed_priority", 0.35)), 0.0, 1.0)
 	autopilot_safety_margin = clampf(float(data.get("autopilot_safety_margin", 0.10)), 0.0, 0.4)
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))
