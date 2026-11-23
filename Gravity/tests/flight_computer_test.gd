@@ -380,7 +380,7 @@ func _initialize() -> void:
 	surface_planner_window.navigation_altitude_input.value = 200.0
 	surface_planner_window._calculate_destination_plan()
 	assert(surface_planner_window.navigation_plan_valid, "Surface destination plan failed: %s" % surface_planner_window.navigation_report.text)
-	assert(bool(surface_planner_window.navigation_plan.get("needs_parking_orbit", false)))
+	assert(bool(surface_planner_window.navigation_plan.get("needs_parking_orbit", false)), "Surface plan did not request parking orbit: %s landed=%s body=%s" % [str(surface_planner_window.navigation_plan), str(surface_sim.landed), str(surface_sim.call("_nearest_body_state", surface_sim.rocket_position).get("name", ""))])
 	surface_planner_window._send_destination_to_autopilot()
 	assert(surface_sim.autopilot_enabled)
 	assert(surface_sim.autopilot_phase == "ASCENT")
