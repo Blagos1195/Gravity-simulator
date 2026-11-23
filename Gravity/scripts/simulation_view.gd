@@ -852,8 +852,10 @@ func _update_guidance(dt: float) -> void:
 			"ASCENT":
 				status_message = "AUTOPILOT  •  ASCENT TO %.0f KM" % (guidance_orbit_altitude / 1000.0)
 				var ascent_orbit_periapsis := float(orbit.get("periapsis", 0.0))
+				var ascent_orbit_apoapsis := float(orbit.get("apoapsis", INF))
 				var ascent_orbit_radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
-				var already_in_stable_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and ascent_orbit_radial_speed < maxf(1.0, target_orbit_speed * 0.01)
+				var safe_parking_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and ascent_orbit_apoapsis < float(guidance_body.radius) + maximum_stable_altitude
+				var already_in_stable_orbit := safe_parking_orbit and ascent_orbit_radial_speed < maxf(1.0, target_orbit_speed * 0.01)
 				if not propellant_available and not already_in_stable_orbit:
 					_fail_autopilot("OUT OF PROPELLANT BEFORE SAFE PARKING ORBIT")
 					return
