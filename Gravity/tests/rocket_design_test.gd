@@ -95,12 +95,23 @@ func _initialize() -> void:
 	var merged_rocket: Dictionary = merged_catalog.rocket
 	assert(merged_rocket.stage_parts.size() == ContentCatalog.get_catalog().rocket.stage_parts.size() + 1)
 	assert(merged_rocket.presets.has("TEST_MOD_PRESET"))
-	assert(merged_rocket.builder_options.engine_counts.has(5))
-	assert(merged_rocket.builder_options.payloads.any(func(option: Dictionary): return str(option.id) == "test_payload"))
-	assert(merged_rocket.builder_options.tank_scales.any(func(option: Dictionary): return is_equal_approx(float(option.scale), 1.5)))
+	var original_catalog: Dictionary = ContentCatalog._catalog
+	ContentCatalog._catalog = merged_catalog
+	assert(RocketDesign.engine_count_options().has(5))
+	var has_test_payload := false
+	for payload_option in RocketDesign.payload_options():
+		if str(payload_option.id) == "test_payload":
+			has_test_payload = true
+	assert(has_test_payload)
+	var has_test_tank_scale := false
+	for tank_option in RocketDesign.tank_scale_options():
+		if is_equal_approx(float(tank_option.scale), 1.5):
+			has_test_tank_scale = true
+	assert(has_test_tank_scale)
 	var modded_stage := RocketDesign.configure_stage("explorer_first_stage", 5, 1.5)
 	assert(not modded_stage.is_empty())
 	assert(int(modded_stage.engine_count) == 5)
 	assert(is_equal_approx(float(modded_stage.fuel_capacity), 450000.0))
+	ContentCatalog._catalog = original_catalog
 	print("Rocket design tests passed.")
 	quit()
