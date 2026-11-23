@@ -132,6 +132,9 @@ func _validate_moon_arrival_capture() -> void:
 	missed_simulation.velocity = Vector2(missed_moon_state.get("velocity", Vector2.ZERO)) + Vector2(1500.0, 200.0)
 	missed_simulation._update_guidance(0.1)
 	assert(missed_simulation.autopilot_phase == "FAILED", "Outbound Moon flyby was not identified as a missed capture")
+	missed_simulation.autopilot_phase = "ARRIVAL_PENDING"
+	missed_simulation._update_guidance(0.1)
+	assert(missed_simulation.autopilot_phase == "FAILED", "Missed arrival window did not terminate autopilot cleanly")
 	missed_simulation.free()
 
 
