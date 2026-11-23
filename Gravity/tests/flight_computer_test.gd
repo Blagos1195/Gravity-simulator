@@ -489,6 +489,43 @@ func _initialize() -> void:
 	assert(planner_sim.manual_burn_tracking_enabled)
 	route_planner_window.manual_navigation_button.emit_signal("pressed")
 	assert(planner_sim.manual_flight_plan.is_empty(), "Manual plan cancellation did not clear the plan")
+	var mars_target_id := -1
+	for target_index in range(FlightComputer.PLANET_TARGETS.size()):
+		if str(FlightComputer.PLANET_TARGETS[target_index].get("name", "")) == "Mars":
+			mars_target_id = target_index
+	assert(mars_target_id >= 0)
+	route_planner_window.navigation_plan = {
+		"valid": true,
+		"target_id": mars_target_id,
+		"target_name": "Mars",
+		"target_altitude": 200000.0,
+		"local": false,
+		"deep_space_start": false,
+		"planned_at_time": planner_sim.sim_time,
+		"planned_position": planner_sim.rocket_position,
+		"planned_velocity": planner_sim.velocity,
+		"departure_direction": Vector2.RIGHT,
+		"departure_delta_v": 100.0,
+		"capture_delta_v": 500.0,
+		"total_delta_v": 600.0,
+		"transfer_time": 86400.0
+	}
+	route_planner_window.navigation_plan_valid = true
+	route_planner_window._refresh_navigation_state()
+	route_planner_window.manual_navigation_button.emit_signal("pressed")
+	assert(planner_sim.manual_flight_plan.get("phase", "") == "DEPARTURE_BURN", "Manual interplanetary departure burn was not armed")
+	assert(planner_sim.manual_burn_tracking_enabled)
+	assert(not planner_sim.autopilot_enabled, "Manual interplanetary plan engaged autopilot")
+	planner_sim.manual_burn_accumulated_vector = planner_sim.manual_burn_target_vector
+	planner_sim.thrust_key_down = false
+	route_planner_window._update_manual_flight_plan()
+	assert(planner_sim.manual_flight_plan.get("phase", "") == "TRANSFER_COAST", "Manual departure burn did not transition to transfer coast")
+	route_planner_window._refresh_navigation_state()
+	assert(not route_planner_window.replan_button.disabled, "Mid-course replan was not offered during manual transfer coast")
+	route_planner_window.manual_navigation_button.emit_signal("pressed")
+	assert(planner_sim.manual_flight_plan.is_empty(), "Manual interplanetary plan cancellation did not clear the plan")
+	route_planner_window._calculate_destination_plan()
+	assert(route_planner_window.navigation_plan_valid and bool(route_planner_window.navigation_plan.get("local", false)))
 	route_planner_window._send_destination_to_autopilot()
 	assert(planner_sim.autopilot_enabled)
 	assert(planner_sim.autopilot_target_mode == "ORBIT")
