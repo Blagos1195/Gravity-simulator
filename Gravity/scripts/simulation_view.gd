@@ -424,7 +424,7 @@ func _adaptive_step_size() -> float:
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and not thrust_key_down:
 		step_limit = minf(step_limit, 0.1)
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and autopilot_burn_remaining > 0.0:
-		var current_mass := maxf(1.0, _current_vehicle_mass())
+		var current_mass := maxf(1.0, _current_vehicle_mass(effective_fuel))
 		var current_thrust := _engine_thrust(altitude)
 		if infinite_weightless_fuel:
 			var acceleration := current_thrust / current_mass
