@@ -15,6 +15,11 @@ func _initialize() -> void:
 	assert(is_instance_valid(main.design_error_label))
 	assert(main.design_stats_label.text.contains("IDEAL ΔV"))
 	assert(main.design_error_label.text == "DESIGN VALID")
+	var payload_input := _find_spinbox(main)
+	assert(is_instance_valid(payload_input))
+	payload_input.value = 1200.0
+	assert(is_equal_approx(float(main.rocket_design.payload_mass), 1200.0))
+	assert(main.design_error_label.text == "DESIGN VALID")
 	main._start_flight()
 	main._show_new_vehicle_dialog()
 	var vehicle_dialog: Window
@@ -28,3 +33,13 @@ func _initialize() -> void:
 	print("Rocket builder UI test passed.")
 	main.queue_free()
 	quit()
+
+
+func _find_spinbox(node: Node) -> SpinBox:
+	if node is SpinBox:
+		return node
+	for child in node.get_children():
+		var found := _find_spinbox(child)
+		if found != null:
+			return found
+	return null
