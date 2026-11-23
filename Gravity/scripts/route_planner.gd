@@ -563,7 +563,7 @@ func _calculate_destination_plan() -> void:
 	var stable_orbit := inside_current_soi and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + current_minimum
 	var landed_start := bool(simulation.get("landed"))
 	var deep_space_start := not inside_current_soi
-	if current_name == target_name:
+	if current_name == target_name and inside_current_soi:
 		if not stable_orbit and landed_start:
 			navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "local": true, "needs_parking_orbit": true}
 		elif not stable_orbit:
@@ -589,17 +589,20 @@ func _calculate_destination_plan() -> void:
 			var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
 			var transfer: Dictionary = FlightComputer.simulated_transfer_search_precise(simulation.get("rocket_position_precise"), simulation.get("velocity"), float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
 			if not bool(transfer.get("valid", false)):
-				_invalidate_navigation_plan()
-				navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
-				return
-			navigation_plan = transfer.duplicate(true)
-			navigation_plan["target_id"] = target_id
-			navigation_plan["target_name"] = target_name
-			navigation_plan["target_altitude"] = target_altitude
-			navigation_plan["planned_at_time"] = float(simulation.get("sim_time"))
-			navigation_plan["planned_position"] = Vector2(simulation.get("rocket_position"))
-			navigation_plan["planned_velocity"] = Vector2(simulation.get("velocity"))
-			navigation_plan["local"] = false
+				if not deep_space_start:
+					_invalidate_navigation_plan()
+					navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
+					return
+				navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "local": false, "needs_window_search": true}
+			else:
+				navigation_plan = transfer.duplicate(true)
+				navigation_plan["target_id"] = target_id
+				navigation_plan["target_name"] = target_name
+				navigation_plan["target_altitude"] = target_altitude
+				navigation_plan["planned_at_time"] = float(simulation.get("sim_time"))
+				navigation_plan["planned_position"] = Vector2(simulation.get("rocket_position"))
+				navigation_plan["planned_velocity"] = Vector2(simulation.get("velocity"))
+				navigation_plan["local"] = false
 	navigation_plan_valid = true
 	navigation_engage_button.disabled = false
 	navigation_plot.visible = not bool(navigation_plan.get("local", false))
