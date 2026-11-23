@@ -312,12 +312,13 @@ func _initialize() -> void:
 	tracking_sim.velocity = Vector2(-manoeuvre_speed, 0.0)
 	tracking_sim.autopilot_enabled = true
 	tracking_sim.guidance_enabled = true
+	tracking_sim.autopilot_enabled = true
 	tracking_sim.autopilot_phase = "TRANSFER_BURN"
 	tracking_sim.autopilot_burn_remaining = 1000.0
 	tracking_sim.autopilot_burn_reference_direction = Vector2.RIGHT
 	tracking_sim.autopilot_burn_reference_position_angle = 0.0
 	tracking_sim.autopilot_burn_tracks_orbit = true
-	tracking_sim.rotation_angle = PI
+	tracking_sim.rotation_angle = 0.0
 	tracking_sim._update_guidance(0.1)
 	assert(tracking_sim.autopilot_burn_direction.distance_to(Vector2.UP) < 0.000001)
 	tracking_sim.free()
