@@ -585,9 +585,9 @@ static func _propagate_wait_state(start_position_components: PackedFloat64Array,
 			maximum_step = clampf(period / 48.0, 5.0, 1800.0)
 	while elapsed < wait_seconds:
 		var step_size := minf(maximum_step, wait_seconds - elapsed)
-		var initial_states: Dictionary = PlanetarySystem.gravity_body_states(start_time + elapsed)
+		var step_initial_states: Dictionary = PlanetarySystem.gravity_body_states(start_time + elapsed)
 		var final_states: Dictionary = PlanetarySystem.gravity_body_states(start_time + elapsed + step_size)
-		var initial_acceleration: Vector2 = PlanetarySystem.gravity_acceleration_from_precise_states(position, initial_states)
+		var initial_acceleration: Vector2 = PlanetarySystem.gravity_acceleration_from_precise_states(position, step_initial_states)
 		var half_velocity := velocity + initial_acceleration * (step_size * 0.5)
 		var next_position := PackedFloat64Array([
 			position[0] + half_velocity.x * step_size,
@@ -655,12 +655,12 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		propagated_days = wait_days
 		var future_components: PackedFloat64Array = future_state.position_components
 		var future_position := Vector2(future_components[0], future_components[1])
-		var plan := simulated_transfer_search_precise(future_components, future_state.velocity, start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
+		var plan := simulated_transfer_search_precise(future_components, future_state.velocity, float(refinement_seed.departure_time_seconds) + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
 		if not bool(plan.get("valid", false)):
 			continue
 		plan["departure_wait_days"] = wait_days
-		plan["departure_time_seconds"] = start_time + wait_seconds
-		plan["planned_at_time"] = start_time + wait_seconds
+		plan["departure_time_seconds"] = start_time + wait_days * 86400.0
+		plan["planned_at_time"] = start_time + wait_days * 86400.0
 		plan["planned_position"] = future_position
 		plan["planned_position_precise"] = future_components
 		plan["planned_velocity"] = future_state.velocity
@@ -693,8 +693,8 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 		if not bool(plan.get("valid", false)):
 			continue
 		plan["departure_wait_days"] = wait_days
-		plan["departure_time_seconds"] = start_time + wait_seconds
-		plan["planned_at_time"] = start_time + wait_seconds
+		plan["departure_time_seconds"] = start_time + wait_days * 86400.0
+		plan["planned_at_time"] = start_time + wait_days * 86400.0
 		plan["planned_position"] = future_position
 		plan["planned_position_precise"] = future_components
 		plan["planned_velocity"] = future_state.velocity
@@ -709,7 +709,6 @@ static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2
 	var final_position := Vector2(final_components[0], final_components[1])
 	var final_plan := simulated_transfer_search_precise(final_components, final_velocity, start_time + final_wait_seconds, target_index, maximum_delta_v, speed_priority, false, target_orbit_altitude)
 	if bool(final_plan.get("valid", false)):
-		if bool(final_plan.get("valid", false)):
 			final_plan["departure_wait_days"] = final_wait_days
 			final_plan["departure_time_seconds"] = start_time + final_wait_seconds
 			final_plan["planned_at_time"] = start_time + final_wait_seconds
