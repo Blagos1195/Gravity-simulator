@@ -477,6 +477,16 @@ func _initialize() -> void:
 	assert(planner_sim.manual_flight_plan.get("phase", "") == "LOCAL_BURN")
 	assert(planner_sim.manual_burn_tracking_enabled)
 	assert(not planner_sim.autopilot_enabled, "Manual flight-computer mode engaged autopilot")
+	planner_sim.manual_burn_accumulated_vector = planner_sim.manual_burn_target_vector
+	planner_sim.thrust_key_down = false
+	route_planner_window._update_manual_flight_plan()
+	assert(planner_sim.manual_flight_plan.get("phase", "") == "LOCAL_COAST", "Manual local transfer did not coast to its target apsis")
+	var manual_target_radius: float = float(planner_sim.manual_flight_plan.get("target_radius", 0.0))
+	planner_sim._set_rocket_position_components(0.0, -manual_target_radius)
+	planner_sim.velocity = Vector2(FlightComputer.circular_orbit_speed(manual_target_radius) * 1.1, 0.0)
+	route_planner_window._update_manual_flight_plan()
+	assert(planner_sim.manual_flight_plan.get("phase", "") == "LOCAL_CIRCULARISE", "Manual local transfer did not arm its circularisation burn")
+	assert(planner_sim.manual_burn_tracking_enabled)
 	route_planner_window.manual_navigation_button.emit_signal("pressed")
 	assert(planner_sim.manual_flight_plan.is_empty(), "Manual plan cancellation did not clear the plan")
 	route_planner_window._send_destination_to_autopilot()
