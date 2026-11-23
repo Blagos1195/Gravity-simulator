@@ -1046,6 +1046,7 @@ func _scan_launch_windows() -> void:
 	var available := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
 	navigation_report.text = "SCANNING UP TO 540 DAYS OF DEPARTURE WINDOWS. This is a more expensive search than the immediate-transfer solver."
 	launch_window_button.disabled = true
+	var precise_position: PackedFloat64Array = simulation.get("rocket_position_precise")
 	var result := FlightComputer.scan_launch_windows(
 		current_position,
 		Vector2(simulation.get("velocity")),
@@ -1056,7 +1057,7 @@ func _scan_launch_windows() -> void:
 		540,
 		30,
 		target_altitude,
-		simulation.get("rocket_position_precise")
+		precise_position
 	)
 	launch_window_button.disabled = false
 	if not bool(result.get("valid", false)):
