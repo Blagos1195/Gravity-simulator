@@ -28,9 +28,9 @@ jobs:
           include-templates: false
       - name: Import and parse project
         run: |
-          output="$(godot --headless --path Gravity --editor --quit 2>&1)" || { printf '%s\\n' "$output"; exit 1; }
-          printf '%s\\n' "$output"
-          if printf '%s\\n' "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
+          output="$(godot --headless --path Gravity --editor --quit 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
             exit 1
           fi
       - name: Run focused pull request checks
@@ -41,22 +41,22 @@ jobs:
           git fetch origin "$BASE_REF"
           changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
           run_check() {
-            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { printf '%s\\n' "$output"; exit 1; }
-            printf '%s\\n' "$output"
-            if printf '%s\\n' "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
+            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+            echo "$output"
+            if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
               exit 1
             fi
           }
           run_check compile_simulation_view
-          if printf '%s\\n' "$changed_files" | grep -Eq 'rocket_design|main.gd|content_catalog'; then
+          if echo "$changed_files" | grep -Eq 'rocket_design|main.gd|content_catalog'; then
             run_check rocket_design_test
           fi
-          if printf '%s\\n' "$changed_files" | grep -Eq 'flight_computer|route_planner'; then
+          if echo "$changed_files" | grep -Eq 'flight_computer|route_planner'; then
             run_check flight_computer_test
             run_check leo_autopilot_mission_test
             run_check body_agnostic_orbit_test
           fi
-          if printf '%s\\n' "$changed_files" | grep -Eq 'simulation_view|planetary_system'; then
+          if echo "$changed_files" | grep -Eq 'simulation_view|planetary_system'; then
             run_check simulation_lifecycle_test
             run_check orbital_stability_test
             run_check body_agnostic_orbit_test
@@ -65,9 +65,9 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           run_check() {
-            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { printf '%s\\n' "$output"; exit 1; }
-            printf '%s\\n' "$output"
-            if printf '%s\\n' "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
+            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+            echo "$output"
+            if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
               exit 1
             fi
           }
