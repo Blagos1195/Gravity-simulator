@@ -59,6 +59,9 @@ jobs:
             run_check leo_autopilot_mission_test
             run_check body_agnostic_orbit_test
           fi
+          if echo "$changed_files" | grep -Eq 'main.gd|simulation_view'; then
+            run_check multi_vehicle_test
+          fi
           if echo "$changed_files" | grep -Eq 'simulation_view|planetary_system'; then
             run_check simulation_lifecycle_test
             run_check orbital_stability_test
@@ -77,6 +80,7 @@ jobs:
           run_check compile_simulation_view
           run_check rocket_design_test
           run_check rocket_builder_ui_test
+          run_check multi_vehicle_test
           run_check flight_computer_test
           run_check orbital_stability_test
           run_check simulation_lifecycle_test
