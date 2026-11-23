@@ -7,6 +7,7 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 func _initialize() -> void:
 	_validate_launch_and_fuel()
 	_validate_infinite_weightless_fuel()
+	_validate_save_options()
 	_validate_staging()
 	_validate_atmospheric_forces()
 	_validate_surface_contact()
@@ -70,16 +71,38 @@ func _validate_infinite_weightless_fuel() -> void:
 	simulation.landed_surface_normal = Vector2.UP
 	simulation._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 0.5)
 	var initial_mass: float = simulation._current_vehicle_mass()
+	var initial_virtual_mass: float = simulation._current_vehicle_mass(simulation.infinite_fuel_stage_remaining)
 	var initial_fuel: float = simulation.fuel
-	assert(initial_mass < RocketDesign.total_initial_mass(RocketDesign.create_default()))
+	assert(is_equal_approx(initial_mass, RocketDesign.total_initial_mass(RocketDesign.create_default())))
 	simulation.thrust_key_down = true
 	simulation._physics_step(0.05)
 	assert(not simulation.landed)
 	assert(is_equal_approx(simulation.fuel, initial_fuel))
 	assert(is_equal_approx(simulation._current_vehicle_mass(), initial_mass))
+	assert(simulation._current_vehicle_mass(simulation.infinite_fuel_stage_remaining) < initial_virtual_mass)
 	assert(simulation.velocity.length() > 0.0)
 	assert(not is_finite(simulation._remaining_ideal_delta_v(initial_mass)))
+	var first_stage_fuel: float = float(simulation._active_stage_data().get("fuel_capacity", 0.0))
+	var first_stage_dry_mass: float = float(simulation._active_stage_data().get("dry_mass", 0.0))
+	simulation._separate_stage()
+	assert(is_equal_approx(simulation.discarded_propellant_mass, first_stage_fuel))
+	assert(is_equal_approx(simulation.discarded_stage_mass, first_stage_dry_mass))
+	assert(is_equal_approx(simulation._current_vehicle_mass(), initial_mass - first_stage_fuel - first_stage_dry_mass))
 	simulation.free()
+
+
+func _validate_save_options() -> void:
+	var original: Variant = SimulationView.new()
+	original.set_rocket_design(RocketDesign.create_default())
+	original.infinite_weightless_fuel = true
+	original.show_vectors = false
+	var save_data: Dictionary = original.get_save_data()
+	var restored: Variant = SimulationView.new()
+	assert(restored.load_save_data(save_data), "Save options could not be restored")
+	assert(restored.infinite_weightless_fuel, "Infinite propellant was not saved per flight")
+	assert(not restored.show_vectors, "Velocity vector visibility was not saved per flight")
+	original.free()
+	restored.free()
 
 func _validate_atmospheric_forces() -> void:
 	var simulation: Variant = SimulationView.new()

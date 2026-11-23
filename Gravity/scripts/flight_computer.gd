@@ -439,8 +439,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
 	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index <= -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
-	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.25, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v * 0.8, maximum_delta_v]
-	var direction_count := 12 if coarse_search else 24
+	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v]
+	var direction_count := 12 if coarse_search else 16
 	var best_score := INF
 	var best_plan: Dictionary = {}
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
@@ -448,8 +448,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
-		var minimum_steps := 360 if coarse_search else 720
-		var maximum_steps := 1200 if coarse_search else 2400
+		var minimum_steps := 360
+		var maximum_steps := 1200 if coarse_search else 720
 		var integration_steps := clampi(int(ceil(flight_duration / 21600.0)), minimum_steps, maximum_steps)
 		var step_size := flight_duration / float(integration_steps)
 		var gravity_states: Array[Dictionary] = []
@@ -469,7 +469,10 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				var closest_distance := INF
 				var closest_relative_position := Vector2.ZERO
 				var closest_relative_velocity := Vector2.ZERO
+				var closest_target_position := PackedFloat64Array()
 				var closest_time := flight_duration
+				var closest_trajectory_index := 0
+				var candidate_trajectory := PackedVector2Array([Vector2(position[0], position[1])])
 				var collided := false
 				for step_index in range(integration_steps):
 					var initial_acceleration := PlanetarySystem.gravity_acceleration_from_precise_states(position, gravity_states[step_index])
@@ -482,6 +485,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 					velocity = half_velocity + final_acceleration * (step_size * 0.5)
 					var previous_position := position
 					position = next_position
+					candidate_trajectory.append(Vector2(position[0], position[1]))
 					if _segment_intersects_circle_precise(previous_position, position, PackedFloat64Array([0.0, 0.0]), EARTH_RADIUS):
 						collided = true
 						break
@@ -503,7 +507,9 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 						closest_distance = sqrt(distance_squared)
 						closest_relative_position = Vector2(relative_x, relative_y)
 						closest_relative_velocity = velocity - Vector2(target_state.velocity)
+						closest_target_position = target_position.duplicate()
 						closest_time = float(step_index + 1) * step_size
+						closest_trajectory_index = candidate_trajectory.size() - 1
 				if collided:
 					continue
 				var target_soi := float(initial_target.soi)
@@ -524,15 +530,21 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				if candidate_score >= best_score:
 					continue
 				best_score = candidate_score
+				var arrival_trajectory := PackedVector2Array()
+				for trajectory_index in range(closest_trajectory_index + 1):
+					arrival_trajectory.append(candidate_trajectory[trajectory_index])
 				best_plan = {
 					"valid": true,
 					"departure_delta_v": departure_delta_v,
 					"departure_direction": burn_direction,
 					"capture_delta_v": capture_delta_v,
-					"capture_direction": capture.get("direction", Vector2.ZERO),
+					"capture_direction": Vector2(capture.get("burn_vector", Vector2.ZERO)).normalized(),
 					"total_delta_v": total_delta_v,
 					"transfer_time": closest_time,
 					"closest_approach": closest_distance,
+					"arrival_speed": closest_relative_velocity.length(),
+					"target_position": closest_target_position,
+					"trajectory": arrival_trajectory,
 					"target_soi": target_soi,
 					"simulated_steps": integration_steps,
 					"search_candidates": direction_count * magnitudes.size() * durations.size()

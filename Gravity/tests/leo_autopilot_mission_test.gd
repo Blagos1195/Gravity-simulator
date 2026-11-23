@@ -6,14 +6,20 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 
 func _initialize() -> void:
-	_validate_leo_autopilot_mission()
-	print("LEO autopilot mission test passed.")
-	quit()
+	if not _validate_leo_autopilot_mission(false):
+		quit(1)
+		return
+	if not _validate_leo_autopilot_mission(true):
+		quit(1)
+		return
+	print("LEO autopilot missions and one-revolution stability checks passed with finite and infinite propellant.")
+	quit(0)
 
-func _validate_leo_autopilot_mission() -> void:
+func _validate_leo_autopilot_mission(infinite_propellant: bool) -> bool:
 	var simulation: Variant = SimulationView.new()
 	simulation.set_rocket_design(RocketDesign.create_default())
 	simulation.realism = "Realistic"
+	simulation.infinite_weightless_fuel = infinite_propellant
 	simulation.landed = true
 	simulation.landed_body_name = "Earth"
 	simulation.landed_surface_normal = Vector2.UP
@@ -34,15 +40,16 @@ func _validate_leo_autopilot_mission() -> void:
 	var phase_transitions: Array[String] = []
 	while elapsed < mission_time_limit and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
 		var step: float = simulation._adaptive_step_size()
-		assert(step > 0.000001)
+		if step <= 0.000001:
+			push_error("LEO %s mission produced an invalid physics step." % ("infinite-fuel" if infinite_propellant else "finite-fuel"))
+			simulation.free()
+			return false
 		simulation._physics_step(step)
 		elapsed += step
 		iterations += 1
 		if simulation.autopilot_phase != previous_phase:
 			var transition_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
-			var transition_position: Vector2 = transition_body.relative_position
-			var transition_velocity: Vector2 = simulation.velocity - transition_body.velocity
-			var transition_orbit: Dictionary = FlightComputer.orbital_state(transition_position, transition_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
+			var transition_orbit: Dictionary = FlightComputer.orbital_state(transition_body.relative_position, simulation.velocity - transition_body.velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
 			if phase_transitions.size() < 30:
 				phase_transitions.append("%.1f s %s>%s alt=%.0f radial=%.1f peri=%.0f apo=%.0f burn=%.1f" % [elapsed, previous_phase, simulation.autopilot_phase, float(transition_body.distance) - PlanetarySystem.EARTH_RADIUS, float(transition_orbit.get("radial_speed", INF)), float(transition_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(transition_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.autopilot_burn_remaining])
 			elif phase_transitions.size() == 30:
@@ -50,37 +57,51 @@ func _validate_leo_autopilot_mission() -> void:
 			previous_phase = simulation.autopilot_phase
 		if iterations >= 300000:
 			break
-	print("LEO phase trace: " + "; ".join(PackedStringArray(phase_transitions)))
+	print("LEO phase trace (%s): " % ("infinite" if infinite_propellant else "finite") + "; ".join(PackedStringArray(phase_transitions)))
 	var end_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
-	var end_position: Vector2 = end_body.relative_position
-	var end_velocity: Vector2 = simulation.velocity - end_body.velocity
-	var end_orbit: Dictionary = FlightComputer.orbital_state(end_position, end_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
-	assert(not simulation.crashed, "LEO ascent crashed: phase=%s status=%s elapsed=%.1f altitude=%.1f speed=%.1f fuel=%.1f" % [simulation.autopilot_phase, simulation.status_message, elapsed, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.fuel])
-	assert(simulation.autopilot_complete, "LEO mission did not complete: phase=%s status=%s elapsed=%.1f iterations=%d altitude=%.1f speed=%.1f radial_speed=%.1f periapsis_altitude=%.1f apoapsis_altitude=%.1f fuel=%.1f landed=%s crashed=%s transitions=%s" % [simulation.autopilot_phase, simulation.status_message, elapsed, iterations, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), float(end_orbit.get("radial_speed", INF)), float(end_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(end_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, simulation.landed, simulation.crashed, "; ".join(PackedStringArray(phase_transitions))])
-	assert(simulation.autopilot_phase == "COMPLETE")
-	assert(not simulation.landed)
+	var end_orbit: Dictionary = FlightComputer.orbital_state(end_body.relative_position, simulation.velocity - end_body.velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
+	if simulation.crashed or not simulation.autopilot_complete:
+		push_error("LEO %s mission failed: phase=%s status=%s elapsed=%.1f iterations=%d altitude=%.1f speed=%.1f radial_speed=%.1f periapsis_altitude=%.1f apoapsis_altitude=%.1f fuel=%.1f landed=%s crashed=%s transitions=%s" % ["infinite-fuel" if infinite_propellant else "finite-fuel", simulation.autopilot_phase, simulation.status_message, elapsed, iterations, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), float(end_orbit.get("radial_speed", INF)), float(end_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(end_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, simulation.landed, simulation.crashed, "; ".join(PackedStringArray(phase_transitions))])
+		simulation.free()
+		return false
 	var earth_state: Dictionary = simulation._surface_body_state("Earth")
 	var relative_position: Vector2 = simulation._relative_position_to_body(earth_state)
 	var relative_velocity: Vector2 = simulation.velocity - Vector2(earth_state.velocity)
 	var orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
-	assert(bool(orbit.get("valid", false)))
-	assert(bool(orbit.get("bound", false)))
-	assert(float(orbit.get("periapsis", 0.0)) > PlanetarySystem.EARTH_RADIUS + 70000.0)
-	assert(absf(float(orbit.get("periapsis", 0.0)) - target_orbit_radius) < 5000.0, "LEO periapsis missed target altitude: %.1f m" % (float(orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS))
-	assert(absf(float(orbit.get("apoapsis", 0.0)) - target_orbit_radius) < 5000.0, "LEO apoapsis missed target altitude: %.1f m" % (float(orbit.get("apoapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS))
+	var orbit_failure := ""
+	if not bool(orbit.get("valid", false)) or not bool(orbit.get("bound", false)):
+		orbit_failure = "insertion did not produce a valid bound orbit"
+	elif float(orbit.get("periapsis", 0.0)) <= PlanetarySystem.EARTH_RADIUS + 70000.0:
+		orbit_failure = "insertion periapsis is below the safe-orbit floor"
+	elif absf(float(orbit.get("periapsis", 0.0)) - target_orbit_radius) >= 5000.0:
+		orbit_failure = "insertion periapsis missed the target altitude"
+	elif absf(float(orbit.get("apoapsis", 0.0)) - target_orbit_radius) >= 5000.0:
+		orbit_failure = "insertion apoapsis missed the target altitude"
+	if not orbit_failure.is_empty():
+		push_error("LEO %s mission %s: periapsis=%.1f km apoapsis=%.1f km." % ["infinite-fuel" if infinite_propellant else "finite-fuel", orbit_failure, (float(orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS) / 1000.0, (float(orbit.get("apoapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS) / 1000.0])
+		simulation.free()
+		return false
 	var orbital_period := TAU * sqrt(pow(float(orbit.get("semi_major_axis", 0.0)), 3.0) / (PlanetarySystem.G * PlanetarySystem.EARTH_MASS))
 	var coast_elapsed := 0.0
 	while coast_elapsed < orbital_period:
 		var step: float = minf(simulation._adaptive_step_size(), orbital_period - coast_elapsed)
-		assert(step > 0.000001)
+		if step <= 0.000001:
+			push_error("LEO %s orbit produced an invalid coast step." % ("infinite-fuel" if infinite_propellant else "finite-fuel"))
+			simulation.free()
+			return false
 		simulation._physics_step(step)
 		coast_elapsed += step
-		assert(not simulation.crashed, "LEO orbit decayed into Earth during one revolution")
-		assert(not simulation.landed, "LEO autopilot unexpectedly landed during one revolution")
+		if simulation.crashed or simulation.landed:
+			push_error("LEO %s orbit did not survive one full revolution: crashed=%s landed=%s altitude=%.1f." % ["infinite-fuel" if infinite_propellant else "finite-fuel", simulation.crashed, simulation.landed, simulation.rocket_position.length() - PlanetarySystem.EARTH_RADIUS])
+			simulation.free()
+			return false
 	var coast_earth_state: Dictionary = simulation._surface_body_state("Earth")
 	var coast_position: Vector2 = simulation._relative_position_to_body(coast_earth_state)
 	var coast_velocity: Vector2 = simulation.velocity - Vector2(coast_earth_state.velocity)
 	var coast_orbit: Dictionary = FlightComputer.orbital_state(coast_position, coast_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
-	assert(bool(coast_orbit.get("bound", false)), "LEO became unbound during one revolution")
-	assert(float(coast_orbit.get("periapsis", 0.0)) > PlanetarySystem.EARTH_RADIUS + 70000.0, "LEO periapsis fell below the safe orbit")
+	if not bool(coast_orbit.get("bound", false)) or float(coast_orbit.get("periapsis", 0.0)) <= PlanetarySystem.EARTH_RADIUS + 70000.0:
+		push_error("LEO %s orbit became unbound or unsafe after one revolution." % ("infinite-fuel" if infinite_propellant else "finite-fuel"))
+		simulation.free()
+		return false
 	simulation.free()
+	return true

@@ -39,6 +39,7 @@ var rocket_position: Vector2:
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
 var fuel := 300000.0
+var infinite_fuel_stage_remaining := 300000.0
 var stage_index := 0
 var discarded_stage_mass := 0.0
 var discarded_propellant_mass := 0.0
@@ -55,6 +56,7 @@ var autopilot_apsis_correction_angle := 0.0
 var autopilot_throttle := 0.0
 var autopilot_transfer_start_time := -1.0
 var autopilot_transfer_duration := 0.0
+var autopilot_precomputed_transfer_plan: Dictionary = {}
 var autopilot_transfer_corrections := 0
 var autopilot_speed_priority := 0.35
 var autopilot_safety_margin := 0.10
@@ -105,6 +107,7 @@ func set_rocket_design(design: Dictionary) -> void:
 	payload_mass = float(design.get("payload_mass", 500.0))
 	stage_index = 0
 	fuel = float(rocket_stages[0].get("fuel_capacity", 0.0))
+	infinite_fuel_stage_remaining = fuel
 
 func _active_stage_data() -> Dictionary:
 	return rocket_stages[clampi(stage_index, 0, rocket_stages.size() - 1)]
@@ -114,15 +117,13 @@ func _remaining_stack_mass() -> float:
 	for i in range(stage_index + 1, rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[i]
 		mass += float(stage.get("dry_mass", 0.0))
-		if not infinite_weightless_fuel:
-			mass += float(stage.get("fuel_capacity", 0.0))
+		mass += float(stage.get("fuel_capacity", 0.0))
 	return mass
 
 func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
 	var active := _active_stage_data()
 	var mass := float(active.get("dry_mass", 0.0)) + _remaining_stack_mass()
-	if not infinite_weightless_fuel:
-		mass += fuel if fuel_amount < 0.0 else fuel_amount
+	mass += fuel if fuel_amount < 0.0 else fuel_amount
 	return mass
 
 func _ready() -> void:
@@ -230,19 +231,22 @@ func _physics_step(dt: float) -> void:
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 	var propellant_available := infinite_weightless_fuel or fuel > 0.0
 	throttle = autopilot_throttle if autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if thrust_key_down and propellant_available else 0.0)
-	var fuel_used := 0.0 if infinite_weightless_fuel else minf(fuel, total_flow * throttle * dt)
-	var mass_before := maxf(1.0, _current_vehicle_mass())
-	var mass_after := mass_before if infinite_weightless_fuel else maxf(1.0, mass_before - fuel_used)
+	var fuel_used := minf(infinite_fuel_stage_remaining, total_flow * throttle * dt) if infinite_weightless_fuel and total_flow > 0.0 else (minf(fuel, total_flow * throttle * dt) if total_flow > 0.0 else 0.0)
+	var effective_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else -1.0
+	var mass_before := maxf(1.0, _current_vehicle_mass(effective_fuel))
+	var mass_after := maxf(1.0, mass_before - fuel_used)
 	var mass_mid := (mass_before + mass_after) * 0.5
 	var initial_atmosphere: Dictionary = {}
 	if realism != "Arcade" or throttle > 0.0:
 		initial_atmosphere = _atmosphere_at(rocket_position, velocity, start_time, rocket_position_precise)
 	var thrust_force: float = _engine_thrust(maxf(0.0, altitude), initial_atmosphere) * throttle if throttle > 0.0 else 0.0
 	var thrust_delta_v := 0.0
-	if infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
-		thrust_delta_v = thrust_force / mass_before * dt
-	elif fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
+	if fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
+	elif infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
+		thrust_delta_v = thrust_force / mass_before * dt
+	if infinite_weightless_fuel:
+		infinite_fuel_stage_remaining = maxf(0.0, infinite_fuel_stage_remaining - fuel_used)
 	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
 	var thrust_impulse := thrust_direction * thrust_delta_v
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
@@ -304,7 +308,9 @@ func _physics_step(dt: float) -> void:
 		fuel = maxf(0.0, fuel - fuel_used)
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
-	if not infinite_weightless_fuel and fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
+	if infinite_weightless_fuel and infinite_fuel_stage_remaining <= 0.0001 and stage_index < rocket_stages.size() - 1:
+		_separate_stage()
+	elif not infinite_weightless_fuel and fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
 	_handle_body_contact()
 	if simulate_belt_collisions and not crashed and not landed:
@@ -406,16 +412,19 @@ func _adaptive_step_size() -> float:
 		drag_acceleration = _aerodynamic_acceleration(rocket_position, velocity, maxf(1.0, _current_vehicle_mass()), -1.0, rocket_position_precise).length()
 	var drag_limit := 0.08 * speed / drag_acceleration if drag_acceleration > 0.01 else maximum_step
 	var active := _active_stage_data()
-	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass()) if thrust_key_down and (infinite_weightless_fuel or fuel > 0.0) else 0.0
+	var effective_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else -1.0
+	var engine_acceleration := _engine_thrust(altitude) / maxf(1.0, _current_vehicle_mass(effective_fuel)) if thrust_key_down and (infinite_weightless_fuel or fuel > 0.0) else 0.0
 	var thrust_limit := 0.08 * maxf(100.0, speed) / engine_acceleration if engine_acceleration > 0.01 else maximum_step
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	var burnout_limit := fuel / total_flow if not infinite_weightless_fuel and thrust_key_down and fuel > 0.0 and total_flow > 0.0 else maximum_step
+	var burnout_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else fuel
+	var has_burnout_limit := not infinite_weightless_fuel or stage_index < rocket_stages.size() - 1
+	var burnout_limit := burnout_fuel / total_flow if thrust_key_down and has_burnout_limit and burnout_fuel > 0.0 and total_flow > 0.0 else maximum_step
 	var physics_limit := clampf(minf(minf(orbital_limit, travel_limit), minf(drag_limit, thrust_limit)), 0.0005, maximum_step)
 	var step_limit := minf(physics_limit, burnout_limit)
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and not thrust_key_down:
 		step_limit = minf(step_limit, 0.1)
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and autopilot_burn_remaining > 0.0:
-		var current_mass := maxf(1.0, _current_vehicle_mass())
+		var current_mass := maxf(1.0, _current_vehicle_mass(effective_fuel))
 		var current_thrust := _engine_thrust(altitude)
 		if infinite_weightless_fuel:
 			var acceleration := current_thrust / current_mass
@@ -573,11 +582,11 @@ func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
 		return
 	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0))
-	if not infinite_weightless_fuel:
-		discarded_propellant_mass += fuel
+	discarded_propellant_mass += fuel
 	velocity += Vector2.UP.rotated(rotation_angle) * 2.0
 	stage_index += 1
 	fuel = float(_active_stage_data().get("fuel_capacity", 0.0))
+	infinite_fuel_stage_remaining = fuel
 	thrust_key_down = false
 
 func _autopilot_target_body_name() -> String:
@@ -963,9 +972,19 @@ func _update_guidance(dt: float) -> void:
 			"PLAN_TRANSFER":
 				status_message = "AUTOPILOT  •  SIMULATING TRANSFER TRAJECTORIES"
 				thrust_key_down = false
-				var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
-				var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
-				var transfer_plan := FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
+				var transfer_plan: Dictionary = autopilot_precomputed_transfer_plan.duplicate(true)
+				autopilot_precomputed_transfer_plan.clear()
+				if not transfer_plan.is_empty():
+					var planned_position: Vector2 = transfer_plan.get("planned_position", Vector2.INF)
+					var planned_velocity: Vector2 = transfer_plan.get("planned_velocity", Vector2.INF)
+					var plan_matches_target := int(transfer_plan.get("target_id", -999)) == autopilot_planet_index and is_equal_approx(float(transfer_plan.get("target_altitude", -1.0)), autopilot_target_altitude)
+					var plan_matches_state := absf(sim_time - float(transfer_plan.get("planned_at_time", -INF))) <= 2.0 and planned_position.distance_to(rocket_position) <= 20000.0 and planned_velocity.distance_to(velocity) <= 5.0
+					if not plan_matches_target or not plan_matches_state:
+						transfer_plan.clear()
+				if transfer_plan.is_empty():
+					var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
+					var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
+					transfer_plan = FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
 				if not bool(transfer_plan.get("valid", false)):
 					_fail_autopilot("TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY")))
 				else:
@@ -1060,10 +1079,11 @@ func _update_guidance(dt: float) -> void:
 				var approach_relative_velocity: Vector2 = velocity - approach_target_state.velocity
 				var arrival_orbit := FlightComputer.orbital_state(approach_relative_position, approach_relative_velocity, G * float(approach_target_state.mass))
 				var approach_radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
-				var approach_speed_tolerance := maxf(0.1, minf(10.0, FlightComputer.circular_orbit_speed(float(approach_target_state.radius) + autopilot_target_altitude, G * float(approach_target_state.mass)) * 0.001))
 				status_message = "AUTOPILOT  •  ARRIVAL AT %s  •  ALT %.0f KM" % [str(approach_target_state.name).to_upper(), (approach_relative_position.length() - float(approach_target_state.radius)) / 1000.0]
-				if approach_radial_speed >= -approach_speed_tolerance:
+				if approach_radial_speed < 0.0:
 					_begin_arrival_capture(approach_target_state)
+				else:
+					_fail_autopilot("ARRIVAL CAPTURE WINDOW MISSED  •  SPACECRAFT IS MOVING AWAY FROM THE TARGET")
 			"ARRIVAL_CAPTURE_BURN":
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
 				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
@@ -1536,13 +1556,11 @@ func _calculate_predicted_trajectory() -> void:
 		if predicted_stage < rocket_stages.size():
 			active = rocket_stages[predicted_stage]
 			mass += float(active.get("dry_mass", 0.0))
-			if not infinite_weightless_fuel:
-				mass += predicted_fuel
+			mass += predicted_fuel
 			for j in range(predicted_stage + 1, rocket_stages.size()):
 				var upper: Dictionary = rocket_stages[j]
 				mass += float(upper.get("dry_mass", 0.0))
-				if not infinite_weightless_fuel:
-					mass += float(upper.get("fuel_capacity", 0.0))
+				mass += float(upper.get("fuel_capacity", 0.0))
 			total_flow = float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 			if not infinite_weightless_fuel:
 				burn = minf(predicted_fuel, total_flow * throttle * dt)
@@ -1660,7 +1678,7 @@ func _draw_hud() -> void:
 		"ALTITUDE       %s" % _format_distance(altitude),
 		"INERTIAL SPEED %s" % _format_speed(orbital_speed),
 		"VERTICAL SPEED %s" % _format_speed(local_velocity.dot(local_position.normalized())),
-		"FUEL           %s" % ("INFINITE • MASSLESS" if infinite_weightless_fuel else "%d%%" % roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
+		"FUEL           %s" % ("INFINITE • MASS RETAINED" if infinite_weightless_fuel else "%d%%" % roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
 		"THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
 		"THRUST / WEIGHT %.2f" % thrust_to_weight,
 		"IDEAL ΔV EST.  %s" % ("UNLIMITED" if infinite_weightless_fuel else "%.2f km/s" % (remaining_delta_v / 1000.0)),
@@ -1759,11 +1777,14 @@ func get_save_data() -> Dictionary:
 		"velocity": [velocity.x, velocity.y],
 		"rotation_angle": rotation_angle,
 		"fuel": fuel,
+		"infinite_fuel_stage_remaining": infinite_fuel_stage_remaining,
 		"stage_index": stage_index,
 		"discarded_stage_mass": discarded_stage_mass,
 		"discarded_propellant_mass": discarded_propellant_mass,
 		"gimbal_angle": gimbal_angle,
 		"guidance_enabled": guidance_enabled,
+		"infinite_weightless_fuel": infinite_weightless_fuel,
+		"show_velocity_vector": show_vectors,
 		"autopilot_enabled": autopilot_enabled,
 		"autopilot_target_altitude": autopilot_target_altitude,
 		"autopilot_target_mode": autopilot_target_mode,
@@ -1872,10 +1893,13 @@ func load_save_data(data: Dictionary) -> bool:
 	velocity = Vector2(float(v[0]), float(v[1]))
 	rotation_angle = float(data.get("rotation_angle", 0.0))
 	fuel = float(data.get("fuel", _active_stage_data().get("fuel_capacity", 0.0)))
+	infinite_fuel_stage_remaining = clampf(float(data.get("infinite_fuel_stage_remaining", fuel)), 0.0, float(_active_stage_data().get("fuel_capacity", 0.0)))
 	discarded_stage_mass = float(data.get("discarded_stage_mass", 0.0))
 	discarded_propellant_mass = float(data.get("discarded_propellant_mass", 0.0))
 	gimbal_angle = float(data.get("gimbal_angle", 0.0))
 	guidance_enabled = bool(data.get("guidance_enabled", false))
+	infinite_weightless_fuel = bool(data.get("infinite_weightless_fuel", false))
+	show_vectors = bool(data.get("show_velocity_vector", true))
 	autopilot_enabled = bool(data.get("autopilot_enabled", false))
 	autopilot_target_altitude = float(data.get("autopilot_target_altitude", 200000.0))
 	autopilot_target_mode = str(data.get("autopilot_target_mode", "ORBIT"))

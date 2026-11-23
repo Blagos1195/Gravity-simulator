@@ -7,6 +7,7 @@ var simulation: Control
 var rocket_design: Dictionary = {}
 var orbit_plot: OrbitPlot
 var current_path := PackedVector2Array()
+var planned_path := PackedVector2Array()
 var node_list: ItemList
 var time_input: SpinBox
 var prograde_input: SpinBox
@@ -22,6 +23,7 @@ var gravitational_parameter := 0.0
 var available_delta_v := 0.0
 var initial_available_delta_v := 0.0
 var nodes: Array[Dictionary] = []
+var planned_path_times := PackedFloat64Array()
 var selected_node_index := -1
 var loading_node := false
 var current_orbit_duration := 7200.0
@@ -41,6 +43,16 @@ var target_coordinates_loading := false
 var interface_scroll: ScrollContainer
 var node_editor: Control
 var add_node_button: Button
+var navigation_planet_dropdown: OptionButton
+var navigation_moon_dropdown: OptionButton
+var navigation_altitude_input: SpinBox
+var navigation_report: RichTextLabel
+var navigation_progress: Label
+var navigation_plot: OrbitPlot
+var navigation_engage_button: Button
+var navigation_cancel_button: Button
+var navigation_plan_valid := false
+var navigation_plan: Dictionary = {}
 
 class OrbitPlot extends Control:
 	signal node_dragged(index: int, world_position: Vector2)
@@ -59,8 +71,13 @@ class OrbitPlot extends Control:
 	var interaction_scale := 1.0
 	var interaction_center := Vector2.ZERO
 	var zoom_factor := 1.0
+	var solar_system_mode := false
+	var solar_system_bodies: Array[Dictionary] = []
+	var solar_system_target_name := ""
 
 	func _gui_input(event: InputEvent) -> void:
+		if solar_system_mode and not (event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]):
+			return
 		if event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 			zoom_factor = clampf(zoom_factor * (1.15 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.15), 0.25, 4.0)
 			queue_redraw()
@@ -112,6 +129,8 @@ class OrbitPlot extends Control:
 		return nearest_index
 
 	func set_paths(current: PackedVector2Array, planned: PackedVector2Array, markers: PackedVector2Array, radius: float, initial_position: Vector2, destination: Vector2, destination_enabled: bool) -> void:
+		solar_system_mode = false
+		solar_system_bodies.clear()
 		current_path = current
 		planned_path = planned
 		node_positions = markers
@@ -121,8 +140,51 @@ class OrbitPlot extends Control:
 		has_target = destination_enabled
 		queue_redraw()
 
+	func set_solar_system_path(path: PackedVector2Array, initial_position: Vector2, destination: Vector2, bodies: Array[Dictionary], destination_name: String) -> void:
+		solar_system_mode = true
+		solar_system_target_name = destination_name
+		solar_system_bodies = bodies.duplicate(true)
+		current_path = PackedVector2Array([initial_position])
+		planned_path = path
+		node_positions.clear()
+		body_radius = 0.0
+		rocket_position = initial_position
+		target_position = destination
+		has_target = true
+		queue_redraw()
+
+	func _draw_solar_system() -> void:
+		var extent := maxf(rocket_position.length(), target_position.length())
+		for point in planned_path:
+			extent = maxf(extent, point.length())
+		extent = maxf(1.0, extent * 1.08)
+		var scale_value := minf(size.x, size.y) * 0.46 / extent * zoom_factor
+		var center := size * 0.5
+		var path_screen := PackedVector2Array()
+		for point in planned_path:
+			path_screen.append(center + Vector2(point.x, -point.y) * scale_value)
+		if path_screen.size() > 1:
+			draw_polyline(path_screen, Color(0.25, 0.9, 0.68), 2.2, true)
+		for body in solar_system_bodies:
+			var body_name := str(body.get("name", ""))
+			var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+			var screen_position := center + Vector2(body_position.x, -body_position.y) * scale_value
+			var body_color := Color(0.92, 0.76, 0.35) if body_name == "Sun" else Color(0.25, 0.78, 1.0) if body_name == solar_system_target_name else Color(0.55, 0.68, 0.82)
+			var screen_radius := maxf(2.5, float(body.get("radius", 0.0)) * scale_value)
+			draw_circle(screen_position, screen_radius, body_color)
+			draw_string(ThemeDB.fallback_font, screen_position + Vector2(5.0, -5.0), body_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.82, 0.88, 0.96))
+		var rocket_screen := center + Vector2(rocket_position.x, -rocket_position.y) * scale_value
+		var target_screen := center + Vector2(target_position.x, -target_position.y) * scale_value
+		draw_circle(rocket_screen, 4.5, Color(1.0, 0.86, 0.35))
+		draw_circle(target_screen, 7.0, Color(0.25, 0.78, 1.0))
+		draw_arc(target_screen, 11.0, 0.0, TAU, 48, Color(0.55, 0.88, 1.0), 1.8)
+		draw_string(ThemeDB.fallback_font, Vector2(8.0, 18.0), "EARTH-CENTRED TRAJECTORY", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.72, 0.82, 0.92))
+
 	func _draw() -> void:
 		if size.x <= 0.0 or size.y <= 0.0 or current_path.is_empty():
+			return
+		if solar_system_mode:
+			_draw_solar_system()
 			return
 		var extent: float = maxf(rocket_position.length(), body_radius * 1.2)
 		if has_target:
@@ -207,6 +269,79 @@ func _build_interface() -> void:
 	description.text = "Choose any point inside the current body's sphere of influence by clicking the map or entering body-centred X/Y coordinates. The planner calculates a transfer, previews the path and creates the departure burn. Add or edit further manoeuvre nodes below. Transfers use a simplified two-body model."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
+
+	var navigation_heading := Label.new()
+	navigation_heading.text = "DESTINATION NAVIGATION"
+	navigation_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	root.add_child(navigation_heading)
+	var navigation_description := Label.new()
+	navigation_description.text = "Plan a transfer to any modeled planet or moon and enter a target orbit. This uses the same trajectory search and autopilot as the main destination controls."
+	navigation_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(navigation_description)
+	var navigation_row := HBoxContainer.new()
+	root.add_child(navigation_row)
+	navigation_planet_dropdown = OptionButton.new()
+	navigation_planet_dropdown.add_item("Earth", -2)
+	for planet_index in range(FlightComputer.PLANET_TARGETS.size()):
+		var planet: Dictionary = FlightComputer.PLANET_TARGETS[planet_index]
+		navigation_planet_dropdown.add_item(str(planet.get("name", "Unknown")), planet_index)
+	navigation_planet_dropdown.item_selected.connect(func(_index: int):
+		_rebuild_navigation_moons(navigation_planet_dropdown.get_selected_id())
+		_invalidate_navigation_plan()
+	)
+	navigation_row.add_child(navigation_planet_dropdown)
+	navigation_moon_dropdown = OptionButton.new()
+	navigation_moon_dropdown.custom_minimum_size.x = 190.0
+	navigation_moon_dropdown.item_selected.connect(func(_index: int): _invalidate_navigation_plan())
+	navigation_row.add_child(navigation_moon_dropdown)
+	_rebuild_navigation_moons(-2)
+	var altitude_row := HBoxContainer.new()
+	root.add_child(altitude_row)
+	var altitude_label := Label.new()
+	altitude_label.text = "TARGET ORBIT ALTITUDE"
+	altitude_row.add_child(altitude_label)
+	navigation_altitude_input = SpinBox.new()
+	navigation_altitude_input.min_value = 1.0
+	navigation_altitude_input.max_value = 1000000000.0
+	navigation_altitude_input.step = 1.0
+	navigation_altitude_input.value = 200.0
+	navigation_altitude_input.suffix = " km"
+	navigation_altitude_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	navigation_altitude_input.value_changed.connect(func(_value: float): _invalidate_navigation_plan())
+	altitude_row.add_child(navigation_altitude_input)
+	var navigation_actions := HBoxContainer.new()
+	root.add_child(navigation_actions)
+	var calculate_navigation_button := Button.new()
+	calculate_navigation_button.text = "CALCULATE DESTINATION TRANSFER"
+	calculate_navigation_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	calculate_navigation_button.pressed.connect(_calculate_destination_plan)
+	navigation_actions.add_child(calculate_navigation_button)
+	navigation_engage_button = Button.new()
+	navigation_engage_button.text = "SEND TO AUTOPILOT"
+	navigation_engage_button.disabled = true
+	navigation_engage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	navigation_engage_button.pressed.connect(_send_destination_to_autopilot)
+	navigation_actions.add_child(navigation_engage_button)
+	navigation_cancel_button = Button.new()
+	navigation_cancel_button.text = "CANCEL MISSION"
+	navigation_cancel_button.visible = false
+	navigation_cancel_button.pressed.connect(_cancel_destination_autopilot)
+	navigation_actions.add_child(navigation_cancel_button)
+	navigation_report = RichTextLabel.new()
+	navigation_report.bbcode_enabled = false
+	navigation_report.fit_content = true
+	navigation_report.custom_minimum_size.y = 76
+	navigation_report.scroll_active = false
+	root.add_child(navigation_report)
+	navigation_progress = Label.new()
+	navigation_progress.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(navigation_progress)
+	navigation_plot = OrbitPlot.new()
+	navigation_plot.custom_minimum_size = Vector2(0, 250)
+	navigation_plot.mouse_filter = Control.MOUSE_FILTER_STOP
+	navigation_plot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	navigation_plot.visible = false
+	root.add_child(navigation_plot)
 
 	orbit_plot = OrbitPlot.new()
 	orbit_plot.custom_minimum_size = Vector2(0, 250)
@@ -376,6 +511,244 @@ func _build_interface() -> void:
 	prograde_input.value_changed.connect(_update_selected_node)
 	radial_input.value_changed.connect(_update_selected_node)
 
+func _rebuild_navigation_moons(parent_target_index: int) -> void:
+	navigation_moon_dropdown.clear()
+	navigation_moon_dropdown.add_item("Planet only", parent_target_index)
+	if parent_target_index == -2:
+		navigation_moon_dropdown.add_item("Moon", -1)
+	else:
+		var parent_name := FlightComputer.target_body_name(parent_target_index)
+		for satellite in FlightComputer.satellite_targets_for_host(parent_name):
+			navigation_moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
+	navigation_moon_dropdown.select(0)
+	navigation_moon_dropdown.disabled = navigation_moon_dropdown.item_count <= 1
+
+func _invalidate_navigation_plan() -> void:
+	navigation_plan_valid = false
+	navigation_plan.clear()
+	if is_instance_valid(navigation_plot):
+		navigation_plot.visible = false
+	if is_instance_valid(navigation_engage_button):
+		navigation_engage_button.disabled = true
+	if is_instance_valid(navigation_report):
+		navigation_report.text = "DESTINATION CHANGED  •  RECALCULATE THE TRANSFER BEFORE SENDING IT TO AUTOPILOT."
+
+func _calculate_destination_plan() -> void:
+	if not is_instance_valid(simulation):
+		return
+	var target_id := navigation_moon_dropdown.get_selected_id()
+	var target_name := FlightComputer.target_body_name(target_id)
+	var target_altitude := navigation_altitude_input.value * 1000.0
+	var target_body: Dictionary = simulation.call("_surface_body_state", target_name)
+	if target_body.is_empty():
+		_invalidate_navigation_plan()
+		navigation_report.text = "TARGET BODY DATA IS UNAVAILABLE."
+		return
+	var target_radius := float(target_body.get("radius", 0.0)) + target_altitude
+	var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(target_name, float(target_body.get("radius", 0.0)))
+	var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(float(target_body.get("radius", 0.0)), float(target_body.get("soi", 0.0)))
+	if target_altitude < minimum_altitude or target_altitude > maximum_altitude:
+		_invalidate_navigation_plan()
+		navigation_report.text = "NO STABLE TARGET ORBIT AT THAT ALTITUDE. Valid range: %.1f–%.1f km." % [minimum_altitude / 1000.0, maximum_altitude / 1000.0]
+		return
+	var rocket_position: Vector2 = simulation.get("rocket_position")
+	var current: Dictionary = simulation.call("_nearest_body_state", rocket_position)
+	var current_name := str(current.get("name", ""))
+	var current_position: Vector2 = rocket_position - Vector2(current.get("position", Vector2.ZERO))
+	var current_velocity: Vector2 = Vector2(simulation.get("velocity")) - Vector2(current.get("velocity", Vector2.ZERO))
+	var current_mu := FlightComputer.G * float(current.get("mass", 0.0))
+	var current_orbit := FlightComputer.orbital_state(current_position, current_velocity, current_mu)
+	var current_minimum := FlightComputer.minimum_safe_orbit_altitude(current_name, float(current.get("radius", 0.0)))
+	var inside_current_soi := float(current.get("distance", INF)) <= float(current.get("soi", 0.0))
+	var stable_orbit := inside_current_soi and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + current_minimum
+	if current_name == target_name:
+		if not stable_orbit:
+			_invalidate_navigation_plan()
+			navigation_report.text = "ESTABLISH A SAFE ORBIT AROUND %s BEFORE CALCULATING AN ORBIT CHANGE." % target_name.to_upper()
+			return
+		var local_plan := FlightComputer.target_radius_burn(current_position, current_velocity, target_radius, current_mu)
+		var local_available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
+		if not bool(local_plan.get("valid", false)) or float(local_plan.get("delta_v", INF)) > local_available:
+			_invalidate_navigation_plan()
+			navigation_report.text = "NO FEASIBLE LOCAL ORBIT CHANGE. Check the target orbit and remaining ΔV budget."
+			return
+		navigation_plan = {"valid": true, "target_id": target_id, "target_name": target_name, "target_altitude": target_altitude, "delta_v": float(local_plan.get("delta_v", 0.0)), "local": true}
+	else:
+		if not stable_orbit:
+			_invalidate_navigation_plan()
+			navigation_report.text = "A SAFE PARKING ORBIT AROUND %s IS REQUIRED BEFORE A DESTINATION TRANSFER CAN BE CALCULATED." % current_name.to_upper()
+			return
+		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
+		var transfer: Dictionary = FlightComputer.simulated_transfer_search_precise(simulation.get("rocket_position_precise"), simulation.get("velocity"), float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
+		if not bool(transfer.get("valid", false)):
+			_invalidate_navigation_plan()
+			navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
+			return
+		navigation_plan = transfer.duplicate(true)
+		navigation_plan["target_id"] = target_id
+		navigation_plan["target_name"] = target_name
+		navigation_plan["target_altitude"] = target_altitude
+		navigation_plan["planned_at_time"] = float(simulation.get("sim_time"))
+		navigation_plan["planned_position"] = Vector2(simulation.get("rocket_position"))
+		navigation_plan["planned_velocity"] = Vector2(simulation.get("velocity"))
+		navigation_plan["local"] = false
+	navigation_plan_valid = true
+	navigation_engage_button.disabled = false
+	navigation_plot.visible = not bool(navigation_plan.get("local", false))
+	if not bool(navigation_plan.get("local", false)):
+		_update_navigation_plot()
+	if bool(navigation_plan.get("local", false)):
+		navigation_report.text = "ORBIT CHANGE SOLVED  •  %s\nTarget altitude: %.1f km\nRequired ΔV: %.0f m/s\nThis plan will circularise around the current body." % [target_name, target_altitude / 1000.0, float(navigation_plan.get("delta_v", 0.0))]
+	else:
+		navigation_report.text = "TRANSFER SOLVED  •  %s\nDeparture: CURRENT ORBIT  •  T+ %.1f s\nDeparture ΔV: %.0f m/s\nArrival capture ΔV: %.0f m/s\nTotal estimated ΔV: %.0f m/s\nFlight time: %.1f days\nClosest approach: %.0f km\nArrival speed: %.0f m/s\nCandidate trajectories: %d\nThe exact departure solution will be handed to autopilot. Finite-burn losses and mid-course corrections remain approximate." % [
+			target_name,
+			float(navigation_plan.get("planned_at_time", 0.0)),
+			float(navigation_plan.get("departure_delta_v", 0.0)),
+			float(navigation_plan.get("capture_delta_v", 0.0)),
+			float(navigation_plan.get("total_delta_v", 0.0)),
+			float(navigation_plan.get("transfer_time", 0.0)) / 86400.0,
+			float(navigation_plan.get("closest_approach", 0.0)) / 1000.0,
+			float(navigation_plan.get("arrival_speed", 0.0)),
+			int(navigation_plan.get("search_candidates", 0))
+		]
+
+func _update_navigation_plot() -> void:
+	if not is_instance_valid(simulation) or navigation_plan.is_empty():
+		return
+	var trajectory: PackedVector2Array = navigation_plan.get("trajectory", PackedVector2Array())
+	var target_components: PackedFloat64Array = navigation_plan.get("target_position", PackedFloat64Array())
+	if trajectory.size() < 2 or target_components.size() < 2:
+		navigation_plot.visible = false
+		return
+	var body_states: Dictionary = PlanetarySystem.gravity_body_states(float(simulation.get("sim_time")))
+	var bodies: Array[Dictionary] = []
+	for body_variant in body_states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
+		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+		var components: PackedFloat64Array = body.get("position_components", PackedFloat64Array())
+		if components.size() >= 2:
+			body_position = Vector2(components[0], components[1])
+		bodies.append({"name": str(body.get("name", "Unknown")), "position": body_position, "radius": float(body.get("radius", 0.0))})
+	for body_variant in body_states.get("bodies", []):
+		var body: Dictionary = body_variant
+		if str(body.get("name", "")) == "Sun":
+			var sun_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+			var sun_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array())
+			if sun_components.size() >= 2:
+				sun_position = Vector2(sun_components[0], sun_components[1])
+			bodies.append({"name": "Sun", "position": sun_position, "radius": float(body.get("radius", 0.0))})
+			break
+	navigation_plot.set_solar_system_path(
+		trajectory,
+		Vector2(simulation.get("rocket_position")),
+		Vector2(target_components[0], target_components[1]),
+		bodies,
+		str(navigation_plan.get("target_name", ""))
+	)
+
+func _refresh_navigation_state() -> void:
+	if not is_instance_valid(simulation) or not is_instance_valid(navigation_engage_button):
+		return
+	var autopilot_enabled := bool(simulation.get("autopilot_enabled"))
+	var target_mode := str(simulation.get("autopilot_target_mode"))
+	var autopilot_target_id := int(simulation.get("autopilot_planet_index"))
+	var phase := str(simulation.get("autopilot_phase"))
+	var destination_mission := target_mode == "ORBIT" and (autopilot_enabled or phase in ["COMPLETE", "FAILED", "ARRIVAL_PENDING"])
+	navigation_cancel_button.visible = destination_mission
+	navigation_cancel_button.text = "CANCEL DESTINATION MISSION" if autopilot_enabled else "CLEAR MISSION STATUS"
+	if autopilot_enabled:
+		navigation_engage_button.disabled = true
+		navigation_engage_button.text = "AUTOPILOT ACTIVE"
+	elif destination_mission:
+		navigation_engage_button.disabled = not navigation_plan_valid
+		navigation_engage_button.text = "SEND NEW PLAN"
+	else:
+		navigation_engage_button.disabled = not navigation_plan_valid
+		navigation_engage_button.text = "SEND TO AUTOPILOT"
+	if destination_mission:
+		var target_name := FlightComputer.target_body_name(autopilot_target_id)
+		var target_state: Dictionary = simulation.call("_surface_body_state", target_name)
+		var rocket_position: Vector2 = simulation.get("rocket_position")
+		var rocket_velocity: Vector2 = simulation.get("velocity")
+		var target_position: Vector2 = target_state.get("position", Vector2.ZERO)
+		var target_velocity: Vector2 = target_state.get("velocity", Vector2.ZERO)
+		var range_to_target := rocket_position.distance_to(target_position)
+		var relative_speed := (rocket_velocity - target_velocity).length()
+		navigation_progress.text = "MISSION: %s  •  PHASE: %s  •  RANGE: %.0f km  •  RELATIVE SPEED: %.0f m/s\n%s" % [
+			target_name.to_upper(),
+			phase.replace("_", " "),
+			range_to_target / 1000.0,
+			relative_speed,
+			str(simulation.get("status_message"))
+		]
+	elif autopilot_enabled:
+		navigation_progress.text = "ANOTHER AUTOPILOT MODE IS ACTIVE. Finish or cancel it before starting destination navigation."
+	else:
+		navigation_progress.text = "NO DESTINATION MISSION ACTIVE."
+	if navigation_plan_valid and not bool(navigation_plan.get("local", false)):
+		_update_navigation_plot()
+
+func _cancel_destination_autopilot() -> void:
+	if not is_instance_valid(simulation) or str(simulation.get("autopilot_target_mode")) != "ORBIT":
+		return
+	var was_active := bool(simulation.get("autopilot_enabled"))
+	simulation.set("autopilot_enabled", false)
+	simulation.set("guidance_enabled", false)
+	simulation.set("thrust_key_down", false)
+	simulation.set("autopilot_complete", false)
+	simulation.set("autopilot_phase", "IDLE")
+	simulation.set("autopilot_burn_remaining", 0.0)
+	simulation.set("autopilot_burn_direction", Vector2.ZERO)
+	simulation.set("autopilot_transfer_start_time", -1.0)
+	simulation.set("autopilot_transfer_duration", 0.0)
+	simulation.set("autopilot_precomputed_transfer_plan", {})
+	simulation.set("status_message", "FLIGHT COMPUTER  •  DESTINATION MISSION %s" % ("CANCELLED" if was_active else "STATUS CLEARED"))
+	_refresh_navigation_state()
+
+func _send_destination_to_autopilot() -> void:
+	if not navigation_plan_valid or not is_instance_valid(simulation) or bool(simulation.get("crashed")):
+		return
+	var target_id := int(navigation_plan.get("target_id", -999))
+	var target_name := str(navigation_plan.get("target_name", ""))
+	if target_id == -999 or target_name.is_empty():
+		return
+	if not bool(navigation_plan.get("local", false)):
+		var planned_position: Vector2 = navigation_plan.get("planned_position", Vector2.INF)
+		var planned_velocity: Vector2 = navigation_plan.get("planned_velocity", Vector2.INF)
+		var current_position: Vector2 = simulation.get("rocket_position")
+		var current_velocity: Vector2 = simulation.get("velocity")
+		var plan_age: float = absf(float(simulation.get("sim_time")) - float(navigation_plan.get("planned_at_time", -INF)))
+		if plan_age > 2.0 or planned_position.distance_to(current_position) > 20000.0 or planned_velocity.distance_to(current_velocity) > 5.0:
+			_calculate_destination_plan()
+			if not navigation_plan_valid:
+				return
+	var current: Dictionary = simulation.call("_nearest_body_state", simulation.get("rocket_position"))
+	var current_name := str(current.get("name", ""))
+	var relative_position: Vector2 = Vector2(simulation.get("rocket_position")) - Vector2(current.get("position", Vector2.ZERO))
+	var relative_velocity: Vector2 = Vector2(simulation.get("velocity")) - Vector2(current.get("velocity", Vector2.ZERO))
+	var current_orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(current.get("mass", 0.0)))
+	var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(current_name, float(current.get("radius", 0.0)))
+	var stable_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + minimum_altitude
+	simulation.set("autopilot_enabled", true)
+	simulation.set("autopilot_complete", false)
+	simulation.set("autopilot_target_mode", "ORBIT")
+	simulation.set("autopilot_planet_index", target_id)
+	simulation.set("autopilot_target_altitude", float(navigation_plan.get("target_altitude", 200000.0)))
+	simulation.set("autopilot_burn_remaining", 0.0)
+	simulation.set("autopilot_burn_direction", Vector2.ZERO)
+	simulation.set("autopilot_transfer_corrections", 0)
+	simulation.set("autopilot_precomputed_transfer_plan", navigation_plan.duplicate(true) if not bool(navigation_plan.get("local", false)) else {})
+	simulation.set("autopilot_apsis_correction_armed", true)
+	simulation.set("autopilot_apsis_correction_angle", relative_position.angle())
+	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if bool(simulation.get("landed")) or not stable_orbit else "PLAN_TRANSFER")
+	simulation.set("guidance_enabled", true)
+	simulation.set("thrust_key_down", bool(simulation.get("landed")) or not stable_orbit)
+	simulation.set("status_message", "FLIGHT COMPUTER  •  NAVIGATING TO %s" % target_name.to_upper())
+	navigation_engage_button.disabled = true
+	navigation_engage_button.text = "AUTOPILOT ACTIVE"
+	navigation_report.text += "\n\nAUTOPILOT ENGAGED. The calculated departure solution has been handed to the live guidance system."
+	_refresh_navigation_state()
+
 func _process(delta: float) -> void:
 	refresh_elapsed += delta
 	if refresh_elapsed >= 0.5 and is_instance_valid(simulation):
@@ -415,6 +788,7 @@ func _refresh_state() -> void:
 		_calculate_route()
 	else:
 		_update_manoeuvre()
+	_refresh_navigation_state()
 
 func _add_node() -> void:
 	if not is_instance_valid(simulation):
@@ -645,24 +1019,25 @@ func _calculate_route() -> void:
 	_update_manoeuvre()
 
 func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
-	if index < 0 or index >= nodes.size() or current_path.size() < 2:
+	if index < 0 or index >= nodes.size() or planned_path.size() < 2 or planned_path_times.size() != planned_path.size():
 		return
 	if index == 0:
 		_invalidate_route_solution()
 	var nearest_index := 0
 	var nearest_distance := INF
-	for point_index in range(current_path.size()):
-		var distance: float = current_path[point_index].distance_squared_to(world_position)
+	for point_index in range(planned_path.size()):
+		var distance: float = planned_path[point_index].distance_squared_to(world_position)
 		if distance < nearest_distance:
 			nearest_distance = distance
 			nearest_index = point_index
-	var fraction := float(nearest_index) / float(current_path.size() - 1)
-	var time_offset := fraction * current_orbit_duration
-	var step_time := current_orbit_duration / float(current_path.size() - 1)
+	var time_offset: float = planned_path_times[nearest_index]
 	var before_index := maxi(0, nearest_index - 1)
-	var after_index := mini(current_path.size() - 1, nearest_index + 1)
-	var burn_position: Vector2 = current_path[nearest_index]
-	var burn_velocity: Vector2 = (current_path[after_index] - current_path[before_index]) / maxf(0.001, float(after_index - before_index) * step_time)
+	var after_index := mini(planned_path.size() - 1, nearest_index + 1)
+	var burn_position: Vector2 = planned_path[nearest_index]
+	var sample_duration: float = planned_path_times[after_index] - planned_path_times[before_index]
+	var burn_velocity: Vector2 = relative_velocity
+	if sample_duration > 0.001:
+		burn_velocity = (planned_path[after_index] - planned_path[before_index]) / sample_duration
 	var radial: Vector2 = burn_position.normalized()
 	var tangent := Vector2(-radial.y, radial.x)
 	if burn_position.cross(burn_velocity) < 0.0:
@@ -679,7 +1054,8 @@ func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
 	)
 	selected_node_index = 0
 	for node_index in range(nodes.size()):
-		if is_equal_approx(float(nodes[node_index].get("time_offset", 0.0)), time_offset):
+		var candidate: Dictionary = nodes[node_index]
+		if is_equal_approx(float(candidate.get("time_offset", 0.0)), time_offset) and is_equal_approx(float(candidate.get("prograde", 0.0)), float(node.get("prograde", 0.0))) and is_equal_approx(float(candidate.get("radial", 0.0)), float(node.get("radial", 0.0))):
 			selected_node_index = node_index
 			break
 	_rebuild_node_list()
@@ -757,7 +1133,8 @@ func _append_integrated_path(path: PackedVector2Array, position: Vector2, veloci
 
 func _build_prediction_paths() -> void:
 	current_path = PackedVector2Array()
-	var planned_path := PackedVector2Array()
+	planned_path = PackedVector2Array([relative_position])
+	planned_path_times = PackedFloat64Array([0.0])
 	var markers := PackedVector2Array()
 	var current_orbit: Dictionary = FlightComputer.orbital_state(relative_position, relative_velocity, gravitational_parameter)
 	var orbit_duration: float = 7200.0
@@ -782,6 +1159,8 @@ func _build_prediction_paths() -> void:
 				break
 			var coast_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, coast_duration, coast_steps)
 			planned_path = coast_result.get("path", planned_path)
+			for sample_index in range(coast_steps):
+				planned_path_times.append(elapsed + coast_duration * float(sample_index + 1) / float(coast_steps))
 			plan_position = coast_result.get("position", plan_position)
 			plan_velocity = coast_result.get("velocity", plan_velocity)
 			integrated_steps += coast_steps
@@ -800,8 +1179,11 @@ func _build_prediction_paths() -> void:
 			final_duration = TAU * sqrt(pow(final_axis, 3.0) / gravitational_parameter)
 	final_duration = route_duration if has_route_target else clampf(final_duration, 60.0, 30.0 * 86400.0)
 	var remaining_steps: int = 1440
+	var final_steps: int = clampi(int(ceil(final_duration / 120.0)), 1, remaining_steps)
 	var final_result: Dictionary = _append_integrated_path(planned_path, plan_position, plan_velocity, final_duration, remaining_steps)
 	planned_path = final_result.get("path", planned_path)
+	for sample_index in range(final_steps):
+		planned_path_times.append(elapsed + final_duration * float(sample_index + 1) / float(final_steps))
 	if has_route_target:
 		var body_radius := float(current_body.get("radius", 0.0))
 		for point in planned_path:

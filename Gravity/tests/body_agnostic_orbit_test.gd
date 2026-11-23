@@ -7,6 +7,7 @@ const RocketDesign = preload("res://scripts/rocket_design.gd")
 
 func _initialize() -> void:
 	_validate_catalogue_orbits()
+	_validate_moon_arrival_capture()
 	_validate_local_orbit_autopilot("Moon")
 	_validate_local_orbit_autopilot("Mars")
 	print("Body-agnostic orbital guidance tests passed.")
@@ -68,6 +69,55 @@ func _validate_catalogue_orbits() -> void:
 			assert(body_lookup.has(FlightComputer.target_body_name(satellite_id)), "Moon dropdown entry is not a simulated body")
 			assert(str(satellite.get("host_name", "")) == host_name)
 	simulation.free()
+
+
+func _validate_moon_arrival_capture() -> void:
+	var simulation: Variant = SimulationView.new()
+	simulation.set_rocket_design(RocketDesign.create_default())
+	simulation.realism = "Realistic"
+	simulation.infinite_weightless_fuel = true
+	simulation.landed = false
+	simulation.autopilot_enabled = true
+	simulation.guidance_enabled = true
+	simulation.autopilot_target_mode = "ORBIT"
+	simulation.autopilot_target_altitude = 200000.0
+	simulation.autopilot_planet_index = -1
+	simulation.autopilot_phase = "ARRIVAL_APPROACH"
+	var moon_state: Dictionary = simulation._surface_body_state("Moon")
+	var moon_radius := float(moon_state.get("radius", 0.0))
+	var moon_mu := FlightComputer.G * float(moon_state.get("mass", 0.0))
+	var moon_soi := float(moon_state.get("soi", 0.0))
+	var relative_position := Vector2(moon_soi * 0.8, 0.0)
+	var relative_velocity := Vector2(-1500.0, 200.0)
+	simulation._set_rocket_position_relative_to_body(moon_state, relative_position)
+	simulation.velocity = Vector2(moon_state.get("velocity", Vector2.ZERO)) + relative_velocity
+	simulation._update_guidance(0.1)
+	assert(simulation.autopilot_phase == "ARRIVAL_CAPTURE_BURN", "Inbound Moon arrival did not start capture before periapsis: %s" % simulation.status_message)
+	var safe_altitude := FlightComputer.minimum_safe_orbit_altitude("Moon", moon_radius)
+	var capture := FlightComputer.arrival_capture_burn(relative_position, relative_velocity, moon_mu, moon_radius, 200000.0, safe_altitude)
+	assert(bool(capture.get("valid", false)), "Moon SOI arrival did not produce a valid capture burn")
+	var captured_orbit := FlightComputer.orbital_state(relative_position, relative_velocity + Vector2(capture.get("burn_vector", Vector2.ZERO)), moon_mu)
+	var target_radius := moon_radius + maxf(safe_altitude, 200000.0)
+	assert(bool(captured_orbit.get("bound", false)), "Moon arrival capture did not produce a bound orbit")
+	assert(absf(float(captured_orbit.get("periapsis", 0.0)) - target_radius) < FlightComputer.orbit_radius_tolerance(target_radius), "Moon arrival capture missed the requested periapsis")
+
+	simulation.free()
+
+	var missed_simulation: Variant = SimulationView.new()
+	missed_simulation.set_rocket_design(RocketDesign.create_default())
+	missed_simulation.landed = false
+	missed_simulation.autopilot_enabled = true
+	missed_simulation.guidance_enabled = true
+	missed_simulation.autopilot_target_mode = "ORBIT"
+	missed_simulation.autopilot_target_altitude = 200000.0
+	missed_simulation.autopilot_planet_index = -1
+	missed_simulation.autopilot_phase = "ARRIVAL_APPROACH"
+	var missed_moon_state: Dictionary = missed_simulation._surface_body_state("Moon")
+	missed_simulation._set_rocket_position_relative_to_body(missed_moon_state, relative_position)
+	missed_simulation.velocity = Vector2(missed_moon_state.get("velocity", Vector2.ZERO)) + Vector2(1500.0, 200.0)
+	missed_simulation._update_guidance(0.1)
+	assert(missed_simulation.autopilot_phase == "FAILED", "Outbound Moon flyby was not identified as a missed capture")
+	missed_simulation.free()
 
 
 func _validate_local_orbit_autopilot(body_name: String) -> void:
