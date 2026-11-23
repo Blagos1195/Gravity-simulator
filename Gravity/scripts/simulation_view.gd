@@ -1934,12 +1934,20 @@ func _saved_manual_flight_plan() -> Dictionary:
 	var plan := manual_flight_plan.duplicate(true)
 	var departure_direction: Vector2 = plan.get("departure_direction", Vector2.ZERO)
 	var burn_vector: Vector2 = plan.get("burn_vector", Vector2.ZERO)
+	var planned_position: Vector2 = plan.get("planned_position", Vector2.ZERO)
+	var planned_velocity: Vector2 = plan.get("planned_velocity", Vector2.ZERO)
 	plan.erase("departure_direction")
 	plan.erase("burn_vector")
+	plan.erase("planned_position")
+	plan.erase("planned_velocity")
 	plan["departure_direction_x"] = departure_direction.x
 	plan["departure_direction_y"] = departure_direction.y
 	plan["burn_vector_x"] = burn_vector.x
 	plan["burn_vector_y"] = burn_vector.y
+	plan["planned_position_x"] = planned_position.x
+	plan["planned_position_y"] = planned_position.y
+	plan["planned_velocity_x"] = planned_velocity.x
+	plan["planned_velocity_y"] = planned_velocity.y
 	return plan
 
 func get_save_data() -> Dictionary:
@@ -2120,7 +2128,7 @@ func load_save_data(data: Dictionary) -> bool:
 	var saved_manual_plan: Variant = data.get("manual_flight_plan", {})
 	if saved_manual_plan is Dictionary and not saved_manual_plan.is_empty():
 		var manual_plan_valid := str(saved_manual_plan.get("target_name", "")).length() > 0 and str(saved_manual_plan.get("phase", "")) in ["WAIT_DEPARTURE", "DEPARTURE_BURN", "TRANSFER_COAST", "ARRIVAL_BURN", "ARRIVAL_COAST", "ARRIVAL_CIRCULARISE", "LOCAL_BURN", "COMPLETE", "FAILED"]
-		for key in ["departure_time", "transfer_time", "departure_delta_v", "target_altitude", "burn_delta_v", "departure_direction_x", "departure_direction_y", "burn_vector_x", "burn_vector_y"]:
+		for key in ["departure_time", "transfer_time", "departure_delta_v", "target_altitude", "burn_delta_v", "departure_direction_x", "departure_direction_y", "burn_vector_x", "burn_vector_y", "planned_position_x", "planned_position_y", "planned_velocity_x", "planned_velocity_y"]:
 			var value: Variant = saved_manual_plan.get(key, 0.0)
 			if not (value is float or value is int) or not is_finite(float(value)):
 				manual_plan_valid = false
@@ -2129,6 +2137,8 @@ func load_save_data(data: Dictionary) -> bool:
 			manual_flight_plan = saved_manual_plan.duplicate(true)
 			manual_flight_plan["departure_direction"] = Vector2(float(saved_manual_plan.get("departure_direction_x", 0.0)), float(saved_manual_plan.get("departure_direction_y", 0.0)))
 			manual_flight_plan["burn_vector"] = Vector2(float(saved_manual_plan.get("burn_vector_x", 0.0)), float(saved_manual_plan.get("burn_vector_y", 0.0)))
+			manual_flight_plan["planned_position"] = Vector2(float(saved_manual_plan.get("planned_position_x", 0.0)), float(saved_manual_plan.get("planned_position_y", 0.0)))
+			manual_flight_plan["planned_velocity"] = Vector2(float(saved_manual_plan.get("planned_velocity_x", 0.0)), float(saved_manual_plan.get("planned_velocity_y", 0.0)))
 	manual_burn_tracking_enabled = bool(data.get("manual_burn_tracking_enabled", false)) and not manual_flight_plan.is_empty() and str(manual_flight_plan.get("phase", "")) in ["DEPARTURE_BURN", "ARRIVAL_BURN", "ARRIVAL_CIRCULARISE", "LOCAL_BURN"]
 	manual_burn_target_vector = Vector2(float(data.get("manual_burn_target_x", 0.0)), float(data.get("manual_burn_target_y", 0.0)))
 	manual_burn_accumulated_vector = Vector2(float(data.get("manual_burn_accumulated_x", 0.0)), float(data.get("manual_burn_accumulated_y", 0.0)))
