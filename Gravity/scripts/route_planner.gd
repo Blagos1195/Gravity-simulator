@@ -50,6 +50,7 @@ var navigation_report: RichTextLabel
 var navigation_progress: Label
 var navigation_plot: OrbitPlot
 var navigation_engage_button: Button
+var manual_navigation_button: Button
 var navigation_cancel_button: Button
 var navigation_plan_valid := false
 var navigation_plan: Dictionary = {}
@@ -338,6 +339,12 @@ func _build_interface() -> void:
 	navigation_engage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	navigation_engage_button.pressed.connect(_send_destination_to_autopilot)
 	navigation_actions.add_child(navigation_engage_button)
+	manual_navigation_button = Button.new()
+	manual_navigation_button.text = "FLY MANUALLY"
+	manual_navigation_button.disabled = true
+	manual_navigation_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	manual_navigation_button.pressed.connect(_toggle_manual_destination_plan)
+	navigation_actions.add_child(manual_navigation_button)
 	navigation_cancel_button = Button.new()
 	navigation_cancel_button.text = "CANCEL MISSION"
 	navigation_cancel_button.visible = false
@@ -785,6 +792,11 @@ func _refresh_navigation_state() -> void:
 		navigation_progress.text = "NO DESTINATION MISSION ACTIVE."
 	if navigation_plan_valid and not bool(navigation_plan.get("local", false)):
 		_update_navigation_plot()
+	var manual_plan: Dictionary = simulation.get("manual_flight_plan")
+	var manual_active := not manual_plan.is_empty() and bool(manual_plan.get("active", false))
+	manual_navigation_button.disabled = not manual_active and (not navigation_plan_valid or autopilot_enabled)
+	manual_navigation_button.text = "CANCEL MANUAL PLAN" if manual_active else "FLY MANUALLY"
+	_update_manual_guidance()
 
 func _cancel_destination_autopilot() -> void:
 	if not is_instance_valid(simulation) or str(simulation.get("autopilot_target_mode")) != "ORBIT":
@@ -895,8 +907,28 @@ func _refresh_state() -> void:
 func _arm_manual_guidance() -> void:
 	if not is_instance_valid(simulation) or selected_node_index < 0 or selected_node_index >= nodes.size():
 		return
+	var existing_plan: Dictionary = simulation.get("manual_flight_plan")
+	if not existing_plan.is_empty() and bool(existing_plan.get("active", false)):
+		manual_guidance_report.text = "A MANUAL DESTINATION PLAN IS ALREADY ACTIVE. Complete or cancel it before arming a separate manoeuvre node."
+		return
+	var node: Dictionary = nodes[selected_node_index]
+	var node_time := maxf(0.0, float(node.get("time_offset", 0.0)))
+	var predicted_state := _manual_node_state(node_time)
+	var guidance := FlightComputer.manoeuvre_burn_guidance(
+		Vector2(predicted_state.get("position", relative_position)),
+		Vector2(predicted_state.get("velocity", relative_velocity)),
+		float(node.get("prograde", 0.0)),
+		float(node.get("radial", 0.0))
+	)
+	if not bool(guidance.get("valid", false)) or float(guidance.get("delta_v", 0.0)) < 0.1:
+		manual_guidance_report.text = "THE SELECTED NODE DOES NOT CONTAIN A VALID BURN."
+		return
 	manual_guidance_node_index = selected_node_index
 	manual_guidance_start_time = float(simulation.get("sim_time"))
+	simulation.set("manual_burn_tracking_enabled", false)
+	simulation.set("manual_burn_target_vector", Vector2(guidance.get("burn_vector", Vector2.ZERO)))
+	simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
+	simulation.set("thrust_key_down", false)
 	_update_manual_guidance()
 
 func _manual_node_state(node_time: float) -> Dictionary:
@@ -917,10 +949,14 @@ func _manual_node_state(node_time: float) -> Dictionary:
 	return {"position": planned_path[nearest_index], "velocity": predicted_velocity}
 
 func _update_manual_guidance() -> void:
-	if not is_instance_valid(manual_guidance_report):
+	if not is_instance_valid(manual_guidance_report) or not is_instance_valid(simulation):
 		return
-	if not is_instance_valid(simulation) or manual_guidance_node_index < 0 or manual_guidance_node_index >= nodes.size():
-		manual_guidance_report.text = "MANUAL BURN GUIDANCE  •  Select a manoeuvre node and press GUIDE SELECTED BURN. No autopilot is engaged."
+	var manual_plan: Dictionary = simulation.get("manual_flight_plan")
+	if not manual_plan.is_empty() and bool(manual_plan.get("active", false)):
+		_update_manual_flight_plan()
+		return
+	if manual_guidance_node_index < 0 or manual_guidance_node_index >= nodes.size():
+		manual_guidance_report.text = "MANUAL GUIDANCE  •  Select a manoeuvre node and arm its burn. No automatic steering or thrust is used."
 		return
 	var node: Dictionary = nodes[manual_guidance_node_index]
 	var node_time := maxf(0.0, float(node.get("time_offset", 0.0)))
@@ -936,16 +972,229 @@ func _update_manual_guidance() -> void:
 	if not bool(guidance.get("valid", false)):
 		manual_guidance_report.text = "MANUAL BURN GUIDANCE  •  Unable to calculate the selected node's burn direction."
 		return
-	var timing := "BURN WINDOW OPEN" if remaining_time <= 0.0 else "BURN IN %.1f s" % remaining_time
-	var angle_degrees := rad_to_deg(float(guidance.get("angle_from_prograde", 0.0)))
-	manual_guidance_report.text = "MANUAL NODE %d  •  %s\nTARGET ΔV: %.1f m/s  •  PROGRADE: %+.1f m/s  •  RADIAL: %+.1f m/s\nBURN VECTOR: %.1f° from prograde towards radial. Point the rocket along this vector and use manual thrust; stop when the planned ΔV is reached. No automatic steering or thrust is used." % [
+	var burn_vector: Vector2 = guidance.get("burn_vector", Vector2.ZERO)
+	var target_delta_v := float(guidance.get("delta_v", 0.0))
+	var tracking := bool(simulation.get("manual_burn_tracking_enabled"))
+	if remaining_time <= 0.0 and not tracking:
+		simulation.set("manual_burn_target_vector", burn_vector)
+		simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
+		simulation.set("manual_burn_tracking_enabled", true)
+		tracking = true
+	var accumulated: Vector2 = simulation.get("manual_burn_accumulated_vector")
+	var achieved := maxf(0.0, accumulated.dot(burn_vector.normalized())) if target_delta_v > 0.0 else 0.0
+	var cross_track := absf(accumulated.cross(burn_vector.normalized()))
+	var desired_rotation := burn_vector.angle() - Vector2.UP.angle()
+	var heading_error := rad_to_deg(angle_difference(float(simulation.get("rotation_angle")), desired_rotation))
+	var timing := "BURN IN %.1f s" % remaining_time if remaining_time > 0.0 else "BURN WINDOW OPEN"
+	var tolerance := maxf(0.5, target_delta_v * 0.01)
+	var burn_status := "CUT THRUST  •  TARGET ΔV REACHED" if achieved >= target_delta_v - tolerance else "BURN TRACKING" if tracking else "READY"
+	if not bool(simulation.get("thrust_key_down")) and achieved >= target_delta_v - tolerance:
+		simulation.set("manual_burn_tracking_enabled", false)
+		burn_status = "NODE BURN COMPLETE"
+	manual_guidance_report.text = "MANUAL NODE %d  •  %s  •  %s\nREQUIRED ΔV: %.1f m/s  •  DELIVERED: %.1f m/s  •  CROSS-TRACK: %.1f m/s\nHEADING ERROR: %+.1f°  •  BURN VECTOR: %.1f° FROM PROGRADE\nRotate with Q/E to reduce heading error, press W to thrust and S to cut off. The computer never steers or fires the engine." % [
 		manual_guidance_node_index + 1,
 		timing,
-		float(guidance.get("delta_v", 0.0)),
-		float(guidance.get("prograde", 0.0)),
-		float(guidance.get("radial", 0.0)),
-		angle_degrees
+		burn_status,
+		target_delta_v,
+		achieved,
+		cross_track,
+		heading_error,
+		rad_to_deg(float(guidance.get("angle_from_prograde", 0.0)))
 	]
+
+func _toggle_manual_destination_plan() -> void:
+	if not is_instance_valid(simulation):
+		return
+	var existing: Dictionary = simulation.get("manual_flight_plan")
+	if not existing.is_empty() and bool(existing.get("active", false)):
+		simulation.set("manual_flight_plan", {})
+		simulation.set("manual_burn_tracking_enabled", false)
+		simulation.set("manual_burn_target_vector", Vector2.ZERO)
+		simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
+		simulation.set("thrust_key_down", false)
+		manual_guidance_report.text = "MANUAL DESTINATION PLAN CANCELLED."
+		_refresh_navigation_state()
+		return
+	_start_manual_destination_plan()
+
+func _start_manual_destination_plan() -> void:
+	if not navigation_plan_valid or bool(simulation.get("autopilot_enabled")) or bool(simulation.get("landed")) or bool(simulation.get("crashed")):
+		return
+	var current: Dictionary = simulation.call("_nearest_body_state", simulation.get("rocket_position"))
+	var relative_position_now: Vector2 = simulation.get("rocket_position") - Vector2(current.get("position", Vector2.ZERO))
+	var relative_velocity_now: Vector2 = simulation.get("velocity") - Vector2(current.get("velocity", Vector2.ZERO))
+	var current_orbit := FlightComputer.orbital_state(relative_position_now, relative_velocity_now, FlightComputer.G * float(current.get("mass", 0.0)))
+	var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(str(current.get("name", "")), float(current.get("radius", 0.0)))
+	var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(float(current.get("radius", 0.0)), float(current.get("soi", 0.0)))
+	var stable_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + minimum_altitude and float(current_orbit.get("apoapsis", INF)) < float(current.get("radius", 0.0)) + maximum_altitude
+	if not stable_orbit:
+		manual_guidance_report.text = "MANUAL DESTINATION FLIGHT REQUIRES A SAFE PARKING ORBIT. Establish one first; manual ascent and escape guidance are not included yet."
+		return
+	var plan := navigation_plan.duplicate(true)
+	if not bool(plan.get("local", false)):
+		var plan_age := absf(float(simulation.get("sim_time")) - float(plan.get("planned_at_time", -INF)))
+		var planned_position: Vector2 = plan.get("planned_position", Vector2.INF)
+		var planned_velocity: Vector2 = plan.get("planned_velocity", Vector2.INF)
+		if plan_age > 2.0 or planned_position.distance_to(simulation.get("rocket_position")) > 20000.0 or planned_velocity.distance_to(simulation.get("velocity")) > 5.0:
+			_calculate_destination_plan()
+			if not navigation_plan_valid:
+				return
+			plan = navigation_plan.duplicate(true)
+	var now := float(simulation.get("sim_time"))
+	var manual_plan: Dictionary = {
+		"active": true,
+		"target_id": int(plan.get("target_id", -999)),
+		"target_name": str(plan.get("target_name", "")),
+		"target_altitude": float(plan.get("target_altitude", 200000.0)),
+		"phase": "LOCAL_BURN" if bool(plan.get("local", false)) else "WAIT_DEPARTURE",
+		"departure_time": float(plan.get("departure_time_seconds", plan.get("planned_at_time", now))),
+		"transfer_time": float(plan.get("transfer_time", 0.0)),
+		"departure_direction": Vector2(plan.get("departure_direction", Vector2.ZERO)).normalized(),
+		"departure_delta_v": float(plan.get("departure_delta_v", 0.0)),
+		"transfer_start_time": -1.0,
+		"burn_kind": "",
+		"burn_delta_v": 0.0,
+		"previous_radial_speed": -0.001
+	}
+	if bool(plan.get("local", false)):
+		var local_burn := FlightComputer.target_radius_burn(relative_position_now, relative_velocity_now, float(current.get("radius", 0.0)) + float(plan.get("target_altitude", 200000.0)), FlightComputer.G * float(current.get("mass", 0.0)))
+		if not bool(local_burn.get("valid", false)):
+			manual_guidance_report.text = "THE LOCAL ORBIT CHANGE HAS NO VALID MANUAL BURN SOLUTION."
+			return
+		_arm_manual_plan_burn(manual_plan, "LOCAL_BURN", Vector2(local_burn.get("burn_vector", Vector2.ZERO)), float(local_burn.get("delta_v", 0.0)))
+	else:
+		if Vector2(manual_plan["departure_direction"]) == Vector2.ZERO or float(manual_plan["departure_delta_v"]) <= 0.0:
+			manual_guidance_report.text = "THE DESTINATION SOLUTION DOES NOT CONTAIN A VALID DEPARTURE BURN."
+			return
+		if float(manual_plan["departure_time"]) <= now + 2.0:
+			_arm_manual_plan_burn(manual_plan, "DEPARTURE_BURN", Vector2(manual_plan["departure_direction"]) * float(manual_plan["departure_delta_v"]), float(manual_plan["departure_delta_v"]))
+	simulation.set("manual_flight_plan", manual_plan)
+	simulation.set("autopilot_enabled", false)
+	simulation.set("guidance_enabled", false)
+	simulation.set("thrust_key_down", false)
+	manual_guidance_node_index = -1
+	_refresh_navigation_state()
+	_update_manual_guidance()
+
+func _arm_manual_plan_burn(plan: Dictionary, phase: String, burn_vector: Vector2, delta_v: float) -> void:
+	if burn_vector.length() < 0.1 or delta_v < 0.1:
+		plan["phase"] = "FAILED"
+		plan["reason"] = "The planned burn is too small or invalid."
+		return
+	plan["phase"] = phase
+	plan["burn_kind"] = phase
+	plan["burn_delta_v"] = delta_v
+	plan["burn_vector"] = burn_vector
+	simulation.set("manual_burn_tracking_enabled", true)
+	simulation.set("manual_burn_target_vector", burn_vector)
+	simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
+	simulation.set("thrust_key_down", false)
+
+func _update_manual_flight_plan() -> void:
+	var plan: Dictionary = simulation.get("manual_flight_plan")
+	if plan.is_empty() or not bool(plan.get("active", false)):
+		return
+	var now := float(simulation.get("sim_time"))
+	var phase := str(plan.get("phase", ""))
+	if phase == "WAIT_DEPARTURE":
+		var wait_remaining := float(plan.get("departure_time", now)) - now
+		if wait_remaining <= 0.0:
+			_arm_manual_plan_burn(plan, "DEPARTURE_BURN", Vector2(plan.get("departure_direction", Vector2.ZERO)) * float(plan.get("departure_delta_v", 0.0)), float(plan.get("departure_delta_v", 0.0)))
+			simulation.set("manual_flight_plan", plan)
+			phase = str(plan.get("phase", ""))
+		else:
+			manual_guidance_report.text = "MANUAL FLIGHT PLAN  •  %s\nDEPARTURE WINDOW OPENS IN %.1f DAYS. No automatic steering or thrust will occur." % [str(plan.get("target_name", "TARGET")).to_upper(), wait_remaining / 86400.0]
+			return
+	if phase in ["DEPARTURE_BURN", "LOCAL_BURN", "ARRIVAL_BURN", "ARRIVAL_CIRCULARISE"]:
+		var target_vector: Vector2 = simulation.get("manual_burn_target_vector")
+		var target_delta_v := float(plan.get("burn_delta_v", 0.0))
+		var accumulated: Vector2 = simulation.get("manual_burn_accumulated_vector")
+		var direction := target_vector.normalized()
+		var achieved := maxf(0.0, accumulated.dot(direction))
+		var cross_track := absf(accumulated.cross(direction))
+		var tolerance := maxf(0.5, target_delta_v * 0.01)
+		if not bool(simulation.get("thrust_key_down")) and achieved >= target_delta_v - tolerance:
+			simulation.set("manual_burn_tracking_enabled", false)
+			if phase == "DEPARTURE_BURN":
+				plan["phase"] = "TRANSFER_COAST"
+				plan["transfer_start_time"] = now
+			elif phase == "ARRIVAL_BURN":
+				plan["phase"] = "ARRIVAL_COAST"
+				plan["previous_radial_speed"] = -0.001
+			elif phase == "ARRIVAL_CIRCULARISE":
+				plan["phase"] = "COMPLETE"
+				plan["active"] = false
+			else:
+				plan["phase"] = "COMPLETE"
+				plan["active"] = false
+			simulation.set("manual_flight_plan", plan)
+			phase = str(plan.get("phase", ""))
+		else:
+			var desired_rotation := target_vector.angle() - Vector2.UP.angle()
+			var heading_error := rad_to_deg(angle_difference(float(simulation.get("rotation_angle")), desired_rotation))
+			var burn_status := "CUT THRUST  •  TARGET ΔV REACHED" if achieved >= target_delta_v - tolerance else "BURN IN PROGRESS"
+			manual_guidance_report.text = "MANUAL FLIGHT PLAN  •  %s\n%s  •  REQUIRED ΔV %.1f m/s  •  DELIVERED %.1f m/s  •  CROSS-TRACK %.1f m/s\nHEADING ERROR %+.1f°. Rotate with Q/E, thrust with W and cut off with S. Engine control remains entirely manual." % [
+				str(plan.get("target_name", "TARGET")).to_upper(),
+				burn_status,
+				target_delta_v,
+				achieved,
+				cross_track,
+				heading_error
+			]
+			return
+	if phase == "TRANSFER_COAST":
+		var target_name := str(plan.get("target_name", ""))
+		var target_state: Dictionary = simulation.call("_surface_body_state", target_name)
+		if target_state.is_empty():
+			plan["phase"] = "FAILED"
+			plan["reason"] = "Destination body data became unavailable."
+		else:
+			var target_position: Vector2 = simulation.get("rocket_position") - Vector2(target_state.get("position", Vector2.ZERO))
+			var target_velocity: Vector2 = simulation.get("velocity") - Vector2(target_state.get("velocity", Vector2.ZERO))
+			var target_distance := target_position.length()
+			var target_soi := float(target_state.get("soi", 0.0))
+			var target_orbit := FlightComputer.orbital_state(target_position, target_velocity, FlightComputer.G * float(target_state.get("mass", 0.0)))
+			if target_distance <= target_soi and float(target_orbit.get("radial_speed", 0.0)) < 0.0:
+				var capture := FlightComputer.arrival_capture_burn(target_position, target_velocity, FlightComputer.G * float(target_state.get("mass", 0.0)), float(target_state.get("radius", 0.0)), float(plan.get("target_altitude", 100000.0)), FlightComputer.minimum_safe_orbit_altitude(target_name, float(target_state.get("radius", 0.0))))
+				if bool(capture.get("valid", false)):
+					_arm_manual_plan_burn(plan, "ARRIVAL_BURN", Vector2(capture.get("burn_vector", Vector2.ZERO)), float(capture.get("delta_v", INF)))
+					plan["target_radius"] = float(capture.get("target_radius", 0.0))
+				else:
+					plan["phase"] = "FAILED"
+					plan["reason"] = str(capture.get("reason", "No safe arrival capture solution exists."))
+		simulation.set("manual_flight_plan", plan)
+		phase = str(plan.get("phase", ""))
+	if phase == "ARRIVAL_COAST":
+		var arrival_state: Dictionary = simulation.call("_surface_body_state", str(plan.get("target_name", "")))
+		if not arrival_state.is_empty():
+			var arrival_position: Vector2 = simulation.get("rocket_position") - Vector2(arrival_state.get("position", Vector2.ZERO))
+			var arrival_velocity: Vector2 = simulation.get("velocity") - Vector2(arrival_state.get("velocity", Vector2.ZERO))
+			var arrival_orbit := FlightComputer.orbital_state(arrival_position, arrival_velocity, FlightComputer.G * float(arrival_state.get("mass", 0.0)))
+			var radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
+			var periapsis := float(arrival_orbit.get("periapsis", INF))
+			var target_radius := float(plan.get("target_radius", 0.0))
+			var at_periapsis := radial_speed >= 0.0 and absf(arrival_position.length() - periapsis) <= FlightComputer.orbit_radius_tolerance(target_radius)
+			if at_periapsis and target_radius > 0.0:
+				var circularise := FlightComputer.target_radius_burn(arrival_position, arrival_velocity, target_radius, FlightComputer.G * float(arrival_state.get("mass", 0.0)))
+				if bool(circularise.get("valid", false)) and float(circularise.get("delta_v", INF)) > FlightComputer.BURN_COMPLETION_TOLERANCE:
+					_arm_manual_plan_burn(plan, "ARRIVAL_CIRCULARISE", Vector2(circularise.get("burn_vector", Vector2.ZERO)), float(circularise.get("delta_v", INF)))
+				else:
+					plan["phase"] = "COMPLETE"
+					plan["active"] = false
+		simulation.set("manual_flight_plan", plan)
+		phase = str(plan.get("phase", ""))
+	if phase == "COMPLETE":
+		manual_guidance_report.text = "MANUAL FLIGHT PLAN COMPLETE  •  TARGET ORBIT REACHED. Verify periapsis and apoapsis in the orbital readout."
+	elif phase == "FAILED":
+		manual_guidance_report.text = "MANUAL FLIGHT PLAN FAILED  •  " + str(plan.get("reason", "The planned trajectory is no longer valid."))
+	else:
+		var target_name := str(plan.get("target_name", "TARGET"))
+		var target_state: Dictionary = simulation.call("_surface_body_state", target_name)
+		var range_text := ""
+		if not target_state.is_empty():
+			range_text = "  •  RANGE %.0f km" % (simulation.get("rocket_position").distance_to(Vector2(target_state.get("position", Vector2.ZERO))) / 1000.0)
+		manual_guidance_report.text = "MANUAL FLIGHT PLAN  •  %s  •  %s%s\nNo automatic steering or thrust is used." % [target_name.to_upper(), phase.replace("_", " "), range_text]
+
 
 func _add_node() -> void:
 	if not is_instance_valid(simulation):
