@@ -280,14 +280,17 @@ static func departure_wait_time(target_index: int, current_time: float, parking_
 		if parking_position.length() <= EARTH_RADIUS:
 			return 0.0
 		var lunar_window_transfer := hohmann_transfer(parking_position.length(), EARTH_RADIUS + MOON_ORBIT_RADIUS)
-		var lunar_rate := TAU / (27.321661 * 86400.0)
+		var transfer_time := float(lunar_window_transfer.get("transfer_time", 0.0))
+		var moon_future_position := PlanetarySystem.moon_position(current_time + transfer_time)
+		var phase_error := wrapf(moon_future_position.angle() - parking_position.angle() - PI, -PI, PI)
+		var moon_now := PlanetarySystem.moon_position(current_time)
+		var moon_next := PlanetarySystem.moon_position(current_time + 1.0)
+		var lunar_rate := angle_difference(moon_now.angle(), moon_next.angle())
 		var parking_rate := sqrt(EARTH_MU / pow(parking_position.length(), 3.0))
-		var lunar_current_phase := wrapf(lunar_rate * current_time - parking_position.angle(), -PI, PI)
-		var lunar_desired_phase := wrapf(PI - lunar_rate * float(lunar_window_transfer.get("transfer_time", 0.0)), -PI, PI)
-		var lunar_relative_rate := lunar_rate - parking_rate
-		var lunar_phase_difference := wrapf(lunar_desired_phase - lunar_current_phase, -PI, PI)
-		var lunar_wait := lunar_phase_difference / lunar_relative_rate
-		return fposmod(lunar_wait, TAU / absf(lunar_relative_rate))
+		var relative_rate := lunar_rate - parking_rate
+		if absf(relative_rate) < 0.000000000001:
+			return 0.0
+		return fposmod(-phase_error / relative_rate, TAU / absf(relative_rate))
 	if target_index < 0 or target_index >= PLANET_TARGETS.size():
 		return 0.0
 	var target: Dictionary = PLANET_TARGETS[target_index]
@@ -311,9 +314,8 @@ static func departure_periapsis_direction(target_index: int, current_time: float
 		target_index = int(_satellite_target_data(target_index).get("host_target_index", -1))
 	if target_index == -1:
 		var transfer := hohmann_transfer(parking_radius, EARTH_RADIUS + MOON_ORBIT_RADIUS)
-		var moon_rate := TAU / (27.321661 * 86400.0)
-		var arrival_angle := moon_rate * (current_time + float(transfer.get("transfer_time", 0.0)))
-		return -Vector2(cos(arrival_angle), sin(arrival_angle))
+		var arrival_position := PlanetarySystem.moon_position(current_time + float(transfer.get("transfer_time", 0.0)))
+		return -arrival_position.normalized()
 	if target_index < 0 or target_index >= PLANET_TARGETS.size():
 		return Vector2.ZERO
 	var transfer_data := interplanetary_transfer(target_index, parking_radius - EARTH_RADIUS)
