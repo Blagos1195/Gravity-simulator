@@ -65,6 +65,49 @@ func _initialize() -> void:
 	assert(RocketDesign.tank_scale_options().size() >= 3)
 	var mod_overlay := {
 		"schema_version": 1,
+		"planets_add": [{
+			"name": "Test Planet",
+			"mass": 1.0e23,
+			"radius": 2000000.0,
+			"a": 2.2,
+			"adot": 0.0,
+			"e": 0.01,
+			"edot": 0.0,
+			"i": 0.0,
+			"idot": 0.0,
+			"L": 0.0,
+			"Ldot": 100.0,
+			"peri": 0.0,
+			"peridot": 0.0,
+			"node": 0.0,
+			"nodedot": 0.0,
+			"orbital_period": 1000.0,
+			"rotation_rate_rad_s": 0.00001,
+			"solid": true,
+			"color_rgb": [0.4, 0.4, 0.7],
+			"atmosphere": {
+				"model": "none",
+				"height_m": 0.0,
+				"visual_height_m": 0.0,
+				"surface_density_kg_m3": 0.0,
+				"scale_height_m": 1.0,
+				"temperature_k": 250.0,
+				"gas_constant_j_kg_k": 287.05287,
+				"gamma": 1.4,
+				"color_rgb": [0.0, 0.0, 0.0]
+			},
+			"satellites": [{
+				"name": "Test Moon",
+				"mass_kg": 1.0e15,
+				"radius_m": 10000.0,
+				"semi_major_axis_m": 10000000.0,
+				"orbital_period_s": 86400.0,
+				"phase_rad": 0.0,
+				"rotation_rate_rad_s": 0.0001,
+				"solid": true,
+				"color_rgb": [0.7, 0.7, 0.7]
+			}]
+		}],
 		"rocket": {
 			"stage_parts_add": [{
 				"id": "test_mod_stage",
@@ -92,6 +135,9 @@ func _initialize() -> void:
 		}
 	}
 	var merged_catalog := ContentCatalog._merge_overlay(ContentCatalog.get_catalog(), mod_overlay)
+	assert(ContentCatalog._catalog_error(merged_catalog).is_empty())
+	assert(merged_catalog.planets.size() == ContentCatalog.get_catalog().planets.size() + 1)
+	assert(merged_catalog.planets[-1].satellites[0].name == "Test Moon")
 	var merged_rocket: Dictionary = merged_catalog.rocket
 	assert(merged_rocket.stage_parts.size() == ContentCatalog.get_catalog().rocket.stage_parts.size() + 1)
 	assert(merged_rocket.presets.has("TEST_MOD_PRESET"))
