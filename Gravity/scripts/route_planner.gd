@@ -821,6 +821,7 @@ func _refresh_navigation_state() -> void:
 	var manual_active := not manual_plan.is_empty() and bool(manual_plan.get("active", false))
 	manual_navigation_button.disabled = not manual_active and (not navigation_plan_valid or autopilot_enabled)
 	manual_navigation_button.text = "CANCEL MANUAL PLAN" if manual_active else "FLY MANUALLY"
+	navigation_engage_button.disabled = navigation_engage_button.disabled or manual_active
 	launch_window_button.disabled = autopilot_enabled or bool(simulation.get("landed")) or bool(simulation.get("crashed"))
 	_update_manual_guidance()
 
@@ -844,6 +845,8 @@ func _cancel_destination_autopilot() -> void:
 func _send_destination_to_autopilot() -> void:
 	if not navigation_plan_valid or not is_instance_valid(simulation) or bool(simulation.get("crashed")):
 		return
+	simulation.set("manual_flight_plan", {})
+	simulation.set("manual_burn_tracking_enabled", false)
 	var target_id := int(navigation_plan.get("target_id", -999))
 	var target_name := str(navigation_plan.get("target_name", ""))
 	if target_id == -999 or target_name.is_empty():
@@ -1158,10 +1161,14 @@ func _start_manual_destination_plan() -> void:
 		if float(manual_plan["departure_time"]) <= now + 2.0:
 			_arm_manual_plan_burn(manual_plan, "DEPARTURE_BURN", Vector2(manual_plan["departure_direction"]) * float(manual_plan["departure_delta_v"]), float(manual_plan["departure_delta_v"]))
 	simulation.set("manual_flight_plan", manual_plan)
+	simulation.set("manual_burn_tracking_enabled", false)
+	manual_guidance_node_index = -1
+	manual_guidance_completed = false
 	simulation.set("autopilot_enabled", false)
 	simulation.set("guidance_enabled", false)
 	simulation.set("thrust_key_down", false)
 	manual_guidance_node_index = -1
+	simulation.set("manual_burn_tracking_enabled", false)
 	_refresh_navigation_state()
 	_update_manual_guidance()
 
@@ -1801,7 +1808,9 @@ func _update_manoeuvre() -> void:
 	var route_active: bool = maneuver_autopilot and str(simulation.get("autopilot_phase")) in ["ROUTE_COAST", "ROUTE_BURN"]
 	var route_complete: bool = maneuver_autopilot and str(simulation.get("autopilot_phase")) == "COMPLETE"
 	var exceeds_delta_v: bool = total_planned_delta_v > available_delta_v
-	var can_send := not landed_state and not crashed_state and stable_orbit and valid_nodes and not exceeds_delta_v and not route_active and not route_complete
+	var manual_plan: Dictionary = simulation.get("manual_flight_plan")
+	var manual_plan_active := not manual_plan.is_empty() and bool(manual_plan.get("active", false))
+	var can_send := not landed_state and not crashed_state and stable_orbit and valid_nodes and not exceeds_delta_v and not route_active and not route_complete and not manual_plan_active
 	autopilot_button.disabled = not can_send
 	autopilot_button.text = "ROUTE ACTIVE IN AUTOPILOT" if route_active else "ROUTE COMPLETE" if route_complete else "SEND ROUTE TO AUTOPILOT"
 	cancel_route_button.visible = route_active or route_complete
@@ -1811,6 +1820,8 @@ func _update_manoeuvre() -> void:
 		send_block_reason = "A route is already running."
 	elif route_complete:
 		send_block_reason = "Disengage the completed autopilot route before sending another."
+	elif manual_plan_active:
+		send_block_reason = "Cancel or complete the manual flight plan before sending a route to autopilot."
 	elif landed_state:
 		send_block_reason = "Launch and establish a safe orbit before executing manoeuvre nodes."
 	elif crashed_state:
