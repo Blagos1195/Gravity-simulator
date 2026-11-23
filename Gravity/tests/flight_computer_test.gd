@@ -287,8 +287,13 @@ func _initialize() -> void:
 	var waiting_sim: Variant = SimulationView.new()
 	waiting_sim.set_rocket_design(RocketDesign.create_default())
 	waiting_sim.landed = false
-	waiting_sim._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 200000.0)
-	waiting_sim.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
+	var departure_wait_state := FlightComputer._propagate_wait_state(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, 86400.0)
+	assert(bool(departure_wait_state.get("valid", false)), "Future departure propagation failed: %s" % str(departure_wait_state))
+	var departure_position: PackedFloat64Array = departure_wait_state.position_components
+	var departure_velocity: Vector2 = departure_wait_state.velocity
+	waiting_sim._set_rocket_position_components(departure_position[0], departure_position[1])
+	waiting_sim.velocity = departure_velocity
+	waiting_sim.sim_time = 86400.0
 	waiting_sim.autopilot_enabled = true
 	waiting_sim.guidance_enabled = true
 	waiting_sim.autopilot_planet_index = -1
@@ -300,20 +305,19 @@ func _initialize() -> void:
 		"target_altitude": 300000.0,
 		"departure_time_seconds": 86400.0,
 		"planned_at_time": 86400.0,
-		"planned_position": waiting_sim.rocket_position,
-		"planned_velocity": waiting_sim.velocity,
+		"planned_position": Vector2(departure_position[0], departure_position[1]),
+		"planned_velocity": departure_velocity,
 		"departure_direction": Vector2.RIGHT,
 		"departure_delta_v": 100.0,
 		"transfer_time": 10000.0
 	}
 	waiting_sim._update_guidance(0.1)
-	assert(waiting_sim.autopilot_phase == "WAIT_WINDOW")
-	assert(not waiting_sim.thrust_key_down)
-	waiting_sim.sim_time = 86400.0
-	waiting_sim._update_guidance(0.1)
 	assert(waiting_sim.autopilot_phase == "PLAN_TRANSFER")
 	waiting_sim._update_guidance(0.1)
 	assert(waiting_sim.autopilot_phase == "TRANSFER_BURN", "Validated departure plan was not handed to the burn phase")
+	assert(is_equal_approx(waiting_sim.autopilot_burn_remaining, 100.0), "Autopilot discarded the stored departure solution and recalculated it")
+	assert(is_equal_approx(waiting_sim.autopilot_transfer_duration, 10000.0))
+	assert(waiting_sim.autopilot_precomputed_transfer_plan.is_empty())
 	waiting_sim.free()
 	var local_transfer_plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, -2, 5000.0, 0.0, false, 3000000.0)
 	assert(bool(local_transfer_plan.get("valid", false)), "Local Earth-orbit transfer failed: %s" % str(local_transfer_plan))
