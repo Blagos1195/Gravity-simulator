@@ -1369,7 +1369,8 @@ func _update_manual_flight_plan() -> void:
 			var target_radius := float(plan.get("target_radius", 0.0))
 			var apsis_tolerance := FlightComputer.orbit_radius_tolerance(target_radius)
 			var radial_tolerance := maxf(0.5, FlightComputer.circular_orbit_speed(target_radius, local_mu) * 0.0002)
-			if not bool(local_orbit.get("bound", false)) or float(local_orbit.get("periapsis", 0.0)) <= float(local_state.get("radius", 0.0)):
+			var local_safe_periapsis := float(local_state.get("radius", 0.0)) + FlightComputer.minimum_safe_orbit_altitude(local_name, float(local_state.get("radius", 0.0)))
+			if not bool(local_orbit.get("bound", false)) or float(local_orbit.get("periapsis", 0.0)) <= local_safe_periapsis:
 				plan["phase"] = "FAILED"
 				plan["active"] = false
 				plan["reason"] = "The local transfer orbit became unsafe or unbound."
@@ -1425,8 +1426,13 @@ func _update_manual_flight_plan() -> void:
 			var radial_speed := float(arrival_orbit.get("radial_speed", 0.0))
 			var periapsis := float(arrival_orbit.get("periapsis", INF))
 			var target_radius := float(plan.get("target_radius", 0.0))
+			var arrival_safe_periapsis := float(arrival_state.get("radius", 0.0)) + FlightComputer.minimum_safe_orbit_altitude(str(plan.get("target_name", "")), float(arrival_state.get("radius", 0.0)))
 			var at_periapsis := radial_speed >= 0.0 and absf(arrival_position.length() - periapsis) <= FlightComputer.orbit_radius_tolerance(target_radius)
-			if at_periapsis and target_radius > 0.0:
+			if not bool(arrival_orbit.get("bound", false)) or periapsis <= arrival_safe_periapsis:
+				plan["phase"] = "FAILED"
+				plan["active"] = false
+				plan["reason"] = "The arrival capture orbit is unsafe or unbound. Replan the approach before impact."
+			elif at_periapsis and target_radius > 0.0:
 				var circularise := FlightComputer.target_radius_burn(arrival_position, arrival_velocity, target_radius, FlightComputer.G * float(arrival_state.get("mass", 0.0)))
 				if bool(circularise.get("valid", false)) and float(circularise.get("delta_v", INF)) > FlightComputer.BURN_COMPLETION_TOLERANCE:
 					_arm_manual_plan_burn(plan, "ARRIVAL_CIRCULARISE", Vector2(circularise.get("burn_vector", Vector2.ZERO)), float(circularise.get("delta_v", INF)))
