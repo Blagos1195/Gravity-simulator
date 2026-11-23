@@ -455,6 +455,30 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var initial_dx: float = start_position_components[0] - initial_target_components[0]
 	var initial_dy: float = start_position_components[1] - initial_target_components[1]
 	var initial_distance := sqrt(initial_dx * initial_dx + initial_dy * initial_dy)
+	if target_index == -2:
+		var current_orbit := orbital_state(Vector2(start_position_components[0], start_position_components[1]), start_velocity, EARTH_MU)
+		var current_periapsis_altitude := float(current_orbit.get("periapsis", 0.0)) - EARTH_RADIUS
+		var current_apoapsis_altitude := float(current_orbit.get("apoapsis", INF)) - EARTH_RADIUS
+		if bool(current_orbit.get("bound", false)) and absf(current_periapsis_altitude - target_orbit_altitude) <= 1000.0 and absf(current_apoapsis_altitude - target_orbit_altitude) <= 1000.0:
+			var current_position := Vector2(start_position_components[0], start_position_components[1])
+			return {
+				"valid": true,
+				"departure_delta_v": 0.0,
+				"departure_direction": Vector2.ZERO,
+				"capture_delta_v": 0.0,
+				"capture_direction": Vector2.ZERO,
+				"total_delta_v": 0.0,
+				"transfer_time": 0.0,
+				"closest_approach": current_position.length(),
+				"arrival_speed": start_velocity.length(),
+				"target_position": PackedFloat64Array([0.0, 0.0]),
+				"trajectory": [current_position],
+				"planned_at_time": start_time,
+				"planned_position": start_position_components.duplicate(),
+				"planned_velocity": start_velocity,
+				"candidate_count": 1,
+				"search_candidates": 1
+			}
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
 	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index <= -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations: Array
