@@ -1077,7 +1077,8 @@ func _scan_launch_windows() -> void:
 		manual_navigation_button.disabled = true
 		navigation_report.text = "NO FEASIBLE DEPARTURE WINDOW FOUND.\n" + str(result.get("reason", "The scanned windows did not produce a valid route."))
 		return
-	navigation_plan = Dictionary(result.get("best", {})).duplicate(true)
+	var best_window: Dictionary = result.get("best", {})
+	navigation_plan = best_window.duplicate(true)
 	navigation_plan["target_id"] = target_id
 	navigation_plan["target_name"] = target_name
 	navigation_plan["target_altitude"] = target_altitude
