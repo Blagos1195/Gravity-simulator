@@ -26,6 +26,7 @@ func _initialize() -> void:
 	var parent_capacity := float(parent._active_stage_data().get("fuel_capacity", 0.0))
 	parent.fuel = parent_capacity - 50000.0
 	child.fuel = 50000.0
+	main._update_docked_masses()
 	var combined_mass_before := parent._current_vehicle_mass()
 	var transferred := main._transfer_fuel(child.vehicle_name, parent.vehicle_name)
 	assert(is_equal_approx(transferred, 50000.0))
