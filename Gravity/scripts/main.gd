@@ -20,6 +20,7 @@ var fleet_sims: Array = []
 var active_vehicle_index := 0
 var fleet_time_backlog := 0.0
 var vehicle_selector: OptionButton
+var docking_links: Array[Dictionary] = []
 var autosave_elapsed := 0.0
 var autosave_enabled := true
 var rebinding_action := ""
@@ -168,14 +169,18 @@ func _advance_fleet(delta: float) -> void:
 		fleet_time_backlog += effective_warp * delta
 		var iterations := 0
 		var physics_budget_start_usec: int = Time.get_ticks_usec()
+		_update_docked_masses()
 		while fleet_time_backlog > 0.000001 and iterations < SimulationView.MAX_PHYSICS_STEPS_PER_FRAME and Time.get_ticks_usec() - physics_budget_start_usec < SimulationView.MAX_PHYSICS_BUDGET_USEC:
 			var step_delta := fleet_time_backlog
 			for vehicle in fleet_sims:
-				step_delta = minf(step_delta, vehicle._adaptive_step_size())
+				if not _is_docked_child(vehicle.vehicle_name):
+					step_delta = minf(step_delta, vehicle._adaptive_step_size())
 			if step_delta <= 0.000001:
 				break
 			for vehicle in fleet_sims:
-				vehicle._physics_step(step_delta)
+				if not _is_docked_child(vehicle.vehicle_name):
+					vehicle._physics_step(step_delta)
+			_sync_docked_vehicles()
 			fleet_time_backlog = maxf(0.0, fleet_time_backlog - step_delta)
 			iterations += 1
 	for vehicle in fleet_sims:
@@ -199,6 +204,7 @@ func _build_menu() -> void:
 	sim = null
 	vehicle_selector = null
 	fleet_time_backlog = 0.0
+	docking_links.clear()
 	rebinding_action = ""
 	rebinding_button = null
 	for child in get_children():
@@ -826,6 +832,7 @@ func _start_flight() -> void:
 	fleet_sims.clear()
 	active_vehicle_index = 0
 	fleet_time_backlog = 0.0
+	docking_links.clear()
 	vehicle_selector = null
 	mode = "flight"
 	autosave_elapsed = 0.0
