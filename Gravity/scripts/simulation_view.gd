@@ -972,33 +972,44 @@ func _update_guidance(dt: float) -> void:
 			"PLAN_TRANSFER":
 				status_message = "AUTOPILOT  •  SIMULATING TRANSFER TRAJECTORIES"
 				thrust_key_down = false
-				var transfer_plan: Dictionary = autopilot_precomputed_transfer_plan.duplicate(true)
-				autopilot_precomputed_transfer_plan.clear()
-				if not transfer_plan.is_empty():
-					var planned_position: Vector2 = transfer_plan.get("planned_position", Vector2.INF)
-					var planned_velocity: Vector2 = transfer_plan.get("planned_velocity", Vector2.INF)
-					var plan_matches_target := int(transfer_plan.get("target_id", -999)) == autopilot_planet_index and is_equal_approx(float(transfer_plan.get("target_altitude", -1.0)), autopilot_target_altitude)
-					var plan_matches_state := absf(sim_time - float(transfer_plan.get("planned_at_time", -INF))) <= 2.0 and planned_position.distance_to(rocket_position) <= 20000.0 and planned_velocity.distance_to(velocity) <= 5.0
-					if not plan_matches_target or not plan_matches_state:
-						transfer_plan.clear()
-				if transfer_plan.is_empty():
-					var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
-					var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
-					transfer_plan = FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
-				if not bool(transfer_plan.get("valid", false)):
-					_fail_autopilot("TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY")))
+				var wait_for_lunar_window := false
+				if autopilot_planet_index == -1:
+					var lunar_orbit := FlightComputer.orbital_state(rocket_position, velocity, G * PlanetarySystem.EARTH_MASS)
+					var lunar_departure_direction := FlightComputer.departure_periapsis_direction(-1, sim_time, rocket_position.length())
+					var lunar_orbit_is_circular := bool(lunar_orbit.get("bound", false)) and float(lunar_orbit.get("eccentricity", 1.0)) <= 0.05
+					if lunar_orbit_is_circular and lunar_departure_direction.length_squared() > 0.5 and rocket_position.normalized().dot(lunar_departure_direction) < cos(deg_to_rad(1.5)):
+						wait_for_lunar_window = true
+				if wait_for_lunar_window:
+					autopilot_phase = "WAIT_WINDOW"
+					status_message = "AUTOPILOT  •  WAITING FOR LUNAR DEPARTURE WINDOW"
 				else:
-					var planned_burn_direction: Vector2 = transfer_plan.get("departure_direction", Vector2.ZERO)
-					autopilot_burn_direction = planned_burn_direction.normalized()
-					autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
-					autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
-					autopilot_transfer_start_time = -1.0
-					if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
-						autopilot_transfer_start_time = sim_time
-						autopilot_phase = "TRANSFER_COAST"
+					var transfer_plan: Dictionary = autopilot_precomputed_transfer_plan.duplicate(true)
+					autopilot_precomputed_transfer_plan.clear()
+					if not transfer_plan.is_empty():
+						var planned_position: Vector2 = transfer_plan.get("planned_position", Vector2.INF)
+						var planned_velocity: Vector2 = transfer_plan.get("planned_velocity", Vector2.INF)
+						var plan_matches_target := int(transfer_plan.get("target_id", -999)) == autopilot_planet_index and is_equal_approx(float(transfer_plan.get("target_altitude", -1.0)), autopilot_target_altitude)
+						var plan_matches_state := absf(sim_time - float(transfer_plan.get("planned_at_time", -INF))) <= 2.0 and planned_position.distance_to(rocket_position) <= 20000.0 and planned_velocity.distance_to(velocity) <= 5.0
+						if not plan_matches_target or not plan_matches_state:
+							transfer_plan.clear()
+					if transfer_plan.is_empty():
+						var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
+						var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
+						transfer_plan = FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
+					if not bool(transfer_plan.get("valid", false)):
+						_fail_autopilot("TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY")))
 					else:
-						autopilot_phase = "TRANSFER_BURN"
-					status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2f KM/S" % (autopilot_burn_remaining / 1000.0)
+						var planned_burn_direction: Vector2 = transfer_plan.get("departure_direction", Vector2.ZERO)
+						autopilot_burn_direction = planned_burn_direction.normalized()
+						autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
+						autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
+						autopilot_transfer_start_time = -1.0
+						if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
+							autopilot_transfer_start_time = sim_time
+							autopilot_phase = "TRANSFER_COAST"
+						else:
+							autopilot_phase = "TRANSFER_BURN"
+						status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2f KM/S" % (autopilot_burn_remaining / 1000.0)
 			"WAIT_WINDOW":
 				var remaining_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
 				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1f DAYS" % (remaining_window / 86400.0)
@@ -1010,8 +1021,11 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = false
 				var desired_radial := FlightComputer.departure_periapsis_direction(autopilot_planet_index, sim_time, guidance_position.length())
 				if desired_radial.length_squared() > 0.5 and guidance_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)):
-					autopilot_burn_direction = tangent * autopilot_transfer_direction
-					autopilot_phase = "TRANSFER_BURN"
+					if autopilot_planet_index == -1:
+						autopilot_phase = "PLAN_TRANSFER"
+					else:
+						autopilot_burn_direction = tangent * autopilot_transfer_direction
+						autopilot_phase = "TRANSFER_BURN"
 			"MANEUVER_BURN":
 				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0f M/S" % autopilot_burn_remaining
 				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
