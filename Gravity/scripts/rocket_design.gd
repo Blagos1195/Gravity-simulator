@@ -14,6 +14,22 @@ static func _rocket_catalog() -> Dictionary:
 	var catalog: Dictionary = ContentCatalog.get_catalog()
 	return catalog.get("rocket", {})
 
+static func payload_options() -> Array:
+	var options: Array = _rocket_catalog().get("builder_options", {}).get("payloads", [])
+	return options.duplicate(true)
+
+static func engine_count_options() -> Array:
+	var options: Array = _rocket_catalog().get("builder_options", {}).get("engine_counts", [1, 2, 3, 4, 6, 8])
+	return options.duplicate()
+
+static func tank_scale_options() -> Array:
+	var options: Array = _rocket_catalog().get("builder_options", {}).get("tank_scales", [
+		{"label": "Compact tank", "scale": 0.75},
+		{"label": "Standard tank", "scale": 1.0},
+		{"label": "Extended tank", "scale": 1.25}
+	])
+	return options.duplicate(true)
+
 static func preset_options() -> Array:
 	var presets: Dictionary = _rocket_catalog().get("presets", {})
 	var options: Array = []
@@ -55,7 +71,14 @@ static func create_stage_part(part_id: String) -> Dictionary:
 	return {}
 
 static func configure_stage(part_id: String, engine_count: int, tank_scale: float) -> Dictionary:
-	if engine_count not in [1, 2, 3, 4, 6, 8] or tank_scale not in [0.75, 1.0, 1.25]:
+	if not engine_count_options().has(engine_count):
+		return {}
+	var valid_tank_scale := false
+	for tank_option in tank_scale_options():
+		if is_equal_approx(float(tank_option.get("scale", 0.0)), tank_scale):
+			valid_tank_scale = true
+			break
+	if not valid_tank_scale:
 		return {}
 	var stage := create_stage_part(part_id)
 	if stage.is_empty():
