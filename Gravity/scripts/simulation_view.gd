@@ -1030,9 +1030,10 @@ func _update_guidance(dt: float) -> void:
 						autopilot_burn_tracks_orbit = bool(departure_orbit.get("bound", false)) and float(departure_orbit.get("eccentricity", 1.0)) <= 0.05 and float(departure_orbit.get("periapsis", 0.0)) > departure_body_radius + FlightComputer.minimum_safe_orbit_altitude(str(guidance_body.get("name", "")), departure_body_radius)
 						var planned_departure_delta_v := float(transfer_plan.get("departure_delta_v", 0.0))
 						var commanded_departure_delta_v := planned_departure_delta_v
-						if autopilot_burn_tracks_orbit and planned_departure_delta_v > 0.0 and thrust_force > 0.0:
+						var departure_thrust := _engine_thrust(altitude)
+						if autopilot_burn_tracks_orbit and planned_departure_delta_v > 0.0 and departure_thrust > 0.0:
 							var departure_mass := maxf(1.0, _current_vehicle_mass())
-							var departure_acceleration := thrust_force / departure_mass
+							var departure_acceleration := departure_thrust / departure_mass
 							var estimated_burn_duration := planned_departure_delta_v / maxf(0.1, departure_acceleration)
 							var departure_orbital_rate := sqrt(G * float(guidance_body.mass) / pow(guidance_position.length(), 3.0))
 							var finite_burn_margin := clampf(departure_orbital_rate * estimated_burn_duration * 0.25, 0.0, 0.12)
