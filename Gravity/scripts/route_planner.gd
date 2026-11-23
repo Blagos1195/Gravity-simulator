@@ -1029,9 +1029,21 @@ func _update_manual_guidance() -> void:
 	var node: Dictionary = nodes[manual_guidance_node_index]
 	var node_time := maxf(0.0, float(node.get("time_offset", 0.0)))
 	var remaining_time := manual_guidance_start_time + node_time - float(simulation.get("sim_time"))
+	var tracking := bool(simulation.get("manual_burn_tracking_enabled"))
+	if not tracking and not manual_guidance_completed:
+		var predicted_state := _manual_node_state(maxf(0.0, remaining_time))
+		var updated_guidance := FlightComputer.manoeuvre_burn_guidance(
+			Vector2(predicted_state.get("position", relative_position)),
+			Vector2(predicted_state.get("velocity", relative_velocity)),
+			float(node.get("prograde", 0.0)),
+			float(node.get("radial", 0.0))
+		)
+		if bool(updated_guidance.get("valid", false)):
+			manual_guidance_burn_vector = Vector2(updated_guidance.get("burn_vector", manual_guidance_burn_vector))
+			manual_guidance_target_delta_v = float(updated_guidance.get("delta_v", manual_guidance_target_delta_v))
+			manual_guidance_angle_from_prograde = float(updated_guidance.get("angle_from_prograde", manual_guidance_angle_from_prograde))
 	var burn_vector := manual_guidance_burn_vector
 	var target_delta_v := manual_guidance_target_delta_v
-	var tracking := bool(simulation.get("manual_burn_tracking_enabled"))
 	if remaining_time <= 0.0 and not tracking and not manual_guidance_completed:
 		simulation.set("manual_burn_target_vector", burn_vector)
 		simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
