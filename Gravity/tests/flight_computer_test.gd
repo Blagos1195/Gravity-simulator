@@ -440,6 +440,9 @@ func _initialize() -> void:
 	escape_sim._update_guidance(0.1)
 	assert(escape_sim.autopilot_phase == "ASCENT", "Autopilot left ascent before establishing a safe parking orbit")
 	assert(escape_sim.thrust_key_down, "Autopilot did not continue thrusting to establish a parking orbit")
+	escape_sim.fuel = 0.0
+	escape_sim._update_guidance(0.1)
+	assert(escape_sim.autopilot_phase == "FAILED", "Ascent did not fail cleanly after exhausting propellant before parking orbit")
 	escape_sim.free()
 	var mars_surface_sim: Variant = SimulationView.new()
 	mars_surface_sim.set_rocket_design(RocketDesign.create_default())
