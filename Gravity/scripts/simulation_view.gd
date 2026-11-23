@@ -63,6 +63,9 @@ var autopilot_safety_margin := 0.10
 var autopilot_transfer_direction := 1.0
 var autopilot_arrival_burn_vector := Vector2.ZERO
 var autopilot_burn_direction := Vector2.ZERO
+var autopilot_burn_reference_direction := Vector2.ZERO
+var autopilot_burn_reference_position_angle := 0.0
+var autopilot_burn_tracks_orbit := false
 var autopilot_route_nodes: Array[Dictionary] = []
 var autopilot_route_node_index := 0
 var autopilot_complete := false
@@ -1011,6 +1014,10 @@ func _update_guidance(dt: float) -> void:
 					else:
 						var planned_burn_direction: Vector2 = transfer_plan.get("departure_direction", Vector2.ZERO)
 						autopilot_burn_direction = planned_burn_direction.normalized()
+						autopilot_burn_reference_direction = autopilot_burn_direction
+						autopilot_burn_reference_position_angle = guidance_position.angle()
+						var departure_orbit := FlightComputer.orbital_state(guidance_position, guidance_velocity, G * float(guidance_body.mass))
+						autopilot_burn_tracks_orbit = str(guidance_body.get("name", "")) == "Earth" and bool(departure_orbit.get("bound", false)) and float(departure_orbit.get("eccentricity", 1.0)) <= 0.05
 						autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
 						autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
 						autopilot_transfer_start_time = -1.0
@@ -1076,7 +1083,13 @@ func _update_guidance(dt: float) -> void:
 					_fail_autopilot("OUT OF PROPELLANT DURING ROUTE BURN")
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
-				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
+				var injection_direction := autopilot_burn_reference_direction if autopilot_burn_reference_direction.length_squared() > 0.5 else autopilot_burn_direction
+				if autopilot_burn_tracks_orbit:
+					var orbit_rotation := wrapf(guidance_position.angle() - autopilot_burn_reference_position_angle, -PI, PI)
+					injection_direction = autopilot_burn_reference_direction.rotated(orbit_rotation).normalized()
+					autopilot_burn_direction = injection_direction
+				if injection_direction.length_squared() <= 0.5:
+					injection_direction = tangent * autopilot_transfer_direction
 				var injection_rotation := injection_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
@@ -1834,6 +1847,10 @@ func get_save_data() -> Dictionary:
 		"landed_surface_normal_y": landed_surface_normal.y,
 		"autopilot_burn_direction_x": autopilot_burn_direction.x,
 		"autopilot_burn_direction_y": autopilot_burn_direction.y,
+		"autopilot_burn_reference_direction_x": autopilot_burn_reference_direction.x,
+		"autopilot_burn_reference_direction_y": autopilot_burn_reference_direction.y,
+		"autopilot_burn_reference_position_angle": autopilot_burn_reference_position_angle,
+		"autopilot_burn_tracks_orbit": autopilot_burn_tracks_orbit,
 		"autopilot_route_nodes": autopilot_route_nodes.duplicate(true),
 		"autopilot_route_node_index": autopilot_route_node_index,
 		"autopilot_complete": autopilot_complete,
@@ -1946,6 +1963,9 @@ func load_save_data(data: Dictionary) -> bool:
 	landed_body_name = str(data.get("landed_body_name", "Earth"))
 	landed_surface_normal = Vector2(float(data.get("landed_surface_normal_x", 0.0)), float(data.get("landed_surface_normal_y", -1.0))).normalized()
 	autopilot_burn_direction = Vector2(float(data.get("autopilot_burn_direction_x", 0.0)), float(data.get("autopilot_burn_direction_y", 0.0)))
+	autopilot_burn_reference_direction = Vector2(float(data.get("autopilot_burn_reference_direction_x", data.get("autopilot_burn_direction_x", 0.0))), float(data.get("autopilot_burn_reference_direction_y", data.get("autopilot_burn_direction_y", 0.0))))
+	autopilot_burn_reference_position_angle = float(data.get("autopilot_burn_reference_position_angle", 0.0))
+	autopilot_burn_tracks_orbit = bool(data.get("autopilot_burn_tracks_orbit", false))
 	autopilot_route_nodes.clear()
 	var saved_route_nodes: Variant = data.get("autopilot_route_nodes", [])
 	if saved_route_nodes is Array:
