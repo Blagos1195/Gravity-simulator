@@ -1080,12 +1080,12 @@ func _update_guidance(dt: float) -> void:
 				var current_nearest_body := _nearest_body_state(rocket_position, rocket_position_precise)
 				if destination_distance <= encounter_radius and str(current_nearest_body.get("name", "")) == str(transfer_destination_state.get("name", "")):
 					autopilot_phase = "ARRIVAL_APPROACH"
-				elif transfer_elapsed > autopilot_transfer_duration * 0.4 and autopilot_transfer_corrections < 2:
+				elif autopilot_planet_index != -1 and transfer_elapsed > autopilot_transfer_duration * 0.4 and autopilot_transfer_corrections < 2:
 					autopilot_transfer_corrections += 1
 					autopilot_phase = "PLAN_TRANSFER"
 					status_message = "AUTOPILOT  •  SIMULATING MID-COURSE CORRECTION"
 				elif transfer_elapsed > autopilot_transfer_duration * 1.5:
-					autopilot_phase = "ARRIVAL_PENDING"
+					_fail_autopilot("TRANSFER ARRIVAL WINDOW MISSED  •  NO DESTINATION ENCOUNTER")
 			"ARRIVAL_APPROACH":
 				thrust_key_down = false
 				var approach_target_state := _autopilot_target_state()
