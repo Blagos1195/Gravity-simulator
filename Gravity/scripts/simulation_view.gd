@@ -839,6 +839,8 @@ func _update_guidance(dt: float) -> void:
 	var atmosphere_height := PlanetarySystem.planetary_atmosphere_height(guidance_body_name)
 	var pitch_reference_altitude := maxf(maxf(5000.0, float(guidance_body.radius) * 0.01), atmosphere_height * 0.6)
 	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / pitch_reference_altitude, 0.0, 1.0))
+	if autopilot_enabled and autopilot_phase == "ASCENT" and not destination_is_local and maximum_stable_altitude <= minimum_safe_altitude:
+		_fail_autopilot("NO SAFE PARKING ORBIT EXISTS AROUND %s" % guidance_body_name.to_upper())
 	if autopilot_enabled:
 		gimbal_angle = 0.0
 		var orbit := FlightComputer.orbital_state(guidance_position, guidance_velocity, G * float(guidance_body.mass))
