@@ -1102,6 +1102,7 @@ func _replan_manual_transfer() -> void:
 	manual_plan["departure_direction"] = direction
 	manual_plan["departure_delta_v"] = delta_v
 	manual_plan["transfer_time"] = float(correction.get("transfer_time", 0.0))
+	manual_plan["total_delta_v"] = float(correction.get("total_delta_v", delta_v))
 	manual_plan["planned_position"] = current_position
 	manual_plan["planned_velocity"] = current_velocity
 	manual_plan["transfer_start_time"] = -1.0
