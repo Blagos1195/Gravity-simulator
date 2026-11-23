@@ -1039,7 +1039,7 @@ func _scan_launch_windows() -> void:
 	var relative_velocity_now: Vector2 = simulation.get("velocity") - Vector2(current_body.get("velocity", Vector2.ZERO))
 	var current_orbit := FlightComputer.orbital_state(relative_position_now, relative_velocity_now, FlightComputer.G * float(current_body.get("mass", 0.0)))
 	var safe_altitude := FlightComputer.minimum_safe_orbit_altitude(str(current_body.get("name", "")), float(current_body.get("radius", 0.0)))
-	var stable_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.get("radius", 0.0)) + safe_altitude and float(current_orbit.get("apoapsis", INF)) < float(current_body.get("radius", 0.0)) + FlightComputer.maximum_stable_orbit_altitude(float(current_body.get("radius", 0.0)), float(current_body.get("soi", 0.0)))
+	var stable_orbit := float(current_body.get("distance", INF)) <= float(current_body.get("soi", 0.0)) and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.get("radius", 0.0)) + safe_altitude and float(current_orbit.get("apoapsis", INF)) < float(current_body.get("radius", 0.0)) + FlightComputer.maximum_stable_orbit_altitude(float(current_body.get("radius", 0.0)), float(current_body.get("soi", 0.0)))
 	if not stable_orbit:
 		navigation_report.text = "LAUNCH-WINDOW SEARCH REQUIRES A SAFE PARKING ORBIT AROUND THE CURRENT BODY."
 		return
@@ -1110,7 +1110,7 @@ func _start_manual_destination_plan() -> void:
 	var current_orbit := FlightComputer.orbital_state(relative_position_now, relative_velocity_now, FlightComputer.G * float(current.get("mass", 0.0)))
 	var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(str(current.get("name", "")), float(current.get("radius", 0.0)))
 	var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(float(current.get("radius", 0.0)), float(current.get("soi", 0.0)))
-	var stable_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + minimum_altitude and float(current_orbit.get("apoapsis", INF)) < float(current.get("radius", 0.0)) + maximum_altitude
+	var stable_orbit := float(current.get("distance", INF)) <= float(current.get("soi", 0.0)) and bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current.get("radius", 0.0)) + minimum_altitude and float(current_orbit.get("apoapsis", INF)) < float(current.get("radius", 0.0)) + maximum_altitude
 	if not stable_orbit:
 		manual_guidance_report.text = "MANUAL DESTINATION FLIGHT REQUIRES A SAFE PARKING ORBIT. Establish one first; manual ascent and escape guidance are not included yet."
 		return
