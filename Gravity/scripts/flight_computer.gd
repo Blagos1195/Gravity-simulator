@@ -332,8 +332,12 @@ static func departure_periapsis_direction(target_index: int, current_time: float
 static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float, target_altitude: float = 100000.0, minimum_safe_altitude: float = 1000.0) -> Dictionary:
 	var radius := position.length()
 	var target_radius := body_radius + maxf(minimum_safe_altitude, target_altitude)
-	if radius < target_radius or body_mu <= 0.0:
+	if body_mu <= 0.0 or radius <= body_radius + minimum_safe_altitude:
 		return {"valid": false}
+	if radius < target_radius:
+		if target_radius - radius > orbit_radius_tolerance(target_radius):
+			return {"valid": false}
+		target_radius = radius
 	var capture := target_radius_burn(position, velocity, target_radius, body_mu)
 	if not bool(capture.get("valid", false)) or float(capture.get("periapsis", 0.0)) < target_radius * 0.999:
 		return {"valid": false}
