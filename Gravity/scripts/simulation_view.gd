@@ -1026,8 +1026,20 @@ func _update_guidance(dt: float) -> void:
 						autopilot_burn_reference_direction = autopilot_burn_direction
 						autopilot_burn_reference_position_angle = guidance_position.angle()
 						var departure_orbit := FlightComputer.orbital_state(guidance_position, guidance_velocity, G * float(guidance_body.mass))
-						autopilot_burn_tracks_orbit = str(guidance_body.get("name", "")) == "Earth" and bool(departure_orbit.get("bound", false)) and float(departure_orbit.get("eccentricity", 1.0)) <= 0.05
-						autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
+						var departure_body_radius := float(guidance_body.get("radius", 0.0))
+						autopilot_burn_tracks_orbit = bool(departure_orbit.get("bound", false)) and float(departure_orbit.get("eccentricity", 1.0)) <= 0.05 and float(departure_orbit.get("periapsis", 0.0)) > departure_body_radius + FlightComputer.minimum_safe_orbit_altitude(str(guidance_body.get("name", "")), departure_body_radius)
+						var planned_departure_delta_v := float(transfer_plan.get("departure_delta_v", 0.0))
+						var commanded_departure_delta_v := planned_departure_delta_v
+						if autopilot_burn_tracks_orbit and planned_departure_delta_v > 0.0 and thrust_force > 0.0:
+							var departure_mass := maxf(1.0, _current_vehicle_mass())
+							var departure_acceleration := thrust_force / departure_mass
+							var estimated_burn_duration := planned_departure_delta_v / maxf(0.1, departure_acceleration)
+							var departure_orbital_rate := sqrt(G * float(guidance_body.mass) / pow(guidance_position.length(), 3.0))
+							var finite_burn_margin := clampf(departure_orbital_rate * estimated_burn_duration * 0.25, 0.0, 0.12)
+							commanded_departure_delta_v *= 1.0 + finite_burn_margin
+							transfer_plan["departure_delta_v"] = commanded_departure_delta_v
+							transfer_plan["total_delta_v"] = float(transfer_plan.get("total_delta_v", planned_departure_delta_v)) + commanded_departure_delta_v - planned_departure_delta_v
+						autopilot_burn_remaining = commanded_departure_delta_v
 						autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
 						autopilot_transfer_start_time = -1.0
 						if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
