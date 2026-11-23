@@ -868,9 +868,6 @@ func _update_guidance(dt: float) -> void:
 				elif bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002)):
 					thrust_key_down = false
 					autopilot_phase = "COAST"
-				elif not bool(orbit.get("bound", false)) and float(orbit.get("radial_speed", 0.0)) > 0.0 and altitude > minimum_safe_altitude and not destination_is_local:
-					thrust_key_down = false
-					autopilot_phase = "PLAN_TRANSFER"
 				else:
 					var ascent_tangential_speed: float = absf(float(orbit.get("tangential_speed", 0.0)))
 					var surface_rotation_speed: float = absf(float(guidance_body.get("rotation_rate", 0.0))) * float(guidance_body.radius)
