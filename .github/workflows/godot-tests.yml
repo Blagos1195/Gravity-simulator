@@ -48,22 +48,24 @@ jobs:
             fi
           }
           run_check compile_simulation_view
-          if echo "$changed_files" | grep -Eq 'rocket_design|main.gd|content_catalog'; then
+          if echo "$changed_files" | grep -Eq 'rocket_design|content_catalog'; then
             run_check rocket_design_test
-            if echo "$changed_files" | grep -Eq 'main.gd'; then
-              run_check rocket_builder_ui_test
-            fi
           fi
-          if echo "$changed_files" | grep -Eq 'flight_computer|route_planner'; then
-            run_check flight_computer_test
-            run_check leo_autopilot_mission_test
-            run_check body_agnostic_orbit_test
+          if echo "$changed_files" | grep -Eq 'main.gd'; then
+            run_check rocket_builder_ui_test
           fi
           if echo "$changed_files" | grep -Eq 'main.gd|simulation_view'; then
             run_check multi_vehicle_test
           fi
           if echo "$changed_files" | grep -Eq 'simulation_view|planetary_system'; then
             run_check simulation_lifecycle_test
+          fi
+          if echo "$changed_files" | grep -Eq 'flight_computer|route_planner'; then
+            run_check flight_computer_test
+            run_check leo_autopilot_mission_test
+            run_check body_agnostic_orbit_test
+          fi
+          if echo "$changed_files" | grep -Eq 'planetary_system'; then
             run_check orbital_stability_test
             run_check body_agnostic_orbit_test
           fi
