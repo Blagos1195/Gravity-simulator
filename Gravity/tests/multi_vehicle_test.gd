@@ -2,23 +2,8 @@ extends SceneTree
 
 const Main = preload("res://scripts/main.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
-const SimulationView = preload("res://scripts/simulation_view.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
-
-class FakeVehicle:
-	extends SimulationView
-
-	var step_calls := 0
-
-	func _nearest_body_state(_position: Vector2, _position_components: PackedFloat64Array = PackedFloat64Array()) -> Dictionary:
-		return {"name": "Earth", "distance": PlanetarySystem.EARTH_RADIUS + 2.0, "radius": PlanetarySystem.EARTH_RADIUS, "soi": 925000000.0}
-
-	func _adaptive_step_size() -> float:
-		return 0.0005
-
-	func _physics_step(dt: float) -> void:
-		sim_time += dt
-		step_calls += 1
+const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -31,7 +16,7 @@ func _initialize() -> void:
 	assert(main.fleet_sims.size() == 2)
 	var second: SimulationView = main.sim
 	assert(first != second)
-	assert(not first.visible)
+	assert(first.visible == false)
 	assert(second.visible)
 	assert(not first.input_enabled)
 	assert(second.input_enabled)
@@ -48,26 +33,35 @@ func _initialize() -> void:
 	assert(not second.visible)
 	assert(first.input_enabled)
 	assert(not second.input_enabled)
-	assert(first.get_save_data().get("vehicle_name", "") == "Vehicle 1")
-	assert(second.get_save_data().get("vehicle_name", "") == "Vehicle 2")
-	var fake_first := FakeVehicle.new()
-	var fake_second := FakeVehicle.new()
-	root.add_child(fake_first)
-	root.add_child(fake_second)
-	fake_first.visible = false
-	fake_second.visible = false
-	fake_first.set_process(false)
-	fake_second.set_process(false)
-	main.fleet_sims = [fake_first, fake_second]
-	main.sim = fake_first
-	main.fleet_time_backlog = 0.0
-	main._advance_fleet(0.001)
-	assert(is_equal_approx(fake_first.sim_time, fake_second.sim_time))
-	assert(is_equal_approx(fake_first.sim_time, 0.001))
-	assert(fake_first.step_calls == 2)
-	assert(fake_second.step_calls == 2)
+	second.landed = false
+	second.rocket_position = Vector2(PlanetarySystem.EARTH_RADIUS + 200000.0, 0.0)
+	second.velocity = Vector2(0.0, 7780.0)
+	second.autopilot_enabled = true
+	second.autopilot_phase = "TRANSFER_COAST"
+	var second_start_position := second.rocket_position
+	main._advance_fleet(0.02)
+	assert(first.sim_time > 0.0)
+	assert(is_equal_approx(first.sim_time, second.sim_time))
+	assert(second.rocket_position.distance_to(second_start_position) > 0.0)
+	assert(second.autopilot_enabled)
+	assert(first.vehicle_name == "Vehicle 1")
+	assert(second.vehicle_name == "Vehicle 2")
+	main._switch_vehicle(1)
+	main.save_slot = 8
+	main._save_game(false)
+	var save_path := "user://saves/slot_08.json"
+	assert(FileAccess.file_exists(save_path))
+	var save_file := FileAccess.open(save_path, FileAccess.READ)
+	var saved_data: Dictionary = JSON.parse_string(save_file.get_as_text())
+	save_file.close()
+	assert(saved_data.get("vehicles", []).size() == 2)
+	assert(int(saved_data.get("active_vehicle_index", -1)) == 1)
+	main._load_game_from_path(save_path)
+	assert(main.fleet_sims.size() == 2)
+	assert(main.active_vehicle_index == 1)
+	assert(main.sim.vehicle_name == "Vehicle 2")
+	assert(is_equal_approx(main.fleet_sims[0].sim_time, main.fleet_sims[1].sim_time))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Multi-vehicle simulation test passed.")
 	main.queue_free()
-	fake_first.queue_free()
-	fake_second.queue_free()
 	quit()
