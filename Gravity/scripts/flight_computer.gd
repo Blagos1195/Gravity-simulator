@@ -329,6 +329,50 @@ static func departure_periapsis_direction(target_index: int, current_time: float
 	return periapsis_tangent.rotated(-direction_sign * PI * 0.5).normalized()
 
 
+static func parking_orbit_recovery_plan(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float, body_soi: float, body_name: String, requested_altitude: float = 200000.0) -> Dictionary:
+	if body_mu <= 0.0 or body_radius <= 0.0 or position.length() <= 0.0 or body_name.is_empty():
+		return {"valid": false, "reason": "Invalid current-body state."}
+	var minimum_altitude := minimum_safe_orbit_altitude(body_name, body_radius)
+	var maximum_altitude := maximum_stable_orbit_altitude(body_radius, body_soi)
+	var current_radius := position.length()
+	if maximum_altitude <= minimum_altitude:
+		return {"valid": false, "reason": "The current body has no safe parking-orbit band."}
+	if current_radius <= body_radius or current_radius >= body_soi:
+		return {"valid": false, "reason": "The spacecraft is outside the body's physical sphere of influence."}
+	var orbit_margin := orbit_radius_tolerance(body_radius + maximum_altitude)
+	var minimum_target_altitude := minimum_altitude + orbit_radius_tolerance(body_radius + minimum_altitude)
+	var maximum_target_altitude := maximum_altitude - orbit_margin
+	if maximum_target_altitude <= minimum_target_altitude:
+		return {"valid": false, "reason": "The current body has no parking-orbit band with adequate safety margins."}
+	var target_altitude := clampf(requested_altitude, minimum_target_altitude, maximum_target_altitude)
+	var target_radius := body_radius + target_altitude
+	var burn := target_radius_burn(position, velocity, target_radius, body_mu)
+	if not bool(burn.get("valid", false)):
+		return {"valid": false, "reason": "No bound recovery orbit can be created from the current state."}
+	var recovered_orbit := orbital_state(position, Vector2(burn.get("desired_velocity", velocity)), body_mu)
+	var periapsis := float(recovered_orbit.get("periapsis", 0.0))
+	var apoapsis := float(recovered_orbit.get("apoapsis", INF))
+	var lower_safe_radius := body_radius + minimum_altitude
+	var upper_safe_radius := body_radius + maximum_altitude
+	var atmospheric_floor := body_radius + maxf(1000.0, PlanetarySystem.planetary_atmosphere_height(body_name))
+	var staged_from_high_orbit := current_radius > upper_safe_radius and periapsis > lower_safe_radius and absf(apoapsis - current_radius) <= orbit_radius_tolerance(current_radius)
+	var staged_from_low_orbit := current_radius < lower_safe_radius and current_radius > atmospheric_floor and apoapsis < upper_safe_radius and absf(apoapsis - target_radius) <= orbit_radius_tolerance(target_radius)
+	var already_safe := periapsis > lower_safe_radius and apoapsis < upper_safe_radius
+	if not bool(recovered_orbit.get("bound", false)) or not (already_safe or staged_from_high_orbit or staged_from_low_orbit):
+		return {"valid": false, "reason": "No safe direct or staged recovery orbit can be created from the current state."}
+	return {
+		"valid": true,
+		"staged": not already_safe,
+		"burn_vector": Vector2(burn.get("burn_vector", Vector2.ZERO)),
+		"desired_velocity": Vector2(burn.get("desired_velocity", velocity)),
+		"delta_v": float(burn.get("delta_v", INF)),
+		"target_altitude": target_altitude,
+		"target_radius": target_radius,
+		"periapsis": periapsis,
+		"apoapsis": apoapsis
+	}
+
+
 static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float, target_altitude: float = 100000.0, minimum_safe_altitude: float = 1000.0) -> Dictionary:
 	var radius := position.length()
 	var target_radius := body_radius + maxf(minimum_safe_altitude, target_altitude)
