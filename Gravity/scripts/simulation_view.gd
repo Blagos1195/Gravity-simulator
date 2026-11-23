@@ -366,6 +366,8 @@ func _physics_step(dt: float) -> void:
 	sim_time = end_time
 	if not infinite_weightless_fuel:
 		fuel = maxf(0.0, fuel - fuel_used)
+		if stage_index < stage_fuel_remaining.size():
+			stage_fuel_remaining[stage_index] = fuel
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
 	if infinite_weightless_fuel and infinite_fuel_stage_remaining <= 0.0001 and stage_index < rocket_stages.size() - 1:
@@ -643,9 +645,11 @@ func _separate_stage() -> void:
 		return
 	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0))
 	discarded_propellant_mass += fuel
+	if stage_index < stage_fuel_remaining.size():
+		stage_fuel_remaining[stage_index] = 0.0
 	velocity += Vector2.UP.rotated(rotation_angle) * 2.0
 	stage_index += 1
-	fuel = float(_active_stage_data().get("fuel_capacity", 0.0))
+	fuel = stage_fuel_remaining[stage_index]
 	infinite_fuel_stage_remaining = fuel
 	thrust_key_down = false
 
@@ -1753,6 +1757,7 @@ func _calculate_predicted_trajectory() -> void:
 	var position_components := rocket_position_precise.duplicate()
 	var predicted_velocity := velocity
 	var predicted_fuel := fuel
+	var predicted_stage_fuel_remaining := stage_fuel_remaining.duplicate()
 	var predicted_stage := stage_index
 	var dt := 5.0
 	for i in range(360):
@@ -1769,7 +1774,7 @@ func _calculate_predicted_trajectory() -> void:
 			for j in range(predicted_stage + 1, rocket_stages.size()):
 				var upper: Dictionary = rocket_stages[j]
 				mass += float(upper.get("dry_mass", 0.0))
-				mass += float(upper.get("fuel_capacity", 0.0))
+				mass += predicted_stage_fuel_remaining[j] if j < predicted_stage_fuel_remaining.size() else float(upper.get("fuel_capacity", 0.0))
 			total_flow = float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 			if not infinite_weightless_fuel:
 				burn = minf(predicted_fuel, total_flow * throttle * dt)
@@ -1801,9 +1806,11 @@ func _calculate_predicted_trajectory() -> void:
 		position = next_position
 		if not infinite_weightless_fuel:
 			predicted_fuel = maxf(0.0, predicted_fuel - burn)
+			predicted_stage_fuel_remaining[predicted_stage] = predicted_fuel
 		if not infinite_weightless_fuel and predicted_fuel <= 0.0001 and predicted_stage < rocket_stages.size() - 1:
+			predicted_stage_fuel_remaining[predicted_stage] = 0.0
 			predicted_stage += 1
-			predicted_fuel = float(rocket_stages[predicted_stage].get("fuel_capacity", 0.0))
+			predicted_fuel = predicted_stage_fuel_remaining[predicted_stage]
 		predicted_path.append(position)
 		var impacted := false
 		for body in final_gravity_states.get("surface_bodies", []):
