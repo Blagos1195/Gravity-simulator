@@ -839,6 +839,8 @@ func _update_guidance(dt: float) -> void:
 	var atmosphere_height := PlanetarySystem.planetary_atmosphere_height(guidance_body_name)
 	var pitch_reference_altitude := maxf(maxf(5000.0, float(guidance_body.radius) * 0.01), atmosphere_height * 0.6)
 	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / pitch_reference_altitude, 0.0, 1.0))
+	if autopilot_enabled and autopilot_phase == "ASCENT" and not destination_is_local and maximum_stable_altitude <= minimum_safe_altitude:
+		_fail_autopilot("NO SAFE PARKING ORBIT EXISTS AROUND %s" % guidance_body_name.to_upper())
 	if autopilot_enabled:
 		gimbal_angle = 0.0
 		var orbit := FlightComputer.orbital_state(guidance_position, guidance_velocity, G * float(guidance_body.mass))
@@ -850,8 +852,14 @@ func _update_guidance(dt: float) -> void:
 			"ASCENT":
 				status_message = "AUTOPILOT  •  ASCENT TO %.0f KM" % (guidance_orbit_altitude / 1000.0)
 				var ascent_orbit_periapsis := float(orbit.get("periapsis", 0.0))
+				var ascent_orbit_apoapsis := float(orbit.get("apoapsis", INF))
 				var ascent_orbit_radial_speed := absf(float(orbit.get("radial_speed", 0.0)))
-				var already_in_stable_orbit := bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and ascent_orbit_radial_speed < maxf(1.0, target_orbit_speed * 0.01)
+				var inside_guidance_body_soi := float(guidance_body.get("distance", INF)) <= float(guidance_body.get("soi", 0.0))
+				var safe_parking_orbit := inside_guidance_body_soi and bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and ascent_orbit_apoapsis < float(guidance_body.radius) + maximum_stable_altitude
+				var already_in_stable_orbit := safe_parking_orbit and ascent_orbit_radial_speed < maxf(1.0, target_orbit_speed * 0.01)
+				if not propellant_available and not already_in_stable_orbit:
+					_fail_autopilot("OUT OF PROPELLANT BEFORE SAFE PARKING ORBIT")
+					return
 				var reached_parking_orbit := already_in_stable_orbit and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002))
 				if reached_parking_orbit and not destination_is_local:
 					thrust_key_down = false
@@ -863,12 +871,9 @@ func _update_guidance(dt: float) -> void:
 				elif already_in_stable_orbit:
 					thrust_key_down = false
 					autopilot_phase = "CIRCULARISE"
-				elif bool(orbit.get("bound", false)) and ascent_orbit_periapsis > float(guidance_body.radius) + minimum_safe_altitude and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002)):
+				elif safe_parking_orbit and float(orbit.get("apoapsis", 0.0)) >= target_radius - maxf(orbit_target_tolerance, minf(25000.0, target_radius * 0.002)):
 					thrust_key_down = false
 					autopilot_phase = "COAST"
-				elif not bool(orbit.get("bound", false)) and float(orbit.get("radial_speed", 0.0)) > 0.0 and altitude > minimum_safe_altitude and not destination_is_local:
-					thrust_key_down = false
-					autopilot_phase = "PLAN_TRANSFER"
 				else:
 					var ascent_tangential_speed: float = absf(float(orbit.get("tangential_speed", 0.0)))
 					var surface_rotation_speed: float = absf(float(guidance_body.get("rotation_rate", 0.0))) * float(guidance_body.radius)
@@ -985,26 +990,43 @@ func _update_guidance(dt: float) -> void:
 					var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
 					var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
 					transfer_plan = FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
+					if not bool(transfer_plan.get("valid", false)):
+						var window_search := FlightComputer.scan_launch_windows(rocket_position, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, 540, 30, autopilot_target_altitude, rocket_position_precise)
+						if bool(window_search.get("valid", false)):
+							transfer_plan = window_search.best
 				if not bool(transfer_plan.get("valid", false)):
 					_fail_autopilot("TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY")))
 				else:
-					var planned_burn_direction: Vector2 = transfer_plan.get("departure_direction", Vector2.ZERO)
-					autopilot_burn_direction = planned_burn_direction.normalized()
-					autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
-					autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
-					autopilot_transfer_start_time = -1.0
-					if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
-						autopilot_transfer_start_time = sim_time
-						autopilot_phase = "TRANSFER_COAST"
+					var departure_time := float(transfer_plan.get("departure_time_seconds", sim_time))
+					if departure_time > sim_time + 2.0:
+						autopilot_precomputed_transfer_plan = transfer_plan.duplicate(true)
+						autopilot_phase = "WAIT_WINDOW"
+						status_message = "AUTOPILOT  •  WAITING FOR VALIDATED DEPARTURE WINDOW  •  %.1f DAYS" % ((departure_time - sim_time) / 86400.0)
 					else:
-						autopilot_phase = "TRANSFER_BURN"
-					status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2f KM/S" % (autopilot_burn_remaining / 1000.0)
+						var planned_burn_direction: Vector2 = transfer_plan.get("departure_direction", Vector2.ZERO)
+						autopilot_burn_direction = planned_burn_direction.normalized()
+						autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
+						autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
+						autopilot_transfer_start_time = -1.0
+						if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
+							autopilot_transfer_start_time = sim_time
+							autopilot_phase = "TRANSFER_COAST"
+						else:
+							autopilot_phase = "TRANSFER_BURN"
+						status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2f KM/S" % (autopilot_burn_remaining / 1000.0)
 			"WAIT_WINDOW":
-				var remaining_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
-				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1f DAYS" % (remaining_window / 86400.0)
+				var waiting_plan: Dictionary = autopilot_precomputed_transfer_plan
+				var departure_time := float(waiting_plan.get("departure_time_seconds", -1.0))
 				thrust_key_down = false
-				if remaining_window <= 3600.0:
-					autopilot_phase = "ALIGN_DEPARTURE"
+				if waiting_plan.is_empty() or departure_time < 0.0:
+					autopilot_precomputed_transfer_plan.clear()
+					autopilot_phase = "PLAN_TRANSFER"
+					status_message = "AUTOPILOT  •  REPLANNING DEPARTURE WINDOW"
+				else:
+					var remaining_window := maxf(0.0, departure_time - sim_time)
+					status_message = "AUTOPILOT  •  WAITING FOR VALIDATED DEPARTURE WINDOW  •  %.1f DAYS" % (remaining_window / 86400.0)
+					if remaining_window <= 0.0:
+						autopilot_phase = "PLAN_TRANSFER"
 			"ALIGN_DEPARTURE":
 				status_message = "AUTOPILOT  •  ALIGNING DEPARTURE ORBIT"
 				thrust_key_down = false
@@ -1113,8 +1135,7 @@ func _update_guidance(dt: float) -> void:
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING LANDING")
 			"ARRIVAL_PENDING":
-				status_message = "ARRIVAL WINDOW MISSED  •  TARGET OUTSIDE CAPTURE REGION"
-				thrust_key_down = false
+				_fail_autopilot("ARRIVAL WINDOW MISSED  •  TARGET OUTSIDE CAPTURE REGION")
 			"COMPLETE":
 				status_message = "AUTOPILOT  •  TARGET ORBIT ACHIEVED"
 				thrust_key_down = false
@@ -1224,12 +1245,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			if show_solar_system:
 				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
 			else:
-				camera_zoom = minf(0.0025, camera_zoom * 1.2)
+				camera_zoom = minf(0.02, camera_zoom * 1.2)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			if show_solar_system:
 				solar_map_zoom = maxf(0.25, solar_map_zoom / 1.2)
 			else:
-				camera_zoom = maxf(0.0000005, camera_zoom / 1.2)
+				camera_zoom = maxf(0.00000000002, camera_zoom / 1.2)
 
 func _draw_atmosphere(center: Vector2, planet_radius: float, atmosphere_height: float, atmosphere_color: Color) -> void:
 	if atmosphere_height <= 0.0:
@@ -1309,6 +1330,11 @@ func _draw() -> void:
 		_draw_solar_system(view_center)
 		_draw_hud()
 		return
+	if camera_zoom <= 0.0000000002:
+		_draw_full_system_zoom(view_center)
+		_draw_offscreen_body_indicators(view_center, altitude_visual_scale)
+		_draw_hud()
+		return
 
 	if show_grid:
 		_draw_grid(view_center)
@@ -1359,6 +1385,8 @@ func _draw() -> void:
 		if soi_pixels > destination_radius and soi_pixels < 1200.0:
 			draw_arc(destination_screen, soi_pixels, 0.0, TAU, 100, Color(0.35, 0.72, 1.0, 0.22), 1.0)
 
+	_draw_offscreen_body_indicators(rocket_screen, altitude_visual_scale)
+
 	if show_orbit:
 		_draw_orbit(rocket_screen, world_scale_factor)
 
@@ -1384,6 +1412,94 @@ func _draw() -> void:
 		draw_string(ThemeDB.fallback_font, velocity_end + Vector2(6, 0), "V", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.25, 0.9, 0.55))
 
 	_draw_hud()
+
+
+func _draw_full_system_zoom(view_center: Vector2) -> void:
+	var states: Dictionary = _ephemeris_states_at(sim_time)
+	var bodies: Array = states.get("bodies", [])
+	var scale := camera_zoom * _visual_scale()
+	var sun_position := Vector2.ZERO
+	for body_variant in bodies:
+		var body: Dictionary = body_variant
+		if str(body.get("name", "")) == "Sun":
+			sun_position = Vector2(body.get("position", Vector2.ZERO))
+			break
+	var sun_screen := view_center + (sun_position - rocket_position) * scale
+	for planet in PlanetarySystem.PLANETS:
+		var orbit_radius := float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT * scale
+		if orbit_radius > 2.0 and orbit_radius < maxf(size.x, size.y) * 1.5:
+			draw_arc(sun_screen, orbit_radius, 0.0, TAU, 160, Color(0.28, 0.43, 0.58, 0.28), 1.0)
+	for body_variant in bodies:
+		var body: Dictionary = body_variant
+		var body_name := str(body.get("name", ""))
+		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+		var screen_position := view_center + (body_position - rocket_position) * scale
+		if screen_position.x < -24.0 or screen_position.x > size.x + 24.0 or screen_position.y < -24.0 or screen_position.y > size.y + 24.0:
+			continue
+		var body_radius := clampf(float(body.get("radius", 1.0)) * scale, 1.5, 9.0)
+		var body_color: Color
+		if body_name == "Sun":
+			body_color = PlanetarySystem.system_visual_color()
+			draw_circle(screen_position, body_radius + 5.0, Color(body_color.r, body_color.g, body_color.b, 0.14))
+		else:
+			body_color = PlanetarySystem.planet_visual_data(body_name).get("color", Color(0.72, 0.78, 0.86))
+		draw_circle(screen_position, body_radius, body_color)
+		if body_radius >= 2.0 or body_name in ["Sun", "Earth", "Moon"]:
+			var label_position := screen_position + Vector2(body_radius + 4.0, 3.0)
+			draw_string(ThemeDB.fallback_font, label_position, body_name.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, body_color.lightened(0.2))
+	var earth_screen := view_center - rocket_position * scale
+	var earth_radius := clampf(PlanetarySystem.EARTH_RADIUS * scale, 1.5, 9.0)
+	var earth_color: Color = PlanetarySystem.planet_visual_data("Earth").get("color", Color(0.25, 0.55, 0.82))
+	draw_circle(earth_screen, earth_radius, earth_color)
+	if earth_screen.distance_to(view_center) > 12.0:
+		draw_string(ThemeDB.fallback_font, earth_screen + Vector2(earth_radius + 4.0, 3.0), "EARTH", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, earth_color)
+	draw_circle(view_center, 3.0, Color(0.3, 1.0, 0.65))
+	draw_string(ThemeDB.fallback_font, view_center + Vector2(7.0, -7.0), "ROCKET", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.4, 1.0, 0.72))
+	draw_string(ThemeDB.fallback_font, Vector2(18.0, 20.0), "SOLAR SYSTEM  •  ROCKET-CENTRED VIEW", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.8, 1.0))
+
+func _draw_offscreen_body_indicators(view_center: Vector2, scale: float) -> void:
+	var states: Dictionary = _ephemeris_states_at(sim_time)
+	var candidates: Array[Dictionary] = []
+	var earth_position := Vector2.ZERO
+	var earth_screen := view_center + (earth_position - rocket_position) * scale
+	if earth_screen.x < 0.0 or earth_screen.x > size.x or earth_screen.y < 0.0 or earth_screen.y > size.y:
+		candidates.append({"name": "Earth", "distance": earth_position.distance_to(rocket_position), "direction": (earth_screen - view_center).normalized(), "color": PlanetarySystem.planet_visual_data("Earth").get("color", Color(0.25, 0.55, 0.82))})
+	for body_variant in states.get("bodies", []):
+		var body: Dictionary = body_variant
+		var body_name := str(body.get("name", ""))
+		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
+		var screen_position := view_center + (body_position - rocket_position) * scale
+		if screen_position.x >= 0.0 and screen_position.x <= size.x and screen_position.y >= 0.0 and screen_position.y <= size.y:
+			continue
+		var distance := body_position.distance_to(rocket_position)
+		var color: Color = PlanetarySystem.system_visual_color() if body_name == "Sun" else PlanetarySystem.planet_visual_data(body_name).get("color", Color(0.72, 0.78, 0.86))
+		candidates.append({"name": body_name, "distance": distance, "direction": (screen_position - view_center).normalized(), "color": color})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.distance) < float(b.distance))
+	var count := mini(4, candidates.size())
+	for index in range(count):
+		var candidate: Dictionary = candidates[index]
+		var direction: Vector2 = candidate.direction
+		if direction.length_squared() < 0.0001:
+			continue
+		var half_size := size * 0.5 - Vector2(34.0, 34.0)
+		var edge_distance := INF
+		if absf(direction.x) > 0.0001:
+			edge_distance = minf(edge_distance, half_size.x / absf(direction.x))
+		if absf(direction.y) > 0.0001:
+			edge_distance = minf(edge_distance, half_size.y / absf(direction.y))
+		var edge_position := view_center + direction * edge_distance
+		edge_position.y = clampf(edge_position.y + (float(index) - float(count - 1) * 0.5) * 24.0, 28.0, size.y - 28.0)
+		var color: Color = candidate.color
+		var side := direction
+		var tip := edge_position + side * 9.0
+		var base := edge_position - side * 7.0
+		var perpendicular := Vector2(-side.y, side.x)
+		draw_colored_polygon(PackedVector2Array([tip, base + perpendicular * 6.0, base - perpendicular * 6.0]), color)
+		var distance_text := "%.2f AU" % (float(candidate.distance) / PlanetarySystem.ASTRONOMICAL_UNIT) if float(candidate.distance) >= 1000000000.0 else _format_distance(float(candidate.distance))
+		var label := "%s  %s" % [str(candidate.name).to_upper(), distance_text]
+		var label_offset := Vector2(12.0, 4.0) if direction.x < 0.7 else Vector2(-150.0, 4.0)
+		draw_string(ThemeDB.fallback_font, edge_position + label_offset, label, HORIZONTAL_ALIGNMENT_LEFT, 145, 10, color)
+
 
 func _draw_solar_label(label: String, anchor: Vector2, font_size: int, color: Color, occupied: Array[Rect2]) -> void:
 	var font: Font = ThemeDB.fallback_font
@@ -1769,6 +1885,28 @@ func _format_time(value: float) -> String:
 	var total := int(value)
 	return "%02d:%02d:%02d" % [total / 3600, (total / 60) % 60, total % 60]
 
+func _saved_departure_plan() -> Dictionary:
+	if autopilot_precomputed_transfer_plan.is_empty() or not autopilot_precomputed_transfer_plan.has("departure_time_seconds"):
+		return {}
+	var plan := autopilot_precomputed_transfer_plan
+	var position: Vector2 = plan.get("planned_position", Vector2.ZERO)
+	var velocity_value: Vector2 = plan.get("planned_velocity", Vector2.ZERO)
+	var direction: Vector2 = plan.get("departure_direction", Vector2.ZERO)
+	return {
+		"target_id": int(plan.get("target_id", autopilot_planet_index)),
+		"target_altitude": float(plan.get("target_altitude", autopilot_target_altitude)),
+		"departure_time_seconds": float(plan.get("departure_time_seconds", -1.0)),
+		"planned_at_time": float(plan.get("planned_at_time", -1.0)),
+		"planned_position_x": position.x,
+		"planned_position_y": position.y,
+		"planned_velocity_x": velocity_value.x,
+		"planned_velocity_y": velocity_value.y,
+		"departure_direction_x": direction.x,
+		"departure_direction_y": direction.y,
+		"departure_delta_v": float(plan.get("departure_delta_v", 0.0)),
+		"transfer_time": float(plan.get("transfer_time", 0.0))
+	}
+
 func get_save_data() -> Dictionary:
 	return {
 		"sim_time": sim_time,
@@ -1795,6 +1933,7 @@ func get_save_data() -> Dictionary:
 		"autopilot_throttle": autopilot_throttle,
 		"autopilot_transfer_start_time": autopilot_transfer_start_time,
 		"autopilot_transfer_duration": autopilot_transfer_duration,
+		"autopilot_departure_plan": _saved_departure_plan(),
 		"autopilot_speed_priority": autopilot_speed_priority,
 		"autopilot_safety_margin": autopilot_safety_margin,
 		"autopilot_transfer_direction": autopilot_transfer_direction,
@@ -1910,6 +2049,28 @@ func load_save_data(data: Dictionary) -> bool:
 	autopilot_throttle = float(data.get("autopilot_throttle", 0.0))
 	autopilot_transfer_start_time = float(data.get("autopilot_transfer_start_time", sim_time if str(data.get("autopilot_phase", "IDLE")) == "TRANSFER_COAST" else -1.0))
 	autopilot_transfer_duration = float(data.get("autopilot_transfer_duration", 0.0))
+	autopilot_precomputed_transfer_plan.clear()
+	var saved_departure_plan: Variant = data.get("autopilot_departure_plan", {})
+	if saved_departure_plan is Dictionary and not saved_departure_plan.is_empty():
+		var departure_plan_valid := true
+		for key in ["target_id", "target_altitude", "departure_time_seconds", "planned_at_time", "planned_position_x", "planned_position_y", "planned_velocity_x", "planned_velocity_y", "departure_direction_x", "departure_direction_y", "departure_delta_v", "transfer_time"]:
+			var value: Variant = saved_departure_plan.get(key, null)
+			if not (value is float or value is int) or not is_finite(float(value)):
+				departure_plan_valid = false
+				break
+		if departure_plan_valid and str(data.get("autopilot_phase", "IDLE")) == "WAIT_WINDOW" and int(saved_departure_plan.target_id) == autopilot_planet_index and is_equal_approx(float(saved_departure_plan.target_altitude), autopilot_target_altitude) and float(saved_departure_plan.departure_time_seconds) >= sim_time - 2.0 and float(saved_departure_plan.departure_delta_v) >= 0.0 and float(saved_departure_plan.transfer_time) > 0.0:
+			autopilot_precomputed_transfer_plan = {
+				"valid": true,
+				"target_id": int(saved_departure_plan.target_id),
+				"target_altitude": float(saved_departure_plan.target_altitude),
+				"departure_time_seconds": float(saved_departure_plan.departure_time_seconds),
+				"planned_at_time": float(saved_departure_plan.planned_at_time),
+				"planned_position": Vector2(float(saved_departure_plan.planned_position_x), float(saved_departure_plan.planned_position_y)),
+				"planned_velocity": Vector2(float(saved_departure_plan.planned_velocity_x), float(saved_departure_plan.planned_velocity_y)),
+				"departure_direction": Vector2(float(saved_departure_plan.departure_direction_x), float(saved_departure_plan.departure_direction_y)),
+				"departure_delta_v": float(saved_departure_plan.departure_delta_v),
+				"transfer_time": float(saved_departure_plan.transfer_time)
+			}
 	autopilot_speed_priority = clampf(float(data.get("autopilot_speed_priority", 0.35)), 0.0, 1.0)
 	autopilot_safety_margin = clampf(float(data.get("autopilot_safety_margin", 0.10)), 0.0, 0.4)
 	autopilot_transfer_direction = float(data.get("autopilot_transfer_direction", 1.0))

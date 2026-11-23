@@ -332,11 +332,17 @@ static func departure_periapsis_direction(target_index: int, current_time: float
 static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float, target_altitude: float = 100000.0, minimum_safe_altitude: float = 1000.0) -> Dictionary:
 	var radius := position.length()
 	var target_radius := body_radius + maxf(minimum_safe_altitude, target_altitude)
-	if radius < target_radius or body_mu <= 0.0:
-		return {"valid": false}
+	if body_mu <= 0.0 or radius <= body_radius + minimum_safe_altitude:
+		return {"valid": false, "reason": "Encounter is below the minimum safe altitude."}
+	if radius < target_radius:
+		if target_radius - radius > orbit_radius_tolerance(target_radius):
+			return {"valid": false, "reason": "Encounter is below the requested target-orbit radius."}
+		target_radius = radius
 	var capture := target_radius_burn(position, velocity, target_radius, body_mu)
-	if not bool(capture.get("valid", false)) or float(capture.get("periapsis", 0.0)) < target_radius * 0.999:
-		return {"valid": false}
+	if not bool(capture.get("valid", false)):
+		return {"valid": false, "reason": "Capture burn does not produce a bound orbit."}
+	if float(capture.get("periapsis", 0.0)) < target_radius * 0.999:
+		return {"valid": false, "reason": "Capture periapsis is below the requested orbit radius."}
 	var transfer_axis := (radius + target_radius) * 0.5
 	var transfer_speed_at_periapsis := sqrt(body_mu * (2.0 / target_radius - 1.0 / transfer_axis))
 	var circular_speed := sqrt(body_mu / target_radius)
@@ -426,30 +432,69 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 	return simulated_transfer_search_precise(PackedFloat64Array([start_position.x, start_position.y]), start_velocity, start_time, target_index, maximum_delta_v, speed_priority, coarse_search, target_orbit_altitude)
 
 
-static func simulated_transfer_search_precise(start_position_components: PackedFloat64Array, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false, target_orbit_altitude: float = 100000.0) -> Dictionary:
+static func simulated_transfer_search_precise(start_position_components: PackedFloat64Array, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false, target_orbit_altitude: float = 100000.0, refinement_center: Dictionary = {}) -> Dictionary:
 	if start_position_components.size() < 2 or not _is_valid_target_index(target_index) or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Invalid target, position or manoeuvre capability."}
 	var initial_target := _simulated_target_state(target_index, start_time)
 	if initial_target.is_empty():
 		return {"valid": false, "reason": "Destination state unavailable."}
 	var initial_target_components: PackedFloat64Array = initial_target.position_components
+	if target_index == -2:
+		var local_relative_position := Vector2(start_position_components[0] - initial_target_components[0], start_position_components[1] - initial_target_components[1])
+		var local_relative_velocity: Vector2 = start_velocity - Vector2(initial_target.velocity)
+		var local_orbit := orbital_state(local_relative_position, local_relative_velocity, G * float(initial_target.mass))
+		var local_target_radius := float(initial_target.radius) + maxf(minimum_safe_orbit_altitude("Earth", float(initial_target.radius)), target_orbit_altitude)
+		var local_tolerance := orbit_radius_tolerance(local_target_radius)
+		if bool(local_orbit.get("bound", false)) and float(local_orbit.get("periapsis", 0.0)) > float(initial_target.radius) + minimum_safe_orbit_altitude("Earth", float(initial_target.radius)) and absf(float(local_orbit.get("periapsis", 0.0)) - local_target_radius) <= local_tolerance and absf(float(local_orbit.get("apoapsis", INF)) - local_target_radius) <= local_tolerance:
+			return {
+				"valid": true,
+				"departure_delta_v": 0.0,
+				"departure_direction": Vector2.ZERO,
+				"capture_delta_v": 0.0,
+				"capture_direction": Vector2.ZERO,
+				"total_delta_v": 0.0,
+				"transfer_time": 0.0,
+				"closest_approach": local_relative_position.length(),
+				"arrival_speed": local_relative_velocity.length(),
+				"target_position": initial_target_components.duplicate(),
+				"trajectory": PackedVector2Array([Vector2(start_position_components[0], start_position_components[1])]),
+				"target_soi": float(initial_target.get("soi", 0.0)),
+				"simulated_steps": 0,
+				"search_candidates": 1
+			}
 	var initial_dx: float = start_position_components[0] - initial_target_components[0]
 	var initial_dy: float = start_position_components[1] - initial_target_components[1]
 	var initial_distance := sqrt(initial_dx * initial_dx + initial_dy * initial_dy)
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
-	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index <= -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
+	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index == -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
-	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v]
-	var direction_count := 12 if coarse_search else 16
+	if target_index == -1 and not coarse_search:
+		durations = [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 1.65, nominal_time * 2.5]
+	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.1, maximum_delta_v * 0.2, maximum_delta_v * 0.2133, maximum_delta_v * 0.25, maximum_delta_v * 0.3, maximum_delta_v * 0.35, maximum_delta_v * 0.4, maximum_delta_v * 0.5, maximum_delta_v * 0.65, maximum_delta_v * 0.8, maximum_delta_v]
+	var direction_count := 12 if coarse_search else 24
+	if not refinement_center.is_empty():
+		var center_time := maxf(3600.0, float(refinement_center.get("transfer_time", nominal_time)))
+		var center_delta_v := clampf(float(refinement_center.get("departure_delta_v", 0.0)), 0.0, maximum_delta_v)
+		var delta_v_step := maxf(25.0, minf(maximum_delta_v * 0.1, maxf(250.0, center_delta_v * 0.1)))
+		durations = [maxf(3600.0, center_time * 0.9), center_time, center_time * 1.1]
+		magnitudes = [maxf(0.0, center_delta_v - delta_v_step), center_delta_v, minf(maximum_delta_v, center_delta_v + delta_v_step)]
+		direction_count = 9
 	var best_score := INF
 	var best_plan: Dictionary = {}
+	var rejected_collisions := 0
+	var rejected_soi := 0
+	var rejected_capture := 0
+	var rejected_delta_v := 0
+	var first_capture_failure := ""
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
 	var time_weight := 1.0 - fuel_weight
-	var maximum_flight_duration := maxf(float(durations[0]), maxf(float(durations[1]), float(durations[2])))
+	var maximum_flight_duration := 0.0
+	for duration_candidate in durations:
+		maximum_flight_duration = maxf(maximum_flight_duration, float(duration_candidate))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
-		var minimum_steps := 360
-		var maximum_steps := 1200 if coarse_search else 720
+		var minimum_steps := 360 if coarse_search else 720
+		var maximum_steps := 1200 if coarse_search else 2400
 		var integration_steps := clampi(int(ceil(flight_duration / 21600.0)), minimum_steps, maximum_steps)
 		var step_size := flight_duration / float(integration_steps)
 		var gravity_states: Array[Dictionary] = []
@@ -461,6 +506,9 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 			target_states.append(_simulated_target_state(target_index, sample_time, sample_states))
 		for direction_index in range(direction_count):
 			var angle := TAU * float(direction_index) / float(direction_count)
+			if not refinement_center.is_empty():
+				var center_direction: Vector2 = refinement_center.get("departure_direction", Vector2.RIGHT)
+				angle = center_direction.angle() + deg_to_rad(float(direction_index - 4) * 5.0)
 			var burn_direction := Vector2(cos(angle), sin(angle))
 			for magnitude_value in magnitudes:
 				var departure_delta_v: float = float(magnitude_value)
@@ -476,6 +524,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				var collided := false
 				for step_index in range(integration_steps):
 					var initial_acceleration := PlanetarySystem.gravity_acceleration_from_precise_states(position, gravity_states[step_index])
+					var previous_velocity := velocity
 					var half_velocity := velocity + initial_acceleration * (step_size * 0.5)
 					var next_position := PackedFloat64Array([
 						position[0] + half_velocity.x * step_size,
@@ -498,31 +547,76 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 							break
 					if collided:
 						break
+					var previous_target_state: Dictionary = target_states[step_index]
 					var target_state: Dictionary = target_states[step_index + 1]
+					var previous_target_position: PackedFloat64Array = previous_target_state.position_components
 					var target_position: PackedFloat64Array = target_state.position_components
-					var relative_x: float = position[0] - target_position[0]
-					var relative_y: float = position[1] - target_position[1]
-					var distance_squared := relative_x * relative_x + relative_y * relative_y
+					var relative_start_x: float = previous_position[0] - previous_target_position[0]
+					var relative_start_y: float = previous_position[1] - previous_target_position[1]
+					var relative_end_x: float = position[0] - target_position[0]
+					var relative_end_y: float = position[1] - target_position[1]
+					var relative_start_velocity: Vector2 = previous_velocity - Vector2(previous_target_state.velocity)
+					var relative_end_velocity: Vector2 = velocity - Vector2(target_state.velocity)
+					var segment_closest_distance := INF
+					var closest_fraction := 0.0
+					var closest_relative_x := relative_start_x
+					var closest_relative_y := relative_start_y
+					var interpolated_relative_velocity := relative_start_velocity
+					for refinement_sample in range(9):
+						var fraction := float(refinement_sample) / 8.0
+						var fraction_squared := fraction * fraction
+						var fraction_cubed := fraction_squared * fraction
+						var h00 := 2.0 * fraction_cubed - 3.0 * fraction_squared + 1.0
+						var h10 := fraction_cubed - 2.0 * fraction_squared + fraction
+						var h01 := -2.0 * fraction_cubed + 3.0 * fraction_squared
+						var h11 := fraction_cubed - fraction_squared
+						var sample_x := h00 * relative_start_x + h10 * step_size * relative_start_velocity.x + h01 * relative_end_x + h11 * step_size * relative_end_velocity.x
+						var sample_y := h00 * relative_start_y + h10 * step_size * relative_start_velocity.y + h01 * relative_end_y + h11 * step_size * relative_end_velocity.y
+						var sample_distance := sqrt(sample_x * sample_x + sample_y * sample_y)
+						if sample_distance >= segment_closest_distance:
+							continue
+						segment_closest_distance = sample_distance
+						closest_fraction = fraction
+						closest_relative_x = sample_x
+						closest_relative_y = sample_y
+						var dh00 := 6.0 * fraction_squared - 6.0 * fraction
+						var dh10 := 3.0 * fraction_squared - 4.0 * fraction + 1.0
+						var dh01 := -6.0 * fraction_squared + 6.0 * fraction
+						var dh11 := 3.0 * fraction_squared - 2.0 * fraction
+						interpolated_relative_velocity = Vector2(
+							(dh00 * relative_start_x + dh01 * relative_end_x) / step_size + dh10 * relative_start_velocity.x + dh11 * relative_end_velocity.x,
+							(dh00 * relative_start_y + dh01 * relative_end_y) / step_size + dh10 * relative_start_velocity.y + dh11 * relative_end_velocity.y
+						)
+					var distance_squared := segment_closest_distance * segment_closest_distance
 					if distance_squared < closest_distance * closest_distance:
-						closest_distance = sqrt(distance_squared)
-						closest_relative_position = Vector2(relative_x, relative_y)
-						closest_relative_velocity = velocity - Vector2(target_state.velocity)
-						closest_target_position = target_position.duplicate()
-						closest_time = float(step_index + 1) * step_size
+						closest_distance = segment_closest_distance
+						closest_relative_position = Vector2(closest_relative_x, closest_relative_y)
+						closest_relative_velocity = interpolated_relative_velocity
+						closest_target_position = PackedFloat64Array([
+							lerpf(previous_target_position[0], target_position[0], closest_fraction),
+							lerpf(previous_target_position[1], target_position[1], closest_fraction)
+						])
+						closest_time = (float(step_index) + closest_fraction) * step_size
 						closest_trajectory_index = candidate_trajectory.size() - 1
 				if collided:
+					rejected_collisions += 1
 					continue
 				var target_soi := float(initial_target.soi)
 				if closest_distance > target_soi:
+					rejected_soi += 1
 					continue
 				var target_mu := G * float(initial_target.mass)
 				var target_safe_altitude := minimum_safe_orbit_altitude(str(initial_target.get("name", "")), float(initial_target.radius))
 				var capture := arrival_capture_burn(closest_relative_position, closest_relative_velocity, target_mu, float(initial_target.radius), target_orbit_altitude, target_safe_altitude)
 				if not bool(capture.get("valid", false)):
+					rejected_capture += 1
+					if first_capture_failure.is_empty():
+						first_capture_failure = str(capture.get("reason", "Unspecified capture rejection"))
 					continue
 				var capture_delta_v := float(capture.get("total_delta_v", INF))
 				var total_delta_v := departure_delta_v + capture_delta_v
 				if total_delta_v > maximum_delta_v:
+					rejected_delta_v += 1
 					continue
 				var fuel_cost := total_delta_v / maxf(1.0, maximum_delta_v)
 				var time_cost := closest_time / maxf(1.0, maximum_flight_duration)
@@ -539,6 +633,10 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 					"departure_direction": burn_direction,
 					"capture_delta_v": capture_delta_v,
 					"capture_direction": Vector2(capture.get("burn_vector", Vector2.ZERO)).normalized(),
+					"capture_periapsis": float(capture.get("periapsis", 0.0)),
+					"capture_apoapsis": float(capture.get("apoapsis", 0.0)),
+					"arrival_relative_position": closest_relative_position,
+					"arrival_relative_velocity": closest_relative_velocity,
 					"total_delta_v": total_delta_v,
 					"transfer_time": closest_time,
 					"closest_approach": closest_distance,
@@ -547,97 +645,212 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 					"trajectory": arrival_trajectory,
 					"target_soi": target_soi,
 					"simulated_steps": integration_steps,
-					"search_candidates": direction_count * magnitudes.size() * durations.size()
+					"search_candidates": direction_count * magnitudes.size() * durations.size(),
+					"search_score": candidate_score
 				}
 	if best_plan.is_empty():
 		return {
 			"valid": false,
-			"reason": "No sampled trajectory reached the destination sphere of influence within the available delta-v.",
+			"reason": "No feasible candidate. Rejected: collision=%d, outside_soi=%d, unsafe_capture=%d, delta_v=%d. First capture rejection: %s" % [rejected_collisions, rejected_soi, rejected_capture, rejected_delta_v, first_capture_failure],
 			"search_candidates": direction_count * magnitudes.size() * durations.size()
 		}
+	if not coarse_search and refinement_center.is_empty():
+		var refined_plan := simulated_transfer_search_precise(start_position_components, start_velocity, start_time, target_index, maximum_delta_v, speed_priority, false, target_orbit_altitude, best_plan)
+		if bool(refined_plan.get("valid", false)) and float(refined_plan.get("search_score", INF)) < float(best_plan.get("search_score", INF)):
+			refined_plan["search_candidates"] = int(best_plan.get("search_candidates", 0)) + int(refined_plan.get("search_candidates", 0))
+			return refined_plan
 	return best_plan
 
 
-static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 30, target_orbit_altitude: float = 100000.0) -> Dictionary:
-	if target_index == -2 or not _is_valid_target_index(target_index) or maximum_delta_v <= 0.0:
-		return {"valid": false, "reason": "Select a destination other than Earth and provide a positive manoeuvre budget."}
-	var radius := start_position.length()
-	var earth_minimum_orbit_altitude := minimum_safe_orbit_altitude("Earth", EARTH_RADIUS)
-	if radius < EARTH_RADIUS + earth_minimum_orbit_altitude:
-		return {"valid": false, "reason": "A stable Earth departure orbit is required."}
-	var mu := G * PlanetarySystem.EARTH_MASS
-	var initial_orbit := orbital_state(start_position, start_velocity, mu)
-	if float(initial_orbit.get("eccentricity", 1.0)) > 0.05:
-		return {"valid": false, "reason": "Launch-window scanning currently requires a near-circular Earth parking orbit."}
-	var orbital_rate := sqrt(mu / pow(radius, 3.0))
+static func _propagate_wait_state(start_position_components: PackedFloat64Array, start_velocity: Vector2, start_time: float, wait_seconds: float) -> Dictionary:
+	if start_position_components.size() < 2 or wait_seconds < 0.0:
+		return {"valid": false, "reason": "Invalid departure state or wait duration."}
+	var position := start_position_components.duplicate()
+	var velocity := start_velocity
+	var elapsed := 0.0
+	var initial_states: Dictionary = PlanetarySystem.gravity_body_states(start_time)
+	var maximum_step := 1800.0
+	var nearest_distance := INF
+	for body_variant in initial_states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var dx: float = position[0] - body_components[0]
+		var dy: float = position[1] - body_components[1]
+		var distance := sqrt(dx * dx + dy * dy)
+		if distance > float(body.get("soi", 0.0)) or distance >= nearest_distance:
+			continue
+		nearest_distance = distance
+		var relative_position := Vector2(dx, dy)
+		var relative_velocity := velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var orbit := orbital_state(relative_position, relative_velocity, G * float(body.get("mass", 0.0)))
+		if bool(orbit.get("bound", false)) and float(orbit.get("semi_major_axis", 0.0)) > 0.0:
+			var period := TAU * sqrt(pow(float(orbit.semi_major_axis), 3.0) / (G * float(body.get("mass", 0.0))))
+			maximum_step = clampf(period / 48.0, 5.0, 1800.0)
+	while elapsed < wait_seconds:
+		var step_size := minf(maximum_step, wait_seconds - elapsed)
+		var step_initial_states: Dictionary = PlanetarySystem.gravity_body_states(start_time + elapsed)
+		var final_states: Dictionary = PlanetarySystem.gravity_body_states(start_time + elapsed + step_size)
+		var initial_acceleration: Vector2 = PlanetarySystem.gravity_acceleration_from_precise_states(position, step_initial_states)
+		var half_velocity := velocity + initial_acceleration * (step_size * 0.5)
+		var next_position := PackedFloat64Array([
+			position[0] + half_velocity.x * step_size,
+			position[1] + half_velocity.y * step_size
+		])
+		var final_acceleration: Vector2 = PlanetarySystem.gravity_acceleration_from_precise_states(next_position, final_states)
+		velocity = half_velocity + final_acceleration * (step_size * 0.5)
+		for body_variant in final_states.get("surface_bodies", []):
+			var body: Dictionary = body_variant
+			var body_position: Vector2 = body.get("position", Vector2.ZERO)
+			var body_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+			if _segment_intersects_circle_precise(position, next_position, body_components, float(body.get("radius", 0.0))):
+				return {"valid": false, "reason": "The waiting orbit intersects %s." % str(body.get("name", "a celestial body"))}
+		position = next_position
+		elapsed += step_size
+	return {"valid": true, "position_components": position, "velocity": velocity}
+
+
+static func _has_safe_parking_orbit_at(position_components: PackedFloat64Array, velocity: Vector2, time_seconds: float, body_name: String) -> bool:
+	if position_components.size() < 2 or body_name.is_empty():
+		return false
+	var states: Dictionary = PlanetarySystem.gravity_body_states(time_seconds)
+	for body_variant in states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
+		if str(body.get("name", "")) != body_name:
+			continue
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var relative_position := Vector2(position_components[0] - body_components[0], position_components[1] - body_components[1])
+		if relative_position.length() > float(body.get("soi", 0.0)):
+			return false
+		var relative_velocity := velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var radius := float(body.get("radius", 0.0))
+		var orbit := orbital_state(relative_position, relative_velocity, G * float(body.get("mass", 0.0)))
+		var minimum_altitude := minimum_safe_orbit_altitude(body_name, radius)
+		var maximum_altitude := maximum_stable_orbit_altitude(radius, float(body.get("soi", 0.0)))
+		return bool(orbit.get("bound", false)) and float(orbit.get("periapsis", 0.0)) > radius + minimum_altitude and float(orbit.get("apoapsis", INF)) < radius + maximum_altitude
+	return false
+
+
+static func scan_launch_windows(start_position: Vector2, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, scan_days: int = 540, interval_days: int = 30, target_orbit_altitude: float = 100000.0, start_position_components: PackedFloat64Array = PackedFloat64Array()) -> Dictionary:
+	if not _is_valid_target_index(target_index) or maximum_delta_v <= 0.0 or scan_days <= 0 or interval_days <= 0:
+		return {"valid": false, "reason": "Select a valid destination and provide a positive manoeuvre budget and scan interval."}
+	var initial_position := start_position_components if start_position_components.size() >= 2 else PackedFloat64Array([start_position.x, start_position.y])
+	var initial_states: Dictionary = PlanetarySystem.gravity_body_states(start_time)
+	var nearest_body: Dictionary = {}
+	var nearest_distance := INF
+	for body_variant in initial_states.get("surface_bodies", []):
+		var body: Dictionary = body_variant
+		var body_position: Vector2 = body.get("position", Vector2.ZERO)
+		var body_components: PackedFloat64Array = body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var dx: float = initial_position[0] - body_components[0]
+		var dy: float = initial_position[1] - body_components[1]
+		var distance := sqrt(dx * dx + dy * dy)
+		if distance <= float(body.get("soi", 0.0)) and distance < nearest_distance:
+			nearest_body = body
+			nearest_distance = distance
+	if not nearest_body.is_empty():
+		if str(nearest_body.get("name", "")) == target_body_name(target_index):
+			return {"valid": false, "reason": "The selected destination is the current local body; use local orbit planning instead of a departure window."}
+		var body_position: Vector2 = nearest_body.get("position", Vector2.ZERO)
+		var body_velocity: Vector2 = nearest_body.get("velocity", Vector2.ZERO)
+		var body_components: PackedFloat64Array = nearest_body.get("position_components", PackedFloat64Array([body_position.x, body_position.y]))
+		var relative_position := Vector2(initial_position[0] - body_components[0], initial_position[1] - body_components[1])
+		var relative_velocity := start_velocity - body_velocity
+		var body_radius := float(nearest_body.get("radius", 0.0))
+		var safe_altitude := minimum_safe_orbit_altitude(str(nearest_body.get("name", "")), body_radius)
+		var orbit := orbital_state(relative_position, relative_velocity, G * float(nearest_body.get("mass", 0.0)))
+		var maximum_altitude := maximum_stable_orbit_altitude(body_radius, float(nearest_body.get("soi", 0.0)))
+		if not bool(orbit.get("bound", false)) or float(orbit.get("periapsis", 0.0)) <= body_radius + safe_altitude or float(orbit.get("apoapsis", INF)) >= body_radius + maximum_altitude:
+			return {"valid": false, "reason": "A safe, stable parking orbit around the current body is required before scanning departure windows."}
+	var parking_body_name := str(nearest_body.get("name", ""))
 	var best_window: Dictionary = {}
 	var best_score := INF
 	var dates_checked := 0
 	var coarse_windows: Array[Dictionary] = []
 	var samples := maxi(2, int(ceil(float(scan_days) / float(interval_days))) + 1)
+	var propagated_position := initial_position.duplicate()
+	var propagated_velocity := start_velocity
+	var propagated_days := 0.0
 	for sample_index in range(samples):
-		var wait_days := mini(scan_days, sample_index * interval_days)
-		var wait_seconds := float(wait_days) * 86400.0
-		var rotation := orbital_rate * wait_seconds
-		var future_position := start_position.rotated(rotation)
-		var future_velocity := start_velocity.rotated(rotation)
-		var plan := simulated_transfer_search(future_position, future_velocity, start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
+		var wait_days := float(mini(scan_days, sample_index * interval_days))
+		var wait_seconds := wait_days * 86400.0
+		var future_state := _propagate_wait_state(propagated_position, propagated_velocity, start_time + propagated_days * 86400.0, (wait_days - propagated_days) * 86400.0)
 		dates_checked += 1
+		if not bool(future_state.get("valid", false)):
+			continue
+		if not parking_body_name.is_empty() and not _has_safe_parking_orbit_at(future_state.position_components, future_state.velocity, start_time + wait_seconds, parking_body_name):
+			continue
+		propagated_position = future_state.position_components
+		propagated_velocity = future_state.velocity
+		propagated_days = wait_days
+		var future_components: PackedFloat64Array = future_state.position_components
+		var future_position := Vector2(future_components[0], future_components[1])
+		var plan := simulated_transfer_search_precise(future_components, future_state.velocity, start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
 		if not bool(plan.get("valid", false)):
 			continue
 		plan["departure_wait_days"] = wait_days
-		plan["departure_time_seconds"] = start_time + wait_seconds
+		plan["departure_time_seconds"] = start_time + wait_days * 86400.0
+		plan["planned_at_time"] = start_time + wait_days * 86400.0
+		plan["planned_position"] = future_position
+		plan["planned_position_precise"] = future_components
+		plan["planned_velocity"] = future_state.velocity
 		coarse_windows.append(plan)
 		var score := float(plan.get("total_delta_v", INF)) / maxf(1.0, maximum_delta_v) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / (30.0 * 365.25 * 86400.0) * clampf(speed_priority, 0.0, 1.0)
 		if score < best_score:
 			best_score = score
 			best_window = plan
 	if best_window.is_empty():
-		return {"valid": false, "reason": "No sampled departure date produced a feasible simulated transfer.", "dates_checked": dates_checked}
+		return {"valid": false, "reason": "No propagated departure date produced a feasible transfer within the available delta-v.", "dates_checked": dates_checked}
 	var coarse_best_day := float(best_window.departure_wait_days)
+	var refinement_seed: Dictionary = best_window.duplicate(true)
 	var refinement_spacing := maxf(1.0, float(interval_days) / 4.0)
 	for refinement_index in range(-2, 3):
 		var wait_days := clampf(coarse_best_day + float(refinement_index) * refinement_spacing, 0.0, float(scan_days))
 		if absf(wait_days - coarse_best_day) < 0.01:
 			continue
-		var wait_seconds := wait_days * 86400.0
-		var rotation := orbital_rate * wait_seconds
-		var plan := simulated_transfer_search(start_position.rotated(rotation), start_velocity.rotated(rotation), start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
+		if wait_days < coarse_best_day:
+			continue
+		var wait_seconds := (wait_days - coarse_best_day) * 86400.0
+		var best_position: PackedFloat64Array = refinement_seed.planned_position_precise
+		var best_velocity: Vector2 = refinement_seed.planned_velocity
+		var future_state := _propagate_wait_state(best_position, best_velocity, float(refinement_seed.departure_time_seconds), wait_seconds)
 		dates_checked += 1
+		if not bool(future_state.get("valid", false)):
+			continue
+		if not parking_body_name.is_empty() and not _has_safe_parking_orbit_at(future_state.position_components, future_state.velocity, float(refinement_seed.departure_time_seconds) + wait_seconds, parking_body_name):
+			continue
+		var future_components: PackedFloat64Array = future_state.position_components
+		var future_position := Vector2(future_components[0], future_components[1])
+		var plan := simulated_transfer_search_precise(future_components, future_state.velocity, float(refinement_seed.departure_time_seconds) + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
 		if not bool(plan.get("valid", false)):
 			continue
 		plan["departure_wait_days"] = wait_days
-		plan["departure_time_seconds"] = start_time + wait_seconds
-		var score := float(plan.get("total_delta_v", INF)) / maxf(1.0, maximum_delta_v) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / (30.0 * 365.25 * 86400.0) * clampf(speed_priority, 0.0, 1.0)
-		if score < best_score:
-			best_score = score
-			best_window = plan
-	var refined_best_day := float(best_window.departure_wait_days)
-	for refinement_index in range(-2, 3):
-		var wait_days := clampf(refined_best_day + float(refinement_index), 0.0, float(scan_days))
-		if absf(wait_days - refined_best_day) < 0.01:
-			continue
-		var wait_seconds := wait_days * 86400.0
-		var rotation := orbital_rate * wait_seconds
-		var plan := simulated_transfer_search(start_position.rotated(rotation), start_velocity.rotated(rotation), start_time + wait_seconds, target_index, maximum_delta_v, speed_priority, true, target_orbit_altitude)
-		dates_checked += 1
-		if not bool(plan.get("valid", false)):
-			continue
-		plan["departure_wait_days"] = wait_days
-		plan["departure_time_seconds"] = start_time + wait_seconds
+		plan["departure_time_seconds"] = start_time + wait_days * 86400.0
+		plan["planned_at_time"] = start_time + wait_days * 86400.0
+		plan["planned_position"] = future_position
+		plan["planned_position_precise"] = future_components
+		plan["planned_velocity"] = future_state.velocity
 		var score := float(plan.get("total_delta_v", INF)) / maxf(1.0, maximum_delta_v) * (1.0 - clampf(speed_priority, 0.0, 1.0)) + float(plan.get("transfer_time", 0.0)) / (30.0 * 365.25 * 86400.0) * clampf(speed_priority, 0.0, 1.0)
 		if score < best_score:
 			best_score = score
 			best_window = plan
 	var final_wait_days := float(best_window.departure_wait_days)
 	var final_wait_seconds := final_wait_days * 86400.0
-	var final_rotation := orbital_rate * final_wait_seconds
-	var final_plan := simulated_transfer_search(start_position.rotated(final_rotation), start_velocity.rotated(final_rotation), start_time + final_wait_seconds, target_index, maximum_delta_v, speed_priority, false, target_orbit_altitude)
+	var final_components: PackedFloat64Array = best_window.planned_position_precise
+	var final_velocity: Vector2 = best_window.planned_velocity
+	var final_position := Vector2(final_components[0], final_components[1])
+	var final_plan := simulated_transfer_search_precise(final_components, final_velocity, start_time + final_wait_seconds, target_index, maximum_delta_v, speed_priority, false, target_orbit_altitude)
 	if bool(final_plan.get("valid", false)):
-		final_plan["departure_wait_days"] = final_wait_days
-		final_plan["departure_time_seconds"] = start_time + final_wait_seconds
-		best_window = final_plan
+			final_plan["departure_wait_days"] = final_wait_days
+			final_plan["departure_time_seconds"] = start_time + final_wait_seconds
+			final_plan["planned_at_time"] = start_time + final_wait_seconds
+			final_plan["planned_position"] = final_position
+			final_plan["planned_position_precise"] = final_components
+			final_plan["planned_velocity"] = final_velocity
+			best_window = final_plan
 	return {"valid": true, "best": best_window, "windows": coarse_windows, "dates_checked": dates_checked, "refined": true}
+
 
 static func target_orbit_report(position: Vector2, velocity: Vector2, altitude: float) -> Dictionary:
 	var target_radius := EARTH_RADIUS + maxf(0.0, altitude)

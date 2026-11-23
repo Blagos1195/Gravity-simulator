@@ -278,8 +278,54 @@ func _initialize() -> void:
 	assert(is_equal_approx(float(earth_destination.get("mass", 0.0)), PlanetarySystem.EARTH_MASS))
 	var earth_orbit_radius := PlanetarySystem.EARTH_RADIUS + 3000000.0
 	var earth_orbit_speed := FlightComputer.circular_orbit_speed(earth_orbit_radius)
+	var propagated_wait := FlightComputer._propagate_wait_state(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, 3600.0)
+	assert(bool(propagated_wait.get("valid", false)), "Stable parking-orbit propagation failed: %s" % str(propagated_wait))
+	var propagated_position: PackedFloat64Array = propagated_wait.position_components
+	var propagated_orbit := FlightComputer.orbital_state(Vector2(propagated_position[0], propagated_position[1]), propagated_wait.velocity)
+	assert(bool(propagated_orbit.get("bound", false)))
+	assert(float(propagated_orbit.get("periapsis", 0.0)) > PlanetarySystem.EARTH_RADIUS + FlightComputer.minimum_safe_orbit_altitude("Earth", PlanetarySystem.EARTH_RADIUS))
+	assert(FlightComputer._has_safe_parking_orbit_at(propagated_position, propagated_wait.velocity, 3600.0, "Earth"))
+	var waiting_sim: Variant = SimulationView.new()
+	waiting_sim.set_rocket_design(RocketDesign.create_default())
+	waiting_sim.landed = false
+	var departure_wait_state := FlightComputer._propagate_wait_state(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, 86400.0)
+	assert(bool(departure_wait_state.get("valid", false)), "Future departure propagation failed: %s" % str(departure_wait_state))
+	var departure_position: PackedFloat64Array = departure_wait_state.position_components
+	var departure_velocity: Vector2 = departure_wait_state.velocity
+	waiting_sim._set_rocket_position_components(departure_position[0], departure_position[1])
+	waiting_sim.velocity = departure_velocity
+	waiting_sim.sim_time = 86400.0
+	waiting_sim.autopilot_enabled = true
+	waiting_sim.guidance_enabled = true
+	waiting_sim.autopilot_planet_index = -1
+	waiting_sim.autopilot_target_altitude = 300000.0
+	waiting_sim.autopilot_phase = "WAIT_WINDOW"
+	waiting_sim.autopilot_precomputed_transfer_plan = {
+		"valid": true,
+		"target_id": -1,
+		"target_altitude": 300000.0,
+		"departure_time_seconds": 86400.0,
+		"planned_at_time": 86400.0,
+		"planned_position": Vector2(departure_position[0], departure_position[1]),
+		"planned_velocity": departure_velocity,
+		"departure_direction": Vector2.RIGHT,
+		"departure_delta_v": 100.0,
+		"transfer_time": 10000.0
+	}
+	var restored_waiting_sim: Variant = SimulationView.new()
+	assert(restored_waiting_sim.load_save_data(waiting_sim.get_save_data()), "Could not restore a saved departure-window plan")
+	assert(not restored_waiting_sim.autopilot_precomputed_transfer_plan.is_empty(), "Saved departure-window plan was lost")
+	restored_waiting_sim._update_guidance(0.1)
+	assert(restored_waiting_sim.autopilot_phase == "PLAN_TRANSFER")
+	restored_waiting_sim._update_guidance(0.1)
+	assert(restored_waiting_sim.autopilot_phase == "TRANSFER_BURN", "Validated departure plan was not handed to the burn phase")
+	assert(is_equal_approx(restored_waiting_sim.autopilot_burn_remaining, 100.0), "Autopilot discarded the stored departure solution and recalculated it")
+	assert(is_equal_approx(restored_waiting_sim.autopilot_transfer_duration, 10000.0))
+	assert(restored_waiting_sim.autopilot_precomputed_transfer_plan.is_empty())
+	waiting_sim.free()
+	restored_waiting_sim.free()
 	var local_transfer_plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, -2, 5000.0, 0.0, false, 3000000.0)
-	assert(bool(local_transfer_plan.get("valid", false)))
+	assert(bool(local_transfer_plan.get("valid", false)), "Local Earth-orbit transfer failed: %s" % str(local_transfer_plan))
 	assert(float(local_transfer_plan.get("total_delta_v", INF)) < 100.0, "Local Earth-orbit transfer exceeded its expected delta-v: %s" % str(local_transfer_plan))
 	var invalid_transfer_plan := FlightComputer.simulated_transfer_search(Vector2.ZERO, Vector2.ZERO, 0.0, -3, 5000.0)
 	assert(not bool(invalid_transfer_plan.get("valid", true)))
@@ -361,6 +407,87 @@ func _initialize() -> void:
 	planner_sim.autopilot_enabled = false
 	planner_sim.guidance_enabled = false
 	planner_sim.autopilot_phase = "IDLE"
+	var surface_sim: Variant = SimulationView.new()
+	surface_sim.set_rocket_design(RocketDesign.create_default())
+	surface_sim.landed = true
+	surface_sim.landed_body_name = "Earth"
+	surface_sim.landed_surface_normal = Vector2.UP
+	surface_sim._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 0.5)
+	var surface_planner_window: Window = RoutePlanner.new()
+	root.add_child(surface_planner_window)
+	surface_planner_window.configure(surface_sim, RocketDesign.create_default())
+	surface_planner_window.navigation_moon_dropdown.select(1)
+	surface_planner_window.navigation_altitude_input.value = 300.0
+	surface_planner_window._calculate_destination_plan()
+	assert(surface_planner_window.navigation_plan_valid, "Surface destination plan failed: %s" % surface_planner_window.navigation_report.text)
+	assert(bool(surface_planner_window.navigation_plan.get("needs_parking_orbit", false)), "Surface plan did not request parking orbit: %s landed=%s body=%s" % [str(surface_planner_window.navigation_plan), str(surface_sim.landed), str(surface_sim.call("_nearest_body_state", surface_sim.rocket_position).get("name", ""))])
+	surface_planner_window._send_destination_to_autopilot()
+	assert(surface_sim.autopilot_enabled)
+	assert(surface_sim.autopilot_phase == "ASCENT")
+	surface_planner_window.free()
+	surface_sim.free()
+	var escape_sim: Variant = SimulationView.new()
+	escape_sim.set_rocket_design(RocketDesign.create_default())
+	escape_sim.landed = false
+	escape_sim._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 500000.0)
+	escape_sim.velocity = Vector2(0.0, -12000.0)
+	escape_sim.autopilot_enabled = true
+	escape_sim.guidance_enabled = true
+	escape_sim.autopilot_planet_index = -1
+	escape_sim.autopilot_target_altitude = 300000.0
+	escape_sim.autopilot_phase = "ASCENT"
+	var escaping_orbit := FlightComputer.orbital_state(Vector2(0.0, -PlanetarySystem.EARTH_RADIUS - 500000.0), escape_sim.velocity)
+	assert(not bool(escaping_orbit.get("bound", true)), "Direct-escape ascent regression did not begin on an unbound trajectory")
+	escape_sim._update_guidance(0.1)
+	assert(escape_sim.autopilot_phase == "ASCENT", "Autopilot left ascent before establishing a safe parking orbit")
+	assert(escape_sim.thrust_key_down, "Autopilot did not continue thrusting to establish a parking orbit")
+	escape_sim.fuel = 0.0
+	escape_sim._update_guidance(0.1)
+	assert(escape_sim.autopilot_phase == "FAILED", "Ascent did not fail cleanly after exhausting propellant before parking orbit")
+	escape_sim.free()
+	var unstable_sim: Variant = SimulationView.new()
+	unstable_sim.set_rocket_design(RocketDesign.create_default())
+	unstable_sim.landed = false
+	var unstable_radius := PlanetarySystem.EARTH_RADIUS + 200000.0
+	var unstable_speed := FlightComputer.circular_orbit_speed(unstable_radius) * 1.4141
+	unstable_sim._set_rocket_position_components(0.0, -unstable_radius)
+	unstable_sim.velocity = Vector2(unstable_speed, 0.0)
+	unstable_sim.autopilot_enabled = true
+	unstable_sim.guidance_enabled = true
+	unstable_sim.autopilot_planet_index = -1
+	unstable_sim.autopilot_target_altitude = 300000.0
+	unstable_sim.autopilot_phase = "ASCENT"
+	var unstable_orbit := FlightComputer.orbital_state(Vector2(0.0, -unstable_radius), unstable_sim.velocity)
+	assert(bool(unstable_orbit.get("bound", false)))
+	assert(float(unstable_orbit.get("apoapsis", 0.0)) > unstable_radius + FlightComputer.maximum_stable_orbit_altitude(PlanetarySystem.EARTH_RADIUS, PlanetarySystem.EARTH_SOI_RADIUS))
+	assert(not FlightComputer._has_safe_parking_orbit_at(PackedFloat64Array([0.0, -unstable_radius]), unstable_sim.velocity, 0.0, "Earth"))
+	unstable_sim._update_guidance(0.1)
+	assert(unstable_sim.autopilot_phase == "ASCENT", "Unstable high-apoapsis orbit was accepted as a safe parking orbit")
+	assert(unstable_sim.thrust_key_down)
+	unstable_sim.free()
+	var mars_surface_sim: Variant = SimulationView.new()
+	mars_surface_sim.set_rocket_design(RocketDesign.create_default())
+	mars_surface_sim.landed = true
+	mars_surface_sim.landed_body_name = "Mars"
+	mars_surface_sim.landed_surface_normal = Vector2.UP
+	var mars_surface_state: Dictionary = mars_surface_sim._surface_body_state("Mars")
+	mars_surface_sim._set_rocket_position_relative_to_body(mars_surface_state, Vector2.UP * (float(mars_surface_state.radius) + 0.5))
+	mars_surface_sim.velocity = Vector2(mars_surface_state.get("velocity", Vector2.ZERO))
+	var mars_planner_window: Window = RoutePlanner.new()
+	root.add_child(mars_planner_window)
+	mars_planner_window.configure(mars_surface_sim, RocketDesign.create_default())
+	mars_planner_window.navigation_planet_dropdown.select(0)
+	mars_planner_window._rebuild_navigation_moons(-2)
+	mars_planner_window.navigation_moon_dropdown.select(0)
+	mars_planner_window.navigation_altitude_input.value = 300.0
+	mars_planner_window._calculate_destination_plan()
+	assert(mars_planner_window.navigation_plan_valid, "Mars surface destination plan failed: %s" % mars_planner_window.navigation_report.text)
+	assert(bool(mars_planner_window.navigation_plan.get("needs_parking_orbit", false)), "Mars surface plan did not request a parking orbit")
+	mars_planner_window._send_destination_to_autopilot()
+	assert(mars_surface_sim.autopilot_enabled)
+	assert(mars_surface_sim.autopilot_phase == "ASCENT")
+	mars_planner_window.free()
+	mars_surface_sim.free()
 	route_planner_window.target_x_input.value = 8000.0
 	route_planner_window.target_y_input.value = 3000.0
 	route_planner_window._apply_target_coordinates()

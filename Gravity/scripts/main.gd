@@ -1063,22 +1063,22 @@ func _show_autopilot_panel() -> void:
 	)
 	launch_windows_button.pressed.connect(func():
 		var destination_index: int = selected_target_index.call()
-		if destination_index == -2:
-			report.text += "\n\nLaunch-window scanning is only available for planetary transfers."
-			return
 		var body: Dictionary = sim._nearest_body_state(sim.rocket_position)
 		var relative_position: Vector2 = sim.rocket_position - body.position
 		var relative_velocity: Vector2 = sim.velocity - body.velocity
 		var orbit_state := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(body.mass))
-		var earth_minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude("Earth", FlightComputer.EARTH_RADIUS)
-		if sim.landed or str(body.get("name", "")) != "Earth" or not bool(orbit_state.get("bound", false)) or float(orbit_state.get("periapsis", 0.0)) < FlightComputer.EARTH_RADIUS + earth_minimum_safe_altitude:
-			report.text += "\n\nLaunch-window scanning requires a stable Earth parking orbit."
+		var inside_body_soi := float(body.get("distance", INF)) <= float(body.get("soi", 0.0))
+		var minimum_safe_altitude := FlightComputer.minimum_safe_orbit_altitude(str(body.get("name", "")), float(body.get("radius", 0.0)))
+		var maximum_stable_altitude := FlightComputer.maximum_stable_orbit_altitude(float(body.get("radius", 0.0)), float(body.get("soi", 0.0)))
+		var stable_parking_orbit := bool(orbit_state.get("bound", false)) and float(orbit_state.get("periapsis", 0.0)) > float(body.get("radius", 0.0)) + minimum_safe_altitude and float(orbit_state.get("apoapsis", INF)) < float(body.get("radius", 0.0)) + maximum_stable_altitude
+		if sim.landed or (inside_body_soi and not stable_parking_orbit):
+			report.text += "\n\nLaunch-window scanning requires a safe, stable parking orbit around the current body, or a spacecraft already in deep space."
 			return
 		launch_windows_button.disabled = true
 		report.text = "SCANNING FUTURE DEPARTURE DATES...\nThis simulates coarse candidate transfers and may take a little while."
 		await get_tree().process_frame
 		var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if sim.infinite_weightless_fuel else FlightComputer.available_delta_v(rocket_design, sim.stage_index, sim.fuel) * (1.0 - sim.autopilot_safety_margin)
-		var windows := FlightComputer.scan_launch_windows(relative_position, relative_velocity, sim.sim_time, destination_index, available, sim.autopilot_speed_priority, 540, 30, orbit_altitude.value * 1000.0)
+		var windows := FlightComputer.scan_launch_windows(sim.rocket_position, sim.velocity, sim.sim_time, destination_index, available, sim.autopilot_speed_priority, 540, 30, orbit_altitude.value * 1000.0, sim.rocket_position_precise)
 		launch_windows_button.disabled = false
 		if not bool(windows.get("valid", false)):
 			report.text = "NO FEASIBLE WINDOWS FOUND\n" + str(windows.get("reason", "No valid transfer was found."))
