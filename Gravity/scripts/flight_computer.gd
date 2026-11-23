@@ -728,6 +728,7 @@ static func _has_safe_parking_orbit_at(position_components: PackedFloat64Array, 
 		var orbit := orbital_state(relative_position, relative_velocity, G * float(body.get("mass", 0.0)))
 		var minimum_altitude := minimum_safe_orbit_altitude(body_name, radius)
 		var maximum_altitude := maximum_stable_orbit_altitude(radius, float(body.get("soi", 0.0)))
+		print("PARKING VALIDATION DEBUG ", body_name, " pos=", relative_position, " vel=", relative_velocity, " orbit=", orbit, " min=", minimum_altitude, " max=", maximum_altitude)
 		return bool(orbit.get("bound", false)) and float(orbit.get("periapsis", 0.0)) > radius + minimum_altitude and float(orbit.get("apoapsis", INF)) < radius + maximum_altitude
 	return false
 
