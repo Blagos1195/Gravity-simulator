@@ -1088,7 +1088,12 @@
           "label": "Extended tank",
           "scale": 1.25
         }
-      ]
+      ],
+      "payload_mass_limits": {
+        "minimum": 10,
+        "maximum": 100000,
+        "step": 10
+      }
     }
   }
 }
