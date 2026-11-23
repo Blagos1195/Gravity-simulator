@@ -854,9 +854,9 @@ func _add_new_vehicle() -> void:
 	_launch_vehicle_design(design)
 
 func _launch_vehicle_design(design: Dictionary) -> void:
-	if fleet_sims.is_empty() or fleet_sims.size() >= 12:
+	if fleet_sims.is_empty():
 		if status_label:
-			status_label.text = "VEHICLE LIMIT REACHED"
+			status_label.text = "LAUNCH A FIRST VEHICLE BEFORE ADDING ANOTHER"
 		return
 	var errors := RocketDesign.validation_errors(design)
 	if not errors.is_empty():
