@@ -377,7 +377,7 @@ func _initialize() -> void:
 	root.add_child(surface_planner_window)
 	surface_planner_window.configure(surface_sim, RocketDesign.create_default())
 	surface_planner_window.navigation_moon_dropdown.select(1)
-	surface_planner_window.navigation_altitude_input.value = 200.0
+	surface_planner_window.navigation_altitude_input.value = 300.0
 	surface_planner_window._calculate_destination_plan()
 	assert(surface_planner_window.navigation_plan_valid, "Surface destination plan failed: %s" % surface_planner_window.navigation_report.text)
 	assert(bool(surface_planner_window.navigation_plan.get("needs_parking_orbit", false)), "Surface plan did not request parking orbit: %s landed=%s body=%s" % [str(surface_planner_window.navigation_plan), str(surface_sim.landed), str(surface_sim.call("_nearest_body_state", surface_sim.rocket_position).get("name", ""))])
