@@ -17,7 +17,9 @@ func _initialize() -> void:
 	multi_engine["stages"][0]["flow"] = float(multi_engine["stages"][0]["flow"]) / 3.0
 	assert(RocketDesign.validation_errors(multi_engine).is_empty())
 	assert(is_equal_approx(RocketDesign.total_delta_v(multi_engine), RocketDesign.total_delta_v(design)))
+	print("Workshop options: engines=%s tanks=%s parts=%s" % [str(RocketDesign.engine_count_options()), str(RocketDesign.tank_scale_options()), str(RocketDesign.stage_part_options())])
 	var configured_first_stage := RocketDesign.configure_stage("explorer_first_stage", 1, 1.25)
+	print("Configured first stage: %s" % str(configured_first_stage))
 	assert(not configured_first_stage.is_empty())
 	assert(int(configured_first_stage.engine_count) == 1)
 	assert(is_equal_approx(float(configured_first_stage.fuel_capacity), 375000.0))
