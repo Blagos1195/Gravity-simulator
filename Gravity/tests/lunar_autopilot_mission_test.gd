@@ -10,40 +10,17 @@ func _initialize() -> void:
 	var start_radius: float = PlanetarySystem.EARTH_RADIUS + 200000.0
 	var start_position := Vector2(0.0, -start_radius)
 	var start_velocity := Vector2(FlightComputer.circular_orbit_speed(start_radius), 0.0)
-	var available_delta_v: float = FlightComputer.available_delta_v(design)
-	var plan: Dictionary = FlightComputer.simulated_transfer_search_precise(
-		PackedFloat64Array([start_position.x, start_position.y]),
-		start_velocity,
-		0.0,
-		-1,
-		available_delta_v,
-		0.0,
-		false,
-		200000.0
-	)
-	assert(bool(plan.get("valid", false)), "Earth-to-Moon transfer planner found no feasible route: %s" % str(plan.get("reason", "unknown reason")))
-	plan["target_id"] = -1
-	plan["target_altitude"] = 200000.0
-	plan["planned_at_time"] = 0.0
-	plan["planned_position"] = start_position
-	plan["planned_velocity"] = start_velocity
-	print("Lunar transfer plan: departure=%.1f m/s capture=%.1f m/s flight=%.2f days closest=%.0f km" % [
-		float(plan.get("departure_delta_v", 0.0)),
-		float(plan.get("capture_delta_v", 0.0)),
-		float(plan.get("transfer_time", 0.0)) / 86400.0,
-		float(plan.get("closest_approach", INF)) / 1000.0
-	])
-	if not _run_lunar_mission(design, plan, false, start_position, start_velocity):
+	if not _run_lunar_mission(design, false, start_position, start_velocity):
 		quit(1)
 		return
-	if not _run_lunar_mission(design, plan, true, start_position, start_velocity):
+	if not _run_lunar_mission(design, true, start_position, start_velocity):
 		quit(1)
 		return
 	print("End-to-end Earth-to-Moon autopilot missions passed with finite and infinite propellant.")
 	quit(0)
 
 
-func _run_lunar_mission(design: Dictionary, plan: Dictionary, infinite_propellant: bool, start_position: Vector2, start_velocity: Vector2) -> bool:
+func _run_lunar_mission(design: Dictionary, infinite_propellant: bool, start_position: Vector2, start_velocity: Vector2) -> bool:
 	var simulation: Variant = SimulationView.new()
 	simulation.set_rocket_design(design)
 	simulation.realism = "Realistic"
@@ -56,7 +33,7 @@ func _run_lunar_mission(design: Dictionary, plan: Dictionary, infinite_propellan
 	simulation.autopilot_target_mode = "ORBIT"
 	simulation.autopilot_target_altitude = 200000.0
 	simulation.autopilot_planet_index = -1
-	simulation.autopilot_precomputed_transfer_plan = plan.duplicate(true)
+	simulation.autopilot_precomputed_transfer_plan.clear()
 	simulation.autopilot_phase = "PLAN_TRANSFER"
 	var elapsed := 0.0
 	var iterations := 0
