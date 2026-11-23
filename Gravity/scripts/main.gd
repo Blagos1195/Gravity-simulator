@@ -16,6 +16,10 @@ var infinite_weightless_fuel := false
 var simulate_belt_collisions := false
 var save_slot := 1
 var sim
+var fleet_sims: Array = []
+var active_vehicle_index := 0
+var fleet_time_backlog := 0.0
+var vehicle_selector: OptionButton
 var autosave_elapsed := 0.0
 var autosave_enabled := true
 var rebinding_action := ""
@@ -129,10 +133,45 @@ func _add_rebind_button(parent: Node, action: String) -> void:
 
 func _process(delta: float) -> void:
 	if mode == "flight":
+		_advance_fleet(delta)
 		autosave_elapsed += delta
 		if autosave_enabled and autosave_elapsed >= AUTOSAVE_INTERVAL:
 			autosave_elapsed = 0.0
 			_save_game(true)
+
+func _advance_fleet(delta: float) -> void:
+	if fleet_sims.is_empty() or not is_instance_valid(sim):
+		return
+	for vehicle in fleet_sims:
+		vehicle.time_warp = sim.time_warp
+		vehicle.paused = sim.paused
+	if sim.paused:
+		fleet_time_backlog = 0.0
+	else:
+		var effective_warp: float = sim.time_warp
+		for vehicle in fleet_sims:
+			var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position)
+			var altitude: float = maxf(0.0, float(body.distance) - float(body.radius))
+			var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(body.get("name", "Earth")))
+			if float(body.distance) < float(body.soi) and altitude < atmosphere_height:
+				effective_warp = minf(effective_warp, 100.0)
+		fleet_time_backlog += effective_warp * delta
+		var iterations := 0
+		var physics_budget_start_usec: int = Time.get_ticks_usec()
+		while fleet_time_backlog > 0.000001 and iterations < SimulationView.MAX_PHYSICS_STEPS_PER_FRAME and Time.get_ticks_usec() - physics_budget_start_usec < SimulationView.MAX_PHYSICS_BUDGET_USEC:
+			var step_delta := fleet_time_backlog
+			for vehicle in fleet_sims:
+				step_delta = minf(step_delta, vehicle._adaptive_step_size())
+			if step_delta <= 0.000001:
+				break
+			for vehicle in fleet_sims:
+				vehicle._physics_step(step_delta)
+			fleet_time_backlog = maxf(0.0, fleet_time_backlog - step_delta)
+			iterations += 1
+	for vehicle in fleet_sims:
+		vehicle.simulation_time_backlog = fleet_time_backlog
+	if is_instance_valid(sim):
+		sim.queue_redraw()
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if mode != "flight" or not event is InputEventKey or not event.pressed or event.echo:
@@ -744,21 +783,90 @@ func _show_settings() -> void:
 	settings_root.add_child(controls_note)
 	_add_button(settings_root, "BACK", _build_menu)
 
+func _create_vehicle(design: Dictionary, name: String, saved_state: Dictionary = {}) -> SimulationView:
+	var vehicle := SimulationView.new()
+	vehicle.vehicle_name = name
+	vehicle.realism = realism
+	vehicle.world_scale = world_scale
+	vehicle.career_enabled = career_enabled
+	vehicle.infinite_weightless_fuel = infinite_weightless_fuel
+	vehicle.simulate_belt_collisions = simulate_belt_collisions
+	vehicle.input_enabled = false
+	vehicle.visible = false
+	vehicle.z_index = -1
+	vehicle.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vehicle.set_rocket_design(design)
+	add_child(vehicle)
+	vehicle.set_process(false)
+	if not saved_state.is_empty() and not vehicle.load_save_data(saved_state):
+		vehicle.queue_free()
+		return null
+	vehicle.input_enabled = false
+	vehicle.visible = false
+	vehicle.set_process(false)
+	return vehicle
+
 func _start_flight() -> void:
 	for child in get_children():
 		child.queue_free()
+	fleet_sims.clear()
+	active_vehicle_index = 0
+	fleet_time_backlog = 0.0
+	vehicle_selector = null
 	mode = "flight"
 	autosave_elapsed = 0.0
-	sim = SimulationView.new()
-	sim.realism = realism
-	sim.world_scale = world_scale
-	sim.career_enabled = career_enabled
-	sim.infinite_weightless_fuel = infinite_weightless_fuel
-	sim.simulate_belt_collisions = simulate_belt_collisions
-	sim.set_rocket_design(rocket_design)
-	sim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(sim)
+	var first_vehicle := _create_vehicle(rocket_design, "Vehicle 1")
+	fleet_sims.append(first_vehicle)
 	_build_flight_hud()
+	_switch_vehicle(0)
+
+func _add_new_vehicle() -> void:
+	if fleet_sims.is_empty() or fleet_sims.size() >= 12:
+		if status_label:
+			status_label.text = "VEHICLE LIMIT REACHED"
+		return
+	var design := {
+		"name": sim.vehicle_name,
+		"payload_mass": sim.payload_mass,
+		"stages": sim.rocket_stages.duplicate(true)
+	}
+	var new_name := "Vehicle %d" % (fleet_sims.size() + 1)
+	var vehicle := _create_vehicle(design, new_name)
+	vehicle.sim_time = sim.sim_time
+	vehicle.time_warp = sim.time_warp
+	fleet_sims.append(vehicle)
+	_refresh_vehicle_selector()
+	_switch_vehicle(fleet_sims.size() - 1)
+
+func _switch_vehicle(index: int) -> void:
+	if index < 0 or index >= fleet_sims.size():
+		return
+	if is_instance_valid(sim):
+		sim.thrust_key_down = false
+		sim.input_enabled = false
+		sim.visible = false
+	active_vehicle_index = index
+	sim = fleet_sims[index]
+	sim.input_enabled = true
+	sim.visible = true
+	sim.time_warp = fleet_sims[0].time_warp
+	rocket_design = {
+		"name": sim.vehicle_name,
+		"payload_mass": sim.payload_mass,
+		"stages": sim.rocket_stages.duplicate(true)
+	}
+	_refresh_vehicle_selector()
+	if status_label:
+		status_label.text = "%s  •  %s" % [sim.vehicle_name.to_upper(), sim.status_message]
+
+func _refresh_vehicle_selector() -> void:
+	if not is_instance_valid(vehicle_selector):
+		return
+	vehicle_selector.clear()
+	for index in range(fleet_sims.size()):
+		var vehicle: SimulationView = fleet_sims[index]
+		vehicle_selector.add_item("%02d  •  %s" % [index + 1, vehicle.vehicle_name])
+	vehicle_selector.select(active_vehicle_index)
 
 func _build_flight_hud() -> void:
 	hud_root = Control.new()
