@@ -281,16 +281,31 @@ static func departure_wait_time(target_index: int, current_time: float, parking_
 			return 0.0
 		var lunar_window_transfer := hohmann_transfer(parking_position.length(), EARTH_RADIUS + MOON_ORBIT_RADIUS)
 		var transfer_time := float(lunar_window_transfer.get("transfer_time", 0.0))
+		var parking_rate := sqrt(EARTH_MU / pow(parking_position.length(), 3.0))
 		var moon_future_position := PlanetarySystem.moon_position(current_time + transfer_time)
 		var phase_error := wrapf(moon_future_position.angle() - parking_position.angle() - PI, -PI, PI)
 		var moon_now := PlanetarySystem.moon_position(current_time)
 		var moon_next := PlanetarySystem.moon_position(current_time + 1.0)
 		var lunar_rate := angle_difference(moon_now.angle(), moon_next.angle())
-		var parking_rate := sqrt(EARTH_MU / pow(parking_position.length(), 3.0))
 		var relative_rate := lunar_rate - parking_rate
 		if absf(relative_rate) < 0.000000000001:
 			return 0.0
-		return fposmod(-phase_error / relative_rate, TAU / absf(relative_rate))
+		var synodic_period := TAU / absf(relative_rate)
+		var wait_seconds := fposmod(-phase_error / relative_rate, synodic_period)
+		for iteration in range(8):
+			var future_parking_position := parking_position.rotated(parking_rate * wait_seconds)
+			var future_moon_position := PlanetarySystem.moon_position(current_time + wait_seconds + transfer_time)
+			var refined_error := wrapf(future_moon_position.angle() - future_parking_position.angle() - PI, -PI, PI)
+			if absf(refined_error) < 0.000001:
+				break
+			var moon_at_wait := PlanetarySystem.moon_position(current_time + wait_seconds + transfer_time)
+			var moon_after_wait := PlanetarySystem.moon_position(current_time + wait_seconds + transfer_time + 1.0)
+			var refined_lunar_rate := angle_difference(moon_at_wait.angle(), moon_after_wait.angle())
+			var refined_relative_rate := refined_lunar_rate - parking_rate
+			if absf(refined_relative_rate) < 0.000000000001:
+				break
+			wait_seconds = fposmod(wait_seconds - refined_error / refined_relative_rate, synodic_period)
+		return wait_seconds
 	if target_index < 0 or target_index >= PLANET_TARGETS.size():
 		return 0.0
 	var target: Dictionary = PLANET_TARGETS[target_index]
