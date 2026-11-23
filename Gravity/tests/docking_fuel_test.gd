@@ -50,6 +50,8 @@ func _initialize() -> void:
 	var loaded_child: SimulationView = main.fleet_sims[1]
 	assert(not loaded_child.input_enabled)
 	assert(is_equal_approx(loaded_parent.docked_mass, loaded_child._current_vehicle_mass()))
+	assert(is_zero_approx(loaded_child.stage_fuel_remaining[1]))
+	assert(is_equal_approx(loaded_parent.stage_fuel_remaining[0], float(loaded_parent._active_stage_data().get("fuel_capacity", 0.0))))
 	assert(main._undock_vehicle(loaded_child.vehicle_name))
 	assert(main.docking_links.is_empty())
 	assert(is_zero_approx(loaded_parent.docked_mass))
