@@ -1005,12 +1005,10 @@ func _manual_node_state(node_time: float) -> Dictionary:
 	if node_time <= 0.0 or planned_path.size() < 3 or planned_path_times.size() != planned_path.size():
 		return {"position": relative_position, "velocity": relative_velocity}
 	var nearest_index := 0
-	var nearest_difference := INF
 	for index in range(planned_path_times.size()):
-		var difference := absf(planned_path_times[index] - node_time)
-		if difference < nearest_difference:
-			nearest_difference = difference
-			nearest_index = index
+		if planned_path_times[index] >= node_time - 0.001:
+			break
+		nearest_index = index
 	var before_index := maxi(0, nearest_index - 1)
 	var duration := planned_path_times[nearest_index] - planned_path_times[before_index]
 	var predicted_velocity := relative_velocity
