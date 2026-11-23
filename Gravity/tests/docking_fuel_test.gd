@@ -18,6 +18,8 @@ func _initialize() -> void:
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
 	parent.velocity = Vector2(0.0, 1000.0)
+	child.velocity = Vector2(0.0, 1003.0)
+	assert(not main._dock_vehicle(child.vehicle_name))
 	child.velocity = Vector2(0.0, 1001.0)
 	assert(main._dock_vehicle(child.vehicle_name))
 	assert(main.docking_links.size() == 1)
