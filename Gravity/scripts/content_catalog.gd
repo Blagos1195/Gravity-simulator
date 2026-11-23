@@ -45,9 +45,7 @@ static func _merge_overlay(base: Dictionary, overlay: Dictionary) -> Dictionary:
 			if existing is Array and additions is Array:
 				merged[target_key] = _merge_array_items(existing, additions)
 			elif existing is Dictionary and additions is Dictionary:
-				var combined: Dictionary = existing.duplicate(true)
-				combined.merge(additions, true)
-				merged[target_key] = combined
+				merged[target_key] = _merge_overlay(existing, additions)
 			else:
 				push_error("Ignoring unsupported mod extension field: %s" % key)
 		elif merged.get(key) is Dictionary and overlay[raw_key] is Dictionary:
