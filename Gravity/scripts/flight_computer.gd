@@ -504,6 +504,10 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 			for candidate_delta_v in [250.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0, 3500.0, 4000.0, 5000.0, 7000.0, 10000.0, 15000.0, 20000.0, 30000.0, 50000.0, 75000.0, 100000.0]:
 				if candidate_delta_v <= maximum_delta_v:
 					magnitudes.append(candidate_delta_v)
+			for offset in [-1000.0, -500.0, -250.0, 0.0, 250.0, 500.0, 1000.0]:
+				var stopping_candidate := maxf(0.0, start_velocity.length() + offset)
+				if stopping_candidate <= maximum_delta_v and not magnitudes.has(stopping_candidate):
+					magnitudes.append(stopping_candidate)
 			direction_count = 24
 	else:
 		durations = [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
@@ -514,6 +518,10 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 			for candidate_delta_v in [250.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0, 3500.0, 4000.0, 5000.0, 7000.0, 10000.0, 15000.0, 20000.0, 30000.0, 50000.0, 75000.0, 100000.0]:
 				if candidate_delta_v <= maximum_delta_v:
 					magnitudes.append(candidate_delta_v)
+			for offset in [-1000.0, -500.0, -250.0, 0.0, 250.0, 500.0, 1000.0]:
+				var stopping_candidate := maxf(0.0, start_velocity.length() + offset)
+				if stopping_candidate <= maximum_delta_v and not magnitudes.has(stopping_candidate):
+					magnitudes.append(stopping_candidate)
 			direction_count = 24
 		else:
 			magnitudes = [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v]
