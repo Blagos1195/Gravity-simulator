@@ -1624,10 +1624,11 @@ func _show_docking_panel() -> void:
 				transfer_button.disabled = true
 				fuel_status.text = "Fuel transfer unavailable."
 			else:
-				var room := maxf(0.0, float(recipient._active_stage_data().get("fuel_capacity", 0.0)) - recipient.fuel)
-				var amount := minf(donor.fuel, room)
+				var available := donor.total_propellant_remaining()
+				var room := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
+				var amount := minf(available, room)
 				transfer_button.disabled = amount <= 0.0 or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel
-				fuel_status.text = "Available: %.0f kg  •  Receiver tank space: %.0f kg" % [donor.fuel, room]
+				fuel_status.text = "Available: %.0f kg  •  Receiver space: %.0f kg across remaining stages" % [available, room]
 		else:
 			fuel_status.text = "Dock spacecraft to enable transfer. Transfers fill the receiver's active tank first, then its later stages."
 	var target_changed := func(_index: int) -> void:
