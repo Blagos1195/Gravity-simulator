@@ -53,6 +53,7 @@ var navigation_plot: OrbitPlot
 var navigation_engage_button: Button
 var manual_navigation_button: Button
 var launch_window_button: Button
+var replan_button: Button
 var navigation_cancel_button: Button
 var navigation_plan_valid := false
 var navigation_plan: Dictionary = {}
@@ -370,6 +371,14 @@ func _build_interface() -> void:
 	launch_window_button.text = "SCAN LAUNCH WINDOWS"
 	launch_window_button.pressed.connect(_scan_launch_windows)
 	navigation_actions.add_child(launch_window_button)
+	var manual_actions := HBoxContainer.new()
+	root.add_child(manual_actions)
+	replan_button = Button.new()
+	replan_button.text = "REPLAN FROM CURRENT TRAJECTORY"
+	replan_button.disabled = true
+	replan_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	replan_button.pressed.connect(_replan_manual_transfer)
+	manual_actions.add_child(replan_button)
 	navigation_cancel_button = Button.new()
 	navigation_cancel_button.text = "CANCEL MISSION"
 	navigation_cancel_button.visible = false
@@ -824,6 +833,7 @@ func _refresh_navigation_state() -> void:
 	manual_navigation_button.text = "CANCEL MANUAL PLAN" if manual_active else "FLY MANUALLY"
 	navigation_engage_button.disabled = navigation_engage_button.disabled or manual_active
 	launch_window_button.disabled = autopilot_enabled or bool(simulation.get("landed")) or bool(simulation.get("crashed"))
+	replan_button.disabled = manual_plan.is_empty() or not manual_active or str(manual_plan.get("phase", "")) != "TRANSFER_COAST"
 	_update_manual_guidance()
 
 func _cancel_destination_autopilot() -> void:
@@ -1038,6 +1048,53 @@ func _update_manual_guidance() -> void:
 		manual_guidance_angle_from_prograde
 	]
 
+
+func _replan_manual_transfer() -> void:
+	if not is_instance_valid(simulation) or bool(simulation.get("autopilot_enabled")):
+		return
+	var manual_plan: Dictionary = simulation.get("manual_flight_plan")
+	if manual_plan.is_empty() or not bool(manual_plan.get("active", false)) or str(manual_plan.get("phase", "")) != "TRANSFER_COAST":
+		return
+	var target_id := int(manual_plan.get("target_id", -999))
+	var target_name := str(manual_plan.get("target_name", ""))
+	var target_altitude := float(manual_plan.get("target_altitude", 200000.0))
+	var available := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
+	var precise_position: PackedFloat64Array = simulation.get("rocket_position_precise")
+	var current_position: Vector2 = simulation.get("rocket_position")
+	var current_velocity: Vector2 = simulation.get("velocity")
+	var result := FlightComputer.simulated_transfer_search_precise(precise_position, current_velocity, float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
+	if not bool(result.get("valid", false)):
+		manual_guidance_report.text = "MID-COURSE REPLAN FAILED  •  " + str(result.get("reason", "No feasible correction trajectory was found."))
+		return
+	var correction: Dictionary = result.duplicate(true)
+	correction["target_id"] = target_id
+	correction["target_name"] = target_name
+	correction["target_altitude"] = target_altitude
+	correction["planned_at_time"] = float(simulation.get("sim_time"))
+	correction["planned_position"] = current_position
+	correction["planned_velocity"] = current_velocity
+	correction["local"] = false
+	var direction: Vector2 = Vector2(correction.get("departure_direction", Vector2.ZERO)).normalized()
+	var delta_v := float(correction.get("departure_delta_v", 0.0))
+	if direction == Vector2.ZERO or delta_v <= 0.0:
+		manual_guidance_report.text = "MID-COURSE REPLAN FAILED  •  The solver returned no usable correction burn."
+		return
+	manual_plan["phase"] = "DEPARTURE_BURN"
+	manual_plan["departure_time"] = float(simulation.get("sim_time"))
+	manual_plan["departure_direction"] = direction
+	manual_plan["departure_delta_v"] = delta_v
+	manual_plan["transfer_time"] = float(correction.get("transfer_time", 0.0))
+	manual_plan["planned_position"] = current_position
+	manual_plan["planned_velocity"] = current_velocity
+	manual_plan["transfer_start_time"] = -1.0
+	manual_plan.erase("target_radius")
+	_arm_manual_plan_burn(manual_plan, "DEPARTURE_BURN", direction * delta_v, delta_v)
+	simulation.set("manual_flight_plan", manual_plan)
+	navigation_plan = correction
+	navigation_plan_valid = true
+	_update_navigation_plot()
+	manual_guidance_report.text = "MID-COURSE CORRECTION SOLVED  •  NEW ΔV %.1f m/s  •  NEW TRANSFER %.1f DAYS. The correction is armed for manual execution; the previous trajectory has been replaced." % [delta_v, float(correction.get("transfer_time", 0.0)) / 86400.0]
+	_refresh_navigation_state()
 
 func _scan_launch_windows() -> void:
 	if not is_instance_valid(simulation) or bool(simulation.get("autopilot_enabled")):
