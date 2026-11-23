@@ -7,6 +7,8 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
 const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
+const DOCKING_CAPTURE_DISTANCE := 100.0
+const DOCKING_CAPTURE_SPEED := 2.5
 
 var mode := "menu"
 var realism := "Realistic"
@@ -869,7 +871,7 @@ func _switch_vehicle(index: int) -> void:
 		sim.visible = false
 	active_vehicle_index = index
 	sim = fleet_sims[index]
-	sim.input_enabled = true
+	sim.input_enabled = not _is_docked_child(sim.vehicle_name)
 	sim.visible = true
 	sim.time_warp = fleet_sims[0].time_warp
 	rocket_design = {
@@ -889,6 +891,121 @@ func _refresh_vehicle_selector() -> void:
 		var vehicle: SimulationView = fleet_sims[index]
 		vehicle_selector.add_item("%02d  •  %s" % [index + 1, vehicle.vehicle_name])
 	vehicle_selector.select(active_vehicle_index)
+
+func _find_vehicle_by_name(vehicle_name: String) -> SimulationView:
+	for vehicle in fleet_sims:
+		if vehicle.vehicle_name == vehicle_name:
+			return vehicle
+	return null
+
+func _is_docked_child(vehicle_name: String) -> bool:
+	for link in docking_links:
+		if str(link.get("child_name", "")) == vehicle_name:
+			return true
+	return false
+
+func _is_vehicle_docked(vehicle_name: String) -> bool:
+	for link in docking_links:
+		if str(link.get("parent_name", "")) == vehicle_name or str(link.get("child_name", "")) == vehicle_name:
+			return true
+	return false
+
+func _are_docked(first_name: String, second_name: String) -> bool:
+	for link in docking_links:
+		var parent_name := str(link.get("parent_name", ""))
+		var child_name := str(link.get("child_name", ""))
+		if (parent_name == first_name and child_name == second_name) or (parent_name == second_name and child_name == first_name):
+			return true
+	return false
+
+func _update_docked_masses() -> void:
+	for vehicle in fleet_sims:
+		vehicle.docked_mass = 0.0
+	for link in docking_links:
+		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
+		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		if parent != null and child != null:
+			parent.docked_mass += child._current_vehicle_mass()
+
+func _sync_docked_vehicles() -> void:
+	for link in docking_links:
+		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
+		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		if parent == null or child == null:
+			continue
+		var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
+		var world_offset := local_offset.rotated(parent.rotation_angle)
+		child.rocket_position = parent.rocket_position + world_offset
+		child.velocity = parent.velocity
+		child.rotation_angle = parent.rotation_angle
+		child.sim_time = parent.sim_time
+		child.landed = parent.landed
+		child.crashed = parent.crashed
+		child.landed_body_name = parent.landed_body_name
+		child.landed_surface_normal = parent.landed_surface_normal
+		child.autopilot_enabled = false
+		child.guidance_enabled = false
+		child.thrust_key_down = false
+		child.docked_mass = 0.0
+
+func _dock_vehicle(target_name: String) -> bool:
+	var target := _find_vehicle_by_name(target_name)
+	if target == null or sim == null or target == sim:
+		return false
+	if sim.landed or sim.crashed or target.landed or target.crashed:
+		return false
+	if _is_vehicle_docked(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
+		return false
+	var separation := target.rocket_position.distance_to(sim.rocket_position)
+	var relative_speed := (target.velocity - sim.velocity).length()
+	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED:
+		return false
+	var local_offset := (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
+	docking_links.append({
+		"parent_name": sim.vehicle_name,
+		"child_name": target.vehicle_name,
+		"offset_x": local_offset.x,
+		"offset_y": local_offset.y
+	})
+	target.autopilot_enabled = false
+	target.guidance_enabled = false
+	target.thrust_key_down = false
+	target.input_enabled = false
+	_update_docked_masses()
+	_sync_docked_vehicles()
+	return true
+
+func _undock_vehicle(target_name: String) -> bool:
+	for index in range(docking_links.size()):
+		var link: Dictionary = docking_links[index]
+		if not ((str(link.parent_name) == sim.vehicle_name and str(link.child_name) == target_name) or (str(link.parent_name) == target_name and str(link.child_name) == sim.vehicle_name)):
+			continue
+		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		docking_links.remove_at(index)
+		if child != null:
+			child.input_enabled = child == sim
+			child.docked_mass = 0.0
+		_update_docked_masses()
+		return true
+	return false
+
+func _transfer_fuel(from_name: String, to_name: String) -> float:
+	if not _are_docked(from_name, to_name):
+		return 0.0
+	var donor := _find_vehicle_by_name(from_name)
+	var recipient := _find_vehicle_by_name(to_name)
+	if donor == null or recipient == null or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel:
+		return 0.0
+	var capacity := float(recipient._active_stage_data().get("fuel_capacity", 0.0))
+	var available_space := maxf(0.0, capacity - recipient.fuel)
+	var amount := minf(donor.fuel, available_space)
+	if amount <= 0.0:
+		return 0.0
+	donor.fuel -= amount
+	recipient.fuel += amount
+	_update_docked_masses()
+	_sync_docked_vehicles()
+	return amount
 
 func _build_flight_hud() -> void:
 	hud_root = Control.new()
@@ -937,6 +1054,7 @@ func _build_flight_hud() -> void:
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
 	_add_button(right, "LAUNCH NEW VEHICLE", _add_new_vehicle)
+	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
 	_add_button(right, "VELOCITY VECTOR  [V]", func(): sim.show_vectors = not sim.show_vectors)
@@ -1419,6 +1537,7 @@ func _save_game(automatic: bool) -> void:
 		})
 	data["vehicles"] = saved_vehicles
 	data["active_vehicle_index"] = active_vehicle_index
+	data["docking_links"] = docking_links.duplicate(true)
 	data["realism"] = realism
 	data["world_scale"] = world_scale
 	data["career_enabled"] = career_enabled
