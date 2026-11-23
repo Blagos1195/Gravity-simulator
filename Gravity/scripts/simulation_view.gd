@@ -1447,6 +1447,12 @@ func _draw_full_system_zoom(view_center: Vector2) -> void:
 		if body_radius >= 2.0 or body_name in ["Sun", "Earth", "Moon"]:
 			var label_position := screen_position + Vector2(body_radius + 4.0, 3.0)
 			draw_string(ThemeDB.fallback_font, label_position, body_name.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, body_color.lightened(0.2))
+	var earth_screen := view_center - rocket_position * scale
+	var earth_radius := clampf(PlanetarySystem.EARTH_RADIUS * scale, 1.5, 9.0)
+	var earth_color: Color = PlanetarySystem.planet_visual_data("Earth").get("color", Color(0.25, 0.55, 0.82))
+	draw_circle(earth_screen, earth_radius, earth_color)
+	if earth_screen.distance_to(view_center) > 12.0:
+		draw_string(ThemeDB.fallback_font, earth_screen + Vector2(earth_radius + 4.0, 3.0), "EARTH", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, earth_color)
 	draw_circle(view_center, 3.0, Color(0.3, 1.0, 0.65))
 	draw_string(ThemeDB.fallback_font, view_center + Vector2(7.0, -7.0), "ROCKET", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.4, 1.0, 0.72))
 	draw_string(ThemeDB.fallback_font, Vector2(18.0, 20.0), "SOLAR SYSTEM  •  ROCKET-CENTRED VIEW", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.8, 1.0))
@@ -1454,6 +1460,10 @@ func _draw_full_system_zoom(view_center: Vector2) -> void:
 func _draw_offscreen_body_indicators(view_center: Vector2, scale: float) -> void:
 	var states: Dictionary = _ephemeris_states_at(sim_time)
 	var candidates: Array[Dictionary] = []
+	var earth_position := Vector2.ZERO
+	var earth_screen := view_center + (earth_position - rocket_position) * scale
+	if earth_screen.x < 0.0 or earth_screen.x > size.x or earth_screen.y < 0.0 or earth_screen.y > size.y:
+		candidates.append({"name": "Earth", "distance": earth_position.distance_to(rocket_position), "direction": (earth_screen - view_center).normalized(), "color": PlanetarySystem.planet_visual_data("Earth").get("color", Color(0.25, 0.55, 0.82))})
 	for body_variant in states.get("bodies", []):
 		var body: Dictionary = body_variant
 		var body_name := str(body.get("name", ""))
