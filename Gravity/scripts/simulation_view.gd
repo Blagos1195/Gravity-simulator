@@ -1762,7 +1762,7 @@ func _calculate_predicted_trajectory() -> void:
 	var dt := 5.0
 	for i in range(360):
 		var step_time := sim_time + float(i) * dt
-		var mass := payload_mass
+		var mass := payload_mass + docked_mass
 		var active: Dictionary = {}
 		var total_flow := 0.0
 		var thrust_force := 0.0
