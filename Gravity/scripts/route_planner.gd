@@ -570,6 +570,11 @@ func _calculate_destination_plan() -> void:
 	if not landed_start and inside_current_soi and not stable_orbit:
 		var recovery_altitude := target_altitude if current_name == target_name else clampf(200000.0, current_minimum, maxf(current_minimum, current_maximum))
 		recovery_plan = FlightComputer.parking_orbit_recovery_plan(current_position, current_velocity, current_mu, float(current.get("radius", 0.0)), float(current.get("soi", 0.0)), current_name, recovery_altitude)
+		if not bool(recovery_plan.get("valid", false)):
+			var current_altitude := current_position.length() - float(current.get("radius", 0.0))
+			var atmosphere_height := PlanetarySystem.planetary_atmosphere_height(current_name)
+			if current_altitude > 0.0 and current_altitude <= maxf(current_minimum, atmosphere_height) and available > 0.0:
+				recovery_plan = {"valid": true, "ascent": true, "delta_v": 0.0}
 		recovery_is_feasible = bool(recovery_plan.get("valid", false)) and float(recovery_plan.get("delta_v", INF)) <= available
 	if current_name == target_name and inside_current_soi:
 		if landed_start:
@@ -589,6 +594,7 @@ func _calculate_destination_plan() -> void:
 				"target_altitude": target_altitude,
 				"local": true,
 				"needs_parking_orbit": true,
+				"recovery_ascent": bool(recovery_plan.get("ascent", false)),
 				"recovery_delta_v": float(recovery_plan.delta_v)
 			}
 		else:
@@ -606,6 +612,7 @@ func _calculate_destination_plan() -> void:
 				"target_altitude": target_altitude,
 				"local": false,
 				"needs_parking_orbit": true,
+				"recovery_ascent": bool(recovery_plan.get("ascent", false)),
 				"recovery_delta_v": float(recovery_plan.delta_v)
 			}
 		else:
