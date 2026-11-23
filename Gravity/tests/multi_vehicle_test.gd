@@ -10,7 +10,7 @@ class FakeVehicle:
 
 	var step_calls := 0
 
-	func _nearest_body_state(_position: Vector2) -> Dictionary:
+	func _nearest_body_state(_position: Vector2, _position_components: PackedFloat64Array = PackedFloat64Array()) -> Dictionary:
 		return {"name": "Earth", "distance": PlanetarySystem.EARTH_RADIUS + 2.0, "radius": PlanetarySystem.EARTH_RADIUS, "soi": 925000000.0}
 
 	func _adaptive_step_size() -> float:
