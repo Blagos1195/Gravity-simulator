@@ -6,6 +6,7 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 
 func _initialize() -> void:
+	_validate_high_warp_burn_step()
 	var design: Dictionary = RocketDesign.create_default()
 	var start_radius: float = PlanetarySystem.EARTH_RADIUS + 200000.0
 	var start_position := Vector2(0.0, -start_radius)
@@ -18,6 +19,25 @@ func _initialize() -> void:
 		return
 	print("End-to-end Earth-to-Moon autopilot missions passed with finite and infinite propellant.")
 	quit(0)
+
+
+func _validate_high_warp_burn_step() -> void:
+	var simulation: Variant = SimulationView.new()
+	simulation.set_rocket_design(RocketDesign.create_default())
+	var radius := PlanetarySystem.EARTH_RADIUS + 200000.0
+	simulation._set_rocket_position_components(0.0, -radius)
+	simulation.velocity = Vector2(FlightComputer.circular_orbit_speed(radius), 0.0)
+	simulation.landed = false
+	simulation.autopilot_enabled = true
+	simulation.guidance_enabled = true
+	simulation.autopilot_phase = "TRANSFER_BURN"
+	simulation.autopilot_burn_direction = Vector2.UP
+	simulation.autopilot_burn_remaining = 5000.0
+	simulation.rotation_angle = 0.0
+	simulation._physics_step(1000.0)
+	assert(simulation.sim_time < 10.0, "A newly-started transfer burn consumed an entire high-warp frame.")
+	assert(simulation.autopilot_burn_remaining > 4000.0, "A high-warp frame consumed an implausibly large fraction of the departure burn.")
+	simulation.free()
 
 
 func _run_lunar_mission(design: Dictionary, infinite_propellant: bool, start_position: Vector2, start_velocity: Vector2) -> bool:
@@ -47,8 +67,9 @@ func _run_lunar_mission(design: Dictionary, infinite_propellant: bool, start_pos
 			simulation.free()
 			return false
 		step = minf(step, mission_time_limit - elapsed)
+		var previous_sim_time: float = simulation.sim_time
 		simulation._physics_step(step)
-		elapsed += step
+		elapsed += maxf(0.0, simulation.sim_time - previous_sim_time)
 		iterations += 1
 		if simulation.autopilot_phase != previous_phase:
 			var moon_state: Dictionary = simulation._surface_body_state("Moon")
