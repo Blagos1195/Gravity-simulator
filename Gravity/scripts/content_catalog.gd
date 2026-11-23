@@ -321,6 +321,14 @@ static func _catalog_error(catalog: Dictionary) -> String:
 	var tank_scales: Variant = builder_options.get("tank_scales")
 	if not payload_options is Array or payload_options.is_empty() or not engine_counts is Array or engine_counts.is_empty() or not tank_scales is Array or tank_scales.is_empty():
 		return "Rocket builder payloads, engine_counts and tank_scales must be non-empty arrays."
+	var payload_mass_limits: Variant = builder_options.get("payload_mass_limits")
+	if not payload_mass_limits is Dictionary:
+		return "Rocket payload_mass_limits must be an object."
+	var payload_limits_error := _numeric_fields_error(payload_mass_limits, ["minimum", "maximum", "step"], "rocket payload_mass_limits")
+	if not payload_limits_error.is_empty():
+		return payload_limits_error
+	if float(payload_mass_limits.minimum) <= 0.0 or float(payload_mass_limits.maximum) <= float(payload_mass_limits.minimum) or float(payload_mass_limits.step) <= 0.0:
+		return "Rocket payload mass limits must have a positive minimum, maximum and step."
 	var payload_ids := {}
 	for payload_variant in payload_options:
 		if not payload_variant is Dictionary:
@@ -332,8 +340,8 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		var payload_error := _numeric_fields_error(payload, ["mass"], "rocket payload %s" % payload_id)
 		if not payload_error.is_empty():
 			return payload_error
-		if float(payload.mass) < 10.0 or float(payload.mass) > 100000.0:
-			return "Rocket payload %s mass must be between 10 and 100,000 kg." % payload_id
+		if float(payload.mass) < float(payload_mass_limits.minimum) or float(payload.mass) > float(payload_mass_limits.maximum):
+			return "Rocket payload %s mass is outside the configured payload limits." % payload_id
 		payload_ids[payload_id] = true
 	var engine_count_ids := {}
 	for engine_count in engine_counts:
