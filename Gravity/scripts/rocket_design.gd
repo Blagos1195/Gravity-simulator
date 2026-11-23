@@ -18,6 +18,10 @@ static func payload_options() -> Array:
 	var options: Array = _rocket_catalog().get("builder_options", {}).get("payloads", [])
 	return options.duplicate(true)
 
+static func payload_mass_limits() -> Dictionary:
+	var limits: Dictionary = _rocket_catalog().get("builder_options", {}).get("payload_mass_limits", {})
+	return limits.duplicate(true)
+
 static func engine_count_options() -> Array:
 	var options: Array = _rocket_catalog().get("builder_options", {}).get("engine_counts", [1, 2, 3, 4, 6, 8])
 	return options.duplicate()
@@ -163,10 +167,13 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 	var errors := PackedStringArray()
 	var stages: Array = design.get("stages", [])
 	var payload := float(design.get("payload_mass", 0.0))
+	var payload_limits := payload_mass_limits()
+	var minimum_payload := float(payload_limits.get("minimum", 10.0))
+	var maximum_payload := float(payload_limits.get("maximum", 100000.0))
 	if stages.size() < MIN_STAGES or stages.size() > MAX_STAGES:
 		errors.append("A vehicle must have between 2 and 8 stages.")
-	if payload < 10.0 or payload > 100000.0:
-		errors.append("Payload must be between 10 kg and 100,000 kg.")
+	if payload < minimum_payload or payload > maximum_payload:
+		errors.append("Payload must be between %.0f kg and %.0f kg." % [minimum_payload, maximum_payload])
 	if stages.is_empty():
 		return errors
 	var total_mass := total_initial_mass(design)
