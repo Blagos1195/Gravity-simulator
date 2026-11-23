@@ -75,10 +75,11 @@ func _validate_catalogue_orbits() -> void:
 func _validate_earth_to_moon_transfer() -> void:
 	var parking_radius := PlanetarySystem.EARTH_RADIUS + 200000.0
 	var parking_speed := FlightComputer.circular_orbit_speed(parking_radius)
-	var plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -parking_radius]), Vector2(parking_speed, 0.0), 0.0, -1, 15000.0, 0.0, false, 300000.0)
+	var departure_time := 20.0 * 86400.0
+	var plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -parking_radius]), Vector2(parking_speed, 0.0), departure_time, -1, 15000.0, 0.0, false, 300000.0)
 	assert(bool(plan.get("valid", false)), "Earth-to-Moon transfer search failed: %s" % str(plan))
 	assert(float(plan.get("total_delta_v", INF)) <= 15000.0)
-	var moon_state := FlightComputer._simulated_target_state(-1, float(plan.get("transfer_time", 0.0)))
+	var moon_state := FlightComputer._simulated_target_state(-1, departure_time + float(plan.get("transfer_time", 0.0)))
 	var target_radius := float(moon_state.get("radius", 0.0)) + 300000.0
 	assert(float(plan.get("closest_approach", INF)) <= float(plan.get("target_soi", 0.0)))
 	assert(absf(float(plan.get("capture_periapsis", 0.0)) - target_radius) <= FlightComputer.orbit_radius_tolerance(target_radius), "Moon capture periapsis missed the requested altitude: %s" % str(plan))
