@@ -985,26 +985,43 @@ func _update_guidance(dt: float) -> void:
 					var vehicle_design := {"payload_mass": payload_mass, "stages": rocket_stages}
 					var available_transfer_delta_v := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if infinite_weightless_fuel else FlightComputer.available_delta_v(vehicle_design, stage_index, fuel) * (1.0 - clampf(autopilot_safety_margin, 0.0, 0.4))
 					transfer_plan = FlightComputer.simulated_transfer_search_precise(rocket_position_precise, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, false, autopilot_target_altitude)
+					if not bool(transfer_plan.get("valid", false)):
+						var window_search := FlightComputer.scan_launch_windows(rocket_position, velocity, sim_time, autopilot_planet_index, available_transfer_delta_v, autopilot_speed_priority, 540, 30, autopilot_target_altitude, rocket_position_precise)
+						if bool(window_search.get("valid", false)):
+							transfer_plan = window_search.best
 				if not bool(transfer_plan.get("valid", false)):
 					_fail_autopilot("TRANSFER PLANNING FAILED  •  " + str(transfer_plan.get("reason", "NO FEASIBLE TRAJECTORY")))
 				else:
-					var planned_burn_direction: Vector2 = transfer_plan.get("departure_direction", Vector2.ZERO)
-					autopilot_burn_direction = planned_burn_direction.normalized()
-					autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
-					autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
-					autopilot_transfer_start_time = -1.0
-					if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
-						autopilot_transfer_start_time = sim_time
-						autopilot_phase = "TRANSFER_COAST"
+					var departure_time := float(transfer_plan.get("departure_time_seconds", sim_time))
+					if departure_time > sim_time + 2.0:
+						autopilot_precomputed_transfer_plan = transfer_plan.duplicate(true)
+						autopilot_phase = "WAIT_WINDOW"
+						status_message = "AUTOPILOT  •  WAITING FOR VALIDATED DEPARTURE WINDOW  •  %.1f DAYS" % ((departure_time - sim_time) / 86400.0)
 					else:
-						autopilot_phase = "TRANSFER_BURN"
-					status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2f KM/S" % (autopilot_burn_remaining / 1000.0)
+						var planned_burn_direction: Vector2 = transfer_plan.get("departure_direction", Vector2.ZERO)
+						autopilot_burn_direction = planned_burn_direction.normalized()
+						autopilot_burn_remaining = float(transfer_plan.get("departure_delta_v", 0.0))
+						autopilot_transfer_duration = float(transfer_plan.get("transfer_time", 0.0))
+						autopilot_transfer_start_time = -1.0
+						if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
+							autopilot_transfer_start_time = sim_time
+							autopilot_phase = "TRANSFER_COAST"
+						else:
+							autopilot_phase = "TRANSFER_BURN"
+						status_message = "AUTOPILOT  •  SIMULATED TRANSFER  •  %.2f KM/S" % (autopilot_burn_remaining / 1000.0)
 			"WAIT_WINDOW":
-				var remaining_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
-				status_message = "AUTOPILOT  •  WAITING FOR TRANSFER WINDOW  %.1f DAYS" % (remaining_window / 86400.0)
+				var waiting_plan: Dictionary = autopilot_precomputed_transfer_plan
+				var departure_time := float(waiting_plan.get("departure_time_seconds", -1.0))
 				thrust_key_down = false
-				if remaining_window <= 3600.0:
-					autopilot_phase = "ALIGN_DEPARTURE"
+				if waiting_plan.is_empty() or departure_time < 0.0:
+					autopilot_precomputed_transfer_plan.clear()
+					autopilot_phase = "PLAN_TRANSFER"
+					status_message = "AUTOPILOT  •  REPLANNING DEPARTURE WINDOW"
+				else:
+					var remaining_window := maxf(0.0, departure_time - sim_time)
+					status_message = "AUTOPILOT  •  WAITING FOR VALIDATED DEPARTURE WINDOW  •  %.1f DAYS" % (remaining_window / 86400.0)
+					if remaining_window <= 0.0:
+						autopilot_phase = "PLAN_TRANSFER"
 			"ALIGN_DEPARTURE":
 				status_message = "AUTOPILOT  •  ALIGNING DEPARTURE ORBIT"
 				thrust_key_down = false
