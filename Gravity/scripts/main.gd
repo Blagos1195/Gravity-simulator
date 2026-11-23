@@ -1554,12 +1554,14 @@ func _show_docking_panel() -> void:
 		fuel_direction.set_item_metadata(0, {"from": parent_name, "to": target_name})
 		fuel_direction.add_item("%s  →  %s" % [target_name, parent_name])
 		fuel_direction.set_item_metadata(1, {"from": target_name, "to": parent_name})
+		fuel_direction.select(0)
 	var refresh_panel := func() -> void:
 		if sim.vehicle_name != parent_name:
 			status.text = "The selected spacecraft changed. Close this panel and reopen it for the new vehicle."
 			dock_button.disabled = true
 			undock_button.disabled = true
 			transfer_button.disabled = true
+			fuel_direction.disabled = true
 			return
 		if target_selector.item_count == 0:
 			status.text = "Launch another vehicle before attempting to dock."
@@ -1632,15 +1634,21 @@ func _show_docking_panel() -> void:
 			refresh_panel.call()
 			return
 		var direction: Dictionary = fuel_direction.get_item_metadata(fuel_direction.selected)
-		var amount := _transfer_fuel(str(direction.from), str(direction.to))
+		var amount := _transfer_fuel(str(direction.get("from", "")), str(direction.get("to", "")))
 		fuel_status.text = "Transferred %.0f kg of propellant." % amount if amount > 0.0 else "No fuel could be transferred."
 		refresh_panel.call()
 	)
 	if target_selector.item_count > 0:
+		target_selector.select(0)
 		refresh_fuel_direction.call(str(target_selector.get_item_metadata(0)))
 	else:
 		fuel_direction.disabled = true
 	refresh_panel.call()
+	var refresh_timer := Timer.new()
+	refresh_timer.wait_time = 0.25
+	refresh_timer.timeout.connect(refresh_panel)
+	window.add_child(refresh_timer)
+	refresh_timer.start()
 	window.popup_centered()
 
 func _pause_simulation() -> void:
