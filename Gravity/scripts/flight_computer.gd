@@ -489,8 +489,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
 	var time_weight := 1.0 - fuel_weight
 	var maximum_flight_duration := 0.0
-	for duration_value in durations:
-		maximum_flight_duration = maxf(maximum_flight_duration, float(duration_value))
+	for duration_candidate in durations:
+		maximum_flight_duration = maxf(maximum_flight_duration, float(duration_candidate))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
 		var minimum_steps := 360 if coarse_search else 720
