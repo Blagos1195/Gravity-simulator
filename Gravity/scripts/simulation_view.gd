@@ -991,7 +991,7 @@ func _update_guidance(dt: float) -> void:
 				var earth_departure_is_stable := bool(earth_departure_orbit.get("bound", false)) and float(earth_departure_orbit.get("eccentricity", 1.0)) <= 0.05 and float(earth_departure_orbit.get("periapsis", 0.0)) > EARTH_RADIUS + FlightComputer.minimum_safe_orbit_altitude("Earth", EARTH_RADIUS)
 				if earth_departure_is_stable:
 					var remaining_departure_window := FlightComputer.departure_wait_time(autopilot_planet_index, sim_time, rocket_position)
-					wait_for_lunar_window = remaining_departure_window > 3600.0
+					wait_for_lunar_window = remaining_departure_window > 60.0
 				if wait_for_lunar_window:
 					autopilot_phase = "WAIT_WINDOW"
 					status_message = "AUTOPILOT  •  WAITING FOR TRANSFER DEPARTURE WINDOW"
@@ -1039,7 +1039,7 @@ func _update_guidance(dt: float) -> void:
 				thrust_key_down = false
 				var desired_radial := FlightComputer.departure_periapsis_direction(autopilot_planet_index, sim_time, guidance_position.length())
 				var planned_departure_time := float(autopilot_precomputed_transfer_plan.get("departure_time_seconds", -1.0))
-				var departure_time_reached := planned_departure_time < 0.0 or sim_time >= planned_departure_time - 600.0
+				var departure_time_reached := planned_departure_time < 0.0 or sim_time >= planned_departure_time - 60.0
 				if desired_radial.length_squared() > 0.5 and guidance_position.normalized().dot(desired_radial) >= cos(deg_to_rad(1.5)) and departure_time_reached:
 					autopilot_precomputed_transfer_plan.clear()
 					autopilot_phase = "PLAN_TRANSFER"
