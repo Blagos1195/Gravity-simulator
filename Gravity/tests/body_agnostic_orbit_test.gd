@@ -214,6 +214,57 @@ func _validate_local_orbit_autopilot(body_name: String) -> void:
 	simulation.free()
 
 
+func _validate_unbound_recovery_to_orbit() -> void:
+	var simulation: Variant = SimulationView.new()
+	simulation.set_rocket_design(RocketDesign.create_default())
+	simulation.realism = "Realistic"
+	simulation.infinite_weightless_fuel = true
+	simulation.landed = false
+	var body_state: Dictionary = simulation._surface_body_state("Earth")
+	var body_radius := float(body_state.get("radius", 0.0))
+	var body_mu := FlightComputer.G * float(body_state.get("mass", 0.0))
+	var initial_radius := body_radius + 200000.0
+	var target_radius := body_radius + 300000.0
+	var initial_speed := FlightComputer.circular_orbit_speed(initial_radius, body_mu) * 1.4141
+	simulation._set_rocket_position_relative_to_body(body_state, Vector2.UP * initial_radius)
+	simulation.velocity = Vector2(body_state.get("velocity", Vector2.ZERO)) + Vector2.RIGHT * initial_speed
+	var initial_orbit := FlightComputer.orbital_state(Vector2.UP * initial_radius, Vector2.RIGHT * initial_speed, body_mu)
+	assert(not bool(initial_orbit.get("bound", true)), "Recovery mission did not start on an unbound trajectory")
+	var planner: Window = RoutePlanner.new()
+	root.add_child(planner)
+	planner.configure(simulation, RocketDesign.create_default())
+	planner.navigation_planet_dropdown.select(0)
+	planner._rebuild_navigation_moons(-2)
+	planner.navigation_moon_dropdown.select(0)
+	planner.navigation_altitude_input.value = 300.0
+	planner._calculate_destination_plan()
+	assert(planner.navigation_plan_valid, "Unbound-to-Earth-orbit planning failed: %s" % planner.navigation_report.text)
+	assert(bool(planner.navigation_plan.get("needs_parking_orbit", false)), "Unbound local trajectory did not request recovery")
+	planner._send_destination_to_autopilot()
+	assert(simulation.autopilot_enabled)
+	assert(simulation.autopilot_phase == "CIRCULARISE")
+	var elapsed := 0.0
+	var iterations := 0
+	var orbital_period := TAU * sqrt(pow(target_radius, 3.0) / body_mu)
+	while elapsed < orbital_period * 3.0 and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
+		var step: float = minf(simulation._adaptive_step_size(), orbital_period * 3.0 - elapsed)
+		assert(step > 0.000001, "Recovery mission produced an invalid physics step")
+		simulation._physics_step(step)
+		elapsed += step
+		iterations += 1
+		assert(iterations < 300000, "Recovery mission exceeded its physics-step budget")
+	assert(simulation.autopilot_complete, "Unbound-to-Earth-orbit mission failed: phase=%s status=%s elapsed=%.1f altitude=%.1f" % [simulation.autopilot_phase, simulation.status_message, elapsed, float(simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise).get("distance", 0.0)) - body_radius])
+	var final_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
+	var final_position: Vector2 = final_body.relative_position
+	var final_velocity: Vector2 = simulation.velocity - Vector2(final_body.velocity)
+	var final_orbit := FlightComputer.orbital_state(final_position, final_velocity, body_mu)
+	assert(bool(final_orbit.get("bound", false)), "Recovered Earth orbit is not bound")
+	assert(absf(float(final_orbit.get("periapsis", 0.0)) - target_radius) < 5000.0, "Recovered Earth orbit missed target periapsis")
+	assert(absf(float(final_orbit.get("apoapsis", 0.0)) - target_radius) < 5000.0, "Recovered Earth orbit missed target apoapsis")
+	planner.free()
+	simulation.free()
+
+
 func _target_index_for_body(body_name: String) -> int:
 	if body_name == "Earth":
 		return -2
