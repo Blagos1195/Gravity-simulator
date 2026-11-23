@@ -399,7 +399,8 @@ func _adaptive_step_size() -> float:
 	var in_atmosphere: bool = altitude < atmosphere_height
 	var maximum_step: float = 0.25 if in_atmosphere else 1800.0
 	var travel_distance_limit: float = 250.0 if in_atmosphere else maxf(100000.0, radius * 0.01)
-	if bool(local_orbit.get("bound", false)) and not in_atmosphere and float(local_orbit.get("eccentricity", 1.0)) <= 0.05:
+	var lunar_transfer_coast := autopilot_enabled and autopilot_phase == "TRANSFER_COAST" and autopilot_planet_index == -1 and float(local_orbit.get("eccentricity", 1.0)) > 0.05
+	if bool(local_orbit.get("bound", false)) and not in_atmosphere and not lunar_transfer_coast:
 		maximum_step = minf(maximum_step, 0.5)
 		travel_distance_limit = minf(travel_distance_limit, maxf(1000.0, radius * 0.002))
 	if autopilot_enabled and autopilot_phase == "COAST_TO_TARGET":
