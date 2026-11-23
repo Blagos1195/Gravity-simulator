@@ -438,9 +438,23 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var initial_distance := sqrt(initial_dx * initial_dx + initial_dy * initial_dy)
 	var rough_speed := maxf(1500.0, minf(18000.0, start_velocity.length() + 5000.0))
 	var nominal_time := clampf(maxf(initial_distance / rough_speed, 3.0 * 86400.0 if target_index <= -1 else 0.0), 3600.0, 30.0 * 365.25 * 86400.0)
-	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
-	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v]
-	var direction_count := 12 if coarse_search else 16
+	var durations: Array
+	var magnitudes: Array
+	var direction_count: int
+	if target_index == -1:
+		durations = [3.5 * 86400.0, 4.5 * 86400.0, 5.5 * 86400.0, 6.5 * 86400.0, 7.5 * 86400.0]
+		magnitudes = [0.0]
+		for delta_v_step in range(8, 25):
+			var candidate_delta_v := float(delta_v_step) * 250.0
+			if candidate_delta_v <= maximum_delta_v:
+				magnitudes.append(candidate_delta_v)
+		if maximum_delta_v > 6000.0:
+			magnitudes.append(maximum_delta_v)
+		direction_count = 32
+	else:
+		durations = [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
+		magnitudes = [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v]
+		direction_count = 12 if coarse_search else 16
 	var best_score := INF
 	var best_plan: Dictionary = {}
 	var fuel_weight := 1.0 - clampf(speed_priority, 0.0, 1.0)
