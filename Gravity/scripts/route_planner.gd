@@ -588,18 +588,18 @@ func _calculate_destination_plan() -> void:
 		else:
 			var available: float = FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
 			var transfer: Dictionary = FlightComputer.simulated_transfer_search_precise(simulation.get("rocket_position_precise"), simulation.get("velocity"), float(simulation.get("sim_time")), target_id, available, float(simulation.get("autopilot_speed_priority")), false, target_altitude)
-		if not bool(transfer.get("valid", false)):
-			_invalidate_navigation_plan()
-			navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
-			return
-		navigation_plan = transfer.duplicate(true)
-		navigation_plan["target_id"] = target_id
-		navigation_plan["target_name"] = target_name
-		navigation_plan["target_altitude"] = target_altitude
-		navigation_plan["planned_at_time"] = float(simulation.get("sim_time"))
-		navigation_plan["planned_position"] = Vector2(simulation.get("rocket_position"))
-		navigation_plan["planned_velocity"] = Vector2(simulation.get("velocity"))
-		navigation_plan["local"] = false
+			if not bool(transfer.get("valid", false)):
+				_invalidate_navigation_plan()
+				navigation_report.text = "NO FEASIBLE TRANSFER FOUND\n" + str(transfer.get("reason", "No trajectory satisfied the arrival and fuel constraints."))
+				return
+			navigation_plan = transfer.duplicate(true)
+			navigation_plan["target_id"] = target_id
+			navigation_plan["target_name"] = target_name
+			navigation_plan["target_altitude"] = target_altitude
+			navigation_plan["planned_at_time"] = float(simulation.get("sim_time"))
+			navigation_plan["planned_position"] = Vector2(simulation.get("rocket_position"))
+			navigation_plan["planned_velocity"] = Vector2(simulation.get("velocity"))
+			navigation_plan["local"] = false
 	navigation_plan_valid = true
 	navigation_engage_button.disabled = false
 	navigation_plot.visible = not bool(navigation_plan.get("local", false))
