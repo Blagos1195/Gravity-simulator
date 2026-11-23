@@ -52,6 +52,7 @@ var navigation_progress: Label
 var navigation_plot: OrbitPlot
 var navigation_engage_button: Button
 var manual_navigation_button: Button
+var launch_window_button: Button
 var navigation_cancel_button: Button
 var navigation_plan_valid := false
 var navigation_plan: Dictionary = {}
@@ -365,6 +366,10 @@ func _build_interface() -> void:
 	manual_navigation_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	manual_navigation_button.pressed.connect(_toggle_manual_destination_plan)
 	navigation_actions.add_child(manual_navigation_button)
+	launch_window_button = Button.new()
+	launch_window_button.text = "SCAN LAUNCH WINDOWS"
+	launch_window_button.pressed.connect(_scan_launch_windows)
+	navigation_actions.add_child(launch_window_button)
 	navigation_cancel_button = Button.new()
 	navigation_cancel_button.text = "CANCEL MISSION"
 	navigation_cancel_button.visible = false
@@ -1018,6 +1023,64 @@ func _update_manual_guidance() -> void:
 		manual_guidance_angle_from_prograde
 	]
 
+
+func _scan_launch_windows() -> void:
+	if not is_instance_valid(simulation) or bool(simulation.get("autopilot_enabled")):
+		return
+	var target_id := navigation_moon_dropdown.get_selected_id()
+	var target_name := FlightComputer.target_body_name(target_id)
+	var target_altitude := navigation_altitude_input.value * 1000.0
+	var current_position: Vector2 = simulation.get("rocket_position")
+	var current_body: Dictionary = simulation.call("_nearest_body_state", current_position)
+	var relative_position_now := current_position - Vector2(current_body.get("position", Vector2.ZERO))
+	var relative_velocity_now: Vector2 = simulation.get("velocity") - Vector2(current_body.get("velocity", Vector2.ZERO))
+	var current_orbit := FlightComputer.orbital_state(relative_position_now, relative_velocity_now, FlightComputer.G * float(current_body.get("mass", 0.0)))
+	var safe_altitude := FlightComputer.minimum_safe_orbit_altitude(str(current_body.get("name", "")), float(current_body.get("radius", 0.0)))
+	var stable_orbit := bool(current_orbit.get("bound", false)) and float(current_orbit.get("periapsis", 0.0)) > float(current_body.get("radius", 0.0)) + safe_altitude and float(current_orbit.get("apoapsis", INF)) < float(current_body.get("radius", 0.0)) + FlightComputer.maximum_stable_orbit_altitude(float(current_body.get("radius", 0.0)), float(current_body.get("soi", 0.0)))
+	if not stable_orbit:
+		navigation_report.text = "LAUNCH-WINDOW SEARCH REQUIRES A SAFE PARKING ORBIT AROUND THE CURRENT BODY."
+		return
+	var available := FlightComputer.INFINITE_FUEL_PLANNING_DELTA_V if bool(simulation.get("infinite_weightless_fuel")) else FlightComputer.available_delta_v(rocket_design, int(simulation.get("stage_index")), float(simulation.get("fuel"))) * (1.0 - float(simulation.get("autopilot_safety_margin")))
+	navigation_report.text = "SCANNING UP TO 540 DAYS OF DEPARTURE WINDOWS. This is a more expensive search than the immediate-transfer solver."
+	launch_window_button.disabled = true
+	var result := FlightComputer.scan_launch_windows(
+		current_position,
+		Vector2(simulation.get("velocity")),
+		float(simulation.get("sim_time")),
+		target_id,
+		available,
+		float(simulation.get("autopilot_speed_priority")),
+		540,
+		30,
+		target_altitude,
+		simulation.get("rocket_position_precise")
+	)
+	launch_window_button.disabled = false
+	if not bool(result.get("valid", false)):
+		navigation_plan_valid = false
+		navigation_engage_button.disabled = true
+		manual_navigation_button.disabled = true
+		navigation_report.text = "NO FEASIBLE DEPARTURE WINDOW FOUND.\n" + str(result.get("reason", "The scanned windows did not produce a valid route."))
+		return
+	navigation_plan = Dictionary(result.get("best", {})).duplicate(true)
+	navigation_plan["target_id"] = target_id
+	navigation_plan["target_name"] = target_name
+	navigation_plan["target_altitude"] = target_altitude
+	navigation_plan["local"] = false
+	navigation_plan_valid = true
+	var wait_days := float(navigation_plan.get("departure_wait_days", 0.0))
+	navigation_report.text = "BEST DEPARTURE WINDOW FOUND  •  %s\nWAIT: %.1f DAYS  •  DEPARTURE ΔV: %.0f m/s  •  ARRIVAL CAPTURE: %.0f m/s\nTOTAL ΔV: %.0f m/s  •  TRANSFER: %.1f DAYS  •  DATES CHECKED: %d\nThe manual plan will wait for this window, then guide you through departure and arrival burns. No engine control is automated." % [
+		target_name.to_upper(),
+		wait_days,
+		float(navigation_plan.get("departure_delta_v", 0.0)),
+		float(navigation_plan.get("capture_delta_v", 0.0)),
+		float(navigation_plan.get("total_delta_v", 0.0)),
+		float(navigation_plan.get("transfer_time", 0.0)) / 86400.0,
+		int(result.get("dates_checked", 0))
+	]
+	navigation_plot.visible = true
+	_update_navigation_plot()
+	_refresh_navigation_state()
 
 func _toggle_manual_destination_plan() -> void:
 	if not is_instance_valid(simulation):
