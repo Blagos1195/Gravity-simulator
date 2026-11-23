@@ -757,7 +757,7 @@ func _send_destination_to_autopilot() -> void:
 	var waiting_for_window := bool(navigation_plan.get("window_wait_only", false)) and departure_time > float(simulation.get("sim_time")) + 3600.0
 	simulation.set("autopilot_phase", "CIRCULARISE" if current_name == target_name and stable_orbit else "ASCENT" if bool(simulation.get("landed")) or (not stable_orbit and not infinite_propellant) else "WAIT_WINDOW" if waiting_for_window else "PLAN_TRANSFER")
 	simulation.set("guidance_enabled", true)
-	simulation.set("thrust_key_down", bool(simulation.get("landed")) or not stable_orbit)
+	simulation.set("thrust_key_down", bool(simulation.get("landed")) or str(simulation.get("autopilot_phase")) == "ASCENT")
 	simulation.set("status_message", "FLIGHT COMPUTER  •  NAVIGATING TO %s" % target_name.to_upper())
 	navigation_engage_button.disabled = true
 	navigation_engage_button.text = "AUTOPILOT ACTIVE"
