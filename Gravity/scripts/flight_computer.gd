@@ -460,15 +460,17 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var durations: Array
 	var magnitudes: Array
 	var direction_count: int
+	var high_accuracy_lunar_search := false
 	if target_index == -1:
 		var lunar_transfer_time := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("transfer_time", 5.0 * 86400.0))
 		var starting_orbit := orbital_state(Vector2(start_position_components[0], start_position_components[1]), start_velocity, EARTH_MU)
 		var safe_parking_orbit := bool(starting_orbit.get("bound", false)) and float(starting_orbit.get("eccentricity", 1.0)) <= 0.05 and float(starting_orbit.get("periapsis", 0.0)) > EARTH_RADIUS + minimum_safe_orbit_altitude("Earth", EARTH_RADIUS)
 		durations = [lunar_transfer_time * 0.8, lunar_transfer_time * 0.9, lunar_transfer_time, lunar_transfer_time * 1.1, lunar_transfer_time * 1.2]
 		if safe_parking_orbit:
+			high_accuracy_lunar_search = true
 			var lunar_reference_delta_v := float(hohmann_transfer(Vector2(start_position_components[0], start_position_components[1]).length(), EARTH_RADIUS + MOON_ORBIT_RADIUS).get("departure_delta_v", 0.0))
 			magnitudes = [0.0]
-			for offset in range(-150, 151, 10):
+			for offset in range(-1000, 1001, 25):
 				var candidate_delta_v := maxf(0.0, lunar_reference_delta_v + float(offset))
 				if candidate_delta_v <= maximum_delta_v:
 					magnitudes.append(candidate_delta_v)
@@ -505,8 +507,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 		maximum_flight_duration = maxf(maximum_flight_duration, float(duration_value))
 	for duration_value in durations:
 		var flight_duration: float = float(duration_value)
-		var minimum_steps := 360
-		var maximum_steps := 1200 if coarse_search else 720
+		var minimum_steps := 1440 if high_accuracy_lunar_search else 360
+		var maximum_steps := 1440 if high_accuracy_lunar_search else (1200 if coarse_search else 720)
 		var integration_steps := clampi(int(ceil(flight_duration / 21600.0)), minimum_steps, maximum_steps)
 		var step_size := flight_duration / float(integration_steps)
 		var gravity_states: Array[Dictionary] = []
