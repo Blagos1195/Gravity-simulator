@@ -969,6 +969,7 @@ func _focus_node_editor() -> void:
 func _remove_node() -> void:
 	if selected_node_index < 0 or selected_node_index >= nodes.size():
 		return
+	manual_guidance_node_index = -1
 	if selected_node_index == 0:
 		_invalidate_route_solution()
 	nodes.remove_at(selected_node_index)
@@ -1178,6 +1179,7 @@ func _calculate_route() -> void:
 func _drag_node_to_orbit_position(index: int, world_position: Vector2) -> void:
 	if index < 0 or index >= nodes.size() or planned_path.size() < 2 or planned_path_times.size() != planned_path.size():
 		return
+	manual_guidance_node_index = -1
 	if index == 0:
 		_invalidate_route_solution()
 	var nearest_index := 0
@@ -1243,6 +1245,7 @@ func _load_selected_node() -> void:
 func _update_selected_node(_value: float = 0.0) -> void:
 	if loading_node or selected_node_index < 0 or selected_node_index >= nodes.size():
 		return
+	manual_guidance_node_index = -1
 	if selected_node_index == 0:
 		_invalidate_route_solution()
 	var node: Dictionary = nodes[selected_node_index]
