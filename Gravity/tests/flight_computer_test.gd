@@ -458,7 +458,7 @@ func _initialize() -> void:
 	unstable_sim.autopilot_phase = "ASCENT"
 	var unstable_orbit := FlightComputer.orbital_state(Vector2(0.0, -unstable_radius), unstable_sim.velocity)
 	assert(bool(unstable_orbit.get("bound", false)))
-	assert(float(unstable_orbit.get("apoapsis", 0.0)) > unstable_radius + FlightComputer.maximum_stable_orbit_altitude(PlanetarySystem.EARTH_RADIUS, FlightComputer.EARTH_SOI))
+	assert(float(unstable_orbit.get("apoapsis", 0.0)) > unstable_radius + FlightComputer.maximum_stable_orbit_altitude(PlanetarySystem.EARTH_RADIUS, PlanetarySystem.EARTH_SOI_RADIUS))
 	unstable_sim._update_guidance(0.1)
 	assert(unstable_sim.autopilot_phase == "ASCENT", "Unstable high-apoapsis orbit was accepted as a safe parking orbit")
 	assert(unstable_sim.thrust_key_down)
