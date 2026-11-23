@@ -337,8 +337,8 @@ static func parking_orbit_recovery_plan(position: Vector2, velocity: Vector2, bo
 	var current_radius := position.length()
 	if maximum_altitude <= minimum_altitude:
 		return {"valid": false, "reason": "The current body has no safe parking-orbit band."}
-	if current_radius <= body_radius:
-		return {"valid": false, "reason": "The spacecraft is below the body's surface."}
+	if current_radius <= body_radius or current_radius >= body_soi:
+		return {"valid": false, "reason": "The spacecraft is outside the body's physical sphere of influence."}
 	var orbit_margin := orbit_radius_tolerance(body_radius + maximum_altitude)
 	var minimum_target_altitude := minimum_altitude + orbit_radius_tolerance(body_radius + minimum_altitude)
 	var maximum_target_altitude := maximum_altitude - orbit_margin
