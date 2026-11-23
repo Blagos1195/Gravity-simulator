@@ -46,6 +46,7 @@ var add_node_button: Button
 var navigation_planet_dropdown: OptionButton
 var navigation_moon_dropdown: OptionButton
 var navigation_altitude_input: SpinBox
+var route_priority_input: SpinBox
 var navigation_report: RichTextLabel
 var navigation_progress: Label
 var navigation_plot: OrbitPlot
@@ -326,6 +327,21 @@ func _build_interface() -> void:
 	navigation_altitude_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	navigation_altitude_input.value_changed.connect(func(_value: float): _invalidate_navigation_plan())
 	altitude_row.add_child(navigation_altitude_input)
+	var priority_row := HBoxContainer.new()
+	root.add_child(priority_row)
+	var priority_label := Label.new()
+	priority_label.text = "ROUTE PRIORITY  •  0 = FUEL EFFICIENT, 1 = FAST"
+	priority_row.add_child(priority_label)
+	route_priority_input = SpinBox.new()
+	route_priority_input.min_value = 0.0
+	route_priority_input.max_value = 1.0
+	route_priority_input.step = 0.05
+	route_priority_input.value = float(simulation.get("autopilot_speed_priority"))
+	route_priority_input.value_changed.connect(func(value: float):
+		simulation.set("autopilot_speed_priority", value)
+		_invalidate_navigation_plan()
+	)
+	priority_row.add_child(route_priority_input)
 	var navigation_actions := HBoxContainer.new()
 	root.add_child(navigation_actions)
 	var calculate_navigation_button := Button.new()
