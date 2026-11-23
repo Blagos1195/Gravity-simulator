@@ -284,6 +284,7 @@ func _initialize() -> void:
 	var propagated_orbit := FlightComputer.orbital_state(Vector2(propagated_position[0], propagated_position[1]), propagated_wait.velocity)
 	assert(bool(propagated_orbit.get("bound", false)))
 	assert(float(propagated_orbit.get("periapsis", 0.0)) > PlanetarySystem.EARTH_RADIUS + FlightComputer.minimum_safe_orbit_altitude("Earth", PlanetarySystem.EARTH_RADIUS))
+	assert(FlightComputer._has_safe_parking_orbit_at(propagated_position, propagated_wait.velocity, 3600.0, "Earth"))
 	var waiting_sim: Variant = SimulationView.new()
 	waiting_sim.set_rocket_design(RocketDesign.create_default())
 	waiting_sim.landed = false
@@ -459,6 +460,7 @@ func _initialize() -> void:
 	var unstable_orbit := FlightComputer.orbital_state(Vector2(0.0, -unstable_radius), unstable_sim.velocity)
 	assert(bool(unstable_orbit.get("bound", false)))
 	assert(float(unstable_orbit.get("apoapsis", 0.0)) > unstable_radius + FlightComputer.maximum_stable_orbit_altitude(PlanetarySystem.EARTH_RADIUS, PlanetarySystem.EARTH_SOI_RADIUS))
+	assert(not FlightComputer._has_safe_parking_orbit_at(PackedFloat64Array([0.0, -unstable_radius]), unstable_sim.velocity, 0.0, "Earth"))
 	unstable_sim._update_guidance(0.1)
 	assert(unstable_sim.autopilot_phase == "ASCENT", "Unstable high-apoapsis orbit was accepted as a safe parking orbit")
 	assert(unstable_sim.thrust_key_down)
