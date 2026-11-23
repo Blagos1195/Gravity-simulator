@@ -329,6 +329,38 @@ static func departure_periapsis_direction(target_index: int, current_time: float
 	return periapsis_tangent.rotated(-direction_sign * PI * 0.5).normalized()
 
 
+static func parking_orbit_recovery_plan(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float, body_soi: float, body_name: String, requested_altitude: float = 200000.0) -> Dictionary:
+	if body_mu <= 0.0 or body_radius <= 0.0 or position.length() <= 0.0 or body_name.is_empty():
+		return {"valid": false, "reason": "Invalid current-body state."}
+	var minimum_altitude := minimum_safe_orbit_altitude(body_name, body_radius)
+	var maximum_altitude := maximum_stable_orbit_altitude(body_radius, body_soi)
+	var current_radius := position.length()
+	if maximum_altitude <= minimum_altitude:
+		return {"valid": false, "reason": "The current body has no safe parking-orbit band."}
+	if current_radius <= body_radius + minimum_altitude or current_radius >= body_radius + maximum_altitude:
+		return {"valid": false, "reason": "The spacecraft is outside the safe parking-orbit altitude band for this recovery manoeuvre."}
+	var target_altitude := clampf(requested_altitude, minimum_altitude, maximum_altitude - orbit_radius_tolerance(body_radius + maximum_altitude))
+	var target_radius := body_radius + target_altitude
+	var burn := target_radius_burn(position, velocity, target_radius, body_mu)
+	if not bool(burn.get("valid", false)):
+		return {"valid": false, "reason": "No bound recovery orbit can be created from the current state."}
+	var recovered_orbit := orbital_state(position, Vector2(burn.get("desired_velocity", velocity)), body_mu)
+	var periapsis := float(recovered_orbit.get("periapsis", 0.0))
+	var apoapsis := float(recovered_orbit.get("apoapsis", INF))
+	if not bool(recovered_orbit.get("bound", false)) or periapsis <= body_radius + minimum_altitude or apoapsis >= body_radius + maximum_altitude:
+		return {"valid": false, "reason": "The recovery burn would not produce a safe, stable parking orbit."}
+	return {
+		"valid": true,
+		"burn_vector": Vector2(burn.get("burn_vector", Vector2.ZERO)),
+		"desired_velocity": Vector2(burn.get("desired_velocity", velocity)),
+		"delta_v": float(burn.get("delta_v", INF)),
+		"target_altitude": target_altitude,
+		"target_radius": target_radius,
+		"periapsis": periapsis,
+		"apoapsis": apoapsis
+	}
+
+
 static func arrival_capture_burn(position: Vector2, velocity: Vector2, body_mu: float, body_radius: float, target_altitude: float = 100000.0, minimum_safe_altitude: float = 1000.0) -> Dictionary:
 	var radius := position.length()
 	var target_radius := body_radius + maxf(minimum_safe_altitude, target_altitude)
