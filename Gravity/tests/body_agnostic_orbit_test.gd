@@ -4,6 +4,7 @@ const SimulationView = preload("res://scripts/simulation_view.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RoutePlanner = preload("res://scripts/route_planner.gd")
 
 func _initialize() -> void:
 	_validate_catalogue_orbits()
