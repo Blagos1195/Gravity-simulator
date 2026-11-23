@@ -278,6 +278,12 @@ func _initialize() -> void:
 	assert(is_equal_approx(float(earth_destination.get("mass", 0.0)), PlanetarySystem.EARTH_MASS))
 	var earth_orbit_radius := PlanetarySystem.EARTH_RADIUS + 3000000.0
 	var earth_orbit_speed := FlightComputer.circular_orbit_speed(earth_orbit_radius)
+	var propagated_wait := FlightComputer._propagate_wait_state(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, 3600.0)
+	assert(bool(propagated_wait.get("valid", false)), "Stable parking-orbit propagation failed: %s" % str(propagated_wait))
+	var propagated_position: PackedFloat64Array = propagated_wait.position_components
+	var propagated_orbit := FlightComputer.orbital_state(Vector2(propagated_position[0], propagated_position[1]), propagated_wait.velocity)
+	assert(bool(propagated_orbit.get("bound", false)))
+	assert(float(propagated_orbit.get("periapsis", 0.0)) > PlanetarySystem.EARTH_RADIUS + FlightComputer.minimum_safe_orbit_altitude("Earth", PlanetarySystem.EARTH_RADIUS))
 	var local_transfer_plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, -2, 5000.0, 0.0, false, 3000000.0)
 	assert(bool(local_transfer_plan.get("valid", false)), "Local Earth-orbit transfer failed: %s" % str(local_transfer_plan))
 	assert(float(local_transfer_plan.get("total_delta_v", INF)) < 100.0, "Local Earth-orbit transfer exceeded its expected delta-v: %s" % str(local_transfer_plan))
@@ -361,6 +367,25 @@ func _initialize() -> void:
 	planner_sim.autopilot_enabled = false
 	planner_sim.guidance_enabled = false
 	planner_sim.autopilot_phase = "IDLE"
+	var surface_sim: Variant = SimulationView.new()
+	surface_sim.set_rocket_design(RocketDesign.create_default())
+	surface_sim.landed = true
+	surface_sim.landed_body_name = "Earth"
+	surface_sim.landed_surface_normal = Vector2.UP
+	surface_sim._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 0.5)
+	var surface_planner_window: Window = RoutePlanner.new()
+	root.add_child(surface_planner_window)
+	surface_planner_window.configure(surface_sim, RocketDesign.create_default())
+	surface_planner_window.navigation_moon_dropdown.select(1)
+	surface_planner_window.navigation_altitude_input.value = 200.0
+	surface_planner_window._calculate_destination_plan()
+	assert(surface_planner_window.navigation_plan_valid)
+	assert(bool(surface_planner_window.navigation_plan.get("needs_parking_orbit", false)))
+	surface_planner_window._send_destination_to_autopilot()
+	assert(surface_sim.autopilot_enabled)
+	assert(surface_sim.autopilot_phase == "ASCENT")
+	surface_planner_window.free()
+	surface_sim.free()
 	route_planner_window.target_x_input.value = 8000.0
 	route_planner_window.target_y_input.value = 3000.0
 	route_planner_window._apply_target_coordinates()
