@@ -319,6 +319,7 @@ func _show_vehicle_editor() -> void:
 		if is_equal_approx(float(payload_option.mass), float(rocket_design.get("payload_mass", 500.0))):
 			selected_payload = payload_index
 	payload_selector.select(selected_payload)
+	rocket_design["payload_type"] = str(payload_options[selected_payload].id)
 	payload_selector.item_selected.connect(func(index: int):
 		var selected_payload_option: Dictionary = payload_selector.get_item_metadata(index)
 		rocket_design["payload_mass"] = float(selected_payload_option.mass)
@@ -408,22 +409,6 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _show_new_game_setup)
 	_update_design_stats()
-
-func _add_rocket_stage() -> void:
-	var stages: Array = rocket_design["stages"]
-	if stages.size() >= 8:
-		return
-	var stage := RocketDesign.default_stage_part()
-	stage["name"] = "STAGE %02d" % (stages.size() + 1)
-	stages.append(stage)
-	_show_vehicle_editor()
-
-func _remove_rocket_stage() -> void:
-	var stages: Array = rocket_design["stages"]
-	if stages.size() <= 2:
-		return
-	stages.pop_back()
-	_show_vehicle_editor()
 
 func _update_design_stats() -> void:
 	if not is_instance_valid(design_stats_label) or not is_instance_valid(design_error_label):
@@ -1360,7 +1345,7 @@ class RocketPreview:
 		for i in range(stages.size() - 1, -1, -1):
 			var stage: Dictionary = stages[i]
 			var stage_height: float = stage_heights[i]
-			var stage_width := rocket_width * (0.62 + 0.1 * float(i + 1) / float(stages.size()))
+			var stage_width := rocket_width * (0.9 - 0.18 * float(i) / float(maxi(1, stages.size() - 1)))
 			var stage_rect := Rect2(center_x - stage_width * 0.5, y, stage_width, stage_height)
 			draw_rect(stage_rect, Color(0.34, 0.57, 0.72))
 			draw_rect(Rect2(stage_rect.position + Vector2(5.0, 5.0), Vector2(stage_width - 10.0, stage_height * 0.58)), Color(0.48, 0.68, 0.78))
