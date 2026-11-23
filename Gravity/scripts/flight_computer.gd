@@ -284,6 +284,8 @@ static func departure_wait_time(target_index: int, current_time: float, parking_
 		var parking_rate := sqrt(EARTH_MU / pow(parking_position.length(), 3.0))
 		var moon_future_position := PlanetarySystem.moon_position(current_time + transfer_time)
 		var phase_error := wrapf(moon_future_position.angle() - parking_position.angle() - PI, -PI, PI)
+		if absf(phase_error) < deg_to_rad(0.1):
+			return 0.0
 		var moon_now := PlanetarySystem.moon_position(current_time)
 		var moon_next := PlanetarySystem.moon_position(current_time + 1.0)
 		var lunar_rate := angle_difference(moon_now.angle(), moon_next.angle())
