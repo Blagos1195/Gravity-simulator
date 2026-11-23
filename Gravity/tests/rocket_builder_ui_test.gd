@@ -18,6 +18,8 @@ func _initialize() -> void:
 	var payload_input := _find_spinbox(main)
 	assert(is_instance_valid(payload_input))
 	payload_input.value = 1200.0
+	if not is_equal_approx(float(main.rocket_design.payload_mass), 1200.0):
+		payload_input.value_changed.emit(payload_input.value)
 	assert(is_equal_approx(float(main.rocket_design.payload_mass), 1200.0))
 	assert(main.design_error_label.text == "DESIGN VALID")
 	main._start_flight()
