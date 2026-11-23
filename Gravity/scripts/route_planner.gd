@@ -821,6 +821,7 @@ func _refresh_navigation_state() -> void:
 	var manual_active := not manual_plan.is_empty() and bool(manual_plan.get("active", false))
 	manual_navigation_button.disabled = not manual_active and (not navigation_plan_valid or autopilot_enabled)
 	manual_navigation_button.text = "CANCEL MANUAL PLAN" if manual_active else "FLY MANUALLY"
+	launch_window_button.disabled = autopilot_enabled or bool(simulation.get("landed")) or bool(simulation.get("crashed"))
 	_update_manual_guidance()
 
 func _cancel_destination_autopilot() -> void:
@@ -1112,10 +1113,12 @@ func _start_manual_destination_plan() -> void:
 		return
 	var plan := navigation_plan.duplicate(true)
 	if not bool(plan.get("local", false)):
-		var plan_age := absf(float(simulation.get("sim_time")) - float(plan.get("planned_at_time", -INF)))
+		var now_for_plan := float(simulation.get("sim_time"))
+		var departure_for_plan := float(plan.get("departure_time_seconds", plan.get("planned_at_time", now_for_plan)))
+		var plan_age := absf(now_for_plan - float(plan.get("planned_at_time", -INF)))
 		var planned_position: Vector2 = plan.get("planned_position", Vector2.INF)
 		var planned_velocity: Vector2 = plan.get("planned_velocity", Vector2.INF)
-		if plan_age > 2.0 or planned_position.distance_to(simulation.get("rocket_position")) > 20000.0 or planned_velocity.distance_to(simulation.get("velocity")) > 5.0:
+		if departure_for_plan <= now_for_plan + 2.0 and (plan_age > 2.0 or planned_position.distance_to(simulation.get("rocket_position")) > 20000.0 or planned_velocity.distance_to(simulation.get("velocity")) > 5.0):
 			_calculate_destination_plan()
 			if not navigation_plan_valid:
 				return
@@ -1131,6 +1134,8 @@ func _start_manual_destination_plan() -> void:
 		"transfer_time": float(plan.get("transfer_time", 0.0)),
 		"departure_direction": Vector2(plan.get("departure_direction", Vector2.ZERO)).normalized(),
 		"departure_delta_v": float(plan.get("departure_delta_v", 0.0)),
+		"planned_position": Vector2(plan.get("planned_position", simulation.get("rocket_position"))),
+		"planned_velocity": Vector2(plan.get("planned_velocity", simulation.get("velocity"))),
 		"transfer_start_time": -1.0,
 		"burn_kind": "",
 		"burn_delta_v": 0.0,
@@ -1181,9 +1186,19 @@ func _update_manual_flight_plan() -> void:
 	if phase == "WAIT_DEPARTURE":
 		var wait_remaining := float(plan.get("departure_time", now)) - now
 		if wait_remaining <= 0.0:
-			_arm_manual_plan_burn(plan, "DEPARTURE_BURN", Vector2(plan.get("departure_direction", Vector2.ZERO)) * float(plan.get("departure_delta_v", 0.0)), float(plan.get("departure_delta_v", 0.0)))
-			simulation.set("manual_flight_plan", plan)
-			phase = str(plan.get("phase", ""))
+			var planned_position: Vector2 = plan.get("planned_position", Vector2.ZERO)
+			var planned_velocity: Vector2 = plan.get("planned_velocity", Vector2.ZERO)
+			var state_matches := planned_position.distance_to(simulation.get("rocket_position")) <= 50000.0 and planned_velocity.distance_to(simulation.get("velocity")) <= 25.0
+			if not state_matches:
+				plan["phase"] = "FAILED"
+				plan["active"] = false
+				plan["reason"] = "The spacecraft missed the predicted departure state. Recalculate the launch window."
+				simulation.set("manual_flight_plan", plan)
+				phase = "FAILED"
+			else:
+				_arm_manual_plan_burn(plan, "DEPARTURE_BURN", Vector2(plan.get("departure_direction", Vector2.ZERO)) * float(plan.get("departure_delta_v", 0.0)), float(plan.get("departure_delta_v", 0.0)))
+				simulation.set("manual_flight_plan", plan)
+				phase = str(plan.get("phase", ""))
 		else:
 			manual_guidance_report.text = "MANUAL FLIGHT PLAN  •  %s\nDEPARTURE WINDOW OPENS IN %.1f DAYS. No automatic steering or thrust will occur." % [str(plan.get("target_name", "TARGET")).to_upper(), wait_remaining / 86400.0]
 			return
