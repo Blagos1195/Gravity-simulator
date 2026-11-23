@@ -446,10 +446,9 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 		magnitudes = [0.0]
 		for delta_v_step in range(8, 25):
 			var candidate_delta_v := float(delta_v_step) * 250.0
-			if candidate_delta_v <= maximum_delta_v:
+			if candidate_delta_v < maximum_delta_v:
 				magnitudes.append(candidate_delta_v)
-		if maximum_delta_v > 6000.0:
-			magnitudes.append(maximum_delta_v)
+		magnitudes.append(maximum_delta_v)
 		direction_count = 32
 	else:
 		durations = [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
