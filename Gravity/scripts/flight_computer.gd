@@ -476,6 +476,7 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 				var collided := false
 				for step_index in range(integration_steps):
 					var initial_acceleration := PlanetarySystem.gravity_acceleration_from_precise_states(position, gravity_states[step_index])
+					var previous_velocity := velocity
 					var half_velocity := velocity + initial_acceleration * (step_size * 0.5)
 					var next_position := PackedFloat64Array([
 						position[0] + half_velocity.x * step_size,
@@ -498,17 +499,33 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 							break
 					if collided:
 						break
+					var previous_target_state: Dictionary = target_states[step_index]
 					var target_state: Dictionary = target_states[step_index + 1]
+					var previous_target_position: PackedFloat64Array = previous_target_state.position_components
 					var target_position: PackedFloat64Array = target_state.position_components
-					var relative_x: float = position[0] - target_position[0]
-					var relative_y: float = position[1] - target_position[1]
-					var distance_squared := relative_x * relative_x + relative_y * relative_y
+					var relative_start_x: float = previous_position[0] - previous_target_position[0]
+					var relative_start_y: float = previous_position[1] - previous_target_position[1]
+					var relative_end_x: float = position[0] - target_position[0]
+					var relative_end_y: float = position[1] - target_position[1]
+					var relative_segment_x := relative_end_x - relative_start_x
+					var relative_segment_y := relative_end_y - relative_start_y
+					var relative_segment_length_squared := relative_segment_x * relative_segment_x + relative_segment_y * relative_segment_y
+					var closest_fraction := 0.0
+					if relative_segment_length_squared > 0.0:
+						closest_fraction = clampf(-(relative_start_x * relative_segment_x + relative_start_y * relative_segment_y) / relative_segment_length_squared, 0.0, 1.0)
+					var closest_relative_x := relative_start_x + relative_segment_x * closest_fraction
+					var closest_relative_y := relative_start_y + relative_segment_y * closest_fraction
+					var distance_squared := closest_relative_x * closest_relative_x + closest_relative_y * closest_relative_y
 					if distance_squared < closest_distance * closest_distance:
 						closest_distance = sqrt(distance_squared)
-						closest_relative_position = Vector2(relative_x, relative_y)
-						closest_relative_velocity = velocity - Vector2(target_state.velocity)
-						closest_target_position = target_position.duplicate()
-						closest_time = float(step_index + 1) * step_size
+						closest_relative_position = Vector2(closest_relative_x, closest_relative_y)
+						var interpolated_target_velocity: Vector2 = Vector2(previous_target_state.velocity).lerp(Vector2(target_state.velocity), closest_fraction)
+						closest_relative_velocity = previous_velocity.lerp(velocity, closest_fraction) - interpolated_target_velocity
+						closest_target_position = PackedFloat64Array([
+							lerpf(previous_target_position[0], target_position[0], closest_fraction),
+							lerpf(previous_target_position[1], target_position[1], closest_fraction)
+						])
+						closest_time = (float(step_index) + closest_fraction) * step_size
 						closest_trajectory_index = candidate_trajectory.size() - 1
 				if collided:
 					continue
