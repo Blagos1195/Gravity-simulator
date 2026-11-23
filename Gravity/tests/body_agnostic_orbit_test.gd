@@ -11,6 +11,7 @@ func _initialize() -> void:
 	_validate_moon_arrival_capture()
 	_validate_local_orbit_autopilot("Moon")
 	_validate_local_orbit_autopilot("Mars")
+	_validate_unbound_recovery_to_orbit()
 	print("Body-agnostic orbital guidance tests passed.")
 	quit()
 
