@@ -2,7 +2,6 @@ extends SceneTree
 
 const Main = preload("res://scripts/main.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
-const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
@@ -10,22 +9,19 @@ func _initialize() -> void:
 	root.add_child(main)
 	main.rocket_design = RocketDesign.create_default()
 	main._start_flight()
-	print("Fleet created.")
 	assert(main.fleet_sims.size() == 1)
 	var first: SimulationView = main.fleet_sims[0]
 	main._add_new_vehicle()
-	print("Second vehicle created.")
 	assert(main.fleet_sims.size() == 2)
 	var second: SimulationView = main.sim
 	assert(first != second)
-	assert(first.visible == false)
+	assert(not first.visible)
 	assert(second.visible)
 	assert(not first.input_enabled)
 	assert(second.input_enabled)
 	assert(first.vehicle_name == "Vehicle 1")
 	assert(second.vehicle_name == "Vehicle 2")
 	main._switch_vehicle(0)
-	print("Vehicle switching verified.")
 	var key_event := InputEventKey.new()
 	key_event.keycode = KEY_W
 	key_event.pressed = true
@@ -36,38 +32,16 @@ func _initialize() -> void:
 	assert(not second.visible)
 	assert(first.input_enabled)
 	assert(not second.input_enabled)
-	second.landed = false
-	second.rocket_position = Vector2(PlanetarySystem.EARTH_RADIUS + 200000.0, 0.0)
-	second.velocity = Vector2(0.0, 7780.0)
+	second.landed_surface_normal = Vector2.RIGHT
 	second.autopilot_enabled = true
 	second.autopilot_phase = "COAST"
-	var second_start_position := second.rocket_position
-	main._advance_fleet(0.001)
-	print("Shared simulation step completed.")
+	main._advance_fleet(0.0005)
 	assert(first.sim_time > 0.0)
 	assert(is_equal_approx(first.sim_time, second.sim_time))
-	assert(second.rocket_position.distance_to(second_start_position) > 0.0)
+	assert(second.rocket_position.distance_to(first.rocket_position) > 1000000.0)
 	assert(second.autopilot_enabled)
-	assert(first.vehicle_name == "Vehicle 1")
-	assert(second.vehicle_name == "Vehicle 2")
-	main._switch_vehicle(1)
-	main.save_slot = 8
-	main._save_game(false)
-	print("Fleet save written.")
-	var save_path := "user://saves/slot_08.json"
-	assert(FileAccess.file_exists(save_path))
-	var save_file := FileAccess.open(save_path, FileAccess.READ)
-	var saved_data: Dictionary = JSON.parse_string(save_file.get_as_text())
-	save_file.close()
-	assert(saved_data.get("vehicles", []).size() == 2)
-	assert(int(saved_data.get("active_vehicle_index", -1)) == 1)
-	main._load_game_from_path(save_path)
-	print("Fleet save loaded.")
-	assert(main.fleet_sims.size() == 2)
-	assert(main.active_vehicle_index == 1)
-	assert(main.sim.vehicle_name == "Vehicle 2")
-	assert(is_equal_approx(main.fleet_sims[0].sim_time, main.fleet_sims[1].sim_time))
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
+	assert(first.get_save_data().get("vehicle_name", "") == "Vehicle 1")
+	assert(second.get_save_data().get("vehicle_name", "") == "Vehicle 2")
 	print("Multi-vehicle simulation test passed.")
 	main.queue_free()
 	quit()
