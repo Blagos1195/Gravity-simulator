@@ -369,6 +369,8 @@ func _show_vehicle_editor() -> void:
 	payload_label.text = "PAYLOAD"
 	payload_label.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 	assembly.add_child(payload_label)
+	var payload_row := HBoxContainer.new()
+	payload_row.add_theme_constant_override("separation", 8)
 	var payload_selector := OptionButton.new()
 	payload_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var payload_options := RocketDesign.payload_options()
@@ -391,13 +393,29 @@ func _show_vehicle_editor() -> void:
 		payload_selector.set_item_metadata(payload_index, payload_option)
 	payload_selector.select(selected_payload)
 	rocket_design["payload_type"] = str(payload_options[selected_payload].id)
+	payload_row.add_child(payload_selector)
+	var payload_limits := RocketDesign.payload_mass_limits()
+	var payload_mass_input := SpinBox.new()
+	payload_mass_input.min_value = float(payload_limits.get("minimum", 10.0))
+	payload_mass_input.max_value = float(payload_limits.get("maximum", 100000.0))
+	payload_mass_input.step = float(payload_limits.get("step", 10.0))
+	payload_mass_input.value = current_payload_mass
+	payload_mass_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	payload_mass_input.tooltip_text = "Set the payload mass directly in kilograms."
+	payload_mass_input.value_changed.connect(func(value: float):
+		rocket_design["payload_mass"] = value
+		rocket_design["payload_type"] = "custom"
+		_update_design_stats()
+	)
+	payload_row.add_child(payload_mass_input)
 	payload_selector.item_selected.connect(func(index: int):
 		var selected_payload_option: Dictionary = payload_selector.get_item_metadata(index)
 		rocket_design["payload_mass"] = float(selected_payload_option.mass)
 		rocket_design["payload_type"] = str(selected_payload_option.id)
+		payload_mass_input.set_value_no_signal(float(selected_payload_option.mass))
 		_update_design_stats()
 	)
-	assembly.add_child(payload_selector)
+	assembly.add_child(payload_row)
 	var stages_heading := Label.new()
 	stages_heading.text = "STAGE STACK  •  FIRST STAGE AT THE BOTTOM"
 	stages_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
