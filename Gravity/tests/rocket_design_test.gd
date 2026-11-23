@@ -96,7 +96,7 @@ func _initialize() -> void:
 				"gamma": 1.4,
 				"color_rgb": [0.0, 0.0, 0.0]
 			},
-			"satellites": [{
+			"satellites_add": [{
 				"name": "Test Moon",
 				"mass_kg": 1.0e15,
 				"radius_m": 10000.0,
