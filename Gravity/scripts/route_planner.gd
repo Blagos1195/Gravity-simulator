@@ -910,11 +910,10 @@ func _manual_node_state(node_time: float) -> Dictionary:
 			nearest_difference = difference
 			nearest_index = index
 	var before_index := maxi(0, nearest_index - 1)
-	var after_index := mini(planned_path.size() - 1, nearest_index + 1)
-	var duration := planned_path_times[after_index] - planned_path_times[before_index]
+	var duration := planned_path_times[nearest_index] - planned_path_times[before_index]
 	var predicted_velocity := relative_velocity
 	if duration > 0.001:
-		predicted_velocity = (planned_path[after_index] - planned_path[before_index]) / duration
+		predicted_velocity = (planned_path[nearest_index] - planned_path[before_index]) / duration
 	return {"position": planned_path[nearest_index], "velocity": predicted_velocity}
 
 func _update_manual_guidance() -> void:
