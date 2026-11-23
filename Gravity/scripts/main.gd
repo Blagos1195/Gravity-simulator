@@ -1356,7 +1356,7 @@ func _show_flight_computer() -> void:
 
 func _pause_simulation() -> void:
 	if sim:
-		var pause_state := not sim.paused
+		var pause_state: bool = not bool(sim.paused)
 		for vehicle in fleet_sims:
 			vehicle.paused = pause_state
 		if status_label:
