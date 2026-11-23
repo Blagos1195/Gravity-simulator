@@ -54,6 +54,8 @@ func _initialize() -> void:
 	var fake_second := FakeVehicle.new()
 	root.add_child(fake_first)
 	root.add_child(fake_second)
+	fake_first.visible = false
+	fake_second.visible = false
 	fake_first.set_process(false)
 	fake_second.set_process(false)
 	main.fleet_sims = [fake_first, fake_second]
