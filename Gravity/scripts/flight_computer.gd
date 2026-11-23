@@ -432,7 +432,7 @@ static func simulated_transfer_search(start_position: Vector2, start_velocity: V
 	return simulated_transfer_search_precise(PackedFloat64Array([start_position.x, start_position.y]), start_velocity, start_time, target_index, maximum_delta_v, speed_priority, coarse_search, target_orbit_altitude)
 
 
-static func simulated_transfer_search_precise(start_position_components: PackedFloat64Array, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false, target_orbit_altitude: float = 100000.0) -> Dictionary:
+static func simulated_transfer_search_precise(start_position_components: PackedFloat64Array, start_velocity: Vector2, start_time: float, target_index: int, maximum_delta_v: float, speed_priority: float = 0.0, coarse_search: bool = false, target_orbit_altitude: float = 100000.0, refinement_center: Dictionary = {}) -> Dictionary:
 	if start_position_components.size() < 2 or not _is_valid_target_index(target_index) or maximum_delta_v <= 0.0:
 		return {"valid": false, "reason": "Invalid target, position or manoeuvre capability."}
 	var initial_target := _simulated_target_state(target_index, start_time)
@@ -470,6 +470,13 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 	var durations := [nominal_time * 0.75, nominal_time * 1.25, nominal_time * 2.5]
 	var magnitudes := [0.0, maximum_delta_v * 0.25, maximum_delta_v * 0.5, maximum_delta_v * 0.75, maximum_delta_v] if coarse_search else [0.0, maximum_delta_v * 0.2, maximum_delta_v * 0.4, maximum_delta_v * 0.6, maximum_delta_v]
 	var direction_count := 12 if coarse_search else 16
+	if not refinement_center.is_empty():
+		var center_time := maxf(3600.0, float(refinement_center.get("transfer_time", nominal_time)))
+		var center_delta_v := clampf(float(refinement_center.get("departure_delta_v", 0.0)), 0.0, maximum_delta_v)
+		var delta_v_step := maxf(25.0, minf(maximum_delta_v * 0.1, maxf(250.0, center_delta_v * 0.1)))
+		durations = [maxf(3600.0, center_time * 0.9), center_time, center_time * 1.1]
+		magnitudes = [maxf(0.0, center_delta_v - delta_v_step), center_delta_v, minf(maximum_delta_v, center_delta_v + delta_v_step)]
+		direction_count = 9
 	var best_score := INF
 	var best_plan: Dictionary = {}
 	var rejected_collisions := 0
@@ -495,6 +502,9 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 			target_states.append(_simulated_target_state(target_index, sample_time, sample_states))
 		for direction_index in range(direction_count):
 			var angle := TAU * float(direction_index) / float(direction_count)
+			if not refinement_center.is_empty():
+				var center_direction: Vector2 = refinement_center.get("departure_direction", Vector2.RIGHT)
+				angle = center_direction.angle() + deg_to_rad(float(direction_index - 4) * 5.0)
 			var burn_direction := Vector2(cos(angle), sin(angle))
 			for magnitude_value in magnitudes:
 				var departure_delta_v: float = float(magnitude_value)
@@ -627,7 +637,8 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 					"trajectory": arrival_trajectory,
 					"target_soi": target_soi,
 					"simulated_steps": integration_steps,
-					"search_candidates": direction_count * magnitudes.size() * durations.size()
+					"search_candidates": direction_count * magnitudes.size() * durations.size(),
+					"search_score": candidate_score
 				}
 	if best_plan.is_empty():
 		return {
@@ -635,6 +646,11 @@ static func simulated_transfer_search_precise(start_position_components: PackedF
 			"reason": "No feasible candidate. Rejected: collision=%d, outside_soi=%d, unsafe_capture=%d, delta_v=%d. First capture rejection: %s" % [rejected_collisions, rejected_soi, rejected_capture, rejected_delta_v, first_capture_failure],
 			"search_candidates": direction_count * magnitudes.size() * durations.size()
 		}
+	if not coarse_search and refinement_center.is_empty():
+		var refined_plan := simulated_transfer_search_precise(start_position_components, start_velocity, start_time, target_index, maximum_delta_v, speed_priority, false, target_orbit_altitude, best_plan)
+		if bool(refined_plan.get("valid", false)) and float(refined_plan.get("search_score", INF)) < float(best_plan.get("search_score", INF)):
+			refined_plan["search_candidates"] = int(best_plan.get("search_candidates", 0)) + int(refined_plan.get("search_candidates", 0))
+			return refined_plan
 	return best_plan
 
 
