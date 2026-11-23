@@ -365,12 +365,71 @@ func _show_vehicle_editor() -> void:
 			part_selector.select(selected_part_index)
 		part_selector.item_selected.connect(func(part_index: int):
 			var selected_part_id := str(part_selector.get_item_metadata(part_index))
-			var replacement_stage := RocketDesign.create_stage_part(selected_part_id)
-			if not replacement_stage.is_empty():
-				rocket_design["stages"][stage_index] = replacement_stage
-				_show_vehicle_editor()
+			rocket_design["stages"][stage_index] = RocketDesign.configure_stage(selected_part_id, 1, 1.0)
+			_show_vehicle_editor()
 		)
 		stage_row.add_child(part_selector)
+		var engine_selector := OptionButton.new()
+		engine_selector.tooltip_text = "Splits the stage's total thrust and fuel flow across this many smaller engines."
+		for engine_count in [1, 2, 3, 4, 6, 8]:
+			engine_selector.add_item("%d engine%s" % [engine_count, "" if engine_count == 1 else "s"])
+			engine_selector.set_item_metadata(engine_selector.item_count - 1, engine_count)
+		var current_engine_count := int(stage.get("engine_count", 1))
+		var engine_options := [1, 2, 3, 4, 6, 8]
+		engine_selector.select(engine_options.find(current_engine_count) if current_engine_count in engine_options else 0)
+		engine_selector.item_selected.connect(func(option_index: int):
+			var current_stage: Dictionary = rocket_design["stages"][stage_index]
+			var configured := RocketDesign.configure_stage(str(current_stage.get("part_id", "")), int(engine_selector.get_item_metadata(option_index)), float(current_stage.get("tank_scale", 1.0)))
+			if not configured.is_empty():
+				rocket_design["stages"][stage_index] = configured
+				_update_design_stats()
+		)
+		stage_row.add_child(engine_selector)
+		var tank_selector := OptionButton.new()
+		var tank_options := [
+			{"label": "Compact tank", "scale": 0.75},
+			{"label": "Standard tank", "scale": 1.0},
+			{"label": "Extended tank", "scale": 1.25}
+		]
+		var selected_tank_index := 1
+		for tank_index in range(tank_options.size()):
+			tank_selector.add_item(str(tank_options[tank_index].label))
+			tank_selector.set_item_metadata(tank_index, float(tank_options[tank_index].scale))
+			if is_equal_approx(float(stage.get("tank_scale", 1.0)), float(tank_options[tank_index].scale)):
+				selected_tank_index = tank_index
+		tank_selector.select(selected_tank_index)
+		tank_selector.item_selected.connect(func(option_index: int):
+			var current_stage: Dictionary = rocket_design["stages"][stage_index]
+			var configured := RocketDesign.configure_stage(str(current_stage.get("part_id", "")), int(current_stage.get("engine_count", 1)), float(tank_selector.get_item_metadata(option_index)))
+			if not configured.is_empty():
+				rocket_design["stages"][stage_index] = configured
+				_update_design_stats()
+		)
+		stage_row.add_child(tank_selector)
+		var move_up_button := Button.new()
+		move_up_button.text = "↑"
+		move_up_button.tooltip_text = "Move this stage closer to the payload"
+		move_up_button.disabled = stage_index == rocket_design["stages"].size() - 1
+		move_up_button.pressed.connect(func():
+			var stages: Array = rocket_design["stages"]
+			var moved_stage: Dictionary = stages[stage_index]
+			stages.remove_at(stage_index)
+			stages.insert(stage_index + 1, moved_stage)
+			_show_vehicle_editor()
+		)
+		stage_row.add_child(move_up_button)
+		var move_down_button := Button.new()
+		move_down_button.text = "↓"
+		move_down_button.tooltip_text = "Move this stage closer to the launch pad"
+		move_down_button.disabled = stage_index == 0
+		move_down_button.pressed.connect(func():
+			var stages: Array = rocket_design["stages"]
+			var moved_stage: Dictionary = stages[stage_index]
+			stages.remove_at(stage_index)
+			stages.insert(stage_index - 1, moved_stage)
+			_show_vehicle_editor()
+		)
+		stage_row.add_child(move_down_button)
 		var remove_button := Button.new()
 		remove_button.text = "REMOVE"
 		remove_button.disabled = rocket_design["stages"].size() <= RocketDesign.MIN_STAGES
@@ -390,7 +449,7 @@ func _show_vehicle_editor() -> void:
 	_add_button(component_row, "ADD STAGE", func():
 		if rocket_design["stages"].size() >= RocketDesign.MAX_STAGES:
 			return
-		var new_stage := RocketDesign.create_stage_part(str(new_stage_selector.get_item_metadata(new_stage_selector.selected)))
+		var new_stage := RocketDesign.configure_stage(str(new_stage_selector.get_item_metadata(new_stage_selector.selected)), 1, 1.0)
 		if not new_stage.is_empty():
 			rocket_design["stages"].append(new_stage)
 			_show_vehicle_editor()
@@ -1351,8 +1410,12 @@ class RocketPreview:
 			draw_rect(Rect2(stage_rect.position + Vector2(5.0, 5.0), Vector2(stage_width - 10.0, stage_height * 0.58)), Color(0.48, 0.68, 0.78))
 			draw_rect(Rect2(center_x - stage_width * 0.5, y + stage_height * 0.76, stage_width, stage_height * 0.12), Color(0.88, 0.65, 0.28))
 			draw_string(ThemeDB.fallback_font, Vector2(center_x + stage_width * 0.5 + 8.0, y + stage_height * 0.58), "S%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.65, 0.8, 0.92))
-			var nozzle_width := stage_width * 0.18
-			draw_colored_polygon(PackedVector2Array([Vector2(center_x - nozzle_width, y + stage_height), Vector2(center_x + nozzle_width, y + stage_height), Vector2(center_x + nozzle_width * 0.65, y + stage_height + 12.0), Vector2(center_x - nozzle_width * 0.65, y + stage_height + 12.0)]), Color(0.58, 0.62, 0.7))
+			var engine_count := int(stage.get("engine_count", 1))
+			var nozzle_width := minf(9.0, stage_width * 0.12)
+			var engine_spacing := minf(20.0, stage_width * 0.68 / float(maxi(1, engine_count - 1)))
+			for engine_index in range(engine_count):
+				var engine_x := center_x + (float(engine_index) - float(engine_count - 1) * 0.5) * engine_spacing
+				draw_colored_polygon(PackedVector2Array([Vector2(engine_x - nozzle_width, y + stage_height), Vector2(engine_x + nozzle_width, y + stage_height), Vector2(engine_x + nozzle_width * 0.65, y + stage_height + 12.0), Vector2(engine_x - nozzle_width * 0.65, y + stage_height + 12.0)]), Color(0.58, 0.62, 0.7))
 			y += stage_height
 		draw_string(ThemeDB.fallback_font, Vector2(12.0, size.y - 12.0), str(design.get("name", "CUSTOM VEHICLE")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.65, 0.8, 0.92))
 

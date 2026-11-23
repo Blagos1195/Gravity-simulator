@@ -54,6 +54,21 @@ static func create_stage_part(part_id: String) -> Dictionary:
 	push_error("Unknown rocket stage part: %s" % part_id)
 	return {}
 
+static func configure_stage(part_id: String, engine_count: int, tank_scale: float) -> Dictionary:
+	if engine_count not in [1, 2, 3, 4, 6, 8] or tank_scale not in [0.75, 1.0, 1.25]:
+		return {}
+	var stage := create_stage_part(part_id)
+	if stage.is_empty():
+		return {}
+	stage["engine_count"] = engine_count
+	stage["tank_scale"] = tank_scale
+	stage["dry_mass"] = float(stage["dry_mass"]) * tank_scale
+	stage["fuel_capacity"] = float(stage["fuel_capacity"]) * tank_scale
+	stage["thrust"] = float(stage["thrust"]) / float(engine_count)
+	stage["vacuum_thrust"] = float(stage["vacuum_thrust"]) / float(engine_count)
+	stage["flow"] = float(stage["flow"]) / float(engine_count)
+	return stage
+
 static func default_stage_part() -> Dictionary:
 	var parts: Array = stage_part_options()
 	if parts.is_empty():
