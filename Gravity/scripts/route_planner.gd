@@ -519,7 +519,7 @@ func _build_interface() -> void:
 	node_actions.add_theme_constant_override("separation", 8)
 	node_controls.add_child(node_actions)
 	var guide_button := Button.new()
-	guide_button.text = "GUIDE SELECTED BURN"
+	guide_button.text = "ARM / DISARM SELECTED BURN"
 	guide_button.pressed.connect(_arm_manual_guidance)
 	node_actions.add_child(guide_button)
 	var remove_button := Button.new()
@@ -935,6 +935,14 @@ func _refresh_state() -> void:
 
 func _arm_manual_guidance() -> void:
 	if not is_instance_valid(simulation) or selected_node_index < 0 or selected_node_index >= nodes.size():
+		return
+	if manual_guidance_node_index == selected_node_index:
+		manual_guidance_node_index = -1
+		manual_guidance_completed = false
+		simulation.set("manual_burn_tracking_enabled", false)
+		simulation.set("thrust_key_down", false)
+		manual_guidance_report.text = "MANUAL NODE GUIDANCE DISARMED."
+		_update_manoeuvre()
 		return
 	var existing_plan: Dictionary = simulation.get("manual_flight_plan")
 	if not existing_plan.is_empty() and bool(existing_plan.get("active", false)):
@@ -1810,7 +1818,8 @@ func _update_manoeuvre() -> void:
 	var exceeds_delta_v: bool = total_planned_delta_v > available_delta_v
 	var manual_plan: Dictionary = simulation.get("manual_flight_plan")
 	var manual_plan_active := not manual_plan.is_empty() and bool(manual_plan.get("active", false))
-	var can_send := not landed_state and not crashed_state and stable_orbit and valid_nodes and not exceeds_delta_v and not route_active and not route_complete and not manual_plan_active
+	var manual_node_active := manual_guidance_node_index >= 0
+	var can_send := not landed_state and not crashed_state and stable_orbit and valid_nodes and not exceeds_delta_v and not route_active and not route_complete and not manual_plan_active and not manual_node_active
 	autopilot_button.disabled = not can_send
 	autopilot_button.text = "ROUTE ACTIVE IN AUTOPILOT" if route_active else "ROUTE COMPLETE" if route_complete else "SEND ROUTE TO AUTOPILOT"
 	cancel_route_button.visible = route_active or route_complete
@@ -1822,6 +1831,8 @@ func _update_manoeuvre() -> void:
 		send_block_reason = "Disengage the completed autopilot route before sending another."
 	elif manual_plan_active:
 		send_block_reason = "Cancel or complete the manual flight plan before sending a route to autopilot."
+	elif manual_node_active:
+		send_block_reason = "Disarm manual node guidance before sending a route to autopilot."
 	elif landed_state:
 		send_block_reason = "Launch and establish a safe orbit before executing manoeuvre nodes."
 	elif crashed_state:
