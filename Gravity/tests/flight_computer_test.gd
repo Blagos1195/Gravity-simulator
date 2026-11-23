@@ -284,6 +284,37 @@ func _initialize() -> void:
 	var propagated_orbit := FlightComputer.orbital_state(Vector2(propagated_position[0], propagated_position[1]), propagated_wait.velocity)
 	assert(bool(propagated_orbit.get("bound", false)))
 	assert(float(propagated_orbit.get("periapsis", 0.0)) > PlanetarySystem.EARTH_RADIUS + FlightComputer.minimum_safe_orbit_altitude("Earth", PlanetarySystem.EARTH_RADIUS))
+	var waiting_sim: Variant = SimulationView.new()
+	waiting_sim.set_rocket_design(RocketDesign.create_default())
+	waiting_sim.landed = false
+	waiting_sim._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 200000.0)
+	waiting_sim.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
+	waiting_sim.autopilot_enabled = true
+	waiting_sim.guidance_enabled = true
+	waiting_sim.autopilot_planet_index = -1
+	waiting_sim.autopilot_target_altitude = 300000.0
+	waiting_sim.autopilot_phase = "WAIT_WINDOW"
+	waiting_sim.autopilot_precomputed_transfer_plan = {
+		"valid": true,
+		"target_id": -1,
+		"target_altitude": 300000.0,
+		"departure_time_seconds": 86400.0,
+		"planned_at_time": 86400.0,
+		"planned_position": waiting_sim.rocket_position,
+		"planned_velocity": waiting_sim.velocity,
+		"departure_direction": Vector2.RIGHT,
+		"departure_delta_v": 100.0,
+		"transfer_time": 10000.0
+	}
+	waiting_sim._update_guidance(0.1)
+	assert(waiting_sim.autopilot_phase == "WAIT_WINDOW")
+	assert(not waiting_sim.thrust_key_down)
+	waiting_sim.sim_time = 86400.0
+	waiting_sim._update_guidance(0.1)
+	assert(waiting_sim.autopilot_phase == "PLAN_TRANSFER")
+	waiting_sim._update_guidance(0.1)
+	assert(waiting_sim.autopilot_phase == "TRANSFER_BURN", "Validated departure plan was not handed to the burn phase")
+	waiting_sim.free()
 	var local_transfer_plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -earth_orbit_radius]), Vector2(earth_orbit_speed, 0.0), 0.0, -2, 5000.0, 0.0, false, 3000000.0)
 	assert(bool(local_transfer_plan.get("valid", false)), "Local Earth-orbit transfer failed: %s" % str(local_transfer_plan))
 	assert(float(local_transfer_plan.get("total_delta_v", INF)) < 100.0, "Local Earth-orbit transfer exceeded its expected delta-v: %s" % str(local_transfer_plan))
