@@ -84,6 +84,10 @@ func _validate_earth_to_moon_transfer() -> void:
 	assert(float(plan.get("closest_approach", INF)) <= float(plan.get("target_soi", 0.0)))
 	assert(absf(float(plan.get("capture_periapsis", 0.0)) - target_radius) <= FlightComputer.orbit_radius_tolerance(target_radius), "Moon capture periapsis missed the requested altitude: %s" % str(plan))
 	assert(plan.get("arrival_relative_position", Vector2.ZERO).length() > target_radius)
+	var impossible_plan := FlightComputer.simulated_transfer_search_precise(PackedFloat64Array([0.0, -parking_radius]), Vector2(parking_speed, 0.0), departure_time, -1, 1.0, 0.0, true, 300000.0)
+	assert(not bool(impossible_plan.get("valid", false)), "Transfer search accepted an impossible one-metre-per-second budget")
+	var impossible_window := FlightComputer.scan_launch_windows(Vector2(0.0, -parking_radius), Vector2(parking_speed, 0.0), departure_time, -1, 1.0, 0.0, 1, 1, 300000.0, PackedFloat64Array([0.0, -parking_radius]))
+	assert(not bool(impossible_window.get("valid", false)), "Launch-window search accepted an impossible delta-v budget")
 
 
 func _validate_moon_arrival_capture() -> void:
