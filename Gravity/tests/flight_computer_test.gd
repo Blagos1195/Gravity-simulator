@@ -379,7 +379,7 @@ func _initialize() -> void:
 	surface_planner_window.navigation_moon_dropdown.select(1)
 	surface_planner_window.navigation_altitude_input.value = 200.0
 	surface_planner_window._calculate_destination_plan()
-	assert(surface_planner_window.navigation_plan_valid)
+	assert(surface_planner_window.navigation_plan_valid, "Surface destination plan failed: %s" % surface_planner_window.navigation_report.text)
 	assert(bool(surface_planner_window.navigation_plan.get("needs_parking_orbit", false)))
 	surface_planner_window._send_destination_to_autopilot()
 	assert(surface_sim.autopilot_enabled)
