@@ -111,6 +111,17 @@ func _initialize() -> void:
 	assert(departure_wait < 900.0 * 86400.0)
 	var mars_departure_direction := FlightComputer.departure_periapsis_direction(2, 0.0, radius)
 	assert(absf(mars_departure_direction.length() - 1.0) < 0.000001)
+	var lunar_parking_radius := FlightComputer.EARTH_RADIUS + 200000.0
+	var lunar_parking_position := Vector2(0.0, -lunar_parking_radius)
+	var lunar_wait := FlightComputer.departure_wait_time(-1, 0.0, lunar_parking_position)
+	var lunar_transfer_time := float(FlightComputer.hohmann_transfer(lunar_parking_radius, FlightComputer.EARTH_RADIUS + FlightComputer.MOON_ORBIT_RADIUS).get("transfer_time", 0.0))
+	var lunar_parking_rate := sqrt(FlightComputer.EARTH_MU / pow(lunar_parking_radius, 3.0))
+	var lunar_departure_position := lunar_parking_position.rotated(lunar_parking_rate * lunar_wait)
+	var lunar_arrival_moon_position := PlanetarySystem.moon_position(lunar_wait + lunar_transfer_time)
+	var lunar_phase_error := wrapf(lunar_arrival_moon_position.angle() - lunar_departure_position.angle() - PI, -PI, PI)
+	assert(lunar_wait >= 0.0 and lunar_wait < 10000.0)
+	assert(absf(lunar_phase_error) < 0.00001)
+
 	for target_index in range(7):
 		var destination := FlightComputer.interplanetary_transfer(target_index, 200000.0)
 		assert(bool(destination.get("valid", false)))
