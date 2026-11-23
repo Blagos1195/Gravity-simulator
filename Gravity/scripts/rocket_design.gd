@@ -75,7 +75,12 @@ static func create_stage_part(part_id: String) -> Dictionary:
 	return {}
 
 static func configure_stage(part_id: String, engine_count: int, tank_scale: float) -> Dictionary:
-	if not engine_count_options().has(engine_count):
+	var valid_engine_count := false
+	for option in engine_count_options():
+		if int(option) == engine_count and is_equal_approx(float(option), float(engine_count)):
+			valid_engine_count = true
+			break
+	if not valid_engine_count:
 		return {}
 	var valid_tank_scale := false
 	for tank_option in tank_scale_options():
