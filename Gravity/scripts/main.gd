@@ -1494,6 +1494,146 @@ func _show_flight_computer() -> void:
 	planner.position = Vector2i(maxi(20, screen_size.x - planner.size.x - 24), 40)
 	planner.popup()
 
+func _show_docking_panel() -> void:
+	var window := Window.new()
+	window.title = "DOCKING AND FUEL TRANSFER"
+	window.size = Vector2i(500, 520)
+	window.min_size = Vector2i(420, 420)
+	window.transient = true
+	window.exclusive = true
+	add_child(window)
+	window.close_requested.connect(window.queue_free)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 12)
+	window.add_child(layout)
+	var intro := Label.new()
+	intro.text = "Rendezvous with another spacecraft, match its velocity and dock within the capture limits."
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(intro)
+	var parent_name := sim.vehicle_name
+	var target_label := Label.new()
+	target_label.text = "OTHER SPACECRAFT"
+	target_label.add_theme_color_override("font_color", Color(0.45, 0.78, 1))
+	layout.add_child(target_label)
+	var target_selector := OptionButton.new()
+	target_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for vehicle in fleet_sims:
+		if vehicle.vehicle_name != parent_name:
+			target_selector.add_item(vehicle.vehicle_name)
+			target_selector.set_item_metadata(target_selector.item_count - 1, vehicle.vehicle_name)
+	layout.add_child(target_selector)
+	var status := Label.new()
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.custom_minimum_size.y = 72
+	layout.add_child(status)
+	var dock_button := Button.new()
+	dock_button.text = "DOCK"
+	dock_button.custom_minimum_size.y = 44
+	layout.add_child(dock_button)
+	var undock_button := Button.new()
+	undock_button.text = "UNDOCK"
+	undock_button.custom_minimum_size.y = 44
+	layout.add_child(undock_button)
+	var fuel_heading := Label.new()
+	fuel_heading.text = "FUEL TRANSFER"
+	fuel_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1))
+	layout.add_child(fuel_heading)
+	var fuel_direction := OptionButton.new()
+	fuel_direction.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.add_child(fuel_direction)
+	var transfer_button := Button.new()
+	transfer_button.text = "TRANSFER AVAILABLE FUEL"
+	transfer_button.custom_minimum_size.y = 44
+	layout.add_child(transfer_button)
+	var fuel_status := Label.new()
+	fuel_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(fuel_status)
+	var refresh_fuel_direction := func(target_name: String) -> void:
+		fuel_direction.clear()
+		fuel_direction.add_item("%s  →  %s" % [parent_name, target_name])
+		fuel_direction.set_item_metadata(0, {"from": parent_name, "to": target_name})
+		fuel_direction.add_item("%s  →  %s" % [target_name, parent_name])
+		fuel_direction.set_item_metadata(1, {"from": target_name, "to": parent_name})
+	var refresh_panel := func() -> void:
+		if sim.vehicle_name != parent_name:
+			status.text = "The selected spacecraft changed. Close this panel and reopen it for the new vehicle."
+			dock_button.disabled = true
+			undock_button.disabled = true
+			transfer_button.disabled = true
+			return
+		if target_selector.item_count == 0:
+			status.text = "Launch another vehicle before attempting to dock."
+			dock_button.disabled = true
+			undock_button.disabled = true
+			transfer_button.disabled = true
+			fuel_direction.disabled = true
+			return
+		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
+		var target := _find_vehicle_by_name(target_name)
+		if target == null:
+			status.text = "The selected spacecraft is no longer available."
+			dock_button.disabled = true
+			undock_button.disabled = true
+			transfer_button.disabled = true
+			return
+		var separation := sim.rocket_position.distance_to(target.rocket_position)
+		var relative_speed := (sim.velocity - target.velocity).length()
+		var docked := _are_docked(parent_name, target_name)
+		var available_to_dock := not docked and not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
+		if docked:
+			status.text = "DOCKED  •  %s\nCombined mass is included in the parent spacecraft's flight dynamics." % target_name
+		elif available_to_dock:
+			status.text = "DOCKING CONDITIONS MET\nRange: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
+		else:
+			status.text = "Range: %.1f m / %.0f m\nRelative speed: %.2f / %.2f m/s\nBoth spacecraft must be free-flying and undocked." % [separation, DOCKING_CAPTURE_DISTANCE, relative_speed, DOCKING_CAPTURE_SPEED]
+		dock_button.disabled = not available_to_dock
+		undock_button.disabled = not docked
+		fuel_direction.disabled = not docked
+		transfer_button.disabled = not docked
+		if docked and fuel_direction.item_count > 0:
+			var direction: Dictionary = fuel_direction.get_item_metadata(fuel_direction.selected)
+			var donor := _find_vehicle_by_name(str(direction.from))
+			var recipient := _find_vehicle_by_name(str(direction.to))
+			if donor == null or recipient == null:
+				transfer_button.disabled = true
+				fuel_status.text = "Fuel transfer unavailable."
+			else:
+				var room := maxf(0.0, float(recipient._active_stage_data().get("fuel_capacity", 0.0)) - recipient.fuel)
+				var amount := minf(donor.fuel, room)
+				transfer_button.disabled = amount <= 0.0 or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel
+				fuel_status.text = "Available: %.0f kg  •  Receiver tank space: %.0f kg" % [donor.fuel, room]
+		else:
+			fuel_status.text = "Dock spacecraft to enable transfer. Transfers use the active tank on each vehicle."
+	var target_changed := func(_index: int) -> void:
+		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
+		refresh_fuel_direction.call(target_name)
+		refresh_panel.call()
+	target_selector.item_selected.connect(target_changed)
+	dock_button.pressed.connect(func():
+		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
+		if _dock_vehicle(target_name):
+			fuel_status.text = "Docking complete."
+		refresh_panel.call()
+	)
+	undock_button.pressed.connect(func():
+		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
+		if _undock_vehicle(target_name):
+			fuel_status.text = "Spacecraft undocked."
+		refresh_panel.call()
+	)
+	transfer_button.pressed.connect(func():
+		var direction: Dictionary = fuel_direction.get_item_metadata(fuel_direction.selected)
+		var amount := _transfer_fuel(str(direction.from), str(direction.to))
+		fuel_status.text = "Transferred %.0f kg of propellant." % amount if amount > 0.0 else "No fuel could be transferred."
+		refresh_panel.call()
+	)
+	if target_selector.item_count > 0:
+		refresh_fuel_direction.call(str(target_selector.get_item_metadata(0)))
+	else:
+		fuel_direction.disabled = true
+	refresh_panel.call()
+	window.popup_centered()
+
 func _pause_simulation() -> void:
 	if sim:
 		var pause_state: bool = not bool(sim.paused)
