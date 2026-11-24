@@ -1033,12 +1033,14 @@ func _show_booster_editor(stage_index: int) -> void:
 	for option in options:
 		booster_selector.add_item(str(option.get("label", option.get("id", "Booster"))))
 		booster_selector.set_item_metadata(booster_selector.item_count - 1, str(option.get("id", "")))
+	if booster_selector.item_count > 0:
+		booster_selector.select(0)
 	add_row.add_child(booster_selector)
 	var add_button := Button.new()
 	add_button.text = "ADD PAIR"
 	add_button.disabled = boosters.size() >= 2 or options.is_empty()
 	add_button.pressed.connect(func():
-		if RocketDesign.add_booster_pair(rocket_design, stage_index, str(booster_selector.get_item_metadata(booster_selector.selected))):
+		if RocketDesign.add_booster_pair(rocket_design, stage_index, str(booster_selector.get_selected_metadata())):
 			_update_design_stats()
 			window.queue_free()
 			_show_booster_editor(stage_index)
