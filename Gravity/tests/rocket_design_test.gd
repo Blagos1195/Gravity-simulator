@@ -13,6 +13,8 @@ func _initialize() -> void:
 	assert(str(RocketDesign.payload_visual_data("satellite").get("satellite_role", "")) == "observation")
 	assert(is_equal_approx(float(RocketDesign.payload_visual_data("satellite").get("revenue_per_day", 0.0)), 15000.0))
 	assert(is_equal_approx(float(RocketDesign.payload_visual_data("satellite").get("operational_lifetime_days", 0.0)), 3650.0))
+	assert(RocketDesign.booster_options().size() >= 2)
+	assert(not RocketDesign.booster_definition("solid_booster_pair").is_empty())
 	var base_vehicle_mass := RocketDesign.total_initial_mass(design)
 	var base_stage_thrust := RocketDesign.stage_total_thrust(design.stages[0])
 	var base_stage_fuel := RocketDesign.stage_total_fuel_capacity(design.stages[0])
