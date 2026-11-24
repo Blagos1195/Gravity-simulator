@@ -707,6 +707,11 @@ func _show_vehicle_editor() -> void:
 	payload_edit_button.tooltip_text = "Edit the payload's shape, proportions and colour."
 	payload_edit_button.pressed.connect(_show_payload_editor)
 	payload_row.add_child(payload_edit_button)
+	var payload_components_button := Button.new()
+	payload_components_button.text = "MODULES"
+	payload_components_button.tooltip_text = "Add solar panels, antennas, docking ports, instruments and fairings."
+	payload_components_button.pressed.connect(_show_payload_components_editor)
+	payload_row.add_child(payload_components_button)
 	payload_selector.item_selected.connect(func(index: int):
 		var selected_payload_option: Dictionary = payload_selector.get_item_metadata(index)
 		rocket_design["payload_mass"] = float(selected_payload_option.mass)
@@ -890,6 +895,71 @@ func _duplicate_stage(stage_index: int) -> void:
 	rocket_design["stages"].insert(stage_index + 1, duplicate)
 	_show_vehicle_editor()
 
+
+func _show_payload_components_editor() -> void:
+	var window := Window.new()
+	window.title = "PAYLOAD COMPONENTS"
+	window.size = Vector2i(560, 460)
+	window.min_size = Vector2i(460, 340)
+	window.transient = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	window.add_child(layout)
+	var components: Array = rocket_design.get("payload_components", [])
+	var heading := Label.new()
+	heading.text = "ATTACHED MODULES  •  %d" % components.size()
+	layout.add_child(heading)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(scroll)
+	var entries := VBoxContainer.new()
+	entries.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	entries.add_theme_constant_override("separation", 6)
+	scroll.add_child(entries)
+	for component_index in range(components.size()):
+		var component_entry: Dictionary = components[component_index]
+		var definition := RocketDesign.payload_component_definition_for_entry(component_entry)
+		var row := HBoxContainer.new()
+		var details := Label.new()
+		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details.text = "%s  •  %.0f kg" % [str(definition.get("label", component_entry.get("id", "Unknown module"))), float(definition.get("dry_mass", 0.0))]
+		row.add_child(details)
+		var remove_button := Button.new()
+		remove_button.text = "REMOVE"
+		remove_button.pressed.connect(func():
+			RocketDesign.remove_payload_component(rocket_design, component_index)
+			_update_design_stats()
+			window.queue_free()
+			_show_payload_components_editor()
+		)
+		row.add_child(remove_button)
+		entries.add_child(row)
+	var add_row := HBoxContainer.new()
+	var component_selector := OptionButton.new()
+	component_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var options := RocketDesign.payload_component_options()
+	for option in options:
+		component_selector.add_item(str(option.get("label", option.get("id", "Payload module"))))
+		component_selector.set_item_metadata(component_selector.item_count - 1, str(option.get("id", "")))
+	if component_selector.item_count > 0:
+		component_selector.select(0)
+	add_row.add_child(component_selector)
+	var add_button := Button.new()
+	add_button.text = "ADD MODULE"
+	add_button.disabled = options.is_empty()
+	add_button.pressed.connect(func():
+		if RocketDesign.add_payload_component(rocket_design, str(component_selector.get_selected_metadata())):
+			_update_design_stats()
+			window.queue_free()
+			_show_payload_components_editor()
+	)
+	add_row.add_child(add_button)
+	layout.add_child(add_row)
+	_add_button(layout, "CLOSE", func(): window.queue_free())
+	window.popup_centered()
 
 func _show_payload_editor() -> void:
 	var visual: Dictionary = rocket_design.get("payload_visual", {}).duplicate(true)
