@@ -1157,10 +1157,14 @@ func _show_new_game_setup() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
+	var setup_scroll := ScrollContainer.new()
+	setup_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	setup_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	center.add_child(setup_scroll)
 	var root := VBoxContainer.new()
-	root.custom_minimum_size = Vector2(560, 0)
+	root.custom_minimum_size = Vector2(minf(560.0, DisplayServer.screen_get_size().x - 48.0), 0)
 	root.add_theme_constant_override("separation", 12)
-	center.add_child(root)
+	setup_scroll.add_child(root)
 	var heading := Label.new()
 	heading.text = "NEW GAME SETUP"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1256,7 +1260,7 @@ func _show_game_load() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var layout := VBoxContainer.new()
-	layout.custom_minimum_size = Vector2(620, 0)
+	layout.custom_minimum_size = Vector2(minf(620.0, DisplayServer.screen_get_size().x - 48.0), 0)
 	layout.add_theme_constant_override("separation", 12)
 	center.add_child(layout)
 	var heading := Label.new()
@@ -1265,7 +1269,7 @@ func _show_game_load() -> void:
 	heading.add_theme_font_size_override("font_size", 32)
 	layout.add_child(heading)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(620, 560)
+	scroll.custom_minimum_size = Vector2(minf(620.0, DisplayServer.screen_get_size().x - 48.0), minf(560.0, DisplayServer.screen_get_size().y - 220.0))
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	layout.add_child(scroll)
 	var root := VBoxContainer.new()
@@ -1317,10 +1321,14 @@ func _show_settings() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
+	var settings_scroll := ScrollContainer.new()
+	settings_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	center.add_child(settings_scroll)
 	settings_root = VBoxContainer.new()
-	settings_root.custom_minimum_size = Vector2(520, 0)
+	settings_root.custom_minimum_size = Vector2(minf(520.0, DisplayServer.screen_get_size().x - 48.0), 0)
 	settings_root.add_theme_constant_override("separation", 14)
-	center.add_child(settings_root)
+	settings_scroll.add_child(settings_root)
 	var heading := Label.new()
 	heading.text = "GAME SETTINGS"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
