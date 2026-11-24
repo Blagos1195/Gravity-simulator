@@ -18,7 +18,7 @@ static func payload_options() -> Array:
 static func payload_mass_limits() -> Dictionary:
 	var limits: Dictionary = _rocket_catalog().get("builder_options", {}).get("payload_mass_limits", {
 		"minimum": 0.001,
-		"maximum": 1000000000000000.0,
+		"maximum": 1.0e300,
 		"step": 1.0
 	})
 	return limits.duplicate(true)
