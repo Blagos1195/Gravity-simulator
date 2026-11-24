@@ -1354,6 +1354,7 @@ func _launch_vehicle_design(design: Dictionary) -> void:
 	vehicle.time_warp = sim.time_warp
 	if career_enabled:
 		funds -= launch_cost
+	_refresh_economy_display()
 	fleet_sims.append(vehicle)
 	_refresh_vehicle_selector()
 	_switch_vehicle(fleet_sims.size() - 1)
@@ -1601,6 +1602,8 @@ func _show_fleet_management_panel() -> void:
 		var operation_state := ""
 		if not role.is_empty():
 			operation_state = "SATELLITE  •  %s  •  %s" % [role.to_upper(), "EXPIRED" if lifetime_days > 0.0 and age_days >= lifetime_days else "OPERATIONAL"]
+		else:
+			operation_state = "GENERAL SPACECRAFT"
 			if lifetime_days > 0.0:
 				operation_state += "  •  %.1f YEARS LEFT" % (maxf(0.0, lifetime_days - age_days) / 365.25)
 			var telescope_range := float(profile.get("telescope_range_au", 0.0))
@@ -1652,7 +1655,16 @@ func _decommission_vehicle(vehicle: SimulationView) -> bool:
 	if index < 0:
 		return false
 	if index == active_vehicle_index:
-		_switch_vehicle((index + 1) % fleet_sims.size())
+		var replacement_index := -1
+		for candidate_index in range(fleet_sims.size()):
+			if candidate_index != index and not _is_docked_child(fleet_sims[candidate_index].vehicle_name):
+				replacement_index = candidate_index
+				break
+		if replacement_index < 0:
+			return false
+		_switch_vehicle(replacement_index)
+		if index < active_vehicle_index:
+			active_vehicle_index -= 1
 	elif index < active_vehicle_index:
 		active_vehicle_index -= 1
 	fleet_sims.remove_at(index)
