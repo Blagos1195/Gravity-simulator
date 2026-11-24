@@ -181,24 +181,8 @@ static func draw_wreck(canvas: CanvasItem, origin: Vector2, rotation: float, sca
 	_line(canvas, origin, Vector2(4.0, -12.0), Vector2(13.0, -18.0), rotation, size, Color(0.38, 0.42, 0.48), 1.4)
 	canvas.draw_circle(_point(origin, Vector2(0.0, -8.0), rotation, size), maxf(1.0, 2.0 * size), Color(1.0, 0.42, 0.12, 0.9))
 
-static func _component_order(kind: String) -> int:
-	match kind:
-		"structure":
-			return 0
-		"tank":
-			return 1
-		"decoupler":
-			return 2
-		"engine":
-			return 3
-		_:
-			return 4
-
 static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation: float, scale: float, components: Array, boosters: Array, y: float, stage_height: float, stage_width: float, engine_enabled: bool, throttle: float) -> void:
 	var ordered: Array = components.duplicate(true)
-	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return _component_order(str(a.get("kind", ""))) < _component_order(str(b.get("kind", "")))
-	)
 	var total_length := 0.0
 	var widest_radius := 0.1
 	for component in ordered:

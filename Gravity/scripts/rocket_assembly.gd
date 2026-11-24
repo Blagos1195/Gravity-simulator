@@ -74,6 +74,17 @@ static func remove_component(stage: Dictionary, component_index: int) -> Diction
 	configured["components"] = components
 	return compile_stage(configured, components)
 
+static func move_component(stage: Dictionary, component_index: int, direction: int) -> Dictionary:
+	var configured := ensure_stage_components(stage)
+	var components: Array = configured.get("components", []).duplicate(true)
+	var destination := component_index + signi(direction)
+	if component_index < 0 or component_index >= components.size() or destination < 0 or destination >= components.size():
+		return {}
+	var component: Variant = components[component_index]
+	components.remove_at(component_index)
+	components.insert(destination, component)
+	return compile_stage(configured, components)
+
 static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	var configured := stage.duplicate(true)
 	var dry_mass := 0.0

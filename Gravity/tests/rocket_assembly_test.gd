@@ -30,6 +30,11 @@ func _initialize() -> void:
 	assert(is_equal_approx(RocketDesign.stage_total_flow(with_engine), original_flow + 85.0))
 	var without_engine := RocketAssembly.remove_component(with_engine, with_engine.components.size() - 1)
 	assert(is_equal_approx(RocketDesign.stage_total_thrust(without_engine, true), original_vacuum_thrust))
+	var reordered := RocketAssembly.move_component(with_engine, 2, -1)
+	assert(str(reordered.components[1].get("id", "")) == "medium_tank", "Component stack order was not updated")
+	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(reordered), RocketDesign.stage_total_dry_mass(with_engine)))
+	assert(RocketAssembly.move_component(with_engine, 0, -1).is_empty())
+	assert(RocketAssembly.move_component(with_engine, with_engine.components.size() - 1, 1).is_empty())
 	assert(RocketAssembly.component_options().size() >= 10)
 	assert(RocketAssembly.remove_component(assembled, 99).is_empty())
 	design["stages"][0] = with_engine
