@@ -67,7 +67,7 @@ func _initialize() -> void:
 	assert(main.design_error_label.text == "DESIGN VALID")
 	stage_dialog.free()
 	var original_stage: Dictionary = main.rocket_design["stages"][0].duplicate(true)
-	var original_stage_count := main.rocket_design["stages"].size()
+	var original_stage_count: int = main.rocket_design["stages"].size()
 	main._duplicate_stage(0)
 	assert(main.rocket_design["stages"].size() == original_stage_count + 1)
 	assert(main.rocket_design["stages"][1] == original_stage)
