@@ -113,7 +113,7 @@ func _set_rocket_position_components(position_x: float, position_y: float) -> vo
 
 func set_rocket_design(design: Dictionary) -> void:
 	rocket_stages = (design.get("stages", []) as Array).duplicate(true)
-	if rocket_stages.size() < 2:
+	if rocket_stages.is_empty():
 		rocket_stages = RocketDesign.create_default()["stages"].duplicate(true)
 	payload_mass = float(design.get("payload_mass", 500.0))
 	payload_type = str(design.get("payload_type", "probe"))
