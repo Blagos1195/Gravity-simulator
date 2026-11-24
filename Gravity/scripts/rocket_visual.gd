@@ -86,6 +86,29 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		_line(canvas, origin, Vector2(-half, y + height * 0.78), Vector2(half, y + height * 0.78), rotation, scale, Color(0.9, 0.68, 0.3), 1.5)
 		_line(canvas, origin, Vector2(-half, y), Vector2(-half * 0.92, y + height), rotation, scale, Color(0.18, 0.32, 0.43), 0.9)
 		_line(canvas, origin, Vector2(half, y), Vector2(half * 0.92, y + height), rotation, scale, Color(0.18, 0.32, 0.43), 0.9)
+		var booster_entries: Array = stage.get("boosters", [])
+		for booster_index in range(booster_entries.size()):
+			var booster_entry: Dictionary = booster_entries[booster_index]
+			var booster := RocketDesign.booster_definition(str(booster_entry.get("id", "")))
+			if booster.is_empty():
+				continue
+			var booster_width := clampf(width * float(booster.get("visual_width_factor", 0.5)), 4.0, 20.0)
+			var booster_height := clampf(height * float(booster.get("visual_length_factor", 0.9)), 8.0, 64.0)
+			var booster_half := booster_width * 0.5
+			var booster_offset := half + booster_width * 0.7 + 2.0 + float(booster_index) * (booster_width + 2.0)
+			var booster_y := y + (height - booster_height) * 0.5
+			var booster_color := Color(0.72, 0.74, 0.78)
+			var booster_color_data: Variant = booster.get("visual_color_rgb", [])
+			if booster_color_data is Array and booster_color_data.size() == 3:
+				booster_color = Color(float(booster_color_data[0]), float(booster_color_data[1]), float(booster_color_data[2]))
+			for side in [-1.0, 1.0]:
+				var booster_x := side * booster_offset
+				_polygon(canvas, origin, [Vector2(booster_x - booster_half, booster_y), Vector2(booster_x + booster_half, booster_y), Vector2(booster_x + booster_half * 0.88, booster_y + booster_height), Vector2(booster_x - booster_half * 0.88, booster_y + booster_height)], rotation, scale, booster_color)
+				_line(canvas, origin, Vector2(booster_x - booster_half, booster_y + booster_height * 0.76), Vector2(booster_x + booster_half, booster_y + booster_height * 0.76), rotation, scale, Color(0.18, 0.32, 0.43), 1.0)
+				_polygon(canvas, origin, [Vector2(booster_x - booster_half * 0.55, booster_y + booster_height), Vector2(booster_x + booster_half * 0.55, booster_y + booster_height), Vector2(booster_x + booster_half * 0.38, booster_y + booster_height + 3.0), Vector2(booster_x - booster_half * 0.38, booster_y + booster_height + 3.0)], rotation, scale, Color(0.56, 0.61, 0.68))
+				if engine_enabled and i == 0 and throttle > 0.0:
+					var booster_flame_length := 7.0 + 8.0 * clampf(throttle, 0.0, 1.0)
+					_polygon(canvas, origin, [Vector2(booster_x - booster_half * 0.38, booster_y + booster_height + 3.0), Vector2(booster_x, booster_y + booster_height + 3.0 + booster_flame_length), Vector2(booster_x + booster_half * 0.38, booster_y + booster_height + 3.0)], rotation, scale, Color(1.0, 0.48, 0.12, 0.92))
 		if show_stage_labels:
 			canvas.draw_string(ThemeDB.fallback_font, _point(origin, Vector2(half + 4.0, y + height * 0.65), rotation, scale), "S%d" % (active_stage_index + i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.8, 0.92))
 		var engines := maxi(1, int(stage.get("engine_count", 1)))
