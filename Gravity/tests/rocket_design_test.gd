@@ -28,6 +28,10 @@ func _initialize() -> void:
 	assert(RocketDesign.remove_booster_pair(design, 0, 2))
 	assert(RocketDesign.remove_booster_pair(design, 0, 1))
 	assert(RocketDesign.remove_booster_pair(design, 0, 0))
+	var saved_mod_booster_design := design.duplicate(true)
+	saved_mod_booster_design["stages"][0]["boosters"] = [{"id": "removed_mod_booster", "definition": RocketDesign.booster_definition("solid_booster_pair")}]
+	assert(RocketDesign.validation_errors(saved_mod_booster_design).is_empty())
+	assert(RocketDesign.stage_total_dry_mass(saved_mod_booster_design.stages[0]) > RocketDesign.stage_total_dry_mass(design.stages[0]))
 	var invalid_booster_design := design.duplicate(true)
 	invalid_booster_design["stages"][0]["boosters"] = [{"id": "missing_booster"}]
 	assert(not RocketDesign.validation_errors(invalid_booster_design).is_empty())
