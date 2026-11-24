@@ -1,6 +1,9 @@
 extends RefCounted
 class_name RocketVisual
 
+static func camera_scale(camera_zoom: float, visual_scale: float = 1.0) -> float:
+	return clampf(camera_zoom * visual_scale * 10.0, 0.002, 5.0)
+
 static func _point(origin: Vector2, local: Vector2, rotation: float, scale: float) -> Vector2:
 	return origin + local.rotated(rotation) * scale
 
@@ -14,6 +17,11 @@ static func _line(canvas: CanvasItem, origin: Vector2, a: Vector2, b: Vector2, r
 	canvas.draw_line(_point(origin, a, rotation, scale), _point(origin, b, rotation, scale), color, maxf(0.7, width * scale), true)
 
 static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2, rotation: float, scale: float, active_stage_index: int = 0, throttle: float = 0.0, engine_enabled: bool = false, show_stage_labels: bool = false) -> void:
+	if scale < 0.025:
+		var marker_color := Color(0.48, 0.82, 1.0)
+		canvas.draw_circle(origin, 1.1, marker_color)
+		canvas.draw_line(origin, origin + Vector2.UP.rotated(rotation) * 2.5, marker_color, 1.0)
+		return
 	var stages: Array = design.get("stages", [])
 	if stages.is_empty():
 		return
@@ -158,7 +166,11 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		y += height + 4.0
 
 static func draw_wreck(canvas: CanvasItem, origin: Vector2, rotation: float, scale: float) -> void:
-	var size := clampf(scale, 0.12, 5.0)
+	var size := clampf(scale, 0.002, 5.0)
+	if size < 0.025:
+		canvas.draw_circle(origin, 1.1, Color(0.22, 0.24, 0.27))
+		canvas.draw_circle(origin, 0.55, Color(1.0, 0.42, 0.12))
+		return
 	var hull := Color(0.18, 0.2, 0.23)
 	var scorched := Color(0.34, 0.22, 0.16)
 	_polygon(canvas, origin, [Vector2(-7.0, -24.0), Vector2(3.0, -19.0), Vector2(6.0, -8.0), Vector2(2.0, 3.0), Vector2(8.0, 17.0), Vector2(-4.0, 22.0), Vector2(-9.0, 8.0), Vector2(-5.0, -4.0)], rotation, size, hull)

@@ -1388,7 +1388,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if show_solar_system:
 				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
 			else:
-				camera_zoom = minf(0.02, camera_zoom * 1.2)
+				camera_zoom = minf(0.1, camera_zoom * 1.2)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			if show_solar_system:
 				solar_map_zoom = maxf(0.25, solar_map_zoom / 1.2)
@@ -1479,12 +1479,12 @@ func _draw() -> void:
 
 	if show_solar_system:
 		_draw_solar_system(view_center)
-		_draw_docked_visuals(view_center, clampf(camera_zoom * world_scale_factor / 0.000045, 0.12, 5.0))
+		_draw_docked_visuals(view_center, RocketVisual.camera_scale(camera_zoom, world_scale_factor))
 		_draw_hud()
 		return
 	if camera_zoom <= 0.0000000002:
 		_draw_full_system_zoom(view_center)
-		_draw_docked_visuals(view_center, clampf(camera_zoom * world_scale_factor / 0.000045, 0.12, 5.0))
+		_draw_docked_visuals(view_center, RocketVisual.camera_scale(camera_zoom, world_scale_factor))
 		_draw_offscreen_body_indicators(view_center, altitude_visual_scale)
 		_draw_hud()
 		return
@@ -1500,9 +1500,9 @@ func _draw() -> void:
 	draw_arc(earth_screen, radius_px, 0, TAU, 120, earth_color.lightened(0.25), 2.0)
 	draw_arc(earth_screen, radius_px * 0.76, -0.4, 2.4, 48, Color(0.18, 0.43, 0.48, 0.45), 2.0)
 	draw_arc(earth_screen, radius_px * 0.53, 2.2, 5.4, 48, Color(0.18, 0.43, 0.48, 0.35), 2.0)
-	var object_scale := clampf(camera_zoom * world_scale_factor / 0.000045, 0.12, 5.0)
-	var pad_width := clampf(34.0 * object_scale, 9.0, 85.0)
-	var pad_height := clampf(7.0 * object_scale, 3.0, 18.0)
+	var object_scale := RocketVisual.camera_scale(camera_zoom, world_scale_factor)
+	var pad_width := clampf(34.0 * object_scale, 0.5, 85.0)
+	var pad_height := clampf(7.0 * object_scale, 0.5, 18.0)
 	var pad_y := earth_screen.y - radius_px - 2.0 * object_scale
 	draw_line(Vector2(earth_screen.x - pad_width, pad_y), Vector2(earth_screen.x + pad_width, pad_y), Color(0.65, 0.72, 0.82), 3.0 * object_scale)
 	draw_line(Vector2(earth_screen.x - 20.0 * object_scale, pad_y), Vector2(earth_screen.x - 20.0 * object_scale, pad_y + pad_height), Color(0.65, 0.72, 0.82), 2.0 * object_scale)
