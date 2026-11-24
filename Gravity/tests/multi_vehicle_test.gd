@@ -4,6 +4,7 @@ const Main = preload("res://scripts/main.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const FlightComputer = preload("res://scripts/flight_computer.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -22,6 +23,20 @@ func _initialize() -> void:
 	assert(second.input_enabled)
 	assert(first.vehicle_name == "Vehicle 1")
 	assert(second.vehicle_name == "Vehicle 2")
+	first.rocket_position = Vector2(1.0e9, 0.0)
+	second.landed = false
+	second.rocket_position = Vector2(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
+	second.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
+	main._update_passive_orbit_states()
+	assert(second.passive_orbit_active, "Inactive stable spacecraft was not moved to passive orbit propagation")
+	var passive_start := second.rocket_position
+	main._advance_passive_vehicle(second, 120.0)
+	assert(second.rocket_position.distance_to(passive_start) > 1000.0, "Passive spacecraft did not advance along its orbit")
+	assert(is_equal_approx(second.sim_time, 120.0))
+	second.passive_orbit_forced = true
+	second.passive_orbit_active = false
+	second.passive_orbit_data.clear()
+	first.rocket_position = Vector2(0.0, -PlanetarySystem.EARTH_RADIUS - 2.0)
 	main._switch_vehicle(0)
 	var key_event := InputEventKey.new()
 	key_event.keycode = KEY_W
