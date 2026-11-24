@@ -67,6 +67,17 @@ func _initialize() -> void:
 	assert(is_equal_approx(red_input.max_value, 1.0))
 	assert(main.design_error_label.text == "DESIGN VALID")
 	stage_dialog.free()
+	main._show_booster_editor(0)
+	var booster_window := _find_window(main, "STAGE 01 BOOSTER MODULES")
+	assert(is_instance_valid(booster_window))
+	var add_booster_button := _find_button(booster_window, "ADD PAIR")
+	assert(is_instance_valid(add_booster_button))
+	add_booster_button.pressed.emit()
+	assert(main.rocket_design["stages"][0].boosters.size() == 1)
+	RocketDesign.remove_booster_pair(main.rocket_design, 0, 0)
+	for child in main.get_children():
+		if child is Window and child.title == "STAGE 01 BOOSTER MODULES":
+			child.queue_free()
 	var original_stage: Dictionary = main.rocket_design["stages"][0].duplicate(true)
 	var original_stage_count: int = main.rocket_design["stages"].size()
 	main._duplicate_stage(0)
@@ -106,6 +117,26 @@ func _find_tooltip_spinbox(node: Node, tooltip: String) -> SpinBox:
 		return node
 	for child in node.get_children():
 		var found := _find_tooltip_spinbox(child, tooltip)
+		if found != null:
+			return found
+	return null
+
+
+func _find_button(node: Node, button_text: String) -> Button:
+	if node is Button and node.text == button_text:
+		return node
+	for child in node.get_children():
+		var found := _find_button(child, button_text)
+		if found != null:
+			return found
+	return null
+
+
+func _find_window(node: Node, window_title: String) -> Window:
+	for child in node.get_children():
+		if child is Window and child.title == window_title:
+			return child
+		var found := _find_window(child, window_title)
 		if found != null:
 			return found
 	return null
