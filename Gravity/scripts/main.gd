@@ -1008,6 +1008,116 @@ func _find_vehicle_by_name(vehicle_name: String) -> SimulationView:
 			return vehicle
 	return null
 
+func _rename_vehicle(vehicle_name: String, requested_name: String) -> bool:
+	var vehicle := _find_vehicle_by_name(vehicle_name)
+	var clean_name := requested_name.strip_edges()
+	if vehicle == null or clean_name.is_empty() or clean_name.length() > 32:
+		return false
+	for other in fleet_sims:
+		if other != vehicle and other.vehicle_name.to_lower() == clean_name.to_lower():
+			return false
+	var previous_name := vehicle.vehicle_name
+	vehicle.vehicle_name = clean_name
+	for link in docking_links:
+		if str(link.get("parent_name", "")) == previous_name:
+			link["parent_name"] = clean_name
+		if str(link.get("child_name", "")) == previous_name:
+			link["child_name"] = clean_name
+	_refresh_vehicle_selector()
+	_sync_docked_vehicles()
+	if vehicle == sim and is_instance_valid(status_label):
+		status_label.text = "%s  •  %s" % [vehicle.vehicle_name.to_upper(), vehicle.status_message]
+	return true
+
+func _show_rename_vehicle_dialog(vehicle: SimulationView) -> void:
+	var window := Window.new()
+	window.title = "RENAME SPACECRAFT"
+	window.size = Vector2i(380, 150)
+	window.min_size = Vector2i(320, 130)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	window.add_child(layout)
+	var name_input := LineEdit.new()
+	name_input.text = vehicle.vehicle_name
+	name_input.max_length = 32
+	name_input.placeholder_text = "Spacecraft name"
+	layout.add_child(name_input)
+	var save_button := Button.new()
+	save_button.text = "SAVE NAME"
+	layout.add_child(save_button)
+	var message := Label.new()
+	message.text = "Names must be unique and contain 1–32 characters."
+	layout.add_child(message)
+	save_button.pressed.connect(func():
+		if _rename_vehicle(vehicle.vehicle_name, name_input.text):
+			window.queue_free()
+		else:
+			message.text = "That name is invalid or already in use."
+	)
+	name_input.text_submitted.connect(func(_value: String):
+		if _rename_vehicle(vehicle.vehicle_name, name_input.text):
+			window.queue_free()
+	)
+	window.popup_centered()
+
+func _show_fleet_management_panel() -> void:
+	var window := Window.new()
+	window.title = "SPACECRAFT FLEET"
+	window.size = Vector2i(650, 520)
+	window.min_size = Vector2i(480, 360)
+	window.transient = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	window.add_child(layout)
+	var heading := Label.new()
+	heading.text = "FLEET OVERVIEW  •  %d SPACECRAFT" % fleet_sims.size()
+	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	layout.add_child(heading)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(scroll)
+	var entries := VBoxContainer.new()
+	entries.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	entries.add_theme_constant_override("separation", 6)
+	scroll.add_child(entries)
+	for index in range(fleet_sims.size()):
+		var vehicle: SimulationView = fleet_sims[index]
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		entries.add_child(row)
+		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position)
+		var altitude := maxf(0.0, float(body.get("distance", 0.0)) - float(body.get("radius", 0.0)))
+		var fuel_capacity := vehicle.total_propellant_capacity()
+		var fuel_percent := 100.0 * vehicle.total_propellant_remaining() / maxf(1.0, fuel_capacity)
+		var state := "DOCKED" if _is_vehicle_docked(vehicle.vehicle_name) else ("LANDED" if vehicle.landed else ("CRASHED" if vehicle.crashed else ("AUTOPILOT" if vehicle.autopilot_enabled else "MANUAL")))
+		var details := Label.new()
+		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details.text = "%s\n%s  •  %s  •  %.0f km altitude  •  %.0f%% fuel" % [vehicle.vehicle_name, state, str(body.get("name", "Deep space")), altitude / 1000.0, fuel_percent]
+		details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(details)
+		var select_button := Button.new()
+		select_button.text = "SELECT"
+		select_button.pressed.connect(func():
+			_switch_vehicle(index)
+			window.queue_free()
+		)
+		row.add_child(select_button)
+		var rename_button := Button.new()
+		rename_button.text = "RENAME"
+		rename_button.pressed.connect(_show_rename_vehicle_dialog.bind(vehicle))
+		row.add_child(rename_button)
+	_add_button(layout, "CLOSE", func(): window.queue_free())
+	window.popup_centered()
+
+
 func _is_docked_child(vehicle_name: String) -> bool:
 	for link in docking_links:
 		if str(link.get("child_name", "")) == vehicle_name:
@@ -1174,6 +1284,7 @@ func _build_flight_hud() -> void:
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
+	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
