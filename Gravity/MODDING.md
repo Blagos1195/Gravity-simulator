@@ -18,22 +18,22 @@ For example, this adds another payload choice, engine-count choice and tank size
 {
   "schema_version": 1,
   "rocket": {
-    "builder_options": {
-      "payloads_add": [
-        {
-          "id": "mapping_probe",
-          "label": "Mapping probe · 2.4 t",
-          "mass": 2400
-        }
-      ],
-      "engine_counts_add": [5],
-      "tank_scales_add": [
-        {
-          "label": "Oversized tank",
-          "scale": 1.5
-        }
-      ]
-    }
+	"builder_options": {
+	  "payloads_add": [
+		{
+		  "id": "mapping_probe",
+		  "label": "Mapping probe · 2.4 t",
+		  "mass": 2400
+		}
+	  ],
+	  "engine_counts_add": [5],
+	  "tank_scales_add": [
+		{
+		  "label": "Oversized tank",
+		  "scale": 1.5
+		}
+	  ]
+	}
   }
 }
 ```
@@ -46,33 +46,33 @@ Stage parts are reusable components. Presets are vehicle designs made from stage
 {
   "schema_version": 1,
   "rocket": {
-    "stage_parts_add": [
-      {
-        "id": "example_kick_stage",
-        "label": "Example · Kick Stage",
-        "name": "KICK STAGE",
-        "dry_mass": 1000,
-        "fuel_capacity": 4000,
-        "thrust": 100000,
-        "vacuum_thrust": 130000,
-        "flow": 30,
-        "engine_count": 1
-      }
-    ],
-    "presets_add": {
-      "EXAMPLE_PROBE": {
-        "label": "Example · Probe launcher",
-        "description": "A small launcher with an additional orbital kick stage.",
-        "name": "Example Probe Launcher",
-        "payload_mass": 2400,
-        "payload_id": "mapping_probe",
-        "stages": [
-          "scout_booster",
-          "scout_upper",
+	"stage_parts_add": [
+	  {
+		"id": "example_kick_stage",
+		"label": "Example · Kick Stage",
+		"name": "KICK STAGE",
+		"dry_mass": 1000,
+		"fuel_capacity": 4000,
+		"thrust": 100000,
+		"vacuum_thrust": 130000,
+		"flow": 30,
+		"engine_count": 1
+	  }
+	],
+	"presets_add": {
+	  "EXAMPLE_PROBE": {
+		"label": "Example · Probe launcher",
+		"description": "A small launcher with an additional orbital kick stage.",
+		"name": "Example Probe Launcher",
+		"payload_mass": 2400,
+		"payload_id": "mapping_probe",
+		"stages": [
+		  "scout_booster",
+		  "scout_upper",
           "example_kick_stage"
-        ]
-      }
-    }
+		]
+	  }
+	}
   }
 }
 ```
