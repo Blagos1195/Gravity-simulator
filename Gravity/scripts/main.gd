@@ -1249,6 +1249,25 @@ func _design_library_files() -> PackedStringArray:
 		filename = directory.get_next()
 	directory.list_dir_end()
 	files.sort()
+	if files.is_empty() and FileAccess.file_exists("user://rocket_design.json"):
+		var legacy_file := FileAccess.open("user://rocket_design.json", FileAccess.READ)
+		if legacy_file != null:
+			var legacy_design: Variant = JSON.parse_string(legacy_file.get_as_text())
+			legacy_file.close()
+			if legacy_design is Dictionary and RocketDesign.validation_errors(legacy_design).is_empty():
+				var legacy_name := str(legacy_design.get("name", "Imported Design"))
+				var safe_name := legacy_name.to_lower().replace(" ", "_")
+				var safe_chars := ""
+				for character in safe_name:
+					if character.is_valid_identifier() or character in ["-", "_"]:
+						safe_chars += character
+				if safe_chars.is_empty():
+					safe_chars = "imported_design"
+				var migrated := FileAccess.open("%s/%s.json" % [_design_library_directory(), safe_chars], FileAccess.WRITE)
+				if migrated != null:
+					migrated.store_string(JSON.stringify(legacy_design, "\t"))
+					migrated.close()
+					files.append("%s.json" % safe_chars)
 	return files
 
 
