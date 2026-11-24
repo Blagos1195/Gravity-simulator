@@ -42,7 +42,9 @@ func _initialize() -> void:
 	stage = builder.design.stages[0]
 	assert(int(stage.components[2].mount_index) == 1)
 	assert(RocketDesign.validation_errors(builder.design).is_empty())
+	print("BEFORE DUPLICATE ", builder.selected_stage_index, " ", builder.design.stages.size())
 	builder._duplicate_selected_stage()
+	print("AFTER DUPLICATE ", builder.selected_stage_index, " ", builder.design.stages.size())
 	assert(builder.design.stages.size() == 2)
 	builder._move_stage(-1)
 	assert(RocketDesign.validation_errors(builder.design).is_empty())
