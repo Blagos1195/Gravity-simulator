@@ -296,6 +296,7 @@
         "description": "Smaller probes with extra departure energy for interplanetary missions. Payload capacity is deliberately lower.",
         "name": "Odyssey · Deep-Space Probe",
         "payload_mass": 1800.0,
+        "payload_id": "probe",
         "stages": ["odyssey_core", "odyssey_upper", "odyssey_transfer", "odyssey_kick"]
       }
     },
