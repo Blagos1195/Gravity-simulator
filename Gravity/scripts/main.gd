@@ -867,6 +867,13 @@ func _show_booster_editor(stage_index: int) -> void:
 	var heading := Label.new()
 	heading.text = "ATTACHED PAIRS  •  %d" % boosters.size()
 	layout.add_child(heading)
+	var entries_scroll := ScrollContainer.new()
+	entries_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	entries_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	layout.add_child(entries_scroll)
+	var entries := VBoxContainer.new()
+	entries.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	entries_scroll.add_child(entries)
 	for booster_index in range(boosters.size()):
 		var booster_entry: Dictionary = boosters[booster_index]
 		var definition := RocketDesign.booster_definition_for_entry(booster_entry)
@@ -889,7 +896,7 @@ func _show_booster_editor(stage_index: int) -> void:
 			_show_booster_editor(stage_index)
 		)
 		row.add_child(remove_button)
-		layout.add_child(row)
+		entries.add_child(row)
 	var add_row := HBoxContainer.new()
 	var booster_selector := OptionButton.new()
 	booster_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -921,10 +928,16 @@ func _show_stage_editor(stage_index: int) -> void:
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "EDIT STAGE %02d" % (stage_index + 1)
 	dialog.dialog_text = "Physical values are per engine. Visual factors change the workshop and flight model."
-	dialog.min_size = Vector2i(520, 480)
+	var screen_size := DisplayServer.screen_get_size()
+	dialog.min_size = Vector2i(mini(520, screen_size.x - 40), mini(480, screen_size.y - 80))
+	var content_scroll := ScrollContainer.new()
+	content_scroll.custom_minimum_size = Vector2(0, mini(390, screen_size.y - 190))
+	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	dialog.add_child(content_scroll)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
-	dialog.add_child(content)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_scroll.add_child(content)
 	var name_row := HBoxContainer.new()
 	var name_label := Label.new()
 	name_label.text = "Stage name"
