@@ -333,8 +333,9 @@ static func _catalog_error(catalog: Dictionary) -> String:
 	var engine_counts: Variant = builder_options.get("engine_counts")
 	var tank_scales: Variant = builder_options.get("tank_scales")
 	var booster_options: Variant = builder_options.get("booster_options")
-	if not payload_options is Array or payload_options.is_empty() or not engine_counts is Array or engine_counts.is_empty() or not tank_scales is Array or tank_scales.is_empty() or not booster_options is Array or booster_options.is_empty():
-		return "Rocket builder payloads, engine_counts, tank_scales and booster_options must be non-empty arrays."
+	var payload_components: Variant = builder_options.get("payload_components")
+	if not payload_options is Array or payload_options.is_empty() or not engine_counts is Array or engine_counts.is_empty() or not tank_scales is Array or tank_scales.is_empty() or not booster_options is Array or booster_options.is_empty() or not payload_components is Array or payload_components.is_empty():
+		return "Rocket builder payloads, payload_components, engine_counts, tank_scales and booster_options must be non-empty arrays."
 	var payload_mass_limits: Variant = builder_options.get("payload_mass_limits")
 	if payload_mass_limits != null:
 		if not payload_mass_limits is Dictionary:
@@ -377,6 +378,32 @@ static func _catalog_error(catalog: Dictionary) -> String:
 			if not payload_visual_color_error.is_empty():
 				return payload_visual_color_error
 		payload_ids[payload_id] = true
+	var payload_component_ids := {}
+	var component_types := ["fairing", "solar_panels", "antenna", "docking_port", "instrument"]
+	for component_variant in payload_components:
+		if not component_variant is Dictionary:
+			return "Every payload component option must be an object."
+		var component: Dictionary = component_variant
+		var component_id := str(component.get("id", ""))
+		var component_type := str(component.get("component_type", ""))
+		if component_id.is_empty() or payload_component_ids.has(component_id) or str(component.get("label", "")).is_empty() or not component_types.has(component_type):
+			return "Payload component ids, labels and component types must be valid and unique."
+		var component_error := _numeric_fields_error(component, ["dry_mass"], "payload component %s" % component_id)
+		if not component_error.is_empty() or float(component.dry_mass) <= 0.0:
+			return "Payload component %s has an invalid dry_mass." % component_id
+		for visual_key in ["visual_width_factor", "visual_height_factor"]:
+			if component.has(visual_key) and (not (component[visual_key] is int or component[visual_key] is float) or not is_finite(float(component[visual_key])) or float(component[visual_key]) <= 0.0):
+				return "Payload component %s has an invalid %s." % [component_id, visual_key]
+		if component.has("visual_color_rgb"):
+			var component_color_error := _color_field_error(component, "visual_color_rgb", "payload component %s" % component_id)
+			if not component_color_error.is_empty():
+				return component_color_error
+		for numeric_key in ["drag_reduction", "power_output_kw", "science_value"]:
+			if component.has(numeric_key) and (not (component[numeric_key] is int or component[numeric_key] is float) or not is_finite(float(component[numeric_key])) or float(component[numeric_key]) < 0.0):
+				return "Payload component %s has an invalid %s." % [component_id, numeric_key]
+		if component_type == "fairing" and (not component.has("drag_reduction") or float(component.drag_reduction) > 1.0):
+			return "Payload fairings need a drag_reduction between zero and one."
+		payload_component_ids[component_id] = true
 	var booster_ids := {}
 	for booster_variant in booster_options:
 		if not booster_variant is Dictionary:
