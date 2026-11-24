@@ -238,7 +238,20 @@ static func _payload_component_definition_is_valid(definition: Dictionary) -> bo
 	if not ["fairing", "solar_panels", "antenna", "docking_port", "instrument"].has(component_type):
 		return false
 	var dry_mass: Variant = definition.get("dry_mass")
-	return (dry_mass is int or dry_mass is float) and is_finite(float(dry_mass)) and float(dry_mass) > 0.0
+	if not (dry_mass is int or dry_mass is float) or not is_finite(float(dry_mass)) or float(dry_mass) <= 0.0:
+		return false
+	if definition.has("visual_color_rgb"):
+		var color: Variant = definition.visual_color_rgb
+		if not color is Array or color.size() != 3:
+			return false
+		for channel in color:
+			if not (channel is int or channel is float) or not is_finite(float(channel)) or float(channel) < 0.0 or float(channel) > 1.0:
+				return false
+	if component_type == "fairing":
+		var drag_reduction: Variant = definition.get("drag_reduction")
+		if not (drag_reduction is int or drag_reduction is float) or not is_finite(float(drag_reduction)) or float(drag_reduction) < 0.0 or float(drag_reduction) > 1.0:
+			return false
+	return true
 
 static func booster_options() -> Array:
 	var options: Array = _rocket_catalog().get("builder_options", {}).get("booster_options", [])
