@@ -354,6 +354,15 @@ static func _catalog_error(catalog: Dictionary) -> String:
 			return payload_error
 		if payload_mass_limits is Dictionary and (float(payload.mass) < float(payload_mass_limits.minimum) or float(payload.mass) > float(payload_mass_limits.maximum)):
 			return "Rocket payload %s mass is outside the configured payload limits." % payload_id
+		if payload.has("visual_type") and (not payload.visual_type is String or not ["probe", "crew", "satellite", "cargo"].has(payload.visual_type)):
+			return "Rocket payload %s has an unsupported visual_type." % payload_id
+		for visual_key in ["visual_width_factor", "visual_height_factor"]:
+			if payload.has(visual_key) and (not (payload[visual_key] is int or payload[visual_key] is float) or not is_finite(float(payload[visual_key])) or float(payload[visual_key]) <= 0.0):
+				return "Rocket payload %s has an invalid %s." % [payload_id, visual_key]
+		if payload.has("visual_color_rgb"):
+			var payload_visual_color_error := _color_field_error(payload, "visual_color_rgb", "rocket payload %s" % payload_id)
+			if not payload_visual_color_error.is_empty():
+				return payload_visual_color_error
 		payload_ids[payload_id] = true
 	var engine_count_ids := {}
 	for engine_count in engine_counts:
