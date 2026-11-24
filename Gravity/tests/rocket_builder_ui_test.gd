@@ -24,6 +24,26 @@ func _initialize() -> void:
 		payload_input.value_changed.emit(payload_input.value)
 	assert(is_equal_approx(float(main.rocket_design.payload_mass), 1200.0))
 	assert(main.design_error_label.text == "DESIGN VALID")
+	main._show_payload_editor()
+	var payload_dialog: ConfirmationDialog
+	for child in main.get_children():
+		if child is ConfirmationDialog and child.title == "EDIT PAYLOAD APPEARANCE":
+			payload_dialog = child
+			break
+	assert(is_instance_valid(payload_dialog))
+	main._apply_payload_editor_values({
+		"visual_type": "cargo",
+		"visual_width_factor": 1.4,
+		"visual_height_factor": 1.2,
+		"visual_color_r": 0.11,
+		"visual_color_g": 0.22,
+		"visual_color_b": 0.33
+	})
+	assert(main.rocket_design.payload_visual.visual_type == "cargo")
+	assert(is_equal_approx(float(main.rocket_design.payload_visual.visual_width_factor), 1.4))
+	assert(main.rocket_design.payload_visual.visual_color_rgb == [0.11, 0.22, 0.33])
+	assert(main.design_error_label.text == "DESIGN VALID")
+	payload_dialog.free()
 	main._show_stage_editor(0)
 	var stage_dialog: ConfirmationDialog
 	for child in main.get_children():
