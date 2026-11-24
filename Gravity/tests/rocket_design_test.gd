@@ -33,6 +33,11 @@ func _initialize() -> void:
 	assert(not configured_upper_stage.is_empty())
 	var configured_design := design.duplicate(true)
 	configured_design["stages"][0] = configured_first_stage
+	configured_design["stages"][0]["engine_layout"] = "cluster"
+	assert(RocketDesign.validation_errors(configured_design).is_empty())
+	var invalid_engine_layout := design.duplicate(true)
+	invalid_engine_layout["stages"][0]["engine_layout"] = "spiral"
+	assert(not RocketDesign.validation_errors(invalid_engine_layout).is_empty())
 	configured_design["stages"][1] = configured_upper_stage
 	assert(RocketDesign.validation_errors(configured_design).is_empty())
 	var engine_variant := design.duplicate(true)
@@ -183,6 +188,7 @@ func _initialize() -> void:
 				"vacuum_thrust": 250000.0,
 				"flow": 63.3,
 				"engine_count": 1,
+				"engine_layout": "cluster",
 				"visual_length_factor": 1.4,
 				"visual_diameter_factor": 1.2,
 				"visual_color_rgb": [0.2, 0.4, 0.6]
@@ -216,6 +222,7 @@ func _initialize() -> void:
 	assert(merged_catalog.planets[-1].satellites[0].name == "Test Moon")
 	var merged_rocket: Dictionary = merged_catalog.rocket
 	assert(merged_rocket.stage_parts.size() == ContentCatalog.get_catalog().rocket.stage_parts.size() + 1)
+	assert(merged_rocket.stage_parts[-1].engine_layout == "cluster")
 	assert(is_equal_approx(float(merged_rocket.stage_parts[-1].visual_length_factor), 1.4))
 	assert(merged_rocket.stage_parts[-1].visual_color_rgb == [0.2, 0.4, 0.6])
 	assert(merged_rocket.presets.has("TEST_MOD_PRESET"))

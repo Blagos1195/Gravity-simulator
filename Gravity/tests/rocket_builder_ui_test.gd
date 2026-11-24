@@ -56,8 +56,9 @@ func _initialize() -> void:
 	var dry_mass_input := _find_tooltip_spinbox(stage_dialog, "dry_mass")
 	assert(is_instance_valid(dry_mass_input))
 	var edited_dry_mass := float(main.rocket_design["stages"][0].dry_mass) + 1000.0
-	main._apply_stage_editor_values(0, {"dry_mass": edited_dry_mass, "visual_color_r": 0.12, "visual_color_g": 0.34, "visual_color_b": 0.56})
+	main._apply_stage_editor_values(0, {"dry_mass": edited_dry_mass, "engine_layout": "radial", "visual_color_r": 0.12, "visual_color_g": 0.34, "visual_color_b": 0.56})
 	assert(is_equal_approx(float(main.rocket_design["stages"][0].dry_mass), edited_dry_mass))
+	assert(main.rocket_design["stages"][0].engine_layout == "radial")
 	assert(main.rocket_design["stages"][0].visual_color_rgb == [0.12, 0.34, 0.56])
 	var red_input := _find_tooltip_spinbox(stage_dialog, "visual_color_r")
 	assert(is_instance_valid(red_input))

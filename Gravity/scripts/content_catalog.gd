@@ -317,6 +317,8 @@ static func _catalog_error(catalog: Dictionary) -> String:
 			return part_error
 		if not part.has("name") or float(part.dry_mass) <= 0.0 or float(part.fuel_capacity) <= 0.0 or float(part.thrust) <= 0.0 or float(part.vacuum_thrust) <= 0.0 or float(part.flow) <= 0.0 or int(part.engine_count) <= 0 or float(part.engine_count) != float(int(part.engine_count)):
 			return "Rocket stage part %s has invalid name or engine values." % part_id
+		if part.has("engine_layout") and (not part.engine_layout is String or not ["linear", "cluster", "radial"].has(part.engine_layout)):
+			return "Rocket stage part %s has an unsupported engine_layout." % part_id
 		for visual_key in ["visual_length_factor", "visual_diameter_factor"]:
 			if part.has(visual_key) and (not (part[visual_key] is int or part[visual_key] is float) or float(part[visual_key]) <= 0.0):
 				return "Rocket stage part %s has an invalid %s." % [part_id, visual_key]

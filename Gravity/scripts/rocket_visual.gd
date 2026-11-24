@@ -90,14 +90,39 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 			canvas.draw_string(ThemeDB.fallback_font, _point(origin, Vector2(half + 4.0, y + height * 0.65), rotation, scale), "S%d" % (active_stage_index + i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.8, 0.92))
 		var engines := maxi(1, int(stage.get("engine_count", 1)))
 		var visible_engines := mini(engines, 64)
-		var spacing := width * 0.76 / float(maxi(1, visible_engines - 1))
-		var nozzle_width := minf(minf(2.5, width * 0.13), maxf(0.1, spacing * 0.38))
-		for engine_index in range(visible_engines):
-			var engine_x := (float(engine_index) - float(visible_engines - 1) * 0.5) * spacing
-			_polygon(canvas, origin, [Vector2(engine_x - nozzle_width, y + height), Vector2(engine_x + nozzle_width, y + height), Vector2(engine_x + nozzle_width * 0.7, y + height + 4.0), Vector2(engine_x - nozzle_width * 0.7, y + height + 4.0)], rotation, scale, Color(0.56, 0.61, 0.68))
+		var engine_layout := str(stage.get("engine_layout", "linear"))
+		var engine_positions: Array[Vector2] = []
+		var minimum_spacing := width * 0.76 / float(maxi(1, visible_engines - 1))
+		if engine_layout == "cluster":
+			var columns := ceili(sqrt(float(visible_engines)))
+			var rows := ceili(float(visible_engines) / float(columns))
+			var spacing_x := width * 0.62 / float(maxi(1, columns - 1))
+			var spacing_y := minf(2.4, height * 0.12) / float(maxi(1, rows - 1))
+			minimum_spacing = minf(spacing_x, maxf(0.1, spacing_y))
+			for engine_index in range(visible_engines):
+				var column := engine_index % columns
+				var engine_row := int(engine_index / columns)
+				var engine_x := (float(column) - float(columns - 1) * 0.5) * spacing_x
+				var engine_y := (float(engine_row) - float(rows - 1) * 0.5) * spacing_y
+				engine_positions.append(Vector2(engine_x, engine_y))
+		elif engine_layout == "radial" and visible_engines > 1:
+			var radius := width * 0.22
+			minimum_spacing = maxf(0.1, 2.0 * radius * sin(PI / float(visible_engines)))
+			for engine_index in range(visible_engines):
+				var angle := TAU * float(engine_index) / float(visible_engines)
+				engine_positions.append(Vector2(cos(angle) * radius, sin(angle) * radius * 0.18))
+		else:
+			for engine_index in range(visible_engines):
+				var engine_x := (float(engine_index) - float(visible_engines - 1) * 0.5) * minimum_spacing
+				engine_positions.append(Vector2(engine_x, 0.0))
+		var nozzle_width := minf(minf(2.5, width * 0.13), maxf(0.1, minimum_spacing * 0.38))
+		for engine_position in engine_positions:
+			var engine_y := y + height + engine_position.y
+			var engine_x := engine_position.x
+			_polygon(canvas, origin, [Vector2(engine_x - nozzle_width, engine_y), Vector2(engine_x + nozzle_width, engine_y), Vector2(engine_x + nozzle_width * 0.7, engine_y + 4.0), Vector2(engine_x - nozzle_width * 0.7, engine_y + 4.0)], rotation, scale, Color(0.56, 0.61, 0.68))
 			if engine_enabled and i == 0 and throttle > 0.0:
 				var flame_length := 7.0 + 8.0 * clampf(throttle, 0.0, 1.0)
-				_polygon(canvas, origin, [Vector2(engine_x - nozzle_width * 0.7, y + height + 4.0), Vector2(engine_x, y + height + 4.0 + flame_length), Vector2(engine_x + nozzle_width * 0.7, y + height + 4.0)], rotation, scale, Color(1.0, 0.48, 0.12, 0.92))
+				_polygon(canvas, origin, [Vector2(engine_x - nozzle_width * 0.7, engine_y + 4.0), Vector2(engine_x, engine_y + 4.0 + flame_length), Vector2(engine_x + nozzle_width * 0.7, engine_y + 4.0)], rotation, scale, Color(1.0, 0.48, 0.12, 0.92))
 		if engines > visible_engines:
 			canvas.draw_string(ThemeDB.fallback_font, _point(origin, Vector2(half + 4.0, y + height), rotation, scale), "×%d" % engines, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.8, 0.92))
 		y += height + 4.0

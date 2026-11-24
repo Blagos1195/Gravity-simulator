@@ -691,6 +691,21 @@ func _show_stage_editor(stage_index: int) -> void:
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
 	dialog.add_child(content)
+	var layout_row := HBoxContainer.new()
+	var layout_label := Label.new()
+	layout_label.text = "Engine arrangement"
+	layout_label.custom_minimum_size.x = 220
+	layout_row.add_child(layout_label)
+	var engine_layout_selector := OptionButton.new()
+	var engine_layout := str(stage.get("engine_layout", "linear"))
+	if not ["linear", "cluster", "radial"].has(engine_layout):
+		engine_layout = "linear"
+	for layout_option in ["linear", "cluster", "radial"]:
+		engine_layout_selector.add_item(layout_option.capitalize())
+		engine_layout_selector.set_item_metadata(engine_layout_selector.item_count - 1, layout_option)
+	engine_layout_selector.select(["linear", "cluster", "radial"].find(engine_layout))
+	layout_row.add_child(engine_layout_selector)
+	content.add_child(layout_row)
 	var default_color := [0.35, 0.57, 0.71] if stage_index % 2 == 0 else [0.43, 0.63, 0.75]
 	var stage_color: Variant = stage.get("visual_color_rgb", default_color)
 	if not stage_color is Array or stage_color.size() != 3:
@@ -727,7 +742,7 @@ func _show_stage_editor(stage_index: int) -> void:
 	dialog.get_ok_button().text = "APPLY"
 	dialog.get_cancel_button().text = "CANCEL"
 	dialog.confirmed.connect(func():
-		var values: Dictionary = {}
+		var values: Dictionary = {"engine_layout": str(engine_layout_selector.get_item_metadata(engine_layout_selector.selected))}
 		for key in inputs:
 			values[key] = inputs[key].value
 		_apply_stage_editor_values(stage_index, values)
@@ -746,6 +761,8 @@ func _apply_stage_editor_values(stage_index: int, values: Dictionary) -> void:
 	if stage_index < 0 or stage_index >= rocket_design["stages"].size():
 		return
 	var updated_stage: Dictionary = rocket_design["stages"][stage_index].duplicate(true)
+	if values.has("engine_layout"):
+		updated_stage["engine_layout"] = str(values["engine_layout"])
 	for key in ["dry_mass", "fuel_capacity", "thrust", "vacuum_thrust", "flow", "visual_length_factor", "visual_diameter_factor"]:
 		if values.has(key):
 			updated_stage[key] = float(values[key])

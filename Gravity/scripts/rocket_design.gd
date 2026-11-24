@@ -267,6 +267,8 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 			errors.append("Stage %d mass, propellant, thrust and flow values must all be positive." % (i + 1))
 		if not (engine_value is int or engine_value is float) or float(engine_value) != float(engines) or engines < 1:
 			errors.append("Stage %d must have a positive whole-number engine count." % (i + 1))
+		if stage.has("engine_layout") and not ["linear", "cluster", "radial"].has(str(stage.engine_layout)):
+			errors.append("Stage %d has an unsupported engine layout." % (i + 1))
 		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0 or not (engine_value is int or engine_value is float) or float(engine_value) != float(engines) or engines < 1:
 			continue
 		if vacuum_thrust < sea_thrust:
