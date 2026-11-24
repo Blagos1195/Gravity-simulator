@@ -48,10 +48,10 @@ func _initialize() -> void:
 	var moved_stage: Dictionary = builder.design.stages[1].duplicate(true)
 	builder._move_stage(-1)
 	assert(builder.design.stages[0] == moved_stage)
-	var changed_count := 0
-	builder.design_changed.connect(func(_updated: Dictionary): changed_count += 1)
+	var emitted_designs: Array[Dictionary] = []
+	builder.design_changed.connect(func(updated: Dictionary): emitted_designs.append(updated))
 	builder._emit_design()
-	assert(changed_count > 0)
+	assert(not emitted_designs.is_empty())
 	builder.free()
 	print("KSP-style vehicle assembly builder tests passed.")
 	quit()
