@@ -10,11 +10,14 @@ func _initialize() -> void:
 	main.rocket_design = RocketDesign.create_default()
 	main._start_flight()
 	main._add_new_vehicle()
+	main._add_new_vehicle()
 	var parent: SimulationView = main.fleet_sims[0]
 	var child: SimulationView = main.fleet_sims[1]
+	var second_child: SimulationView = main.fleet_sims[2]
 	main._switch_vehicle(0)
 	parent.landed = false
 	child.landed = false
+	second_child.landed = false
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
 	parent.velocity = Vector2(0.0, 1000.0)
@@ -25,6 +28,14 @@ func _initialize() -> void:
 	assert(main.docking_links.size() == 1)
 	assert(not child.input_enabled)
 	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass()))
+	second_child.rocket_position = parent.rocket_position + Vector2(-25.0, 0.0)
+	second_child.velocity = Vector2(0.0, 1001.0)
+	assert(main._dock_vehicle(second_child.vehicle_name))
+	assert(main.docking_links.size() == 2)
+	assert(not second_child.input_enabled)
+	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass() + second_child._current_vehicle_mass()))
+	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
+	assert(main._are_docked("Orbital Tug", child.vehicle_name))
 	var parent_capacity := float(parent._active_stage_data().get("fuel_capacity", 0.0))
 	parent.fuel = parent_capacity - 10000.0
 	parent.stage_fuel_remaining[0] = parent.fuel
@@ -44,15 +55,18 @@ func _initialize() -> void:
 	var save_path := "user://saves/slot_08.json"
 	assert(FileAccess.file_exists(save_path))
 	main._load_game_from_path(save_path)
-	assert(main.docking_links.size() == 1)
-	assert(main.fleet_sims.size() == 2)
+	assert(main.docking_links.size() == 2)
+	assert(main.fleet_sims.size() == 3)
 	var loaded_parent: SimulationView = main.fleet_sims[0]
 	var loaded_child: SimulationView = main.fleet_sims[1]
+	var loaded_second_child: SimulationView = main.fleet_sims[2]
 	assert(not loaded_child.input_enabled)
-	assert(is_equal_approx(loaded_parent.docked_mass, loaded_child._current_vehicle_mass()))
+	assert(not loaded_second_child.input_enabled)
+	assert(is_equal_approx(loaded_parent.docked_mass, loaded_child._current_vehicle_mass() + loaded_second_child._current_vehicle_mass()))
 	assert(is_zero_approx(loaded_child.stage_fuel_remaining[1]))
 	assert(is_equal_approx(loaded_parent.stage_fuel_remaining[0], float(loaded_parent._active_stage_data().get("fuel_capacity", 0.0))))
 	assert(main._undock_vehicle(loaded_child.vehicle_name))
+	assert(main._undock_vehicle(loaded_second_child.vehicle_name))
 	assert(main.docking_links.is_empty())
 	assert(is_zero_approx(loaded_parent.docked_mass))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))

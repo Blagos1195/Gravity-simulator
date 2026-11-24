@@ -47,6 +47,9 @@ func _initialize() -> void:
 	assert(first.vehicle_name == "Vehicle 1")
 	assert(second.vehicle_name == "Vehicle 2")
 	main._switch_vehicle(1)
+	assert(main._rename_vehicle("Vehicle 2", "Lunar Relay"))
+	assert(not main._rename_vehicle("Lunar Relay", "Vehicle 1"))
+	assert(main.fleet_sims[1].vehicle_name == "Lunar Relay")
 	main.save_slot = 8
 	main._save_game(false)
 	var save_path := "user://saves/slot_08.json"
@@ -59,7 +62,7 @@ func _initialize() -> void:
 	main._load_game_from_path(save_path)
 	assert(main.fleet_sims.size() == 2)
 	assert(main.active_vehicle_index == 1)
-	assert(main.sim.vehicle_name == "Vehicle 2")
+	assert(main.sim.vehicle_name == "Lunar Relay")
 	assert(is_equal_approx(main.fleet_sims[0].sim_time, main.fleet_sims[1].sim_time))
 	for i in range(12):
 		main._add_new_vehicle()

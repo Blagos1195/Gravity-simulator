@@ -2,6 +2,7 @@ extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RocketVisual = preload("res://scripts/rocket_visual.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
@@ -148,10 +149,11 @@ func _advance_fleet(delta: float) -> void:
 	for vehicle in fleet_sims:
 		vehicle.time_warp = sim.time_warp
 		vehicle.paused = sim.paused
-		vehicle.prediction_timer += delta
-		if vehicle.show_predicted_trajectory and vehicle.prediction_timer >= 0.35:
-			vehicle.prediction_timer = 0.0
-			vehicle._calculate_predicted_trajectory()
+		if vehicle == sim and vehicle.show_predicted_trajectory:
+			vehicle.prediction_timer += delta
+			if vehicle.prediction_timer >= 0.35:
+				vehicle.prediction_timer = 0.0
+				vehicle._calculate_predicted_trajectory()
 		vehicle.trail_timer += delta
 		if vehicle.trail_timer >= 0.12:
 			vehicle.trail_timer = 0.0
@@ -880,6 +882,7 @@ func _add_new_vehicle() -> void:
 	var design := {
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
+		"payload_type": sim.payload_type,
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	_launch_vehicle_design(design)
@@ -909,6 +912,7 @@ func _show_new_vehicle_dialog() -> void:
 	var current_design := {
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
+		"payload_type": sim.payload_type,
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	options.append({
@@ -1010,9 +1014,12 @@ func _switch_vehicle(index: int) -> void:
 	sim.input_enabled = not _is_docked_child(sim.vehicle_name)
 	sim.visible = true
 	sim.time_warp = fleet_sims[0].time_warp
+	if sim.show_predicted_trajectory:
+		sim._calculate_predicted_trajectory()
 	rocket_design = {
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
+		"payload_type": sim.payload_type,
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	_refresh_vehicle_selector()
@@ -1038,6 +1045,116 @@ func _find_vehicle_by_name(vehicle_name: String) -> SimulationView:
 		if vehicle.vehicle_name == vehicle_name:
 			return vehicle
 	return null
+
+func _rename_vehicle(vehicle_name: String, requested_name: String) -> bool:
+	var vehicle := _find_vehicle_by_name(vehicle_name)
+	var clean_name := requested_name.strip_edges()
+	if vehicle == null or clean_name.is_empty() or clean_name.length() > 32:
+		return false
+	for other in fleet_sims:
+		if other != vehicle and other.vehicle_name.to_lower() == clean_name.to_lower():
+			return false
+	var previous_name := vehicle.vehicle_name
+	vehicle.vehicle_name = clean_name
+	for link in docking_links:
+		if str(link.get("parent_name", "")) == previous_name:
+			link["parent_name"] = clean_name
+		if str(link.get("child_name", "")) == previous_name:
+			link["child_name"] = clean_name
+	_refresh_vehicle_selector()
+	_sync_docked_vehicles()
+	if vehicle == sim and is_instance_valid(status_label):
+		status_label.text = "%s  •  %s" % [vehicle.vehicle_name.to_upper(), vehicle.status_message]
+	return true
+
+func _show_rename_vehicle_dialog(vehicle: SimulationView) -> void:
+	var window := Window.new()
+	window.title = "RENAME SPACECRAFT"
+	window.size = Vector2i(380, 150)
+	window.min_size = Vector2i(320, 130)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	window.add_child(layout)
+	var name_input := LineEdit.new()
+	name_input.text = vehicle.vehicle_name
+	name_input.max_length = 32
+	name_input.placeholder_text = "Spacecraft name"
+	layout.add_child(name_input)
+	var save_button := Button.new()
+	save_button.text = "SAVE NAME"
+	layout.add_child(save_button)
+	var message := Label.new()
+	message.text = "Names must be unique and contain 1–32 characters."
+	layout.add_child(message)
+	save_button.pressed.connect(func():
+		if _rename_vehicle(vehicle.vehicle_name, name_input.text):
+			window.queue_free()
+		else:
+			message.text = "That name is invalid or already in use."
+	)
+	name_input.text_submitted.connect(func(_value: String):
+		if _rename_vehicle(vehicle.vehicle_name, name_input.text):
+			window.queue_free()
+	)
+	window.popup_centered()
+
+func _show_fleet_management_panel() -> void:
+	var window := Window.new()
+	window.title = "SPACECRAFT FLEET"
+	window.size = Vector2i(650, 520)
+	window.min_size = Vector2i(480, 360)
+	window.transient = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	window.add_child(layout)
+	var heading := Label.new()
+	heading.text = "FLEET OVERVIEW  •  %d SPACECRAFT" % fleet_sims.size()
+	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	layout.add_child(heading)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(scroll)
+	var entries := VBoxContainer.new()
+	entries.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	entries.add_theme_constant_override("separation", 6)
+	scroll.add_child(entries)
+	for index in range(fleet_sims.size()):
+		var vehicle: SimulationView = fleet_sims[index]
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		entries.add_child(row)
+		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position)
+		var altitude := maxf(0.0, float(body.get("distance", 0.0)) - float(body.get("radius", 0.0)))
+		var fuel_capacity := vehicle.total_propellant_capacity()
+		var fuel_percent := 100.0 * vehicle.total_propellant_remaining() / maxf(1.0, fuel_capacity)
+		var state := "DOCKED" if _is_vehicle_docked(vehicle.vehicle_name) else ("LANDED" if vehicle.landed else ("CRASHED" if vehicle.crashed else ("AUTOPILOT" if vehicle.autopilot_enabled else "MANUAL")))
+		var details := Label.new()
+		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details.text = "%s\n%s  •  %s  •  %.0f km altitude  •  %.0f%% fuel" % [vehicle.vehicle_name, state, str(body.get("name", "Deep space")), altitude / 1000.0, fuel_percent]
+		details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(details)
+		var select_button := Button.new()
+		select_button.text = "SELECT"
+		select_button.pressed.connect(func():
+			_switch_vehicle(index)
+			window.queue_free()
+		)
+		row.add_child(select_button)
+		var rename_button := Button.new()
+		rename_button.text = "RENAME"
+		rename_button.pressed.connect(_show_rename_vehicle_dialog.bind(vehicle))
+		row.add_child(rename_button)
+	_add_button(layout, "CLOSE", func(): window.queue_free())
+	window.popup_centered()
+
 
 func _is_docked_child(vehicle_name: String) -> bool:
 	for link in docking_links:
@@ -1081,7 +1198,9 @@ func _sync_docked_vehicles() -> void:
 		parent.docked_visuals.append({
 			"name": child.vehicle_name,
 			"direction": world_offset.normalized(),
-			"rotation": parent.rotation_angle
+			"rotation": parent.rotation_angle,
+			"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "stages": child.rocket_stages},
+			"stage_index": child.stage_index
 		})
 		child.rocket_position = parent.rocket_position + world_offset
 		child.velocity = parent.velocity
@@ -1102,7 +1221,7 @@ func _dock_vehicle(target_name: String) -> bool:
 		return false
 	if sim.landed or sim.crashed or target.landed or target.crashed:
 		return false
-	if _is_vehicle_docked(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
+	if _is_docked_child(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
 		return false
 	var separation: float = target.rocket_position.distance_to(sim.rocket_position)
 	var relative_speed: float = (target.velocity - sim.velocity).length()
@@ -1205,6 +1324,7 @@ func _build_flight_hud() -> void:
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
+	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
@@ -1969,7 +2089,8 @@ func _load_game_from_path(path: String) -> void:
 	docking_links.clear()
 	var saved_docking_links: Variant = parsed.get("docking_links", [])
 	if saved_docking_links is Array:
-		var linked_names: Dictionary = {}
+		var linked_children: Dictionary = {}
+		var linked_parents: Dictionary = {}
 		for saved_link in saved_docking_links:
 			if not saved_link is Dictionary:
 				continue
@@ -1981,7 +2102,7 @@ func _load_game_from_path(path: String) -> void:
 				continue
 			if _find_vehicle_by_name(parent_name) == null or _find_vehicle_by_name(child_name) == null:
 				continue
-			if linked_names.has(parent_name) or linked_names.has(child_name):
+			if linked_children.has(child_name) or linked_children.has(parent_name) or linked_parents.has(child_name):
 				continue
 			if not (offset_x is float or offset_x is int) or not (offset_y is float or offset_y is int):
 				continue
@@ -1993,8 +2114,8 @@ func _load_game_from_path(path: String) -> void:
 				"offset_x": float(offset_x),
 				"offset_y": float(offset_y)
 			})
-			linked_names[parent_name] = true
-			linked_names[child_name] = true
+			linked_children[child_name] = true
+			linked_parents[parent_name] = true
 	_update_docked_masses()
 	_sync_docked_vehicles()
 	_switch_vehicle(active_vehicle_index)
@@ -2031,61 +2152,16 @@ func _quit_game() -> void:
 
 class RocketPreview:
 	extends Control
+	const RocketVisual = preload("res://scripts/rocket_visual.gd")
 	var design: Dictionary = {}
 
 	func _draw() -> void:
-		var stages: Array = design.get("stages", [])
-		if stages.is_empty():
+		if design.get("stages", []).is_empty():
 			return
-		var center_x := size.x * 0.5
-		var top := 18.0
-		var available_height := maxf(100.0, size.y - 70.0)
-		var payload_height := clampf(available_height * 0.13, 32.0, 52.0)
-		var total_stage_mass := 0.0
-		for stage in stages:
-			total_stage_mass += float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
-		var stage_heights: Array[float] = []
-		for stage in stages:
-			var stage_mass := float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
-			stage_heights.append(clampf((available_height - payload_height) * stage_mass / maxf(1.0, total_stage_mass), 34.0, 86.0))
-		var total_height := payload_height
-		for stage_height in stage_heights:
-			total_height += stage_height
-		var scale_height := minf(1.0, available_height / maxf(1.0, total_height))
-		payload_height *= scale_height
-		for index in range(stage_heights.size()):
-			stage_heights[index] *= scale_height
-		var rocket_width := minf(92.0, size.x * 0.34)
-		var payload_type := str(design.get("payload_type", "probe"))
-		var payload_rect := Rect2(center_x - rocket_width * 0.32, top + 16.0, rocket_width * 0.64, payload_height - 16.0)
-		if payload_type == "satellite":
-			draw_rect(Rect2(center_x - rocket_width * 0.72, top + 22.0, rocket_width * 0.4, 12.0), Color(0.16, 0.42, 0.72))
-			draw_rect(Rect2(center_x + rocket_width * 0.32, top + 22.0, rocket_width * 0.4, 12.0), Color(0.16, 0.42, 0.72))
-			draw_rect(payload_rect, Color(0.78, 0.7, 0.42))
-		elif payload_type == "crew":
-			draw_colored_polygon(PackedVector2Array([Vector2(center_x, top), Vector2(center_x - rocket_width * 0.32, top + payload_height), Vector2(center_x + rocket_width * 0.32, top + payload_height)]), Color(0.82, 0.86, 0.92))
-			draw_circle(Vector2(center_x, top + payload_height * 0.62), 7.0, Color(0.2, 0.52, 0.72))
-		else:
-			draw_colored_polygon(PackedVector2Array([Vector2(center_x, top), Vector2(center_x - rocket_width * 0.32, top + payload_height), Vector2(center_x + rocket_width * 0.32, top + payload_height)]), Color(0.78, 0.84, 0.9))
-			draw_rect(Rect2(center_x - 8.0, top + payload_height * 0.62, 16.0, 10.0), Color(0.22, 0.52, 0.72))
-		var y := top + payload_height
-		for i in range(stages.size() - 1, -1, -1):
-			var stage: Dictionary = stages[i]
-			var stage_height: float = stage_heights[i]
-			var stage_width := rocket_width * (0.9 - 0.18 * float(i) / float(maxi(1, stages.size() - 1)))
-			var stage_rect := Rect2(center_x - stage_width * 0.5, y, stage_width, stage_height)
-			draw_rect(stage_rect, Color(0.34, 0.57, 0.72))
-			draw_rect(Rect2(stage_rect.position + Vector2(5.0, 5.0), Vector2(stage_width - 10.0, stage_height * 0.58)), Color(0.48, 0.68, 0.78))
-			draw_rect(Rect2(center_x - stage_width * 0.5, y + stage_height * 0.76, stage_width, stage_height * 0.12), Color(0.88, 0.65, 0.28))
-			draw_string(ThemeDB.fallback_font, Vector2(center_x + stage_width * 0.5 + 8.0, y + stage_height * 0.58), "S%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.65, 0.8, 0.92))
-			var engine_count := int(stage.get("engine_count", 1))
-			var nozzle_width := minf(9.0, stage_width * 0.12)
-			var engine_spacing := minf(20.0, stage_width * 0.68 / float(maxi(1, engine_count - 1)))
-			for engine_index in range(engine_count):
-				var engine_x := center_x + (float(engine_index) - float(engine_count - 1) * 0.5) * engine_spacing
-				draw_colored_polygon(PackedVector2Array([Vector2(engine_x - nozzle_width, y + stage_height), Vector2(engine_x + nozzle_width, y + stage_height), Vector2(engine_x + nozzle_width * 0.65, y + stage_height + 12.0), Vector2(engine_x - nozzle_width * 0.65, y + stage_height + 12.0)]), Color(0.58, 0.62, 0.7))
-			y += stage_height
+		var scale := minf(1.0, maxf(0.55, (size.y - 52.0) / 190.0))
+		RocketVisual.draw_vehicle(self, design, Vector2(size.x * 0.5, size.y * 0.48), 0.0, scale, 0, 0.0, false, true)
 		draw_string(ThemeDB.fallback_font, Vector2(12.0, size.y - 12.0), str(design.get("name", "CUSTOM VEHICLE")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.65, 0.8, 0.92))
+
 
 class Starfield:
 	extends Control
