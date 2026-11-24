@@ -1535,12 +1535,16 @@ func _draw_full_system_zoom(view_center: Vector2) -> void:
 			break
 	var sun_screen := view_center + (sun_position - rocket_position) * scale
 	for planet in PlanetarySystem.PLANETS:
+		if not discovered_body_names.has(str(planet.get("name", ""))):
+			continue
 		var orbit_radius := float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT * scale
 		if orbit_radius > 2.0 and orbit_radius < maxf(size.x, size.y) * 1.5:
 			draw_arc(sun_screen, orbit_radius, 0.0, TAU, 160, Color(0.28, 0.43, 0.58, 0.28), 1.0)
 	for body_variant in bodies:
 		var body: Dictionary = body_variant
 		var body_name := str(body.get("name", ""))
+		if body_name != "Sun" and not discovered_body_names.has(body_name):
+			continue
 		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
 		var screen_position := view_center + (body_position - rocket_position) * scale
 		if screen_position.x < -24.0 or screen_position.x > size.x + 24.0 or screen_position.y < -24.0 or screen_position.y > size.y + 24.0:
@@ -1576,6 +1580,8 @@ func _draw_offscreen_body_indicators(view_center: Vector2, scale: float) -> void
 	for body_variant in states.get("bodies", []):
 		var body: Dictionary = body_variant
 		var body_name := str(body.get("name", ""))
+		if body_name != "Sun" and not discovered_body_names.has(body_name):
+			continue
 		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
 		var screen_position := view_center + (body_position - rocket_position) * scale
 		if screen_position.x >= 0.0 and screen_position.x <= size.x and screen_position.y >= 0.0 and screen_position.y <= size.y:
