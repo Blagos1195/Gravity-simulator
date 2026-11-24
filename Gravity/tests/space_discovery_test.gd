@@ -29,6 +29,9 @@ func _validate_telescope_range() -> void:
 	assert(SpaceDiscovery.is_spotted(state, "Venus"))
 	assert(not SpaceDiscovery.is_visited(state, "Venus"))
 	assert(not SpaceDiscovery.is_spotted(state, "Mars"))
+	assert(SpaceDiscovery.scan_telescope(state, Vector2.ZERO, 2.0, bodies, PI) == ["Jupiter"])
+	assert(not SpaceDiscovery.is_spotted(state, "Venus"))
+	assert(SpaceDiscovery.scan_telescope(state, Vector2.ZERO, 1.0, bodies) == ["Venus"])
 	assert(SpaceDiscovery.scan_telescope(state, Vector2(1.6, 0.0), 0.1, bodies) == ["Mars"])
 
 func _validate_permanent_knowledge() -> void:
