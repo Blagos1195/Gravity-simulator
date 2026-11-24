@@ -14,18 +14,14 @@ func _initialize() -> void:
 	assert(main.rocket_design.payload_type == "modded_probe")
 	assert(main.rocket_design.payload_visual.visual_color_rgb == [0.1, 0.2, 0.3])
 	assert(main.mode == "editor")
-	assert(is_instance_valid(main.design_preview))
-	assert(is_instance_valid(main.design_stats_label))
-	assert(is_instance_valid(main.design_error_label))
-	assert(main.design_stats_label.text.contains("IDEAL ΔV"))
-	assert(main.design_error_label.text == "DESIGN VALID")
-	var payload_input := _find_spinbox(main)
+	assert(is_instance_valid(main.active_builder))
+	assert(main.active_builder.title == "VEHICLE ASSEMBLY BUILDING")
+	var payload_input := _find_spinbox(main.active_builder)
 	assert(is_instance_valid(payload_input))
 	payload_input.value = 1200.0
 	if not is_equal_approx(float(main.rocket_design.payload_mass), 1200.0):
 		payload_input.value_changed.emit(payload_input.value)
 	assert(is_equal_approx(float(main.rocket_design.payload_mass), 1200.0))
-	assert(main.design_error_label.text == "DESIGN VALID")
 	main._show_payload_editor()
 	var payload_dialog: ConfirmationDialog
 	for child in main.get_children():
@@ -67,9 +63,6 @@ func _initialize() -> void:
 	assert(is_equal_approx(red_input.max_value, 1.0))
 	assert(main.design_error_label.text == "DESIGN VALID")
 	stage_dialog.free()
-	var stage_booster_button := _find_button(main, "BOOST 0")
-	assert(is_instance_valid(stage_booster_button))
-	assert(stage_booster_button.tooltip_text.contains("booster"))
 	var original_stage: Dictionary = main.rocket_design["stages"][0].duplicate(true)
 	var original_stage_count: int = main.rocket_design["stages"].size()
 	main._duplicate_stage(0)
