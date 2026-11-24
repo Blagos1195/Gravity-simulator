@@ -517,15 +517,16 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 	if updated.is_empty():
 		return
 	var components: Array = updated.get("components", [])
-	if attachment == "radial" and insert_index >= 0:
+	if attachment == "radial":
 		var axial_indices: Array[int] = []
 		for index in range(components.size() - 1):
 			if str(components[index].get("attachment", "stack")) != "radial":
 				axial_indices.append(index)
 		if not axial_indices.is_empty():
+			var target_index := insert_index if insert_index >= 0 else int(float(components.size()) * 0.5)
 			var mount_index := axial_indices[0]
 			for candidate in axial_indices:
-				if absi(candidate - insert_index) < absi(mount_index - insert_index):
+				if absi(candidate - target_index) < absi(mount_index - target_index):
 					mount_index = candidate
 			components[components.size() - 1]["mount_index"] = mount_index
 	if attachment == "stack" and insert_index >= 0 and insert_index < components.size() - 1:
@@ -781,7 +782,10 @@ func _refresh_stats() -> void:
 	var mass := RocketDesign.total_initial_mass(design)
 	var thrust := RocketDesign.stage_total_thrust(stage, true)
 	var twr := thrust / maxf(1.0, RocketDesign.stage_ignition_mass(design, selected_stage_index) * RocketDesign.G0)
-	_stats.text = "TOTAL MASS  %.1f t     STAGE TWR  %.2f     IDEAL ΔV  %.2f km/s     STAGES  %d" % [mass / 1000.0, twr, RocketDesign.total_delta_v(design) / 1000.0, design.get("stages", []).size()]
+	var errors := RocketDesign.validation_errors(design)
+	var status := "DESIGN VALID" if errors.is_empty() else "CHECK: %s" % str(errors[0])
+	_stats.text = "TOTAL MASS  %.1f t     STAGE TWR  %.2f     IDEAL ΔV  %.2f km/s     STAGES  %d\n%s" % [mass / 1000.0, twr, RocketDesign.total_delta_v(design) / 1000.0, design.get("stages", []).size(), status]
+	_stats.add_theme_color_override("font_color", Color(0.95, 0.48, 0.38) if not errors.is_empty() else Color(0.76, 0.85, 0.94))
 
 func _changed(refresh_inspector: bool = true) -> void:
 	if refresh_inspector:
