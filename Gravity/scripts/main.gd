@@ -399,7 +399,7 @@ func _show_vehicle_editor() -> void:
 	var payload_limits := RocketDesign.payload_mass_limits()
 	var payload_mass_input := SpinBox.new()
 	payload_mass_input.min_value = float(payload_limits.get("minimum", 0.001))
-	payload_mass_input.max_value = float(payload_limits.get("maximum", 1000000000000000.0))
+	payload_mass_input.max_value = float(payload_limits.get("maximum", 1.0e300))
 	payload_mass_input.step = float(payload_limits.get("step", 1.0))
 	payload_mass_input.value = current_payload_mass
 	payload_mass_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
