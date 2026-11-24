@@ -545,6 +545,13 @@ func _update_discovery_state() -> void:
 func _scan_active_telescopes() -> void:
 	if fleet_sims.is_empty() or not is_instance_valid(sim):
 		return
+	var has_active_telescope := false
+	for vehicle in fleet_sims:
+		if vehicle.telescope_active and not vehicle.crashed and not vehicle.landed:
+			has_active_telescope = true
+			break
+	if not has_active_telescope:
+		return
 	var ephemeris := PlanetarySystem.gravity_body_states(sim.sim_time)
 	var heliocentric_bodies: Array = ephemeris.get("heliocentric_bodies", [])
 	var earth_position: Vector2 = ephemeris.get("earth_heliocentric_position", Vector2.ZERO)
@@ -577,7 +584,9 @@ func _scan_active_telescopes() -> void:
 				break
 		var telescope_position: Vector2 = host_heliocentric_position + (vehicle.rocket_position - relative_position)
 		vehicle.telescope_direction_angle = relative_velocity.angle()
-		SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies, vehicle.telescope_direction_angle, vehicle.telescope_field_of_view)
+		var discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies, vehicle.telescope_direction_angle, vehicle.telescope_field_of_view)
+		if not discoveries.is_empty() and is_instance_valid(status_label):
+			status_label.text = "NEW DISCOVERY  •  " + ", ".join(discoveries).to_upper()
 
 func _update_passive_orbit_states() -> void:
 	for vehicle in fleet_sims:
