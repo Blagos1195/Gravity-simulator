@@ -215,6 +215,15 @@ static func payload_component_mass(design: Dictionary, include_fairings: bool = 
 static func total_payload_mass(design: Dictionary, fairing_jettisoned: bool = false) -> float:
 	return float(design.get("payload_mass", 0.0)) + payload_component_mass(design, not fairing_jettisoned)
 
+static func payload_component_value(design: Dictionary, component_type: String, key: String, default_value: Variant = null) -> Variant:
+	for entry_variant in design.get("payload_components", []):
+		if not entry_variant is Dictionary:
+			continue
+		var definition := payload_component_definition_for_entry(entry_variant)
+		if str(definition.get("component_type", "")) == component_type and definition.has(key):
+			return definition[key]
+	return default_value
+
 static func has_payload_component(design: Dictionary, component_type: String) -> bool:
 	for entry_variant in design.get("payload_components", []):
 		if not entry_variant is Dictionary:
