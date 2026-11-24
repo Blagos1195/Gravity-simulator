@@ -4,6 +4,7 @@ const MissionSystem = preload("res://scripts/mission_system.gd")
 const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
 
 func _initialize() -> void:
+	assert(MissionSystem.definitions().size() >= 9)
 	var missions: Array = [
 		{"id": "lunar_orbit", "condition": "orbit_body", "body": "Moon", "count": 1, "reward": 1000},
 		{"id": "inner_survey", "condition": "discover_count", "count": 2, "reward": 2000},
