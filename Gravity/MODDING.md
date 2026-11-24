@@ -128,4 +128,4 @@ Add booster modules to `rocket.builder_options.booster_options`. Each module nee
 
 ## Strap-on booster modules
 
-Add modules under `rocket.builder_options.booster_options`. Each needs a unique `id` and `label`, per-booster `dry_mass`, `fuel_capacity`, `thrust`, `vacuum_thrust`, and `flow`, plus `pair_count: 2`. Optional `visual_width_factor`, `visual_length_factor`, and `visual_color_rgb` configure the rendered booster pair. Each stage supports up to two booster-pair modules. Booster mass, fuel, thrust and flow are included in vehicle performance and flight physics; attached boosters separate with their stage.
+Add modules under `rocket.builder_options.booster_options`. Each needs a unique `id` and `label`, per-booster `dry_mass`, `fuel_capacity`, `thrust`, `vacuum_thrust`, and `flow`, plus `pair_count: 2`. Optional `visual_width_factor`, `visual_length_factor`, and `visual_color_rgb` configure the rendered booster pair. Stages can carry any number of booster-pair modules. Booster mass, fuel, thrust and flow are included in vehicle performance and flight physics; attached boosters separate with their stage.
