@@ -238,7 +238,7 @@ func _update_economy() -> void:
 	if not is_instance_valid(sim):
 		return
 	var previous_time := economy_last_sim_time
-	var current_time := sim.sim_time
+	var current_time: float = sim.sim_time
 	var elapsed_seconds := maxf(0.0, current_time - previous_time)
 	economy_last_sim_time = current_time
 	if not career_enabled or elapsed_seconds <= 0.0:
@@ -250,8 +250,8 @@ func _update_economy() -> void:
 		var lifetime_days := float(profile.get("operational_lifetime_days", 0.0))
 		if role.is_empty() or lifetime_days <= 0.0 or not _vehicle_in_stable_orbit(vehicle):
 			continue
-		var age_at_start := (previous_time - vehicle.launch_time) / 86400.0
-		var age_at_end := (current_time - vehicle.launch_time) / 86400.0
+		var age_at_start: float = (previous_time - vehicle.launch_time) / 86400.0
+		var age_at_end: float = (current_time - vehicle.launch_time) / 86400.0
 		var active_days := maxf(0.0, minf(age_at_end, lifetime_days) - maxf(age_at_start, 0.0))
 		if active_days <= 0.0:
 			continue
