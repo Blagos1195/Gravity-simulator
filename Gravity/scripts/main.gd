@@ -8,6 +8,7 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
 const OrbitalPropagator = preload("res://scripts/orbital_propagator.gd")
 const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
+const MissionSystem = preload("res://scripts/mission_system.gd")
 const STARTING_FUNDS := 150000000.0
 const LAUNCH_BASE_COST := 1000000.0
 const LAUNCH_COST_PER_KG := 75.0
@@ -33,6 +34,8 @@ var economy_last_sim_time := 0.0
 var total_revenue_earned := 0.0
 var total_operating_costs := 0.0
 var funds_label: Label
+var mission_state: Dictionary = MissionSystem.new_state()
+var orbited_body_names: Dictionary = {}
 var vehicle_selector: OptionButton
 var docking_links: Array[Dictionary] = []
 var autosave_elapsed := 0.0
@@ -295,6 +298,8 @@ func _update_discovery_state() -> void:
 		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(body_name, body_radius)
 		var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(body.get("soi", 0.0)))
 		var stable_orbit := float(orbit.get("periapsis", 0.0)) > body_radius + minimum_altitude and float(orbit.get("apoapsis", INF)) < body_radius + maximum_altitude
+		if stable_orbit:
+			orbited_body_names[body_name] = true
 		if stable_orbit and SpaceDiscovery.mark_visited(discovery_state, body_name) and not newly_discovered.has(body_name):
 			newly_discovered.append(body_name)
 		var telescope_range_au := float(vehicle.payload_visual.get("telescope_range_au", 0.0))
@@ -1075,6 +1080,8 @@ func _begin_new_game() -> void:
 	economy_last_sim_time = 0.0
 	total_revenue_earned = 0.0
 	total_operating_costs = 0.0
+	mission_state = MissionSystem.new_state()
+	orbited_body_names.clear()
 	rocket_design = RocketDesign.create_default()
 	infinite_weightless_fuel = false
 	_show_new_game_setup()
@@ -2507,6 +2514,8 @@ func _save_game(automatic: bool) -> void:
 	data["funds"] = funds
 	data["total_revenue_earned"] = total_revenue_earned
 	data["total_operating_costs"] = total_operating_costs
+	data["mission_state"] = mission_state.duplicate(true)
+	data["orbited_body_names"] = orbited_body_names.duplicate(true)
 
 	if automatic:
 		var history_directory := "%s/history/slot_%02d" % [SAVE_DIR, save_slot]
@@ -2627,6 +2636,9 @@ func _load_game_from_path(path: String) -> void:
 	economy_last_sim_time = fleet_sims[active_vehicle_index].sim_time if not fleet_sims.is_empty() else 0.0
 	_refresh_economy_display()
 	discovery_state = SpaceDiscovery.sanitize_state(parsed.get("discovery_state", SpaceDiscovery.new_campaign_state()))
+	mission_state = MissionSystem.sanitize_state(parsed.get("mission_state", MissionSystem.new_state()))
+	var saved_orbited_bodies: Variant = parsed.get("orbited_body_names", {})
+	orbited_body_names = saved_orbited_bodies.duplicate(true) if saved_orbited_bodies is Dictionary else {}
 	for vehicle in fleet_sims:
 		vehicle.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
 		vehicle.visited_body_names = SpaceDiscovery.visited_names(discovery_state)
