@@ -40,7 +40,7 @@ For example, this adds another payload choice, engine-count choice and tank size
 
 ## Adding a rocket stage part and preset
 
-Stage parts are reusable components. Presets are vehicle designs made from stage-part IDs. In the workshop, each stage also has an edit panel for its dry mass, propellant capacity, per-engine thrust and flow, and visual proportions. Engine-count changes preserve total stage thrust and flow; tank-scale changes scale dry mass and propellant capacity proportionally. Stage parts may also define `visual_length_factor`, `visual_diameter_factor` and `visual_color_rgb` to control their appearance in both the workshop and flight view. The factors are relative visual multipliers; the RGB array uses values from 0 to 1. Omit them to use the built-in defaults.
+Stage parts are reusable components. Presets are vehicle designs made from stage-part IDs. In the workshop, each stage also has an edit panel for its dry mass, propellant capacity, per-engine thrust and flow, visual proportions, and body colour. Engine-count changes preserve total stage thrust and flow; tank-scale changes scale dry mass and propellant capacity proportionally. Stage parts may also define `visual_length_factor`, `visual_diameter_factor` and `visual_color_rgb` to control their appearance in both the workshop and flight view. The factors are relative visual multipliers; the RGB array uses values from 0 to 1. Omit them to use the built-in defaults.
 
 ```json
 {
