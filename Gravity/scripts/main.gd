@@ -895,6 +895,9 @@ func _apply_payload_editor_values(values: Dictionary) -> void:
 			color[channel] = clampf(float(values[key]), 0.0, 1.0)
 	visual["visual_color_rgb"] = color
 	rocket_design["payload_visual"] = visual
+	if is_instance_valid(active_builder) and active_builder is RocketBuilder:
+		active_builder.design = rocket_design.duplicate(true)
+		active_builder._changed()
 	_update_design_stats()
 
 
@@ -1662,108 +1665,60 @@ func _show_new_vehicle_dialog() -> void:
 
 func _show_fleet_custom_builder() -> void:
 	rocket_design = RocketDesign.create_blank()
-	var design: Dictionary = rocket_design
 	var window := Window.new()
 	window.title = "CUSTOM VEHICLE WORKSHOP"
-	window.size = Vector2i(760, 680)
-	window.min_size = Vector2i(600, 480)
+	window.size = Vector2i(1440, 900)
+	window.min_size = Vector2i(900, 620)
 	window.transient = true
-	window.close_requested.connect(window.queue_free)
-	add_child(window)
-	var layout := VBoxContainer.new()
-	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layout.add_theme_constant_override("separation", 8)
-	window.add_child(layout)
-	var name_input := LineEdit.new()
-	name_input.text = str(design.get("name", "Custom Vehicle"))
-	name_input.placeholder_text = "Vehicle name"
-	name_input.text_changed.connect(func(value: String): design["name"] = value)
-	layout.add_child(name_input)
-	var payload_row := HBoxContainer.new()
-	var payload_label := Label.new()
-	payload_label.text = "PAYLOAD MASS (KG)"
-	payload_row.add_child(payload_label)
-	var payload_mass := SpinBox.new()
-	payload_mass.min_value = 0.001
-	payload_mass.max_value = 1.0e300
-	payload_mass.step = 10.0
-	payload_mass.value = float(design.get("payload_mass", 500.0))
-	payload_mass.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	payload_mass.value_changed.connect(func(value: float): design["payload_mass"] = value)
-	payload_row.add_child(payload_mass)
-	layout.add_child(payload_row)
-	var payload_selector := OptionButton.new()
-	var payload_options := RocketDesign.payload_options()
-	for option in payload_options:
-		payload_selector.add_item(str(option.get("label", option.get("id", "Payload"))))
-		payload_selector.set_item_metadata(payload_selector.item_count - 1, option)
-	var current_payload_index := 0
-	for i in range(payload_options.size()):
-		if str(payload_options[i].get("id", "")) == str(design.get("payload_type", "")):
-			current_payload_index = i
-			break
-	if payload_selector.item_count > 0:
-		payload_selector.select(current_payload_index)
-		payload_selector.item_selected.connect(func(index: int):
-			var option: Dictionary = payload_selector.get_item_metadata(index)
-			design["payload_type"] = str(option.get("id", "custom"))
-			design["payload_mass"] = float(option.get("mass", design.get("payload_mass", 500.0)))
-			design["payload_visual"] = RocketDesign.payload_visual_data(str(option.get("id", "")))
-			payload_mass.set_value_no_signal(float(design["payload_mass"]))
-		)
-	layout.add_child(payload_selector)
-	var payload_edit_button := Button.new()
-	payload_edit_button.text = "EDIT PAYLOAD APPEARANCE"
-	payload_edit_button.pressed.connect(_show_payload_editor)
-	layout.add_child(payload_edit_button)
-	var stage_heading := Label.new()
-	stage_heading.text = "STAGES  •  EDIT PARTS, ENGINES, TANKS AND BOOSTERS"
-	layout.add_child(stage_heading)
-	var stage_scroll := ScrollContainer.new()
-	stage_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	layout.add_child(stage_scroll)
-	var stage_list := VBoxContainer.new()
-	stage_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stage_scroll.add_child(stage_list)
-	_populate_fleet_builder_stages(stage_list, design, window)
-	var add_row := HBoxContainer.new()
-	var part_selector := OptionButton.new()
-	part_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for option in RocketDesign.stage_part_options():
-		part_selector.add_item(str(option.get("label", option.get("id", "Stage"))))
-		part_selector.set_item_metadata(part_selector.item_count - 1, str(option.get("id", "")))
-	add_row.add_child(part_selector)
-	var add_stage_button := Button.new()
-	add_stage_button.text = "ADD STAGE"
-	add_stage_button.pressed.connect(func():
-		if part_selector.item_count == 0:
-			return
-		var stage := RocketDesign.configure_stage(str(part_selector.get_selected_metadata()), 1, 1.0)
-		if not stage.is_empty():
-			design["stages"].append(stage)
-			_populate_fleet_builder_stages(stage_list, design, window)
-	)
-	add_row.add_child(add_stage_button)
-	layout.add_child(add_row)
-	var actions := HBoxContainer.new()
-	var launch_button := Button.new()
-	launch_button.text = "LAUNCH CUSTOM VEHICLE"
-	launch_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	launch_button.pressed.connect(func():
-		design["name"] = name_input.text.strip_edges()
-		if str(design["name"]).is_empty():
-			design["name"] = "Custom Vehicle"
-		var errors := RocketDesign.validation_errors(design)
-		if not errors.is_empty():
-			return
-		_launch_vehicle_design(design.duplicate(true))
+	window.exclusive = true
+	window.close_requested.connect(func():
+		if active_builder is RocketBuilder:
+			active_builder = null
 		window.queue_free()
 	)
-	actions.add_child(launch_button)
-	_add_button(actions, "CLOSE", func(): window.queue_free())
-	layout.add_child(actions)
+	add_child(window)
+	var builder := RocketBuilder.new()
+	builder.configure(rocket_design, 0)
+	active_builder = builder
+	builder.tree_exited.connect(func():
+		if active_builder == builder:
+			active_builder = null
+	)
+	builder.design_changed.connect(func(updated_design: Dictionary):
+		rocket_design = updated_design.duplicate(true)
+	)
+	builder.save_requested.connect(_save_rocket_design)
+	builder.load_requested.connect(func():
+		var path := "user://rocket_design.json"
+		if not FileAccess.file_exists(path):
+			return
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			return
+		var parsed: Variant = JSON.parse_string(file.get_as_text())
+		file.close()
+		if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
+			rocket_design = parsed.duplicate(true)
+			builder.configure(rocket_design, 0)
+	)
+	builder.payload_edit_requested.connect(_show_payload_editor)
+	builder.launch_requested.connect(func():
+		var errors := RocketDesign.validation_errors(rocket_design)
+		if not errors.is_empty():
+			return
+		_launch_vehicle_design(rocket_design.duplicate(true))
+		if active_builder == builder:
+			active_builder = null
+		window.queue_free()
+	)
+	builder.back_requested.connect(func():
+		if active_builder == builder:
+			active_builder = null
+		window.queue_free()
+	)
+	builder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	window.add_child(builder)
 	window.popup_centered()
-
 
 func _populate_fleet_builder_stages(stage_list: VBoxContainer, design: Dictionary, window: Window) -> void:
 	for child in stage_list.get_children():
