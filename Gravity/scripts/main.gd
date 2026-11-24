@@ -1122,41 +1122,174 @@ func _update_design_stats() -> void:
 		design_preview.design = rocket_design
 		design_preview.queue_redraw()
 
+func _design_library_directory() -> String:
+	return "user://rocket_designs"
+
+
+func _design_library_files() -> PackedStringArray:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_design_library_directory()))
+	var files := PackedStringArray()
+	var directory := DirAccess.open(_design_library_directory())
+	if directory == null:
+		return files
+	directory.list_dir_begin()
+	var filename := directory.get_next()
+	while not filename.is_empty():
+		if not directory.current_is_dir() and filename.get_extension().to_lower() == "json":
+			files.append(filename)
+		filename = directory.get_next()
+	directory.list_dir_end()
+	files.sort()
+	return files
+
+
 func _save_rocket_design() -> void:
 	var errors := RocketDesign.validation_errors(rocket_design)
 	if not errors.is_empty():
 		_update_design_stats()
 		return
-	var file := FileAccess.open("user://rocket_design.json", FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(rocket_design, "\t"))
+	var window := Window.new()
+	window.title = "SAVE VEHICLE DESIGN"
+	window.size = Vector2i(520, 190)
+	window.min_size = Vector2i(440, 170)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 10)
+	layout.add_theme_constant_override("margin_left", 16)
+	layout.add_theme_constant_override("margin_right", 16)
+	layout.add_theme_constant_override("margin_top", 14)
+	layout.add_theme_constant_override("margin_bottom", 14)
+	window.add_child(layout)
+	var name_input := LineEdit.new()
+	name_input.text = str(rocket_design.get("name", "Custom Vehicle"))
+	name_input.placeholder_text = "Design name"
+	layout.add_child(name_input)
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_END
+	layout.add_child(actions)
+	var cancel := Button.new()
+	cancel.text = "CANCEL"
+	cancel.pressed.connect(window.queue_free)
+	actions.add_child(cancel)
+	var save := Button.new()
+	save.text = "SAVE TO LIBRARY"
+	save.pressed.connect(func():
+		var design_name := name_input.text.strip_edges()
+		if design_name.is_empty():
+			return
+		var safe_name := design_name.to_lower().replace(" ", "_")
+		var safe_chars := ""
+		for character in safe_name:
+			if character.is_valid_identifier() or character in ["-", "_"]:
+				safe_chars += character
+		if safe_chars.is_empty():
+			return
+		var saved_design := rocket_design.duplicate(true)
+		saved_design["name"] = design_name
+		var path := "%s/%s.json" % [_design_library_directory(), safe_chars]
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		if file == null:
+			return
+		file.store_string(JSON.stringify(saved_design, "\t"))
 		file.close()
+		rocket_design = saved_design
+		if is_instance_valid(active_builder) and active_builder is RocketBuilder:
+			active_builder.load_design(saved_design)
 		if is_instance_valid(design_error_label):
-			design_error_label.text = "DESIGN SAVED"
-	else:
-		if is_instance_valid(design_error_label):
-			design_error_label.text = "DESIGN FILE COULD NOT BE OPENED"
+			design_error_label.text = "DESIGN SAVED TO LIBRARY"
+		window.queue_free()
+	)
+	actions.add_child(save)
+	window.popup_centered()
 
 
 func _load_rocket_design() -> void:
-	var path := "user://rocket_design.json"
-	if not FileAccess.file_exists(path):
+	var files := _design_library_files()
+	if files.is_empty():
 		if is_instance_valid(design_error_label):
-			design_error_label.text = "NO SAVED DESIGN FOUND"
+			design_error_label.text = "NO DESIGNS IN LIBRARY"
 		return
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		if is_instance_valid(design_error_label):
-			design_error_label.text = "SAVED DESIGN COULD NOT BE OPENED"
-		return
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	file.close()
-	if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
-		rocket_design = parsed
-		_show_vehicle_editor()
-	else:
-		if is_instance_valid(design_error_label):
-			design_error_label.text = "SAVED DESIGN IS INVALID"
+	var window := Window.new()
+	window.title = "ROCKET DESIGN LIBRARY"
+	window.size = Vector2i(620, 420)
+	window.min_size = Vector2i(500, 320)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_bottom", 14)
+	window.add_child(margin)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 10)
+	margin.add_child(layout)
+	var selector := OptionButton.new()
+	selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for filename in files:
+		var path := "%s/%s" % [_design_library_directory(), filename]
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			continue
+		var parsed: Variant = JSON.parse_string(file.get_as_text())
+		file.close()
+		if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
+			selector.add_item(str(parsed.get("name", filename.get_basename())))
+			selector.set_item_metadata(selector.item_count - 1, filename)
+	layout.add_child(selector)
+	var info := Label.new()
+	info.text = "Saved designs are stored locally and remain available between sessions."
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(info)
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_END
+	layout.add_child(actions)
+	var close := Button.new()
+	close.text = "CLOSE"
+	close.pressed.connect(window.queue_free)
+	actions.add_child(close)
+	var delete := Button.new()
+	delete.text = "DELETE"
+	delete.disabled = selector.item_count == 0
+	delete.pressed.connect(func():
+		if selector.item_count == 0:
+			return
+		var filename := str(selector.get_item_metadata(selector.selected))
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("%s/%s" % [_design_library_directory(), filename]))
+		window.queue_free()
+		_load_rocket_design()
+	)
+	actions.add_child(delete)
+	var load := Button.new()
+	load.text = "LOAD DESIGN"
+	load.disabled = selector.item_count == 0
+	load.pressed.connect(func():
+		if selector.item_count == 0:
+			return
+		var filename := str(selector.get_item_metadata(selector.selected))
+		var path := "%s/%s" % [_design_library_directory(), filename]
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			return
+		var parsed: Variant = JSON.parse_string(file.get_as_text())
+		file.close()
+		if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
+			rocket_design = parsed.duplicate(true)
+			if is_instance_valid(active_builder) and active_builder is RocketBuilder:
+				active_builder.load_design(rocket_design)
+			else:
+				_show_vehicle_editor()
+			window.queue_free()
+	)
+	actions.add_child(load)
+	window.popup_centered()
 
 func _launch_designed_vehicle() -> void:
 	var errors := RocketDesign.validation_errors(rocket_design)
@@ -1689,17 +1822,7 @@ func _show_fleet_custom_builder() -> void:
 	)
 	builder.save_requested.connect(_save_rocket_design)
 	builder.load_requested.connect(func():
-		var path := "user://rocket_design.json"
-		if not FileAccess.file_exists(path):
-			return
-		var file := FileAccess.open(path, FileAccess.READ)
-		if file == null:
-			return
-		var parsed: Variant = JSON.parse_string(file.get_as_text())
-		file.close()
-		if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
-			rocket_design = parsed.duplicate(true)
-			builder.configure(rocket_design, 0)
+		_load_rocket_design()
 	)
 	builder.payload_edit_requested.connect(_show_payload_editor)
 	builder.launch_requested.connect(func():
