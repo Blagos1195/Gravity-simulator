@@ -107,6 +107,11 @@ var landed := true
 var crashed := false
 var landed_body_name := "Earth"
 var landed_surface_normal := Vector2.DOWN
+var discovered_body_names: Dictionary = {"Earth": true, "Moon": true}
+var visited_body_names: Dictionary = {"Earth": true}
+var passive_orbit_active := false
+var passive_orbit_forced := false
+var passive_orbit_data: Dictionary = {}
 
 func _set_rocket_position_components(position_x: float, position_y: float) -> void:
 	rocket_position_precise = PackedFloat64Array([position_x, position_y])
@@ -1530,12 +1535,16 @@ func _draw_full_system_zoom(view_center: Vector2) -> void:
 			break
 	var sun_screen := view_center + (sun_position - rocket_position) * scale
 	for planet in PlanetarySystem.PLANETS:
+		if not discovered_body_names.has(str(planet.get("name", ""))):
+			continue
 		var orbit_radius := float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT * scale
 		if orbit_radius > 2.0 and orbit_radius < maxf(size.x, size.y) * 1.5:
 			draw_arc(sun_screen, orbit_radius, 0.0, TAU, 160, Color(0.28, 0.43, 0.58, 0.28), 1.0)
 	for body_variant in bodies:
 		var body: Dictionary = body_variant
 		var body_name := str(body.get("name", ""))
+		if body_name != "Sun" and not discovered_body_names.has(body_name):
+			continue
 		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
 		var screen_position := view_center + (body_position - rocket_position) * scale
 		if screen_position.x < -24.0 or screen_position.x > size.x + 24.0 or screen_position.y < -24.0 or screen_position.y > size.y + 24.0:
@@ -1571,6 +1580,8 @@ func _draw_offscreen_body_indicators(view_center: Vector2, scale: float) -> void
 	for body_variant in states.get("bodies", []):
 		var body: Dictionary = body_variant
 		var body_name := str(body.get("name", ""))
+		if body_name != "Sun" and not discovered_body_names.has(body_name):
+			continue
 		var body_position: Vector2 = Vector2(body.get("position", Vector2.ZERO))
 		var screen_position := view_center + (body_position - rocket_position) * scale
 		if screen_position.x >= 0.0 and screen_position.x <= size.x and screen_position.y >= 0.0 and screen_position.y <= size.y:
@@ -1675,7 +1686,7 @@ func _draw_solar_system(center: Vector2) -> void:
 	var occupied: Array[Rect2] = []
 	var header := Rect2(Vector2(18.0, 14.0), Vector2(minf(size.x - 36.0, 370.0), 24.0))
 	draw_rect(header, Color(0.025, 0.045, 0.075, 0.9), true)
-	draw_string(ThemeDB.fallback_font, header.position + Vector2(7.0, 18.0), "LIVE SOLAR SYSTEM  •  SIMULATION EPHEMERIS", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
+	draw_string(ThemeDB.fallback_font, header.position + Vector2(7.0, 18.0), "SOLAR SYSTEM  •  KNOWN BODIES ONLY", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
 	occupied.append(header)
 	var sun_screen := center
 	var sun_color := PlanetarySystem.system_visual_color()
@@ -1684,6 +1695,8 @@ func _draw_solar_system(center: Vector2) -> void:
 	_draw_solar_label("SUN", sun_screen, 11, sun_color.lightened(0.15), occupied)
 	var positions: Dictionary = {}
 	for planet in PlanetarySystem.PLANETS:
+		if not discovered_body_names.has(str(planet.get("name", ""))):
+			continue
 		var orbit_radius: float = float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT
 		draw_arc(center, orbit_radius * map_scale, 0.0, TAU, 180, Color(0.28, 0.43, 0.58, 0.34), 1.0)
 	for belt in solar_belt_particles:
@@ -1710,6 +1723,8 @@ func _draw_solar_system(center: Vector2) -> void:
 		positions[body_name] = Vector2(body.get("position", Vector2.ZERO))
 	for planet in PlanetarySystem.PLANETS:
 		var planet_name: String = str(planet.name)
+		if not discovered_body_names.has(planet_name):
+			continue
 		var planet_position: Vector2 = Vector2(positions.get(planet_name, Vector2.ZERO))
 		var planet_screen: Vector2 = center + Vector2(planet_position.x, -planet_position.y) * map_scale
 		var planet_radius: float = clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
@@ -1720,12 +1735,16 @@ func _draw_solar_system(center: Vector2) -> void:
 		_draw_solar_label(planet_name.to_upper(), planet_screen, 10, Color(0.82, 0.88, 0.96), occupied)
 	for planet in PlanetarySystem.PLANETS:
 		var planet_name: String = str(planet.name)
+		if not discovered_body_names.has(planet_name):
+			continue
 		var host_position: Vector2 = positions.get(planet_name, Vector2.ZERO)
 		var host_screen := center + Vector2(host_position.x, -host_position.y) * map_scale
 		var host_radius := clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
 		for satellite_variant in planet.get("satellites", []):
 			var satellite: Dictionary = satellite_variant
 			var satellite_name := "%s %s" % [planet_name, str(satellite.get("name", "Moon"))]
+			if not discovered_body_names.has(satellite_name):
+				continue
 			var satellite_position: Vector2 = positions.get(satellite_name, host_position)
 			var relative_direction := Vector2(satellite_position.x - host_position.x, -(satellite_position.y - host_position.y)).normalized()
 			var orbit_ratio := maxf(1.0, float(satellite.get("semi_major_axis_m", 0.0)) / float(planet.radius))
@@ -2096,7 +2115,10 @@ func get_save_data() -> Dictionary:
 		"time_warp": time_warp,
 		"paused": paused,
 		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": rocket_stages.duplicate(true)},
-		"vehicle_name": vehicle_name
+		"vehicle_name": vehicle_name,
+		"passive_orbit_active": passive_orbit_active,
+		"passive_orbit_forced": passive_orbit_forced,
+		"passive_orbit_data": passive_orbit_data.duplicate(true)
 	}
 
 func load_save_data(data: Dictionary) -> bool:
@@ -2188,6 +2210,13 @@ func load_save_data(data: Dictionary) -> bool:
 				validated_stage_fuel.append(float(saved_stages[i].get("fuel_capacity", 0.0)))
 	set_rocket_design(saved_design)
 	vehicle_name = str(data.get("vehicle_name", vehicle_name))
+	passive_orbit_active = bool(data.get("passive_orbit_active", false))
+	passive_orbit_forced = bool(data.get("passive_orbit_forced", false))
+	var saved_passive_orbit: Variant = data.get("passive_orbit_data", {})
+	passive_orbit_data = saved_passive_orbit.duplicate(true) if saved_passive_orbit is Dictionary else {}
+	if passive_orbit_active and (str(passive_orbit_data.get("host_body_name", "")).is_empty() or not passive_orbit_data.get("elements", {}) is Dictionary):
+		passive_orbit_active = false
+		passive_orbit_data.clear()
 	stage_index = clampi(int(data.get("stage_index", 0)), 0, maxi(0, rocket_stages.size() - 1))
 	sim_time = float(data.get("sim_time", 0.0))
 	var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 2.0])

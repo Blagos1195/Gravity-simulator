@@ -61,6 +61,12 @@ jobs:
           if echo "$changed_files" | grep -Eq 'simulation_view|planetary_system'; then
             run_check simulation_lifecycle_test
           fi
+          if echo "$changed_files" | grep -Eq 'orbital_propagator'; then
+            run_check orbital_propagator_test
+          fi
+          if echo "$changed_files" | grep -Eq 'space_discovery|content_catalog|rocket_design'; then
+            run_check space_discovery_test
+          fi
           if echo "$changed_files" | grep -Eq 'flight_computer|route_planner'; then
             run_check flight_computer_test
             run_check leo_autopilot_mission_test
@@ -81,6 +87,8 @@ jobs:
             fi
           }
           run_check compile_simulation_view
+          run_check orbital_propagator_test
+          run_check space_discovery_test
           run_check rocket_design_test
           run_check rocket_builder_ui_test
           run_check multi_vehicle_test

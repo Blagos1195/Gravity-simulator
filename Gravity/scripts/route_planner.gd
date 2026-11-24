@@ -304,11 +304,16 @@ func _build_interface() -> void:
 	root.add_child(navigation_description)
 	var navigation_row := HBoxContainer.new()
 	root.add_child(navigation_row)
+	var visited_body_names: Dictionary = simulation.get("visited_body_names")
+	var discovered_body_names: Dictionary = simulation.get("discovered_body_names")
 	navigation_planet_dropdown = OptionButton.new()
 	navigation_planet_dropdown.add_item("Earth", -2)
 	for planet_index in range(FlightComputer.PLANET_TARGETS.size()):
 		var planet: Dictionary = FlightComputer.PLANET_TARGETS[planet_index]
-		navigation_planet_dropdown.add_item(str(planet.get("name", "Unknown")), planet_index)
+		var planet_name := str(planet.get("name", "Unknown"))
+		if discovered_body_names.has(planet_name):
+			navigation_planet_dropdown.add_item(planet_name, planet_index)
+			navigation_planet_dropdown.set_item_disabled(navigation_planet_dropdown.item_count - 1, not visited_body_names.has(planet_name))
 	navigation_planet_dropdown.item_selected.connect(func(_index: int):
 		_rebuild_navigation_moons(navigation_planet_dropdown.get_selected_id())
 		_invalidate_navigation_plan()
@@ -577,14 +582,21 @@ func _build_interface() -> void:
 	radial_input.value_changed.connect(_update_selected_node)
 
 func _rebuild_navigation_moons(parent_target_index: int) -> void:
+	var visited_body_names: Dictionary = simulation.get("visited_body_names")
+	var discovered_body_names: Dictionary = simulation.get("discovered_body_names")
 	navigation_moon_dropdown.clear()
 	navigation_moon_dropdown.add_item("Planet only", parent_target_index)
 	if parent_target_index == -2:
-		navigation_moon_dropdown.add_item("Moon", -1)
+		if discovered_body_names.has("Moon"):
+			navigation_moon_dropdown.add_item("Moon", -1)
+			navigation_moon_dropdown.set_item_disabled(navigation_moon_dropdown.item_count - 1, not visited_body_names.has("Moon"))
 	else:
 		var parent_name := FlightComputer.target_body_name(parent_target_index)
 		for satellite in FlightComputer.satellite_targets_for_host(parent_name):
-			navigation_moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
+			var satellite_name := str(satellite.get("name", ""))
+			if discovered_body_names.has(satellite_name):
+				navigation_moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
+				navigation_moon_dropdown.set_item_disabled(navigation_moon_dropdown.item_count - 1, not visited_body_names.has(satellite_name))
 	navigation_moon_dropdown.select(0)
 	navigation_moon_dropdown.disabled = navigation_moon_dropdown.item_count <= 1
 

@@ -6,6 +6,8 @@ const RocketVisual = preload("res://scripts/rocket_visual.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
+const OrbitalPropagator = preload("res://scripts/orbital_propagator.gd")
+const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
 const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
 const DOCKING_CAPTURE_DISTANCE := 100.0
@@ -22,6 +24,7 @@ var sim
 var fleet_sims: Array = []
 var active_vehicle_index := 0
 var fleet_time_backlog := 0.0
+var discovery_state: Dictionary = SpaceDiscovery.new_campaign_state()
 var vehicle_selector: OptionButton
 var docking_links: Array[Dictionary] = []
 var autosave_elapsed := 0.0
@@ -146,6 +149,7 @@ func _process(delta: float) -> void:
 func _advance_fleet(delta: float) -> void:
 	if fleet_sims.is_empty() or not is_instance_valid(sim):
 		return
+	_update_passive_orbit_states()
 	for vehicle in fleet_sims:
 		vehicle.time_warp = sim.time_warp
 		vehicle.paused = sim.paused
@@ -165,6 +169,8 @@ func _advance_fleet(delta: float) -> void:
 	else:
 		var effective_warp: float = sim.time_warp
 		for vehicle in fleet_sims:
+			if vehicle.passive_orbit_active:
+				continue
 			var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position)
 			var altitude: float = maxf(0.0, float(body.distance) - float(body.radius))
 			var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(body.get("name", "Earth")))
@@ -177,20 +183,138 @@ func _advance_fleet(delta: float) -> void:
 		while fleet_time_backlog > 0.000001 and iterations < SimulationView.MAX_PHYSICS_STEPS_PER_FRAME and Time.get_ticks_usec() - physics_budget_start_usec < SimulationView.MAX_PHYSICS_BUDGET_USEC:
 			var step_delta := fleet_time_backlog
 			for vehicle in fleet_sims:
-				if not _is_docked_child(vehicle.vehicle_name):
+				if not _is_docked_child(vehicle.vehicle_name) and not vehicle.passive_orbit_active:
 					step_delta = minf(step_delta, vehicle._adaptive_step_size())
 			if step_delta <= 0.000001:
 				break
 			for vehicle in fleet_sims:
-				if not _is_docked_child(vehicle.vehicle_name):
+				if not _is_docked_child(vehicle.vehicle_name) and not vehicle.passive_orbit_active:
 					vehicle._physics_step(step_delta)
+			for vehicle in fleet_sims:
+				if vehicle.passive_orbit_active:
+					_advance_passive_vehicle(vehicle, sim.sim_time)
 			_sync_docked_vehicles()
 			fleet_time_backlog = maxf(0.0, fleet_time_backlog - step_delta)
 			iterations += 1
 	for vehicle in fleet_sims:
 		vehicle.simulation_time_backlog = fleet_time_backlog
 	if is_instance_valid(sim):
+		_update_discovery_state()
 		sim.queue_redraw()
+
+func _update_discovery_state() -> void:
+	if fleet_sims.is_empty() or not is_instance_valid(sim):
+		return
+	var ephemeris := PlanetarySystem.gravity_body_states(sim.sim_time)
+	var heliocentric_bodies: Array = ephemeris.get("heliocentric_bodies", [])
+	var earth_position: Vector2 = ephemeris.get("earth_heliocentric_position", Vector2.ZERO)
+	var newly_discovered: Array[String] = []
+	for vehicle in fleet_sims:
+		if vehicle.landed:
+			var landed_name := str(vehicle.landed_body_name)
+			if SpaceDiscovery.mark_spotted(discovery_state, landed_name) and not newly_discovered.has(landed_name):
+				newly_discovered.append(landed_name)
+			continue
+		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+		if body.is_empty() or float(body.get("distance", INF)) > float(body.get("soi", 0.0)):
+			continue
+		var body_name := str(body.get("name", ""))
+		if SpaceDiscovery.mark_spotted(discovery_state, body_name) and not newly_discovered.has(body_name):
+			newly_discovered.append(body_name)
+		if vehicle.crashed:
+			continue
+		var relative_position: Vector2 = body.relative_position
+		var relative_velocity: Vector2 = vehicle.velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(body.get("mass", 0.0)))
+		if not bool(orbit.get("bound", false)):
+			continue
+		var body_radius := float(body.get("radius", 0.0))
+		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(body_name, body_radius)
+		var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(body.get("soi", 0.0)))
+		var stable_orbit := float(orbit.get("periapsis", 0.0)) > body_radius + minimum_altitude and float(orbit.get("apoapsis", INF)) < body_radius + maximum_altitude
+		if stable_orbit and SpaceDiscovery.mark_visited(discovery_state, body_name) and not newly_discovered.has(body_name):
+			newly_discovered.append(body_name)
+		var telescope_range_au := float(vehicle.payload_visual.get("telescope_range_au", 0.0))
+		if stable_orbit and str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
+			var telescope_position: Vector2 = earth_position + vehicle.rocket_position
+			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies)
+			for discovered_name in telescope_discoveries:
+				if not newly_discovered.has(discovered_name):
+					newly_discovered.append(discovered_name)
+	var spotted := SpaceDiscovery.spotted_names(discovery_state)
+	var visited := SpaceDiscovery.visited_names(discovery_state)
+	for vehicle in fleet_sims:
+		vehicle.discovered_body_names = spotted.duplicate()
+		vehicle.visited_body_names = visited.duplicate()
+	if not newly_discovered.is_empty() and is_instance_valid(status_label):
+		status_label.text = "NEW DISCOVERY  •  " + ", ".join(newly_discovered).to_upper()
+
+func _update_passive_orbit_states() -> void:
+	for vehicle in fleet_sims:
+		if vehicle == sim or _is_docked_child(vehicle.vehicle_name) or vehicle.passive_orbit_forced or vehicle.landed or vehicle.crashed or vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled:
+			vehicle.passive_orbit_active = false
+			vehicle.passive_orbit_data.clear()
+			continue
+		if vehicle.passive_orbit_active:
+			if _passive_orbit_near_active_vehicle(vehicle):
+				vehicle.passive_orbit_active = false
+				vehicle.passive_orbit_data.clear()
+			continue
+		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+		if body.is_empty() or float(body.get("distance", INF)) > float(body.get("soi", 0.0)):
+			continue
+		var relative_position: Vector2 = body.relative_position
+		var relative_velocity: Vector2 = vehicle.velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var mu := FlightComputer.G * float(body.get("mass", 0.0))
+		var orbit := FlightComputer.orbital_state(relative_position, relative_velocity, mu)
+		if not bool(orbit.get("bound", false)):
+			continue
+		var body_radius := float(body.get("radius", 0.0))
+		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(str(body.get("name", "")), body_radius)
+		var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(body.get("soi", 0.0)))
+		if float(orbit.get("periapsis", 0.0)) <= body_radius + minimum_altitude or float(orbit.get("apoapsis", INF)) >= body_radius + maximum_altitude:
+			continue
+		var elements := OrbitalPropagator.elements_from_state(relative_position, relative_velocity, mu, vehicle.sim_time)
+		if elements.is_empty():
+			continue
+		vehicle.passive_orbit_data = {"host_body_name": str(body.get("name", "")), "elements": elements}
+		vehicle.passive_orbit_active = true
+
+func _passive_orbit_near_active_vehicle(vehicle: SimulationView) -> bool:
+	return vehicle.rocket_position.distance_to(sim.rocket_position) <= 20000000.0
+
+func _advance_passive_vehicle(vehicle: SimulationView, target_time: float) -> void:
+	var host_name := str(vehicle.passive_orbit_data.get("host_body_name", ""))
+	var elements: Dictionary = vehicle.passive_orbit_data.get("elements", {})
+	if host_name.is_empty() or elements.is_empty():
+		vehicle.passive_orbit_active = false
+		vehicle.passive_orbit_data.clear()
+		return
+	vehicle.sim_time = target_time
+	var host := vehicle._surface_body_state(host_name)
+	var local_state := OrbitalPropagator.propagate(elements, target_time)
+	if host.is_empty() or local_state.is_empty():
+		vehicle.passive_orbit_active = false
+		vehicle.passive_orbit_data.clear()
+		return
+	var host_components: PackedFloat64Array = vehicle._body_position_components(host)
+	var local_position: Vector2 = local_state.position
+	vehicle._set_rocket_position_components(host_components[0] + local_position.x, host_components[1] + local_position.y)
+	vehicle.velocity = Vector2(host.get("velocity", Vector2.ZERO)) + Vector2(local_state.velocity)
+	vehicle.rotation_angle = local_position.angle() + PI * 0.5
+
+func _set_selected_vehicle_full_simulation() -> void:
+	if not is_instance_valid(sim):
+		return
+	sim.passive_orbit_forced = not sim.passive_orbit_forced
+	if sim.passive_orbit_forced:
+		sim.passive_orbit_active = false
+		sim.passive_orbit_data.clear()
+		if status_label:
+			status_label.text = "FULL SIMULATION FORCED  •  %s" % sim.vehicle_name.to_upper()
+	else:
+		if status_label:
+			status_label.text = "AUTOMATIC ORBIT SIMULATION ENABLED  •  %s" % sim.vehicle_name.to_upper()
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if mode != "flight" or not event is InputEventKey or not event.pressed or event.echo:
@@ -881,6 +1005,7 @@ func _launch_designed_vehicle() -> void:
 	_start_flight()
 
 func _begin_new_game() -> void:
+	discovery_state = SpaceDiscovery.new_campaign_state()
 	rocket_design = RocketDesign.create_default()
 	infinite_weightless_fuel = false
 	_show_new_game_setup()
@@ -1263,6 +1388,8 @@ func _switch_vehicle(index: int) -> void:
 		sim.visible = false
 	active_vehicle_index = index
 	sim = fleet_sims[index]
+	sim.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
+	sim.visited_body_names = SpaceDiscovery.visited_names(discovery_state)
 	sim.input_enabled = not _is_docked_child(sim.vehicle_name)
 	sim.visible = true
 	sim.time_warp = fleet_sims[0].time_warp
@@ -1576,6 +1703,7 @@ func _build_flight_hud() -> void:
 	vehicle_selector.item_selected.connect(_switch_vehicle)
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
+	_add_button(right, "TOGGLE FULL SIMULATION", _set_selected_vehicle_full_simulation)
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
 	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
@@ -1711,7 +1839,10 @@ func _show_autopilot_panel() -> void:
 	planet_dropdown.add_item("Earth", -2)
 	for planet_index in range(FlightComputer.PLANET_TARGETS.size()):
 		var planet: Dictionary = FlightComputer.PLANET_TARGETS[planet_index]
-		planet_dropdown.add_item(str(planet.get("name", "Unknown")), planet_index)
+		var planet_name := str(planet.get("name", "Unknown"))
+		if SpaceDiscovery.is_spotted(discovery_state, planet_name):
+			planet_dropdown.add_item(planet_name, planet_index)
+			planet_dropdown.set_item_disabled(planet_dropdown.item_count - 1, not SpaceDiscovery.is_visited(discovery_state, planet_name))
 	root.add_child(planet_dropdown)
 	var moon_label := Label.new()
 	moon_label.text = "MOON (OPTIONAL)"
@@ -1722,12 +1853,16 @@ func _show_autopilot_panel() -> void:
 		moon_dropdown.clear()
 		moon_dropdown.add_item("Planet only", parent_target_index)
 		if parent_target_index == -2:
-			moon_dropdown.add_item("Moon")
-			moon_dropdown.set_item_id(moon_dropdown.item_count - 1, -1)
+			if SpaceDiscovery.is_spotted(discovery_state, "Moon"):
+				moon_dropdown.add_item("Moon", -1)
+				moon_dropdown.set_item_disabled(moon_dropdown.item_count - 1, not SpaceDiscovery.is_visited(discovery_state, "Moon"))
 		else:
 			var parent_name := FlightComputer.target_body_name(parent_target_index)
 			for satellite in FlightComputer.satellite_targets_for_host(parent_name):
-				moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
+				var satellite_name := str(satellite.get("name", ""))
+				if SpaceDiscovery.is_spotted(discovery_state, satellite_name):
+					moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
+					moon_dropdown.set_item_disabled(moon_dropdown.item_count - 1, not SpaceDiscovery.is_visited(discovery_state, satellite_name))
 		moon_dropdown.select(0)
 		moon_dropdown.disabled = moon_dropdown.item_count <= 1
 	var selected_target_index := func() -> int:
@@ -2226,6 +2361,7 @@ func _save_game(automatic: bool) -> void:
 	data["world_scale"] = world_scale
 	data["career_enabled"] = career_enabled
 	data["slot"] = save_slot
+	data["discovery_state"] = discovery_state.duplicate(true)
 
 	if automatic:
 		var history_directory := "%s/history/slot_%02d" % [SAVE_DIR, save_slot]
@@ -2340,6 +2476,10 @@ func _load_game_from_path(path: String) -> void:
 		fleet_sims = [sim]
 		active_vehicle_index = 0
 		_switch_vehicle(0)
+	discovery_state = SpaceDiscovery.sanitize_state(parsed.get("discovery_state", SpaceDiscovery.new_campaign_state()))
+	for vehicle in fleet_sims:
+		vehicle.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
+		vehicle.visited_body_names = SpaceDiscovery.visited_names(discovery_state)
 	docking_links.clear()
 	var saved_docking_links: Variant = parsed.get("docking_links", [])
 	if saved_docking_links is Array:

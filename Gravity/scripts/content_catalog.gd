@@ -361,6 +361,8 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		for visual_key in ["visual_width_factor", "visual_height_factor"]:
 			if payload.has(visual_key) and (not (payload[visual_key] is int or payload[visual_key] is float) or not is_finite(float(payload[visual_key])) or float(payload[visual_key]) <= 0.0):
 				return "Rocket payload %s has an invalid %s." % [payload_id, visual_key]
+		if payload.has("telescope_range_au") and (not (payload.telescope_range_au is int or payload.telescope_range_au is float) or not is_finite(float(payload.telescope_range_au)) or float(payload.telescope_range_au) < 0.0):
+			return "Rocket payload %s has an invalid telescope_range_au." % payload_id
 		if payload.has("visual_color_rgb"):
 			var payload_visual_color_error := _color_field_error(payload, "visual_color_rgb", "rocket payload %s" % payload_id)
 			if not payload_visual_color_error.is_empty():

@@ -20,7 +20,7 @@ static func payload_visual_data(payload_id: String) -> Dictionary:
 		if str(option.get("id", "")) != payload_id:
 			continue
 		var visual := {}
-		for key in ["visual_type", "visual_width_factor", "visual_height_factor", "visual_color_rgb"]:
+		for key in ["visual_type", "visual_width_factor", "visual_height_factor", "visual_color_rgb", "telescope_range_au"]:
 			if option.has(key):
 				visual[key] = option[key]
 		return visual
@@ -224,6 +224,10 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 				var visual_value: Variant = payload_visual[visual_key]
 				if not (visual_value is int or visual_value is float) or not is_finite(float(visual_value)) or float(visual_value) <= 0.0:
 					errors.append("Payload %s must be a positive finite number." % visual_key)
+		if payload_visual.has("telescope_range_au"):
+			var telescope_range: Variant = payload_visual.telescope_range_au
+			if not (telescope_range is int or telescope_range is float) or not is_finite(float(telescope_range)) or float(telescope_range) < 0.0:
+				errors.append("Payload telescope_range_au must be a finite non-negative number.")
 		if payload_visual.has("visual_color_rgb"):
 			var payload_color: Variant = payload_visual.visual_color_rgb
 			var valid_payload_color: bool = payload_color is Array and payload_color.size() == 3

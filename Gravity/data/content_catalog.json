@@ -296,6 +296,7 @@
         "description": "Smaller probes with extra departure energy for interplanetary missions. Payload capacity is deliberately lower.",
         "name": "Odyssey · Deep-Space Probe",
         "payload_mass": 1800.0,
+        "payload_id": "probe",
         "stages": ["odyssey_core", "odyssey_upper", "odyssey_transfer", "odyssey_kick"]
       }
     },
@@ -321,7 +322,9 @@
     ],
     "builder_options": {
       "payloads": [
-        {"id": "satellite", "label": "Small satellite · 150 kg", "mass": 150, "visual_type": "satellite", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.78, 0.7, 0.42] },
+        {"id": "satellite", "label": "Scout telescope satellite · 150 kg", "mass": 150, "visual_type": "satellite", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.78, 0.7, 0.42], "telescope_range_au": 1.2 },
+        {"id": "survey_satellite", "label": "Survey telescope satellite · 350 kg", "mass": 350, "visual_type": "satellite", "visual_width_factor": 1.1, "visual_height_factor": 1.0, "visual_color_rgb": [0.68, 0.78, 0.9], "telescope_range_au": 3.5 },
+        {"id": "deep_space_telescope", "label": "Deep-space telescope · 1800 kg", "mass": 1800, "visual_type": "satellite", "visual_width_factor": 1.25, "visual_height_factor": 1.15, "visual_color_rgb": [0.88, 0.72, 0.42], "telescope_range_au": 10.5 },
         {"id": "probe", "label": "Science probe · 1.8 t", "mass": 1800, "visual_type": "probe", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.82, 0.87, 0.93] },
         {"id": "crew", "label": "Crew capsule · 6.5 t", "mass": 6500, "visual_type": "crew", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.84, 0.88, 0.94] },
         {"id": "cargo", "label": "Cargo module · 8 t", "mass": 8000, "visual_type": "cargo", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.62, 0.68, 0.76] },
