@@ -60,7 +60,7 @@ func _initialize() -> void:
 	assert(editor_found, "The component assembly editor did not open")
 	var performance_summary_found := false
 	for child in main.get_children():
-		if child is Window and str(child.title).contains("COMPONENT ASSEMBLY"):
+		if child is Window and str(child.title).contains("VEHICLE ASSEMBLY BUILDING"):
 			for label in child.find_children("*", "Label", true, false):
 				if str(label.text).contains("STAGE TWR") and str(label.text).contains("IDEAL ΔV"):
 					performance_summary_found = true
