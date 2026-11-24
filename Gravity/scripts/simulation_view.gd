@@ -1391,7 +1391,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if show_solar_system:
 				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
 			else:
-				camera_zoom = minf(0.02, camera_zoom * 1.2)
+				camera_zoom = minf(0.1, camera_zoom * 1.2)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			if show_solar_system:
 				solar_map_zoom = maxf(0.25, solar_map_zoom / 1.2)
