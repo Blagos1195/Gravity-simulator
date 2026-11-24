@@ -1423,7 +1423,10 @@ func _show_game_load() -> void:
 				parsed = JSON.parse_string(file.get_as_text())
 				file.close()
 			if parsed is Dictionary:
-				var vehicle_count := parsed.get("vehicles", []).size() if parsed.get("vehicles", []) is Array else 1
+				var vehicle_count: int = 1
+				var saved_vehicles: Variant = parsed.get("vehicles", [])
+				if saved_vehicles is Array:
+					vehicle_count = saved_vehicles.size()
 				var saved_at := int(parsed.get("saved_at_unix", FileAccess.get_modified_time(path)))
 				var saved_text := Time.get_datetime_string_from_unix_time(saved_at, true)
 				var save_name := str(parsed.get("save_name", "Unnamed campaign"))
