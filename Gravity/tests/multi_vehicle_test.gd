@@ -22,6 +22,7 @@ func _initialize() -> void:
 	assert(second.visible)
 	assert(not first.input_enabled)
 	assert(second.input_enabled)
+	assert(not first.is_processing(), "Fleet vehicles must not advance both through their own process and the fleet manager")
 	assert(first.vehicle_name == "Vehicle 1")
 	assert(second.vehicle_name == "Vehicle 2")
 	main._switch_vehicle(0)
@@ -134,6 +135,9 @@ func _initialize() -> void:
 			saved_debris_found = true
 			break
 	assert(saved_debris_found, "Discarded stage was not persisted in the campaign save")
+	debris._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 0.5))
+	main._advance_fleet(0.0)
+	assert(not main.fleet_sims.has(debris), "Debris that reached a planet was not removed")
 	var collision_target: SimulationView = main.fleet_sims[1]
 	for vehicle in main.fleet_sims:
 		vehicle.landed = true
