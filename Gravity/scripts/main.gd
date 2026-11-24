@@ -1018,7 +1018,7 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 		rocket_design = updated_design.duplicate(true)
 		_update_design_stats()
 	)
-	add_child(builder)
+	get_tree().root.add_child(builder)
 	builder.popup_centered()
 
 
