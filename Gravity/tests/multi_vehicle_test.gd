@@ -35,6 +35,10 @@ func _initialize() -> void:
 	main._advance_passive_vehicle(second, 120.0)
 	assert(second.rocket_position.distance_to(passive_start) > 1000.0, "Passive spacecraft did not advance along its orbit")
 	assert(is_equal_approx(second.sim_time, 120.0))
+	second.payload_visual = {"visual_type": "satellite", "telescope_range_au": 100.0}
+	main._update_discovery_state()
+	assert(SpaceDiscovery.is_spotted(main.discovery_state, "Mars"), "An in-range telescope did not reveal Mars")
+	assert(not SpaceDiscovery.is_visited(main.discovery_state, "Mars"), "Telescope discovery incorrectly unlocked autopilot")
 	second.passive_orbit_forced = true
 	second.passive_orbit_active = false
 	second.passive_orbit_data.clear()
