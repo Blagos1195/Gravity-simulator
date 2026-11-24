@@ -24,15 +24,16 @@ func _validate_telescope_range() -> void:
 		{"name": "Mars", "position": Vector2(1.6, 0.0)},
 		{"name": "Jupiter", "position": Vector2(5.2, 0.0)}
 	]
-	var found := SpaceDiscovery.scan_telescope(state, Vector2.ZERO, 1.0, bodies)
-	assert(found == ["Venus"])
+	var outside_view := SpaceDiscovery.scan_telescope(state, Vector2.ZERO, 2.0, bodies, PI, PI / 6.0)
+	assert(outside_view.is_empty())
+	assert(not SpaceDiscovery.is_spotted(state, "Venus"))
+	var found := SpaceDiscovery.scan_telescope(state, Vector2.ZERO, 1.0, bodies, 0.0, PI / 6.0)
+	assert(found.size() == 1 and found[0] == "Venus")
 	assert(SpaceDiscovery.is_spotted(state, "Venus"))
 	assert(not SpaceDiscovery.is_visited(state, "Venus"))
 	assert(not SpaceDiscovery.is_spotted(state, "Mars"))
-	assert(SpaceDiscovery.scan_telescope(state, Vector2.ZERO, 2.0, bodies, PI).is_empty())
-	assert(not SpaceDiscovery.is_spotted(state, "Venus"))
-	assert(SpaceDiscovery.scan_telescope(state, Vector2.ZERO, 1.0, bodies) == ["Venus"])
-	assert(SpaceDiscovery.scan_telescope(state, Vector2(1.6, 0.0), 0.1, bodies) == ["Mars"])
+	var mars_found := SpaceDiscovery.scan_telescope(state, Vector2(1.6, 0.0), 0.1, bodies, 0.0, PI / 6.0)
+	assert(mars_found.size() == 1 and mars_found[0] == "Mars")
 
 func _validate_permanent_knowledge() -> void:
 	var state := SpaceDiscovery.new_campaign_state()
