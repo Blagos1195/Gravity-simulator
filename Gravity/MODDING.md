@@ -64,7 +64,8 @@ Stage parts are reusable components. Presets are vehicle designs made from stage
         "label": "Example · Probe launcher",
         "description": "A small launcher with an additional orbital kick stage.",
         "name": "Example Probe Launcher",
-        "payload_mass": 150,
+        "payload_mass": 2400,
+        "payload_id": "mapping_probe",
         "stages": [
           "scout_booster",
           "scout_upper",
