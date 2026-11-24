@@ -580,7 +580,7 @@ func _build_interface() -> void:
 	radial_input.value_changed.connect(_update_selected_node)
 
 func _rebuild_navigation_moons(parent_target_index: int) -> void:
-	var visited_body_names: Dictionary = simulation.get("visited_body_names", {})
+	var visited_body_names: Dictionary = simulation.get("visited_body_names")
 	navigation_moon_dropdown.clear()
 	navigation_moon_dropdown.add_item("Planet only", parent_target_index)
 	if parent_target_index == -2:
