@@ -1411,13 +1411,13 @@ func _draw_atmosphere(center: Vector2, planet_radius: float, atmosphere_height: 
 		return
 	var physical_thickness := atmosphere_height * camera_zoom * _visual_scale()
 	var visible_thickness := clampf(physical_thickness, 3.0, 34.0)
-	var rings := 5
-	for ring in range(rings):
-		var fraction := float(ring + 1) / float(rings)
+	var rings := 18
+	for ring in range(rings, 0, -1):
+		var fraction := float(ring) / float(rings)
 		var ring_radius := planet_radius + visible_thickness * fraction
-		var alpha := 0.035 + 0.13 * (1.0 - fraction)
-		draw_arc(center, ring_radius, 0.0, TAU, 96, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, alpha), maxf(1.0, visible_thickness / float(rings) * 1.5))
-	draw_arc(center, planet_radius + visible_thickness, 0.0, TAU, 96, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, 0.5), 1.0)
+		var alpha := 0.012 + 0.075 * (1.0 - fraction)
+		draw_circle(center, ring_radius, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, alpha))
+	draw_arc(center, planet_radius + visible_thickness, 0.0, TAU, 128, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, 0.34), 1.0)
 
 func _draw_planet_rings(center: Vector2, planet_radius: float, visual_data: Dictionary, opacity_scale: float = 1.0) -> void:
 	if not bool(visual_data.get("has_rings", false)):
