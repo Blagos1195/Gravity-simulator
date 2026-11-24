@@ -342,7 +342,7 @@ func _build_interface() -> void:
 	redo_button.text = "REDO"
 	redo_button.pressed.connect(_redo_change)
 	header_actions.add_child(redo_button)
-	var workspace := HSplitContainer.new()
+	var workspace := HBoxContainer.new()
 	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	workspace.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(workspace)
@@ -381,6 +381,7 @@ func _build_interface() -> void:
 	var center_panel := PanelContainer.new()
 	center_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center_panel.custom_minimum_size.x = 420.0
 	workspace.add_child(center_panel)
 	var center_column := VBoxContainer.new()
 	center_column.add_theme_constant_override("separation", 6)
