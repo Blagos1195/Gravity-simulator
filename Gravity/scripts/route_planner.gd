@@ -304,7 +304,7 @@ func _build_interface() -> void:
 	root.add_child(navigation_description)
 	var navigation_row := HBoxContainer.new()
 	root.add_child(navigation_row)
-	var visited_body_names: Dictionary = simulation.get("visited_body_names", {})
+	var visited_body_names: Dictionary = simulation.get("visited_body_names")
 	navigation_planet_dropdown = OptionButton.new()
 	navigation_planet_dropdown.add_item("Earth", -2)
 	for planet_index in range(FlightComputer.PLANET_TARGETS.size()):
