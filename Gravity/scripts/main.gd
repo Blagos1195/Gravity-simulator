@@ -1840,8 +1840,9 @@ func _show_autopilot_panel() -> void:
 	for planet_index in range(FlightComputer.PLANET_TARGETS.size()):
 		var planet: Dictionary = FlightComputer.PLANET_TARGETS[planet_index]
 		var planet_name := str(planet.get("name", "Unknown"))
-		if SpaceDiscovery.is_visited(discovery_state, planet_name):
+		if SpaceDiscovery.is_spotted(discovery_state, planet_name):
 			planet_dropdown.add_item(planet_name, planet_index)
+			planet_dropdown.set_item_disabled(planet_dropdown.item_count - 1, not SpaceDiscovery.is_visited(discovery_state, planet_name))
 	root.add_child(planet_dropdown)
 	var moon_label := Label.new()
 	moon_label.text = "MOON (OPTIONAL)"
@@ -1852,14 +1853,16 @@ func _show_autopilot_panel() -> void:
 		moon_dropdown.clear()
 		moon_dropdown.add_item("Planet only", parent_target_index)
 		if parent_target_index == -2:
-			if SpaceDiscovery.is_visited(discovery_state, "Moon"):
+			if SpaceDiscovery.is_spotted(discovery_state, "Moon"):
 				moon_dropdown.add_item("Moon", -1)
+				moon_dropdown.set_item_disabled(moon_dropdown.item_count - 1, not SpaceDiscovery.is_visited(discovery_state, "Moon"))
 		else:
 			var parent_name := FlightComputer.target_body_name(parent_target_index)
 			for satellite in FlightComputer.satellite_targets_for_host(parent_name):
 				var satellite_name := str(satellite.get("name", ""))
-				if SpaceDiscovery.is_visited(discovery_state, satellite_name):
+				if SpaceDiscovery.is_spotted(discovery_state, satellite_name):
 					moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
+					moon_dropdown.set_item_disabled(moon_dropdown.item_count - 1, not SpaceDiscovery.is_visited(discovery_state, satellite_name))
 		moon_dropdown.select(0)
 		moon_dropdown.disabled = moon_dropdown.item_count <= 1
 	var selected_target_index := func() -> int:
