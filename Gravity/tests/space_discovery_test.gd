@@ -32,7 +32,7 @@ func _validate_telescope_range() -> void:
 	assert(SpaceDiscovery.is_spotted(state, "Venus"))
 	assert(not SpaceDiscovery.is_visited(state, "Venus"))
 	assert(not SpaceDiscovery.is_spotted(state, "Mars"))
-	var mars_found := SpaceDiscovery.scan_telescope(state, Vector2(1.6, 0.0), 0.1, bodies, 0.0, PI / 6.0)
+	var mars_found := SpaceDiscovery.scan_telescope(state, Vector2(1.5, 0.0), 0.2, bodies, 0.0, PI / 6.0)
 	assert(mars_found.size() == 1 and mars_found[0] == "Mars")
 
 func _validate_permanent_knowledge() -> void:
