@@ -516,6 +516,12 @@ func _on_component_moved(from_index: int, to_index: int) -> void:
 	_push_undo()
 	var item: Variant = components.pop_at(from_index)
 	var destination := clampi(to_index, 0, components.size())
+	if item is Dictionary and str(item.get("attachment", "stack")) == "radial":
+		var item_mount := int(item.get("mount_index", -1))
+		if from_index < destination and item_mount > from_index and item_mount <= destination:
+			item["mount_index"] = item_mount - 1
+		elif destination < from_index and item_mount >= destination and item_mount < from_index:
+			item["mount_index"] = item_mount + 1
 	for index in range(components.size()):
 		var component: Dictionary = components[index]
 		if str(component.get("attachment", "stack")) != "radial":
