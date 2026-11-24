@@ -1,5 +1,7 @@
 extends Control
 
+signal stage_separated(stage_data: Dictionary)
+
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketVisual = preload("res://scripts/rocket_visual.gd")
@@ -19,6 +21,7 @@ var payload_mass := 500.0
 var payload_type := "probe"
 var payload_visual: Dictionary = {}
 var vehicle_name := "Vehicle 1"
+var is_debris := false
 var input_enabled := true
 var docked_mass := 0.0
 var docked_visuals: Array[Dictionary] = []
@@ -664,11 +667,32 @@ func _update_heating(dt: float, atmosphere: Dictionary) -> void:
 func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
 		return
-	discarded_stage_mass += float(_active_stage_data().get("dry_mass", 0.0))
-	discarded_propellant_mass += fuel
+	var separated_stage: Dictionary = rocket_stages[stage_index].duplicate(true)
+	var separated_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else fuel
+	var separated_dry_mass := RocketDesign.stage_total_dry_mass(separated_stage)
+	var separated_mass := separated_dry_mass + separated_fuel
+	var vehicle_mass_before := _current_vehicle_mass(infinite_fuel_stage_remaining if infinite_weightless_fuel else -1.0)
+	var upper_stack_mass := maxf(0.001, vehicle_mass_before - separated_mass)
+	var total_separated_mass := maxf(0.001, separated_mass + upper_stack_mass)
+	var separation_direction := Vector2.UP.rotated(rotation_angle)
+	var relative_separation_speed := 2.0
+	var debris_velocity := velocity - separation_direction * relative_separation_speed * upper_stack_mass / total_separated_mass
+	var upper_stack_velocity := velocity + separation_direction * relative_separation_speed * separated_mass / total_separated_mass
+	stage_separated.emit({
+		"stage": separated_stage,
+		"fuel": separated_fuel,
+		"position_components": rocket_position_precise.duplicate(),
+		"velocity": debris_velocity,
+		"rotation_angle": rotation_angle,
+		"sim_time": sim_time,
+		"launch_time": launch_time,
+		"separation_speed": relative_separation_speed
+	})
+	discarded_stage_mass += separated_dry_mass
+	discarded_propellant_mass += separated_fuel
 	if stage_index < stage_fuel_remaining.size():
 		stage_fuel_remaining[stage_index] = 0.0
-	velocity += Vector2.UP.rotated(rotation_angle) * 2.0
+	velocity = upper_stack_velocity
 	stage_index += 1
 	fuel = stage_fuel_remaining[stage_index]
 	infinite_fuel_stage_remaining = fuel
@@ -2180,6 +2204,7 @@ func get_save_data() -> Dictionary:
 		"paused": paused,
 		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": rocket_stages.duplicate(true)},
 		"vehicle_name": vehicle_name,
+		"is_debris": is_debris,
 		"passive_orbit_active": passive_orbit_active,
 		"passive_orbit_forced": passive_orbit_forced,
 		"passive_orbit_data": passive_orbit_data.duplicate(true)
@@ -2274,6 +2299,7 @@ func load_save_data(data: Dictionary) -> bool:
 				validated_stage_fuel.append(RocketDesign.stage_total_fuel_capacity(saved_stages[i]))
 	set_rocket_design(saved_design)
 	vehicle_name = str(data.get("vehicle_name", vehicle_name))
+	is_debris = bool(data.get("is_debris", false))
 	passive_orbit_active = bool(data.get("passive_orbit_active", false))
 	passive_orbit_forced = bool(data.get("passive_orbit_forced", false))
 	var saved_passive_orbit: Variant = data.get("passive_orbit_data", {})
