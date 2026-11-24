@@ -540,7 +540,7 @@ func _update_discovery_state() -> void:
 				if str(heliocentric_body.get("name", "")) == body_name:
 					host_heliocentric_position = Vector2(heliocentric_body.get("position", earth_position))
 					break
-			var telescope_position := host_heliocentric_position + (vehicle.rocket_position - Vector2(body.get("relative_position", Vector2.ZERO)))
+			var telescope_position: Vector2 = host_heliocentric_position + (vehicle.rocket_position - Vector2(body.get("relative_position", Vector2.ZERO)))
 			vehicle.telescope_direction_angle = relative_velocity.angle()
 			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies, vehicle.telescope_direction_angle, vehicle.telescope_field_of_view)
 			for discovered_name in telescope_discoveries:
