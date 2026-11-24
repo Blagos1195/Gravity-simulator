@@ -56,6 +56,8 @@ func _initialize() -> void:
 	var single_stage_design := {
 		"name": "Single Stage",
 		"payload_mass": 500.0,
+		"payload_type": "cargo",
+		"payload_visual": {"visual_type": "cargo", "visual_width_factor": 1.3, "visual_height_factor": 1.1, "visual_color_rgb": [0.2, 0.4, 0.6]},
 		"stages": [{
 			"dry_mass": 5000.0,
 			"fuel_capacity": 100000.0,
@@ -84,6 +86,9 @@ func _initialize() -> void:
 	single_stage_sim.set_rocket_design(single_stage_design)
 	assert(single_stage_sim.rocket_stages.size() == 1)
 	assert(is_equal_approx(float(single_stage_sim.rocket_stages[0].dry_mass), 5000.0))
+	assert(single_stage_sim.payload_visual.visual_type == "cargo")
+	var single_stage_save: Dictionary = single_stage_sim.get_save_data()
+	assert(single_stage_save.rocket_design.payload_visual.visual_color_rgb == [0.2, 0.4, 0.6])
 	single_stage_sim.free()
 	var incomplete := design.duplicate(true)
 	incomplete["stages"].clear()
