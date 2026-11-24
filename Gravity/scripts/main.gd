@@ -328,6 +328,10 @@ func _resolve_spacecraft_collisions(positions_before: Dictionary) -> void:
 				continue
 			if _are_docked(first.vehicle_name, second.vehicle_name):
 				continue
+			if first.separation_grace_until > sim.sim_time and second.separation_parent_name == first.vehicle_name:
+				continue
+			if second.separation_grace_until > sim.sim_time and first.separation_parent_name == second.vehicle_name:
+				continue
 			var first_radius := RocketDesign.vehicle_collision_radius_m({"stages": first.rocket_stages}, first.stage_index)
 			var second_radius := RocketDesign.vehicle_collision_radius_m({"stages": second.rocket_stages}, second.stage_index)
 			var contact := SpaceObjectPhysics.swept_circle_contact(
@@ -767,7 +771,19 @@ func _fast_forward_simulation(seconds: float) -> bool:
 		for second_index in range(first_index + 1, fleet_sims.size()):
 			if fleet_sims[first_index].rocket_position.distance_to(fleet_sims[second_index].rocket_position) < 20000000.0:
 				return false
-	var target_time := sim.sim_time + seconds
+	var start_time := sim.sim_time
+	var target_time := start_time + seconds
+	var scan_samples := mini(2000, maxi(1, ceili(seconds / 86400.0)))
+	var scan_step := seconds / float(scan_samples)
+	for sample_index in range(1, scan_samples + 1):
+		var sample_time := start_time + scan_step * float(sample_index)
+		for vehicle in fleet_sims:
+			if not vehicle.telescope_active or vehicle.crashed or vehicle.landed or not orbit_data.has(vehicle):
+				continue
+			vehicle.passive_orbit_data = orbit_data[vehicle]
+			vehicle.passive_orbit_active = true
+			_advance_passive_vehicle(vehicle, sample_time)
+		_scan_active_telescopes()
 	fleet_time_backlog = 0.0
 	for vehicle in fleet_sims:
 		vehicle.simulation_time_backlog = 0.0
@@ -1775,6 +1791,7 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 	elif position_components is Array and position_components.size() >= 2:
 		debris._set_rocket_position_components(float(position_components[0]), float(position_components[1]))
 	debris.velocity = stage_data.get("velocity", Vector2.ZERO)
+	debris.separation_parent_name = str(stage_data.get("parent_vehicle_name", ""))
 	debris.rotation_angle = float(stage_data.get("rotation_angle", 0.0))
 	debris.sim_time = float(stage_data.get("sim_time", sim.sim_time if is_instance_valid(sim) else 0.0))
 	debris.launch_time = float(stage_data.get("launch_time", debris.sim_time))
