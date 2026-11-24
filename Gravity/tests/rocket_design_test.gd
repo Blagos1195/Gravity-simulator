@@ -58,7 +58,7 @@ func _initialize() -> void:
 	assert(is_equal_approx(RocketDesign.total_initial_mass(odyssey), 448500.0))
 	assert(RocketDesign.total_delta_v(odyssey) > RocketDesign.MIN_TOTAL_DELTA_V)
 	var extended_design := design.duplicate(true)
-	var light_stage := design["stages"][1].duplicate(true)
+	var light_stage: Dictionary = design["stages"][1].duplicate(true)
 	light_stage["dry_mass"] = 500.0
 	light_stage["fuel_capacity"] = 500.0
 	light_stage["thrust"] = 1000000.0
