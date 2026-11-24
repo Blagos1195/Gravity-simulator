@@ -928,4 +928,5 @@ func _show_preset_dialog() -> void:
 
 func _finish() -> void:
 	_emit_design()
+	back_requested.emit()
 	queue_free()
