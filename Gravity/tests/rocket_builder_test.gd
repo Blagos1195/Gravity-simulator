@@ -21,7 +21,7 @@ func _initialize() -> void:
 	builder._add_component("medium_tank", "stack", true, 1, -1)
 	var stage: Dictionary = builder.design.stages[0]
 	assert(stage.components.size() == 3)
-	assert(str(stage.components[2].id) == "medium_tank")
+	assert(str(stage.components[1].id) == "medium_tank")
 	builder._add_component("solid_booster_pair", "radial", true, -1, 1)
 	stage = builder.design.stages[0]
 	assert(bool(stage.components[3].mirror))
@@ -39,13 +39,13 @@ func _initialize() -> void:
 	builder._redo_change()
 	stage = builder.design.stages[0]
 	assert(not bool(stage.components[3].mirror))
-	builder._on_component_moved(2, 0)
+	builder._on_component_moved(1, 0)
 	stage = builder.design.stages[0]
 	assert(str(stage.components[0].id) == "medium_tank")
-	assert(int(stage.components[3].mount_index) == 2)
+	assert(int(stage.components[3].mount_index) == 0)
 	builder._remove_selected_component()
 	stage = builder.design.stages[0]
-	assert(int(stage.components[2].mount_index) == 1)
+	assert(int(stage.components[2].mount_index) == 0)
 	assert(RocketDesign.validation_errors(builder.design).is_empty())
 	var stage_count: int = builder.design.stages.size()
 	builder._duplicate_selected_stage()
