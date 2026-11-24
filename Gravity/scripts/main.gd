@@ -609,12 +609,10 @@ func _show_stage_editor(stage_index: int) -> void:
 	dialog.get_ok_button().text = "APPLY"
 	dialog.get_cancel_button().text = "CANCEL"
 	dialog.confirmed.connect(func():
-		if stage_index >= 0 and stage_index < rocket_design["stages"].size():
-			var updated_stage: Dictionary = rocket_design["stages"][stage_index].duplicate(true)
-			for key in inputs:
-				updated_stage[key] = inputs[key].value
-			rocket_design["stages"][stage_index] = updated_stage
-			_update_design_stats()
+		var values: Dictionary = {}
+		for key in inputs:
+			values[key] = inputs[key].value
+		_apply_stage_editor_values(stage_index, values)
 		dialog.queue_free()
 	)
 	dialog.canceled.connect(func():
@@ -625,6 +623,17 @@ func _show_stage_editor(stage_index: int) -> void:
 	)
 	add_child(dialog)
 	dialog.popup_centered()
+
+func _apply_stage_editor_values(stage_index: int, values: Dictionary) -> void:
+	if stage_index < 0 or stage_index >= rocket_design["stages"].size():
+		return
+	var updated_stage: Dictionary = rocket_design["stages"][stage_index].duplicate(true)
+	for key in ["dry_mass", "fuel_capacity", "thrust", "vacuum_thrust", "flow", "visual_length_factor", "visual_diameter_factor"]:
+		if values.has(key):
+			updated_stage[key] = float(values[key])
+	rocket_design["stages"][stage_index] = updated_stage
+	_update_design_stats()
+
 
 func _update_design_stats() -> void:
 	if not is_instance_valid(design_stats_label) or not is_instance_valid(design_error_label):
