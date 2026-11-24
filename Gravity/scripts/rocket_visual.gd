@@ -89,7 +89,7 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		var booster_entries: Array = stage.get("boosters", [])
 		for booster_index in range(booster_entries.size()):
 			var booster_entry: Dictionary = booster_entries[booster_index]
-			var booster := RocketDesign.booster_definition(str(booster_entry.get("id", "")))
+			var booster := RocketDesign.booster_definition_for_entry(booster_entry)
 			if booster.is_empty():
 				continue
 			var booster_width := clampf(width * float(booster.get("visual_width_factor", 0.5)), 4.0, 20.0)
