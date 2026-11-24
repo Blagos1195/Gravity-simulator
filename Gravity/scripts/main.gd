@@ -2915,8 +2915,17 @@ func _autosave_history_paths(slot: int) -> Array[String]:
 
 func _prune_autosave_history(slot: int, keep_count: int = 10) -> void:
 	var paths: Array[String] = _autosave_history_paths(slot)
-	for i in range(keep_count, paths.size()):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(paths[i]))
+	var autosaves: Array[String] = []
+	var manual_backups: Array[String] = []
+	for path in paths:
+		if path.get_file().begins_with("manual_"):
+			manual_backups.append(path)
+		else:
+			autosaves.append(path)
+	for i in range(keep_count, autosaves.size()):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(autosaves[i]))
+	for i in range(keep_count, manual_backups.size()):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(manual_backups[i]))
 
 func _write_save_file(path: String, data: Dictionary) -> bool:
 	var absolute_path := ProjectSettings.globalize_path(path)
