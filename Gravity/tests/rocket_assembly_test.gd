@@ -3,6 +3,7 @@ extends SceneTree
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const Main = preload("res://scripts/main.gd")
+const RocketBuilder = preload("res://scripts/rocket_builder.gd")
 
 func _initialize() -> void:
 	var design := RocketDesign.create_default()
@@ -51,22 +52,12 @@ func _initialize() -> void:
 	root.add_child(main)
 	main.rocket_design = design
 	main._show_vehicle_editor()
-	main._show_vehicle_component_editor(0)
 	await process_frame
-	var editor_found := false
-	for child in main.get_children():
-		if child is Control and child.name == "RocketBuilder":
-			editor_found = true
-			break
-	assert(editor_found, "The component assembly editor did not open")
-	var performance_summary_found := false
-	for child in main.get_children():
-		if child is Control and child.name == "RocketBuilder":
-			child.call("_refresh_stats")
-			var stats_text := str(child.call("performance_summary_text"))
-			performance_summary_found = stats_text.contains("STAGE TWR") and stats_text.contains("IDEAL ΔV")
-			break
-	assert(performance_summary_found, "The component editor does not show live TWR and vehicle delta-v")
+	var builder: RocketBuilder = main.active_builder
+	assert(is_instance_valid(builder), "The vehicle editor did not open through the main editor entry point")
+	builder.call("_refresh_stats")
+	var stats_text := builder.performance_summary_text()
+	assert(stats_text.contains("STAGE TWR") and stats_text.contains("IDEAL ΔV"), "The component editor does not show live TWR and vehicle delta-v")
 	print("Rocket component assembly tests passed.")
 	main.queue_free()
 	quit()
