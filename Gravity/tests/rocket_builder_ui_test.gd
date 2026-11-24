@@ -15,6 +15,8 @@ func _initialize() -> void:
 	var payload_input: SpinBox = main.active_builder._payload_mass_input
 	assert(is_instance_valid(payload_input))
 	payload_input.value = 1200.0
+	if not is_equal_approx(float(main.rocket_design.payload_mass), 1200.0):
+		payload_input.value_changed.emit(payload_input.value)
 	assert(is_equal_approx(float(main.rocket_design.payload_mass), 1200.0))
 	for button_text in ["NEW", "EDIT PAYLOAD", "SAVE DESIGN", "LOAD DESIGN", "LAUNCH", "BACK"]:
 		assert(is_instance_valid(_find_button(main.active_builder, button_text)))
