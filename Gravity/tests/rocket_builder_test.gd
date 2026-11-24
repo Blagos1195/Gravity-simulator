@@ -4,13 +4,21 @@ const RocketBuilder = preload("res://scripts/rocket_builder.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 
+func _find_label(node: Node, expected_text: String) -> bool:
+	if node is Label and node.text == expected_text:
+		return true
+	for child in node.get_children():
+		if _find_label(child, expected_text):
+			return true
+	return false
+
 func _initialize() -> void:
 	var design := RocketDesign.create_default()
 	var builder := RocketBuilder.new()
 	builder.configure(design, 0)
 	builder._build_interface()
 	builder._refresh()
-	assert(builder.title == "VEHICLE ASSEMBLY BUILDING")
+	assert(_find_label(builder, "VEHICLE BUILDER"))
 	assert(builder._parts_list.get_child_count() >= 14)
 	assert(builder._stage_list.get_child_count() == design.stages.size())
 	builder._payload_mass_input.value = 900.0
