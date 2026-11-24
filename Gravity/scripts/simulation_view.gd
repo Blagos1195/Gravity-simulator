@@ -1471,7 +1471,7 @@ func _draw() -> void:
 	var moon_world := PlanetarySystem.moon_position(sim_time)
 	var moon_screen := rocket_screen + (moon_world - rocket_position) * camera_zoom * world_scale_factor
 	var moon_radius_px := maxf(2.0, PlanetarySystem.MOON_RADIUS * camera_zoom * world_scale_factor)
-	if moon_screen.x > -moon_radius_px and moon_screen.x < size.x + moon_radius_px and moon_screen.y > -moon_radius_px and moon_screen.y < size.y + moon_radius_px:
+	if discovered_body_names.has("Moon") and moon_screen.x > -moon_radius_px and moon_screen.x < size.x + moon_radius_px and moon_screen.y > -moon_radius_px and moon_screen.y < size.y + moon_radius_px:
 		var moon_color: Color = PlanetarySystem.planet_visual_data("Moon").get("color", Color(0.72, 0.74, 0.78))
 		if not visited_body_names.has("Moon"):
 			moon_color = moon_color.darkened(0.58).lerp(Color(0.34, 0.44, 0.58), 0.4)
@@ -1813,9 +1813,9 @@ func _draw_solar_system(center: Vector2) -> void:
 	var moon_offset := Vector2(moon_position.x - earth_position.x, -(moon_position.y - earth_position.y)).normalized()
 	var earth_marker_radius := clampf(pow(PlanetarySystem.EARTH_RADIUS / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
 	var moon_orbit_display_radius := earth_marker_radius + 2.0 + log(PlanetarySystem.MOON_ORBIT_RADIUS / PlanetarySystem.EARTH_RADIUS) * 1.6
-	draw_arc(earth_screen, moon_orbit_display_radius, 0.0, TAU, 32, Color(0.65, 0.69, 0.77, 0.22), 1.0)
 	var moon_screen := earth_screen + moon_offset * moon_orbit_display_radius
 	if discovered_body_names.has("Moon"):
+		draw_arc(earth_screen, moon_orbit_display_radius, 0.0, TAU, 32, Color(0.65, 0.69, 0.77, 0.22 if visited_body_names.has("Moon") else 0.08), 1.0)
 		var moon_color: Color = PlanetarySystem.planet_visual_data("Moon").get("color", Color(0.72, 0.74, 0.78))
 		if not visited_body_names.has("Moon"):
 			moon_color = moon_color.darkened(0.58).lerp(Color(0.34, 0.44, 0.58), 0.4)
