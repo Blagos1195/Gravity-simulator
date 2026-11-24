@@ -46,6 +46,7 @@ var funds_label: Label
 var mission_state: Dictionary = MissionSystem.new_state()
 var orbited_body_names: Dictionary = {}
 var vehicle_selector: OptionButton
+var telescope_button: Button
 var docking_links: Array[Dictionary] = []
 var docking_assists: Dictionary = {}
 var autosave_elapsed := 0.0
@@ -1768,6 +1769,7 @@ func _switch_vehicle(index: int) -> void:
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	_refresh_vehicle_selector()
+	_refresh_telescope_control()
 	if status_label:
 		if _is_docked_child(sim.vehicle_name):
 			for link in docking_links:
@@ -1775,6 +1777,17 @@ func _switch_vehicle(index: int) -> void:
 					status_label.text = "%s  •  DOCKED TO %s" % [sim.vehicle_name.to_upper(), str(link.get("parent_name", "")).to_upper()]
 					return
 		status_label.text = "%s  •  %s" % [sim.vehicle_name.to_upper(), sim.status_message]
+
+func _refresh_telescope_control() -> void:
+	if not is_instance_valid(telescope_button) or not is_instance_valid(sim):
+		return
+	var available := str(sim.payload_visual.get("visual_type", "")) == "satellite" and float(sim.payload_visual.get("telescope_range_au", 0.0)) > 0.0
+	telescope_button.disabled = not available
+	telescope_button.text = "TELESCOPE ACTIVE  [T]" if sim.telescope_active else "ACTIVATE TELESCOPE  [T]"
+	if available:
+		telescope_button.tooltip_text = "Scan a 30-degree field. Aim with comma and period."
+	else:
+		telescope_button.tooltip_text = "Select a satellite equipped with a telescope."
 
 func _refresh_vehicle_selector() -> void:
 	if not is_instance_valid(vehicle_selector):
@@ -2154,16 +2167,18 @@ func _build_flight_hud() -> void:
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
 	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
-	if str(sim.payload_visual.get("visual_type", "")) == "satellite" and float(sim.payload_visual.get("telescope_range_au", 0.0)) > 0.0:
-		var telescope_button := Button.new()
-		telescope_button.text = "ACTIVATE TELESCOPE  [T]"
-		telescope_button.pressed.connect(func():
-			sim.telescope_active = not sim.telescope_active
-			telescope_button.text = "TELESCOPE ACTIVE  [T]" if sim.telescope_active else "ACTIVATE TELESCOPE  [T]"
-			if is_instance_valid(status_label):
-				status_label.text = "TELESCOPE ACTIVE  •  AIM WITH , AND ." if sim.telescope_active else "TELESCOPE STANDBY"
-		)
-		right.add_child(telescope_button)
+	telescope_button = Button.new()
+	telescope_button.text = "ACTIVATE TELESCOPE  [T]"
+	telescope_button.disabled = true
+	telescope_button.pressed.connect(func():
+		if not is_instance_valid(sim):
+			return
+		sim.telescope_active = not sim.telescope_active
+		_refresh_telescope_control()
+		if is_instance_valid(status_label):
+			status_label.text = "TELESCOPE ACTIVE  •  AIM WITH , AND ." if sim.telescope_active else "TELESCOPE STANDBY"
+	)
+	right.add_child(telescope_button)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
 	_add_button(right, "VELOCITY VECTOR  [V]", func(): sim.show_vectors = not sim.show_vectors)
@@ -2188,7 +2203,7 @@ func _build_flight_hud() -> void:
 	bottom.offset_top = -58
 	bottom.offset_bottom = -8
 	bottom.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
+	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     T TELESCOPE     , / . AIM TELESCOPE     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
