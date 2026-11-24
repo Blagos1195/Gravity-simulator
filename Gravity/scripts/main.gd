@@ -954,7 +954,8 @@ func _show_stage_editor(stage_index: int) -> void:
 		dialog.queue_free()
 	)
 	add_child(dialog)
-	dialog.popup_centered()
+	if is_inside_tree():
+		dialog.popup_centered()
 
 func _apply_stage_editor_values(stage_index: int, values: Dictionary) -> void:
 	if stage_index < 0 or stage_index >= rocket_design["stages"].size():
