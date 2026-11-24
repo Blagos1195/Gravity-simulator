@@ -33,7 +33,7 @@ class AssemblyCanvas extends Control:
 	var zoom := 1.0
 	var _component_rects: Array[Dictionary] = []
 
-func _ready() -> void:
+	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		custom_minimum_size = Vector2(420.0, 500.0)
 		queue_redraw()
