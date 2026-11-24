@@ -321,11 +321,11 @@
     ],
     "builder_options": {
       "payloads": [
-        {"id": "satellite", "label": "Small satellite · 150 kg", "mass": 150},
-        {"id": "probe", "label": "Science probe · 1.8 t", "mass": 1800},
-        {"id": "crew", "label": "Crew capsule · 6.5 t", "mass": 6500},
-        {"id": "cargo", "label": "Cargo module · 8 t", "mass": 8000},
-        {"id": "heavy_cargo", "label": "Heavy cargo · 12 t", "mass": 12000}
+        {"id": "satellite", "label": "Small satellite · 150 kg", "mass": 150, "visual_type": "satellite", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.78, 0.7, 0.42] },
+        {"id": "probe", "label": "Science probe · 1.8 t", "mass": 1800, "visual_type": "probe", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.82, 0.87, 0.93] },
+        {"id": "crew", "label": "Crew capsule · 6.5 t", "mass": 6500, "visual_type": "crew", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.84, 0.88, 0.94] },
+        {"id": "cargo", "label": "Cargo module · 8 t", "mass": 8000, "visual_type": "cargo", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.62, 0.68, 0.76] },
+        {"id": "heavy_cargo", "label": "Heavy cargo · 12 t", "mass": 12000, "visual_type": "cargo", "visual_width_factor": 1.35, "visual_height_factor": 1.2, "visual_color_rgb": [0.5, 0.58, 0.68] }
       ],
       "engine_counts": [1, 2, 3, 4, 6, 8, 12, 16, 20, 24, 32],
       "tank_scales": [

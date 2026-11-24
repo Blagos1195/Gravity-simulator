@@ -30,11 +30,6 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		var mass := float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
 		var length_factor := maxf(0.25, float(stage.get("visual_length_factor", 1.0)))
 		heights.append(clampf((15.0 + 12.0 * sqrt(mass / maxf(1.0, stack_mass))) * length_factor, 8.0, 60.0))
-	var payload_height := 13.0
-	var total_height := payload_height
-	for height in heights:
-		total_height += height
-	var y := -total_height * 0.5
 	var widest_stage := 0.0
 	for i in range(visible_stages.size()):
 		var stage: Dictionary = visible_stages[i]
@@ -43,17 +38,35 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		var diameter_factor := maxf(0.25, float(stage.get("visual_diameter_factor", 1.0)))
 		var width := clampf((9.0 + 7.0 * sqrt(mass / maxf(1.0, stack_mass)) + 1.5 * sqrt(float(engine_count - 1))) * diameter_factor, 8.0, 40.0)
 		widest_stage = maxf(widest_stage, width)
-	var payload_type := str(design.get("payload_type", "probe"))
-	var payload_width := widest_stage * 0.66
+	var payload_visual: Dictionary = design.get("payload_visual", {})
+	var payload_type := str(payload_visual.get("visual_type", design.get("payload_type", "probe")))
+	if payload_type == "heavy_cargo":
+		payload_type = "cargo"
+	var payload_width_factor := clampf(float(payload_visual.get("visual_width_factor", 1.0)), 0.25, 4.0)
+	var payload_height_factor := clampf(float(payload_visual.get("visual_height_factor", 1.0)), 0.25, 4.0)
+	var payload_height := 13.0 * payload_height_factor
+	var payload_width := widest_stage * 0.66 * payload_width_factor
+	var payload_color := Color(0.82, 0.87, 0.93)
+	var payload_color_data: Variant = payload_visual.get("visual_color_rgb", [])
+	if payload_color_data is Array and payload_color_data.size() == 3:
+		payload_color = Color(float(payload_color_data[0]), float(payload_color_data[1]), float(payload_color_data[2]))
+	var total_height := payload_height
+	for height in heights:
+		total_height += height
+	var y := -total_height * 0.5
 	if payload_type == "crew":
-		_polygon(canvas, origin, [Vector2(0.0, y), Vector2(-payload_width, y + payload_height), Vector2(payload_width, y + payload_height)], rotation, scale, Color(0.84, 0.88, 0.94))
+		_polygon(canvas, origin, [Vector2(0.0, y), Vector2(-payload_width, y + payload_height), Vector2(payload_width, y + payload_height)], rotation, scale, payload_color)
 		_polygon(canvas, origin, [Vector2(0.0, y + 2.0), Vector2(-payload_width * 0.65, y + payload_height * 0.82), Vector2(payload_width * 0.65, y + payload_height * 0.82)], rotation, scale, Color(0.36, 0.65, 0.82))
 	elif payload_type == "satellite":
 		_polygon(canvas, origin, [Vector2(-payload_width * 2.2, y + 4.0), Vector2(-payload_width * 0.7, y + 4.0), Vector2(-payload_width * 0.7, y + 8.0), Vector2(-payload_width * 2.2, y + 8.0)], rotation, scale, Color(0.16, 0.42, 0.72))
 		_polygon(canvas, origin, [Vector2(payload_width * 0.7, y + 4.0), Vector2(payload_width * 2.2, y + 4.0), Vector2(payload_width * 2.2, y + 8.0), Vector2(payload_width * 0.7, y + 8.0)], rotation, scale, Color(0.16, 0.42, 0.72))
-		_polygon(canvas, origin, [Vector2(-payload_width * 0.55, y + 2.0), Vector2(payload_width * 0.55, y + 2.0), Vector2(payload_width * 0.55, y + payload_height - 1.0), Vector2(-payload_width * 0.55, y + payload_height - 1.0)], rotation, scale, Color(0.78, 0.7, 0.42))
+		_polygon(canvas, origin, [Vector2(-payload_width * 0.55, y + 2.0), Vector2(payload_width * 0.55, y + 2.0), Vector2(payload_width * 0.55, y + payload_height - 1.0), Vector2(-payload_width * 0.55, y + payload_height - 1.0)], rotation, scale, payload_color)
+	elif payload_type == "cargo":
+		_polygon(canvas, origin, [Vector2(-payload_width, y + 1.0), Vector2(payload_width, y + 1.0), Vector2(payload_width * 0.88, y + payload_height), Vector2(-payload_width * 0.88, y + payload_height)], rotation, scale, payload_color)
+		_line(canvas, origin, Vector2(-payload_width * 0.8, y + payload_height * 0.32), Vector2(payload_width * 0.8, y + payload_height * 0.32), rotation, scale, Color(0.2, 0.3, 0.4), 1.2)
+		_line(canvas, origin, Vector2(-payload_width * 0.8, y + payload_height * 0.72), Vector2(payload_width * 0.8, y + payload_height * 0.72), rotation, scale, Color(0.2, 0.3, 0.4), 1.2)
 	else:
-		_polygon(canvas, origin, [Vector2(0.0, y), Vector2(-payload_width, y + payload_height), Vector2(payload_width, y + payload_height)], rotation, scale, Color(0.82, 0.87, 0.93))
+		_polygon(canvas, origin, [Vector2(0.0, y), Vector2(-payload_width, y + payload_height), Vector2(payload_width, y + payload_height)], rotation, scale, payload_color)
 		_line(canvas, origin, Vector2(-payload_width * 0.65, y + payload_height * 0.7), Vector2(payload_width * 0.65, y + payload_height * 0.7), rotation, scale, Color(0.24, 0.55, 0.75), 1.2)
 	y += payload_height
 	for i in range(visible_stages.size() - 1, -1, -1):

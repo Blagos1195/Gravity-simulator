@@ -56,6 +56,8 @@ func _initialize() -> void:
 	var single_stage_design := {
 		"name": "Single Stage",
 		"payload_mass": 500.0,
+		"payload_type": "cargo",
+		"payload_visual": {"visual_type": "cargo", "visual_width_factor": 1.3, "visual_height_factor": 1.1, "visual_color_rgb": [0.2, 0.4, 0.6]},
 		"stages": [{
 			"dry_mass": 5000.0,
 			"fuel_capacity": 100000.0,
@@ -84,6 +86,9 @@ func _initialize() -> void:
 	single_stage_sim.set_rocket_design(single_stage_design)
 	assert(single_stage_sim.rocket_stages.size() == 1)
 	assert(is_equal_approx(float(single_stage_sim.rocket_stages[0].dry_mass), 5000.0))
+	assert(single_stage_sim.payload_visual.visual_type == "cargo")
+	var single_stage_save: Dictionary = single_stage_sim.get_save_data()
+	assert(single_stage_save.rocket_design.payload_visual.visual_color_rgb == [0.2, 0.4, 0.6])
 	single_stage_sim.free()
 	var incomplete := design.duplicate(true)
 	incomplete["stages"].clear()
@@ -94,6 +99,14 @@ func _initialize() -> void:
 		var preset_errors := RocketDesign.validation_errors(preset_design)
 		assert(preset_errors.is_empty(), "%s: %s" % [preset_id, str(preset_errors)])
 	var odyssey := RocketDesign.create_preset("DEEP_SPACE")
+	assert(odyssey.payload_type == "probe")
+	assert(odyssey.payload_visual.visual_type == "probe")
+	var cargo_preset := RocketDesign.create_preset("LEO_CARGO")
+	assert(cargo_preset.payload_type == "cargo")
+	assert(cargo_preset.payload_visual.visual_type == "cargo")
+	var satellite_preset := RocketDesign.create_preset("SMALL_SAT")
+	assert(satellite_preset.payload_type == "satellite")
+	assert(satellite_preset.payload_visual.visual_type == "satellite")
 	assert(is_equal_approx(RocketDesign.total_initial_mass(odyssey), 448500.0))
 	assert(RocketDesign.total_delta_v(odyssey) > RocketDesign.MIN_TOTAL_DELTA_V)
 	var extended_design := design.duplicate(true)
@@ -183,11 +196,15 @@ func _initialize() -> void:
 			},
 			"builder_options": {
 				"engine_counts_add": [5],
-				"payloads_add": [{"id": "test_payload", "label": "Test payload · 2 t", "mass": 2000.0}],
+				"payloads_add": [{"id": "test_payload", "label": "Test payload · 2 t", "mass": 2000.0, "visual_type": "cargo", "visual_width_factor": 1.4, "visual_height_factor": 1.1, "visual_color_rgb": [0.2, 0.4, 0.6]}],
 				"tank_scales_add": [{"label": "Test tank", "scale": 2.5}]
 			}
 		}
 	}
+	var invalid_payload_overlay: Dictionary = mod_overlay.duplicate(true)
+	invalid_payload_overlay["rocket"]["builder_options"]["payloads_add"][0]["visual_type"] = "spaceship"
+	var invalid_payload_catalog := ContentCatalog._merge_overlay(ContentCatalog.get_catalog(), invalid_payload_overlay)
+	assert(not ContentCatalog._catalog_error(invalid_payload_catalog).is_empty())
 	var merged_catalog := ContentCatalog._merge_overlay(ContentCatalog.get_catalog(), mod_overlay)
 	assert(ContentCatalog._catalog_error(merged_catalog).is_empty())
 	assert(merged_catalog.planets.size() == ContentCatalog.get_catalog().planets.size() + 1)
@@ -205,6 +222,13 @@ func _initialize() -> void:
 		if str(payload_option.id) == "test_payload":
 			has_test_payload = true
 	assert(has_test_payload)
+	var test_payload_visual := RocketDesign.payload_visual_data("test_payload")
+	assert(test_payload_visual.visual_type == "cargo")
+	assert(is_equal_approx(float(test_payload_visual.visual_width_factor), 1.4))
+	assert(test_payload_visual.visual_color_rgb == [0.2, 0.4, 0.6])
+	var invalid_payload_visual := design.duplicate(true)
+	invalid_payload_visual["payload_visual"] = {"visual_type": "spaceship"}
+	assert(not RocketDesign.validation_errors(invalid_payload_visual).is_empty())
 	var has_test_tank_scale := false
 	for tank_option in RocketDesign.tank_scale_options():
 		if is_equal_approx(float(tank_option.scale), 2.5):

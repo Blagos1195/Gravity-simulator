@@ -15,6 +15,17 @@ static func payload_options() -> Array:
 	var options: Array = _rocket_catalog().get("builder_options", {}).get("payloads", [])
 	return options.duplicate(true)
 
+static func payload_visual_data(payload_id: String) -> Dictionary:
+	for option in payload_options():
+		if str(option.get("id", "")) != payload_id:
+			continue
+		var visual := {}
+		for key in ["visual_type", "visual_width_factor", "visual_height_factor", "visual_color_rgb"]:
+			if option.has(key):
+				visual[key] = option[key]
+		return visual
+	return {}
+
 static func payload_mass_limits() -> Dictionary:
 	var limits: Dictionary = _rocket_catalog().get("builder_options", {}).get("payload_mass_limits", {
 		"minimum": 0.001,
@@ -127,6 +138,12 @@ static func _design_from_catalog(definition: Dictionary) -> Dictionary:
 		"payload_mass": float(definition.get("payload_mass", 500.0)),
 		"stages": []
 	}
+	for payload_option in payload_options():
+		if is_equal_approx(float(payload_option.get("mass", -1.0)), float(design["payload_mass"])):
+			var payload_id := str(payload_option.get("id", "probe"))
+			design["payload_type"] = payload_id
+			design["payload_visual"] = payload_visual_data(payload_id)
+			break
 	var stage_parts: Dictionary = {}
 	for part in _rocket_catalog().get("stage_parts", []):
 		stage_parts[str(part.get("id", ""))] = part
@@ -193,6 +210,27 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		errors.append("Payload mass must be positive.")
 	elif _rocket_catalog().get("builder_options", {}).has("payload_mass_limits") and (payload < minimum_payload or payload > maximum_payload):
 		errors.append("Payload must be between %.3f kg and %.0f kg." % [minimum_payload, maximum_payload])
+	var payload_visual: Variant = design.get("payload_visual", {})
+	if not payload_visual is Dictionary:
+		errors.append("Payload appearance settings must be an object.")
+	else:
+		if payload_visual.has("visual_type") and not ["probe", "crew", "satellite", "cargo"].has(str(payload_visual.visual_type)):
+			errors.append("Payload appearance uses an unsupported visual type.")
+		for visual_key in ["visual_width_factor", "visual_height_factor"]:
+			if payload_visual.has(visual_key):
+				var visual_value: Variant = payload_visual[visual_key]
+				if not (visual_value is int or visual_value is float) or not is_finite(float(visual_value)) or float(visual_value) <= 0.0:
+					errors.append("Payload %s must be a positive finite number." % visual_key)
+		if payload_visual.has("visual_color_rgb"):
+			var payload_color: Variant = payload_visual.visual_color_rgb
+			var valid_payload_color: bool = payload_color is Array and payload_color.size() == 3
+			if valid_payload_color:
+				for component in payload_color:
+					if not (component is int or component is float) or not is_finite(float(component)) or float(component) < 0.0 or float(component) > 1.0:
+						valid_payload_color = false
+						break
+			if not valid_payload_color:
+				errors.append("Payload body colour must contain three finite RGB values between zero and one.")
 	if stages.is_empty():
 		return errors
 	var total_mass := total_initial_mass(design)

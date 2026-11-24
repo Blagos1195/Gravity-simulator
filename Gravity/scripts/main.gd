@@ -395,6 +395,9 @@ func _show_vehicle_editor() -> void:
 		payload_selector.set_item_metadata(payload_index, payload_option)
 	payload_selector.select(selected_payload)
 	rocket_design["payload_type"] = str(payload_options[selected_payload].id)
+	var saved_payload_visual: Variant = rocket_design.get("payload_visual", {})
+	if not saved_payload_visual is Dictionary or saved_payload_visual.is_empty():
+		rocket_design["payload_visual"] = RocketDesign.payload_visual_data(str(payload_options[selected_payload].id))
 	payload_row.add_child(payload_selector)
 	var payload_limits := RocketDesign.payload_mass_limits()
 	var payload_mass_input := SpinBox.new()
@@ -414,6 +417,7 @@ func _show_vehicle_editor() -> void:
 		var selected_payload_option: Dictionary = payload_selector.get_item_metadata(index)
 		rocket_design["payload_mass"] = float(selected_payload_option.mass)
 		rocket_design["payload_type"] = str(selected_payload_option.id)
+		rocket_design["payload_visual"] = RocketDesign.payload_visual_data(str(selected_payload_option.id))
 		payload_mass_input.set_value_no_signal(float(selected_payload_option.mass))
 		_update_design_stats()
 	)
@@ -974,6 +978,7 @@ func _add_new_vehicle() -> void:
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
 		"payload_type": sim.payload_type,
+		"payload_visual": sim.payload_visual.duplicate(true),
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	_launch_vehicle_design(design)
@@ -1004,6 +1009,7 @@ func _show_new_vehicle_dialog() -> void:
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
 		"payload_type": sim.payload_type,
+		"payload_visual": sim.payload_visual.duplicate(true),
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	options.append({
@@ -1111,6 +1117,7 @@ func _switch_vehicle(index: int) -> void:
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
 		"payload_type": sim.payload_type,
+		"payload_visual": sim.payload_visual.duplicate(true),
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	_refresh_vehicle_selector()
@@ -1290,7 +1297,7 @@ func _sync_docked_vehicles() -> void:
 			"name": child.vehicle_name,
 			"direction": world_offset.normalized(),
 			"rotation": parent.rotation_angle,
-			"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "stages": child.rocket_stages},
+			"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "payload_visual": child.payload_visual.duplicate(true), "stages": child.rocket_stages},
 			"stage_index": child.stage_index
 		})
 		child.rocket_position = parent.rocket_position + world_offset
