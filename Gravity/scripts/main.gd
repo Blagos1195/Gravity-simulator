@@ -553,7 +553,12 @@ func _build_menu() -> void:
 
 func _show_vehicle_editor() -> void:
 	for child in get_children():
-		child.queue_free()
+		if child == sim or child == hud_root:
+			child.visible = false
+			child.set_process(false)
+			child.set_physics_process(false)
+		else:
+			child.queue_free()
 	mode = "editor"
 	var bg := ColorRect.new()
 	bg.color = Color(0.012, 0.018, 0.035)
@@ -2213,6 +2218,12 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 	return amount
 
 func _build_flight_hud() -> void:
+	if is_instance_valid(hud_root):
+		hud_root.queue_free()
+	if is_instance_valid(sim):
+		sim.visible = true
+		sim.set_process(true)
+		sim.set_physics_process(true)
 	hud_root = Control.new()
 	hud_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud_root.mouse_filter = Control.MOUSE_FILTER_PASS
