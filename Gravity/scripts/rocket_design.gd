@@ -163,6 +163,70 @@ static func _design_from_catalog(definition: Dictionary) -> Dictionary:
 		design["stages"].append(stage)
 	return design
 
+static func booster_options() -> Array:
+	var options: Array = _rocket_catalog().get("builder_options", {}).get("booster_options", [])
+	return options.duplicate(true)
+
+static func booster_definition(booster_id: String) -> Dictionary:
+	for option in booster_options():
+		if str(option.get("id", "")) == booster_id:
+			return option
+	return {}
+
+static func add_booster_pair(design: Dictionary, stage_index: int, booster_id: String) -> bool:
+	var stages: Array = design.get("stages", [])
+	if stage_index < 0 or stage_index >= stages.size() or booster_definition(booster_id).is_empty():
+		return false
+	var stage: Dictionary = stages[stage_index].duplicate(true)
+	var boosters: Array = stage.get("boosters", []).duplicate(true)
+	if boosters.size() >= 2:
+		return false
+	boosters.append({"id": booster_id})
+	stage["boosters"] = boosters
+	stages[stage_index] = stage
+	design["stages"] = stages
+	return true
+
+static func remove_booster_pair(design: Dictionary, stage_index: int, booster_index: int) -> bool:
+	var stages: Array = design.get("stages", [])
+	if stage_index < 0 or stage_index >= stages.size():
+		return false
+	var stage: Dictionary = stages[stage_index].duplicate(true)
+	var boosters: Array = stage.get("boosters", []).duplicate(true)
+	if booster_index < 0 or booster_index >= boosters.size():
+		return false
+	boosters.remove_at(booster_index)
+	stage["boosters"] = boosters
+	stages[stage_index] = stage
+	design["stages"] = stages
+	return true
+
+static func stage_booster_stats(stage: Dictionary) -> Dictionary:
+	var totals := {"dry_mass": 0.0, "fuel_capacity": 0.0, "thrust": 0.0, "vacuum_thrust": 0.0, "flow": 0.0}
+	for booster_variant in stage.get("boosters", []):
+		if not booster_variant is Dictionary:
+			continue
+		var booster := booster_definition(str(booster_variant.get("id", "")))
+		if booster.is_empty():
+			continue
+		var pair_count := maxi(1, int(booster.get("pair_count", 2)))
+		for key in totals:
+			totals[key] += float(booster.get(key, 0.0)) * pair_count
+	return totals
+
+static func stage_total_dry_mass(stage: Dictionary) -> float:
+	return float(stage.get("dry_mass", 0.0)) + float(stage_booster_stats(stage).dry_mass)
+
+static func stage_total_fuel_capacity(stage: Dictionary) -> float:
+	return float(stage.get("fuel_capacity", 0.0)) + float(stage_booster_stats(stage).fuel_capacity)
+
+static func stage_total_thrust(stage: Dictionary, vacuum: bool = false) -> float:
+	var key := "vacuum_thrust" if vacuum else "thrust"
+	return float(stage.get(key, 0.0)) * float(stage.get("engine_count", 1)) + float(stage_booster_stats(stage).get(key, 0.0))
+
+static func stage_total_flow(stage: Dictionary) -> float:
+	return float(stage.get("flow", 0.0)) * float(stage.get("engine_count", 1)) + float(stage_booster_stats(stage).flow)
+
 static func total_initial_mass(design: Dictionary) -> float:
 	var stages: Array = design.get("stages", [])
 	var mass := float(design.get("payload_mass", 0.0))
