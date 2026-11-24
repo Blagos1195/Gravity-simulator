@@ -668,6 +668,117 @@ func _set_selected_vehicle_full_simulation() -> void:
 		if status_label:
 			status_label.text = "AUTOMATIC ORBIT SIMULATION ENABLED  •  %s" % sim.vehicle_name.to_upper()
 
+func _show_time_skip_dialog() -> void:
+	if not is_instance_valid(sim) or sim.paused:
+		return
+	var window := Window.new()
+	window.title = "FAST FORWARD TIME"
+	window.size = Vector2i(620, 300)
+	window.min_size = Vector2i(520, 260)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	window.add_child(margin)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 12)
+	margin.add_child(layout)
+	var description := Label.new()
+	description.text = "Skip ahead while every vehicle is landed or in a safe, stable orbit. Active burns, autopilot, close encounters and unstable trajectories prevent skipping."
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(description)
+	var options := HBoxContainer.new()
+	options.add_theme_constant_override("separation", 8)
+	layout.add_child(options)
+	for option in [{"label": "1 DAY", "seconds": 86400.0}, {"label": "7 DAYS", "seconds": 604800.0}, {"label": "30 DAYS", "seconds": 2592000.0}, {"label": "1 YEAR", "seconds": 31557600.0}, {"label": "5 YEARS", "seconds": 157788000.0}]:
+		var button := Button.new()
+		button.text = str(option.label)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(func():
+			if _fast_forward_simulation(float(option.seconds)):
+				window.queue_free()
+			else:
+				description.text = "Cannot skip safely right now. Land all vehicles or place them in stable orbits, stop burns and autopilot, and move spacecraft apart."
+		)
+		options.add_child(button)
+	var close := Button.new()
+	close.text = "CLOSE"
+	close.pressed.connect(window.queue_free)
+	layout.add_child(close)
+	window.popup_centered()
+
+
+func _fast_forward_simulation(seconds: float) -> bool:
+	if not is_instance_valid(sim) or sim.paused or seconds <= 0.0 or seconds > 157788000.0:
+		return false
+	if not docking_assists.is_empty():
+		return false
+	var orbit_data: Dictionary = {}
+	for vehicle in fleet_sims:
+		if vehicle.crashed:
+			continue
+		if vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled or vehicle.guidance_enabled:
+			return false
+		if vehicle.landed:
+			continue
+		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+		if body.is_empty() or float(body.get("distance", INF)) > float(body.get("soi", 0.0)):
+			return false
+		var relative_position: Vector2 = body.get("relative_position", Vector2.ZERO)
+		var relative_velocity: Vector2 = vehicle.velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var mu := FlightComputer.G * float(body.get("mass", 0.0))
+		var orbit := FlightComputer.orbital_state(relative_position, relative_velocity, mu)
+		if not bool(orbit.get("bound", false)):
+			return false
+		var body_radius := float(body.get("radius", 0.0))
+		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(str(body.get("name", "")), body_radius)
+		var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(body.get("soi", 0.0)))
+		if float(orbit.get("periapsis", 0.0)) <= body_radius + minimum_altitude or float(orbit.get("apoapsis", INF)) >= body_radius + maximum_altitude:
+			return false
+		var elements := OrbitalPropagator.elements_from_state(relative_position, relative_velocity, mu, vehicle.sim_time)
+		if elements.is_empty():
+			return false
+		orbit_data[vehicle] = {"host_body_name": str(body.get("name", "")), "elements": elements}
+	for first_index in range(fleet_sims.size()):
+		for second_index in range(first_index + 1, fleet_sims.size()):
+			if fleet_sims[first_index].rocket_position.distance_to(fleet_sims[second_index].rocket_position) < 20000000.0:
+				return false
+	var target_time := sim.sim_time + seconds
+	fleet_time_backlog = 0.0
+	for vehicle in fleet_sims:
+		vehicle.simulation_time_backlog = 0.0
+		vehicle.ephemeris_cache_time = -INF
+		vehicle.ephemeris_output_cache_time = -INF
+		if vehicle.crashed:
+			vehicle.sim_time = target_time
+		elif vehicle.landed:
+			vehicle._physics_step(seconds)
+		else:
+			vehicle.passive_orbit_data = orbit_data[vehicle]
+			vehicle.passive_orbit_active = true
+			_advance_passive_vehicle(vehicle, target_time)
+		vehicle.sim_time = target_time
+		vehicle.ephemeris_cache_time = -INF
+		vehicle.ephemeris_output_cache_time = -INF
+	sim.sim_time = target_time
+	_update_docked_masses()
+	_scan_active_telescopes()
+	_update_discovery_state()
+	_update_economy()
+	_update_missions()
+	_refresh_vehicle_selector()
+	if status_label:
+		status_label.text = "TIME SKIPPED  •  %s" % sim._format_time(sim.sim_time)
+	sim.queue_redraw()
+	return true
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if mode != "flight" or not event is InputEventKey or not event.pressed or event.echo:
 		return
@@ -677,6 +788,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_load_game()
 	elif event.keycode == KEY_ESCAPE:
 		_pause_simulation()
+	elif event.keycode == KEY_J:
+		_show_time_skip_dialog()
 
 func _build_menu() -> void:
 	mode = "menu"
@@ -1122,41 +1235,193 @@ func _update_design_stats() -> void:
 		design_preview.design = rocket_design
 		design_preview.queue_redraw()
 
+func _design_library_directory() -> String:
+	return "user://rocket_designs"
+
+
+func _design_library_files() -> PackedStringArray:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_design_library_directory()))
+	var files := PackedStringArray()
+	var directory := DirAccess.open(_design_library_directory())
+	if directory == null:
+		return files
+	directory.list_dir_begin()
+	var filename := directory.get_next()
+	while not filename.is_empty():
+		if not directory.current_is_dir() and filename.get_extension().to_lower() == "json":
+			files.append(filename)
+		filename = directory.get_next()
+	directory.list_dir_end()
+	files.sort()
+	if files.is_empty() and FileAccess.file_exists("user://rocket_design.json"):
+		var legacy_file := FileAccess.open("user://rocket_design.json", FileAccess.READ)
+		if legacy_file != null:
+			var legacy_design: Variant = JSON.parse_string(legacy_file.get_as_text())
+			legacy_file.close()
+			if legacy_design is Dictionary and RocketDesign.validation_errors(legacy_design).is_empty():
+				var legacy_name := str(legacy_design.get("name", "Imported Design"))
+				var safe_name := legacy_name.to_lower().replace(" ", "_")
+				var safe_chars := ""
+				for character in safe_name:
+					if character.is_valid_identifier() or character in ["-", "_"]:
+						safe_chars += character
+				if safe_chars.is_empty():
+					safe_chars = "imported_design"
+				var migrated := FileAccess.open("%s/%s.json" % [_design_library_directory(), safe_chars], FileAccess.WRITE)
+				if migrated != null:
+					migrated.store_string(JSON.stringify(legacy_design, "\t"))
+					migrated.close()
+					files.append("%s.json" % safe_chars)
+	return files
+
+
 func _save_rocket_design() -> void:
 	var errors := RocketDesign.validation_errors(rocket_design)
 	if not errors.is_empty():
 		_update_design_stats()
 		return
-	var file := FileAccess.open("user://rocket_design.json", FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(rocket_design, "\t"))
+	var window := Window.new()
+	window.title = "SAVE VEHICLE DESIGN"
+	window.size = Vector2i(520, 190)
+	window.min_size = Vector2i(440, 170)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 10)
+	layout.add_theme_constant_override("margin_left", 16)
+	layout.add_theme_constant_override("margin_right", 16)
+	layout.add_theme_constant_override("margin_top", 14)
+	layout.add_theme_constant_override("margin_bottom", 14)
+	window.add_child(layout)
+	var name_input := LineEdit.new()
+	name_input.text = str(rocket_design.get("name", "Custom Vehicle"))
+	name_input.placeholder_text = "Design name"
+	layout.add_child(name_input)
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_END
+	layout.add_child(actions)
+	var cancel := Button.new()
+	cancel.text = "CANCEL"
+	cancel.pressed.connect(window.queue_free)
+	actions.add_child(cancel)
+	var save := Button.new()
+	save.text = "SAVE TO LIBRARY"
+	save.pressed.connect(func():
+		var design_name := name_input.text.strip_edges()
+		if design_name.is_empty():
+			return
+		var safe_name := design_name.to_lower().replace(" ", "_")
+		var safe_chars := ""
+		for character in safe_name:
+			if character.is_valid_identifier() or character in ["-", "_"]:
+				safe_chars += character
+		if safe_chars.is_empty():
+			return
+		var saved_design := rocket_design.duplicate(true)
+		saved_design["name"] = design_name
+		var path := "%s/%s.json" % [_design_library_directory(), safe_chars]
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		if file == null:
+			return
+		file.store_string(JSON.stringify(saved_design, "\t"))
 		file.close()
+		rocket_design = saved_design
+		if is_instance_valid(active_builder) and active_builder is RocketBuilder:
+			active_builder.load_design(saved_design)
 		if is_instance_valid(design_error_label):
-			design_error_label.text = "DESIGN SAVED"
-	else:
-		if is_instance_valid(design_error_label):
-			design_error_label.text = "DESIGN FILE COULD NOT BE OPENED"
+			design_error_label.text = "DESIGN SAVED TO LIBRARY"
+		window.queue_free()
+	)
+	actions.add_child(save)
+	window.popup_centered()
 
 
 func _load_rocket_design() -> void:
-	var path := "user://rocket_design.json"
-	if not FileAccess.file_exists(path):
+	var files := _design_library_files()
+	if files.is_empty():
 		if is_instance_valid(design_error_label):
-			design_error_label.text = "NO SAVED DESIGN FOUND"
+			design_error_label.text = "NO DESIGNS IN LIBRARY"
 		return
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		if is_instance_valid(design_error_label):
-			design_error_label.text = "SAVED DESIGN COULD NOT BE OPENED"
-		return
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	file.close()
-	if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
-		rocket_design = parsed
-		_show_vehicle_editor()
-	else:
-		if is_instance_valid(design_error_label):
-			design_error_label.text = "SAVED DESIGN IS INVALID"
+	var window := Window.new()
+	window.title = "ROCKET DESIGN LIBRARY"
+	window.size = Vector2i(620, 420)
+	window.min_size = Vector2i(500, 320)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_bottom", 14)
+	window.add_child(margin)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 10)
+	margin.add_child(layout)
+	var selector := OptionButton.new()
+	selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for filename in files:
+		var path := "%s/%s" % [_design_library_directory(), filename]
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			continue
+		var parsed: Variant = JSON.parse_string(file.get_as_text())
+		file.close()
+		if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
+			selector.add_item(str(parsed.get("name", filename.get_basename())))
+			selector.set_item_metadata(selector.item_count - 1, filename)
+	layout.add_child(selector)
+	var info := Label.new()
+	info.text = "Saved designs are stored locally and remain available between sessions."
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(info)
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_END
+	layout.add_child(actions)
+	var close := Button.new()
+	close.text = "CLOSE"
+	close.pressed.connect(window.queue_free)
+	actions.add_child(close)
+	var delete := Button.new()
+	delete.text = "DELETE"
+	delete.disabled = selector.item_count == 0
+	delete.pressed.connect(func():
+		if selector.item_count == 0:
+			return
+		var filename := str(selector.get_item_metadata(selector.selected))
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("%s/%s" % [_design_library_directory(), filename]))
+		window.queue_free()
+		_load_rocket_design()
+	)
+	actions.add_child(delete)
+	var load := Button.new()
+	load.text = "LOAD DESIGN"
+	load.disabled = selector.item_count == 0
+	load.pressed.connect(func():
+		if selector.item_count == 0:
+			return
+		var filename := str(selector.get_item_metadata(selector.selected))
+		var path := "%s/%s" % [_design_library_directory(), filename]
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			return
+		var parsed: Variant = JSON.parse_string(file.get_as_text())
+		file.close()
+		if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
+			rocket_design = parsed.duplicate(true)
+			if is_instance_valid(active_builder) and active_builder is RocketBuilder:
+				active_builder.load_design(rocket_design)
+			else:
+				_show_vehicle_editor()
+			window.queue_free()
+	)
+	actions.add_child(load)
+	window.popup_centered()
 
 func _launch_designed_vehicle() -> void:
 	var errors := RocketDesign.validation_errors(rocket_design)
@@ -1689,17 +1954,7 @@ func _show_fleet_custom_builder() -> void:
 	)
 	builder.save_requested.connect(_save_rocket_design)
 	builder.load_requested.connect(func():
-		var path := "user://rocket_design.json"
-		if not FileAccess.file_exists(path):
-			return
-		var file := FileAccess.open(path, FileAccess.READ)
-		if file == null:
-			return
-		var parsed: Variant = JSON.parse_string(file.get_as_text())
-		file.close()
-		if parsed is Dictionary and RocketDesign.validation_errors(parsed).is_empty():
-			rocket_design = parsed.duplicate(true)
-			builder.configure(rocket_design, 0)
+		_load_rocket_design()
 	)
 	builder.payload_edit_requested.connect(_show_payload_editor)
 	builder.launch_requested.connect(func():
@@ -2282,7 +2537,7 @@ func _build_flight_hud() -> void:
 	bottom.offset_top = -58
 	bottom.offset_bottom = -8
 	bottom.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     T TELESCOPE ON/OFF     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
+	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     T TELESCOPE ON/OFF     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     J FAST FORWARD     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
