@@ -511,7 +511,7 @@ func _update_discovery_state() -> void:
 
 func _update_passive_orbit_states() -> void:
 	for vehicle in fleet_sims:
-		if vehicle == sim or _is_docked_child(vehicle.vehicle_name) or vehicle.passive_orbit_forced or vehicle.landed or vehicle.crashed or vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled:
+		if vehicle == sim or _is_docked_child(vehicle.vehicle_name) or vehicle.passive_orbit_forced or vehicle.landed or vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled:
 			vehicle.passive_orbit_active = false
 			vehicle.passive_orbit_data.clear()
 			continue
