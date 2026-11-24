@@ -660,7 +660,7 @@ func _show_vehicle_editor() -> void:
 
 func _show_vehicle_component_editor(stage_index: int) -> void:
 	if is_instance_valid(active_builder):
-		active_builder.queue_free()
+		active_builder.free()
 		active_builder = null
 	if stage_index < 0 or stage_index >= rocket_design.get("stages", []).size():
 		return
