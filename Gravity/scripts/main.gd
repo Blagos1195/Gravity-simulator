@@ -677,6 +677,7 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 	)
 	builder.save_requested.connect(_save_rocket_design)
 	builder.load_requested.connect(_load_rocket_design)
+	builder.payload_edit_requested.connect(_show_payload_editor)
 	builder.launch_requested.connect(func():
 		if is_instance_valid(active_builder):
 			active_builder.queue_free()
