@@ -24,6 +24,7 @@ var career_enabled := false
 var infinite_weightless_fuel := false
 var simulate_belt_collisions := false
 var save_slot := 1
+var new_game_slot := 1
 var sim
 var fleet_sims: Array = []
 var active_vehicle_index := 0
@@ -1264,7 +1265,28 @@ func _begin_new_game() -> void:
 	orbited_body_names.clear()
 	rocket_design = RocketDesign.create_default()
 	infinite_weightless_fuel = false
+	new_game_slot = 1
+	for slot in range(1, 9):
+		if not _save_exists(slot):
+			new_game_slot = slot
+			break
 	_show_new_game_setup()
+
+func _confirm_new_game_slot() -> void:
+	if _save_exists(new_game_slot):
+		var confirmation := ConfirmationDialog.new()
+		confirmation.title = "OVERWRITE SAVE?"
+		confirmation.dialog_text = "SLOT %02d already contains a game. Starting here will replace that save. Its previous state will be kept in save history." % new_game_slot
+		confirmation.ok_button_text = "OVERWRITE SLOT %02d" % new_game_slot
+		confirmation.confirmed.connect(func():
+			save_slot = new_game_slot
+			_show_vehicle_editor()
+		)
+		add_child(confirmation)
+		confirmation.popup_centered()
+		return
+	save_slot = new_game_slot
+	_show_vehicle_editor()
 
 func _show_new_game_setup() -> void:
 	for child in get_children():
@@ -1287,6 +1309,14 @@ func _show_new_game_setup() -> void:
 	heading.add_theme_font_size_override("font_size", 32)
 	heading.add_theme_color_override("font_color", Color(0.78, 0.9, 1.0))
 	root.add_child(heading)
+	_add_setting_label(root, "SAVE SLOT")
+	var slot_picker := OptionButton.new()
+	for slot in range(1, 9):
+		var slot_status := "EMPTY" if not _save_exists(slot) else "EXISTING SAVE  •  OVERWRITE"
+		slot_picker.add_item("SLOT %02d  •  %s" % [slot, slot_status])
+	slot_picker.select(new_game_slot - 1)
+	slot_picker.item_selected.connect(func(index: int): new_game_slot = index + 1)
+	root.add_child(slot_picker)
 	_add_setting_label(root, "PHYSICS PRESET")
 	var physics := OptionButton.new()
 	for option in ["Arcade", "Standard", "Realistic", "Hardcore"]:
@@ -1317,7 +1347,7 @@ func _show_new_game_setup() -> void:
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
 	root.add_child(note)
-	_add_button(root, "CONTINUE TO ROCKET BUILDER", _show_vehicle_editor)
+	_add_button(root, "CONTINUE TO ROCKET BUILDER", _confirm_new_game_slot)
 	_add_button(root, "BACK", _build_menu)
 
 func _save_exists(slot: int) -> bool:
@@ -2867,7 +2897,7 @@ func _autosave_history_paths(slot: int) -> Array[String]:
 	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(directory)):
 		return paths
 	for filename in DirAccess.get_files_at(directory):
-		if filename.begins_with("auto_") and filename.ends_with(".json"):
+		if (filename.begins_with("auto_") or filename.begins_with("manual_")) and filename.ends_with(".json"):
 			paths.append(directory.path_join(filename))
 	paths.sort_custom(func(a: String, b: String) -> bool:
 		return FileAccess.get_modified_time(a) > FileAccess.get_modified_time(b)
@@ -2879,10 +2909,42 @@ func _prune_autosave_history(slot: int, keep_count: int = 10) -> void:
 	for i in range(keep_count, paths.size()):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(paths[i]))
 
-func _save_game(automatic: bool) -> void:
-	if not sim:
-		return
+func _write_save_file(path: String, data: Dictionary) -> bool:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	var temporary_path := absolute_path + ".tmp"
+	var file := FileAccess.open(temporary_path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(data, "\t"))
+	file.flush()
+	file.close()
+	if FileAccess.get_open_error() != OK:
+		DirAccess.remove_absolute(temporary_path)
+		return false
+	if FileAccess.file_exists(path):
+		var previous_path := absolute_path + ".previous"
+		if FileAccess.file_exists(previous_path):
+			DirAccess.remove_absolute(previous_path)
+		var backup_error := DirAccess.rename_absolute(absolute_path, previous_path)
+		if backup_error != OK:
+			DirAccess.remove_absolute(temporary_path)
+			return false
+		var replace_error := DirAccess.rename_absolute(temporary_path, absolute_path)
+		if replace_error != OK:
+			DirAccess.rename_absolute(previous_path, absolute_path)
+			DirAccess.remove_absolute(temporary_path)
+			return false
+		DirAccess.remove_absolute(previous_path)
+	else:
+		var install_error := DirAccess.rename_absolute(temporary_path, absolute_path)
+		if install_error != OK:
+			DirAccess.remove_absolute(temporary_path)
+			return false
+	return true
 
+func _save_game(automatic: bool) -> void:
+	if not sim or fleet_sims.is_empty():
+		return
 	var data: Dictionary = sim.get_save_data()
 	var saved_vehicles: Array[Dictionary] = []
 	for vehicle in fleet_sims:
@@ -2897,6 +2959,9 @@ func _save_game(automatic: bool) -> void:
 	data["world_scale"] = world_scale
 	data["career_enabled"] = career_enabled
 	data["slot"] = save_slot
+	data["save_version"] = 2
+	data["saved_at_unix"] = int(Time.get_unix_time_from_system())
+	data["save_name"] = str(sim.vehicle_name)
 	data["discovery_state"] = discovery_state.duplicate(true)
 	data["funds"] = funds
 	data["total_revenue_earned"] = total_revenue_earned
@@ -2904,31 +2969,35 @@ func _save_game(automatic: bool) -> void:
 	data["mission_state"] = mission_state.duplicate(true)
 	data["orbited_body_names"] = orbited_body_names.duplicate(true)
 
-	if automatic:
-		var history_directory := "%s/history/slot_%02d" % [SAVE_DIR, save_slot]
-		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(history_directory))
-		var history_name := "auto_%d_%d.json" % [int(Time.get_unix_time_from_system()), Time.get_ticks_usec()]
-		var history_path := history_directory.path_join(history_name)
-		var history_file := FileAccess.open(history_path, FileAccess.WRITE)
-		if history_file:
-			history_file.store_string(JSON.stringify(data, "\t"))
-			history_file.close()
-			_prune_autosave_history(save_slot)
-		else:
-			if status_label:
-				status_label.text = "AUTOSAVE HISTORY COULD NOT BE WRITTEN"
-
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
+	var history_directory := "%s/history/slot_%02d" % [SAVE_DIR, save_slot]
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(history_directory))
 	var path := "%s/slot_%02d.json" % [SAVE_DIR, save_slot]
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(data, "\t"))
-		file.close()
+	if FileAccess.file_exists(path):
+		var history_prefix := "auto" if automatic else "manual"
+		var history_name := "%s_%d_%d.json" % [history_prefix, int(Time.get_unix_time_from_system()), Time.get_ticks_usec()]
+		var history_path := history_directory.path_join(history_name)
+		var current_file := FileAccess.open(path, FileAccess.READ)
+		if current_file == null:
+			if status_label:
+				status_label.text = "EXISTING SAVE COULD NOT BE BACKED UP"
+			return
+		var current_data := current_file.get_as_text()
+		current_file.close()
+		var history_file := FileAccess.open(history_path, FileAccess.WRITE)
+		if history_file == null:
+			if status_label:
+				status_label.text = "SAVE HISTORY COULD NOT BE WRITTEN"
+			return
+		history_file.store_string(current_data)
+		history_file.flush()
+		history_file.close()
+		_prune_autosave_history(save_slot)
+	if not _write_save_file(path, data):
 		if status_label:
-			status_label.text = ("AUTOSAVED" if automatic else "SAVED") + "  •  SLOT %02d" % save_slot
-	else:
-		if status_label:
-			status_label.text = "SAVE COULD NOT BE WRITTEN"
+			status_label.text = "SAVE COULD NOT BE WRITTEN  •  ORIGINAL PRESERVED"
+		return
+	if status_label:
+		status_label.text = ("AUTOSAVED" if automatic else "SAVED") + "  •  SLOT %02d" % save_slot
 
 func _load_menu_path(slot: int, path: String) -> void:
 	save_slot = slot
