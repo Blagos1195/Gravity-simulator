@@ -655,8 +655,7 @@ func _show_vehicle_editor() -> void:
 		else:
 			child.queue_free()
 	mode = "editor"
-	if is_inside_tree():
-		_show_vehicle_component_editor(0)
+	_show_vehicle_component_editor(0)
 
 
 func _show_vehicle_component_editor(stage_index: int) -> void:
@@ -679,7 +678,12 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 	builder.save_requested.connect(_save_rocket_design)
 	builder.load_requested.connect(_load_rocket_design)
 	builder.launch_requested.connect(_launch_designed_vehicle)
-	builder.back_requested.connect(_show_new_game_setup)
+	builder.back_requested.connect(func():
+		if is_instance_valid(active_builder):
+			active_builder.queue_free()
+			active_builder = null
+		_show_new_game_setup()
+	)
 	if not is_inside_tree():
 		add_child(builder)
 		builder._build_interface()
