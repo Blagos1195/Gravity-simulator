@@ -63,7 +63,7 @@ static func ensure_stage_components(stage: Dictionary) -> Dictionary:
 	]
 	return compile_stage(configured, configured["components"])
 
-static func add_component(stage: Dictionary, component_id: String, attachment: String = "stack", mirrored: bool = true, side: int = 1) -> Dictionary:
+static func add_component(stage: Dictionary, component_id: String, attachment: String = "stack", mirrored: bool = true, side: int = 1, mount_index: int = -1) -> Dictionary:
 	var definition := component_definition(component_id)
 	if definition.is_empty() or not ["stack", "radial"].has(attachment):
 		return {}
@@ -73,6 +73,7 @@ static func add_component(stage: Dictionary, component_id: String, attachment: S
 	if attachment == "radial":
 		definition["mirror"] = mirrored
 		definition["side"] = -1 if side < 0 else 1
+		definition["mount_index"] = mount_index
 	components.append(definition)
 	configured["components"] = components
 	return compile_stage(configured, components)
@@ -118,7 +119,7 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 			radial_definition["visual_width_factor"] = float(component.get("visual_width_factor", 0.5))
 			radial_definition["visual_length_factor"] = float(component.get("visual_length_factor", 1.0))
 			radial_definition["source_component_id"] = str(component.get("id", ""))
-			radial_boosters.append({"id": str(component.get("id", "")), "definition": radial_definition, "source_component_id": str(component.get("id", "")), "side": int(component.get("side", 1))})
+			radial_boosters.append({"id": str(component.get("id", "")), "definition": radial_definition, "source_component_id": str(component.get("id", "")), "side": int(component.get("side", 1)), "mount_index": int(component.get("mount_index", -1))})
 			continue
 		dry_mass += maxf(0.0, float(component.get("dry_mass", 0.0)))
 		fuel_capacity += maxf(0.0, float(component.get("fuel_capacity", 0.0)))
