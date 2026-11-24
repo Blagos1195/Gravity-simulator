@@ -1374,6 +1374,9 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 	_refresh_vehicle_selector()
 
 func _start_flight() -> void:
+	if is_instance_valid(active_builder):
+		active_builder.free()
+		active_builder = null
 	for child in get_children():
 		child.queue_free()
 	fleet_sims.clear()
