@@ -212,6 +212,7 @@ func _advance_fleet(delta: float) -> void:
 	if is_instance_valid(sim):
 		_update_discovery_state()
 		_update_economy()
+		_update_missions()
 		sim.queue_redraw()
 
 func _launch_cost_for_design(design: Dictionary) -> float:
@@ -267,6 +268,91 @@ func _refresh_economy_display() -> void:
 	funds_label.visible = career_enabled
 	if career_enabled:
 		funds_label.text = "FUNDS  •  %.1f M CREDITS" % (funds / 1000000.0)
+
+func _update_missions() -> void:
+	var planet_names: Array[String] = []
+	for planet in PlanetarySystem.PLANETS:
+		var planet_name := str(planet.get("name", ""))
+		if planet_name != "Earth":
+			planet_names.append(planet_name)
+	var operational_satellites := 0
+	for vehicle in fleet_sims:
+		var profile: Dictionary = vehicle.payload_visual
+		var role := str(profile.get("satellite_role", ""))
+		var lifetime_days := float(profile.get("operational_lifetime_days", 0.0))
+		var age_days := maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0)
+		if not role.is_empty() and (lifetime_days <= 0.0 or age_days < lifetime_days) and _vehicle_in_stable_orbit(vehicle):
+			operational_satellites += 1
+	var completed_now := MissionSystem.evaluate(MissionSystem.definitions(), mission_state, discovery_state, orbited_body_names, planet_names, operational_satellites)
+	for mission in completed_now:
+		var reward := maxf(0.0, float(mission.get("reward", 0.0)))
+		if career_enabled:
+			funds += reward
+		if is_instance_valid(status_label):
+			status_label.text = "CONTRACT COMPLETE  •  %s%s" % [str(mission.get("title", "MISSION")).to_upper(), "  •  +%.1f M CREDITS" % (reward / 1000000.0) if career_enabled else ""]
+	if not completed_now.is_empty():
+		_refresh_economy_display()
+
+func _show_missions_panel() -> void:
+	var window := Window.new()
+	window.title = "MISSIONS AND CONTRACTS"
+	window.size = Vector2i(680, 560)
+	window.min_size = Vector2i(500, 380)
+	window.transient = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	window.add_child(layout)
+	var heading := Label.new()
+	heading.text = "EXPLORATION CONTRACTS  •  %d / %d COMPLETE" % [mission_state.get("completed", {}).size(), MissionSystem.definitions().size()]
+	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	layout.add_child(heading)
+	if not career_enabled:
+		var note := Label.new()
+		note.text = "CAREER REWARDS ARE DISABLED IN THIS GAME MODE"
+		layout.add_child(note)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(scroll)
+	var entries := VBoxContainer.new()
+	entries.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	entries.add_theme_constant_override("separation", 10)
+	scroll.add_child(entries)
+	var planet_names: Array[String] = []
+	for planet in PlanetarySystem.PLANETS:
+		var planet_name := str(planet.get("name", ""))
+		if planet_name != "Earth":
+			planet_names.append(planet_name)
+	var operational_satellites := 0
+	for vehicle in fleet_sims:
+		var profile: Dictionary = vehicle.payload_visual
+		var lifetime_days := float(profile.get("operational_lifetime_days", 0.0))
+		var age_days := maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0)
+		if not str(profile.get("satellite_role", "")).is_empty() and (lifetime_days <= 0.0 or age_days < lifetime_days) and _vehicle_in_stable_orbit(vehicle):
+			operational_satellites += 1
+	for mission in MissionSystem.definitions():
+		var mission_id := str(mission.get("id", ""))
+		var progress := MissionSystem.progress(mission, discovery_state, orbited_body_names, planet_names, operational_satellites)
+		var completed := bool(mission_state.get("completed", {}).get(mission_id, false))
+		var card := VBoxContainer.new()
+		card.add_theme_constant_override("separation", 3)
+		entries.add_child(card)
+		var title_label := Label.new()
+		title_label.text = "%s  •  %s" % ["COMPLETE" if completed else "AVAILABLE", str(mission.get("title", mission_id)).to_upper()]
+		card.add_child(title_label)
+		var description := Label.new()
+		description.text = str(mission.get("description", ""))
+		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		card.add_child(description)
+		var reward_text := "%.1f M CREDITS" % (float(mission.get("reward", 0.0)) / 1000000.0)
+		var progress_text := "COMPLETE" if completed else "%d / %d" % [int(progress.current), int(progress.target)]
+		var detail := Label.new()
+		detail.text = "%s  •  %s" % [progress_text, reward_text]
+		card.add_child(detail)
+	_add_button(layout, "CLOSE", func(): window.queue_free())
+	window.popup_centered()
 
 func _update_discovery_state() -> void:
 	if fleet_sims.is_empty() or not is_instance_valid(sim):
@@ -1859,6 +1945,7 @@ func _build_flight_hud() -> void:
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
 	_add_button(right, "VELOCITY VECTOR  [V]", func(): sim.show_vectors = not sim.show_vectors)
+	_add_button(right, "MISSIONS / CONTRACTS", _show_missions_panel)
 	_add_button(right, "AUTOPILOT", _show_autopilot_panel)
 	_add_button(right, "FLIGHT COMPUTER", _show_flight_computer)
 	_add_button(right, "PREDICTED PATH  [P]", func():
