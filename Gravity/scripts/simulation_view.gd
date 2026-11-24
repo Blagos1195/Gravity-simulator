@@ -2265,7 +2265,9 @@ func get_save_data() -> Dictionary:
 		"is_debris": is_debris,
 		"passive_orbit_active": passive_orbit_active,
 		"passive_orbit_forced": passive_orbit_forced,
-		"passive_orbit_data": passive_orbit_data.duplicate(true)
+		"passive_orbit_data": passive_orbit_data.duplicate(true),
+		"telescope_active": telescope_active,
+		"telescope_direction_angle": telescope_direction_angle
 	}
 
 func load_save_data(data: Dictionary) -> bool:
@@ -2360,6 +2362,8 @@ func load_save_data(data: Dictionary) -> bool:
 	is_debris = bool(data.get("is_debris", false))
 	passive_orbit_active = bool(data.get("passive_orbit_active", false))
 	passive_orbit_forced = bool(data.get("passive_orbit_forced", false))
+	telescope_active = bool(data.get("telescope_active", false))
+	telescope_direction_angle = wrapf(float(data.get("telescope_direction_angle", 0.0)), -PI, PI)
 	var saved_passive_orbit: Variant = data.get("passive_orbit_data", {})
 	passive_orbit_data = saved_passive_orbit.duplicate(true) if saved_passive_orbit is Dictionary else {}
 	if passive_orbit_active and (str(passive_orbit_data.get("host_body_name", "")).is_empty() or not passive_orbit_data.get("elements", {}) is Dictionary):
