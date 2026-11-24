@@ -37,7 +37,15 @@ func _initialize() -> void:
 	assert(is_equal_approx(second.sim_time, 120.0))
 	second.payload_visual = {"visual_type": "satellite", "telescope_range_au": 100.0}
 	main._update_discovery_state()
-	assert(SpaceDiscovery.is_spotted(main.discovery_state, "Mars"), "An in-range telescope did not reveal Mars")
+	assert(not SpaceDiscovery.is_spotted(main.discovery_state, "Mars"), "An inactive telescope revealed Mars")
+	var ephemeris := PlanetarySystem.gravity_body_states(main.sim.sim_time)
+	var telescope_position: Vector2 = ephemeris.get("earth_heliocentric_position", Vector2.ZERO) + second.rocket_position
+	for body in ephemeris.get("heliocentric_bodies", []):
+		if str(body.get("name", "")) == "Mars":
+			second.telescope_direction_angle = (Vector2(body.get("position", Vector2.ZERO)) - telescope_position).angle()
+	second.telescope_active = true
+	main._update_discovery_state()
+	assert(SpaceDiscovery.is_spotted(main.discovery_state, "Mars"), "An active telescope aimed at Mars did not reveal it")
 	assert(not SpaceDiscovery.is_visited(main.discovery_state, "Mars"), "Telescope discovery incorrectly unlocked autopilot")
 	second.passive_orbit_forced = true
 	second.passive_orbit_active = false
