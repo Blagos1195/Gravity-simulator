@@ -46,6 +46,7 @@ func _initialize() -> void:
 	builder._duplicate_selected_stage()
 	assert(builder.design.stages.size() == stage_count + 1)
 	builder._move_stage(-1)
+	print("VALIDATION AFTER STAGE MOVE ", RocketDesign.validation_errors(builder.design))
 	assert(RocketDesign.validation_errors(builder.design).is_empty())
 	var changed_count := 0
 	builder.design_changed.connect(func(_updated: Dictionary): changed_count += 1)
