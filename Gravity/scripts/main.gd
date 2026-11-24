@@ -663,7 +663,7 @@ func _apply_payload_editor_values(values: Dictionary) -> void:
 		color = [0.82, 0.87, 0.93]
 	color = color.duplicate()
 	for channel in range(3):
-		var key := ["visual_color_r", "visual_color_g", "visual_color_b"][channel]
+		var key: String = ["visual_color_r", "visual_color_g", "visual_color_b"][channel]
 		if values.has(key):
 			color[channel] = clampf(float(values[key]), 0.0, 1.0)
 	visual["visual_color_rgb"] = color
