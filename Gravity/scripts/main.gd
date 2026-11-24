@@ -395,7 +395,9 @@ func _show_vehicle_editor() -> void:
 		payload_selector.set_item_metadata(payload_index, payload_option)
 	payload_selector.select(selected_payload)
 	rocket_design["payload_type"] = str(payload_options[selected_payload].id)
-	rocket_design["payload_visual"] = RocketDesign.payload_visual_data(str(payload_options[selected_payload].id))
+	var saved_payload_visual: Variant = rocket_design.get("payload_visual", {})
+	if not saved_payload_visual is Dictionary or saved_payload_visual.is_empty():
+		rocket_design["payload_visual"] = RocketDesign.payload_visual_data(str(payload_options[selected_payload].id))
 	payload_row.add_child(payload_selector)
 	var payload_limits := RocketDesign.payload_mass_limits()
 	var payload_mass_input := SpinBox.new()
