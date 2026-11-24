@@ -517,6 +517,7 @@ func _update_discovery_state() -> void:
 		var operational := lifetime_days <= 0.0 or maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0) < lifetime_days
 		if vehicle.telescope_active and stable_orbit and operational and str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
 			var telescope_position: Vector2 = earth_position + vehicle.rocket_position
+			vehicle.telescope_direction_angle = relative_velocity.angle()
 			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies, vehicle.telescope_direction_angle, vehicle.telescope_field_of_view)
 			for discovered_name in telescope_discoveries:
 				if not newly_discovered.has(discovered_name):
@@ -1785,7 +1786,7 @@ func _refresh_telescope_control() -> void:
 	telescope_button.disabled = not available
 	telescope_button.text = "TELESCOPE ACTIVE  [T]" if sim.telescope_active else "ACTIVATE TELESCOPE  [T]"
 	if available:
-		telescope_button.tooltip_text = "Scan a 30-degree field. Aim with comma and period."
+		telescope_button.tooltip_text = "Continuously scans a 30-degree field in the direction of orbital travel while in stable orbit."
 	else:
 		telescope_button.tooltip_text = "Select a satellite equipped with a telescope."
 
@@ -2137,11 +2138,19 @@ func _build_flight_hud() -> void:
 	info.add_child(funds_label)
 	_refresh_economy_display()
 
+	var right_scroll := ScrollContainer.new()
+	right_scroll.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	right_scroll.anchor_bottom = 1.0
+	right_scroll.offset_left = -270
+	right_scroll.offset_right = -18
+	right_scroll.offset_top = 18
+	right_scroll.offset_bottom = -78
+	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	hud_root.add_child(right_scroll)
 	var right := VBoxContainer.new()
-	right.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	right.position = Vector2(-245, 18)
-	right.custom_minimum_size = Vector2(225, 0)
-	hud_root.add_child(right)
+	right.custom_minimum_size.x = 235
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_scroll.add_child(right)
 
 	var slot_label := Label.new()
 	slot_label.text = "SAVE SLOT"
@@ -2176,7 +2185,7 @@ func _build_flight_hud() -> void:
 		sim.telescope_active = not sim.telescope_active
 		_refresh_telescope_control()
 		if is_instance_valid(status_label):
-			status_label.text = "TELESCOPE ACTIVE  •  AIM WITH , AND ." if sim.telescope_active else "TELESCOPE STANDBY"
+			status_label.text = "TELESCOPE ACTIVE  •  PROGRADE SCANNING" if sim.telescope_active else "TELESCOPE STANDBY"
 	)
 	right.add_child(telescope_button)
 
@@ -2203,7 +2212,7 @@ func _build_flight_hud() -> void:
 	bottom.offset_top = -58
 	bottom.offset_bottom = -8
 	bottom.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     T TELESCOPE     , / . AIM TELESCOPE     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
+	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     T TELESCOPE ON/OFF     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
@@ -2255,14 +2264,18 @@ func _show_autopilot_panel() -> void:
 	window.unresizable = false
 	window.close_requested.connect(window.queue_free)
 	add_child(window)
+	var panel_scroll := ScrollContainer.new()
+	panel_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel_scroll.offset_left = 12
+	panel_scroll.offset_right = -12
+	panel_scroll.offset_top = 12
+	panel_scroll.offset_bottom = -12
+	panel_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	window.add_child(panel_scroll)
 	var root := VBoxContainer.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_theme_constant_override("separation", 10)
-	root.offset_left = 18
-	root.offset_right = -18
-	root.offset_top = 18
-	root.offset_bottom = -18
-	window.add_child(root)
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel_scroll.add_child(root)
 	var heading := Label.new()
 	heading.text = "AUTOPILOT CONTROL"
 	heading.add_theme_font_size_override("font_size", 22)
@@ -2636,10 +2649,18 @@ func _show_docking_panel() -> void:
 	window.exclusive = true
 	add_child(window)
 	window.close_requested.connect(window.queue_free)
+	var panel_scroll := ScrollContainer.new()
+	panel_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel_scroll.offset_left = 12
+	panel_scroll.offset_right = -12
+	panel_scroll.offset_top = 12
+	panel_scroll.offset_bottom = -12
+	panel_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	window.add_child(panel_scroll)
 	var layout := VBoxContainer.new()
-	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layout.add_theme_constant_override("separation", 12)
-	window.add_child(layout)
+	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel_scroll.add_child(layout)
 	var intro := Label.new()
 	intro.text = "Use rendezvous assist to match the other spacecraft's velocity and close the gap. Docking still requires a slow, close approach."
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
