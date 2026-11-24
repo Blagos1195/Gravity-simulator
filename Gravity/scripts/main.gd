@@ -988,6 +988,7 @@ func _switch_vehicle(index: int) -> void:
 	rocket_design = {
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
+		"payload_type": sim.payload_type,
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	_refresh_vehicle_selector()
