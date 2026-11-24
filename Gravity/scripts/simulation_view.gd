@@ -1932,7 +1932,7 @@ func _draw_rocket(p: Vector2, object_scale: float, vehicle_design: Dictionary = 
 	var design := vehicle_design if not vehicle_design.is_empty() else _rocket_visual_design()
 	var visible_stage := stage_index if vehicle_stage_index < 0 else vehicle_stage_index
 	var active_throttle := throttle if vehicle_throttle < 0.0 else vehicle_throttle
-	RocketVisual.draw_vehicle(self, design, p, rotation_angle, object_scale, visible_stage, active_throttle, engine_enabled and (infinite_weightless_fuel or fuel > 0.0), fairing_jettisoned)
+	RocketVisual.draw_vehicle(self, design, p, rotation_angle, object_scale, visible_stage, active_throttle, engine_enabled and (infinite_weightless_fuel or fuel > 0.0), false, fairing_jettisoned)
 
 
 func _draw_hud() -> void:
