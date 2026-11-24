@@ -179,8 +179,6 @@ static func add_booster_pair(design: Dictionary, stage_index: int, booster_id: S
 		return false
 	var stage: Dictionary = stages[stage_index].duplicate(true)
 	var boosters: Array = stage.get("boosters", []).duplicate(true)
-	if boosters.size() >= 2:
-		return false
 	boosters.append({"id": booster_id})
 	stage["boosters"] = boosters
 	stages[stage_index] = stage
@@ -346,9 +344,9 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		if stage.has("engine_layout") and not ["linear", "cluster", "radial"].has(str(stage.engine_layout)):
 			errors.append("Stage %d has an unsupported engine layout." % (i + 1))
 		var boosters: Variant = stage.get("boosters", [])
-		if not boosters is Array or boosters.size() > 2:
-			errors.append("Stage %d can have at most two booster pairs." % (i + 1))
-		elif boosters is Array:
+		if not boosters is Array:
+			errors.append("Stage %d booster modules must be an array." % (i + 1))
+		else:
 			for booster_variant in boosters:
 				if not booster_variant is Dictionary or booster_definition(str(booster_variant.get("id", ""))).is_empty():
 					errors.append("Stage %d references an unknown booster module." % (i + 1))
