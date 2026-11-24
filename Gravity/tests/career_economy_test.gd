@@ -4,6 +4,7 @@ const Main = preload("res://scripts/main.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
+const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
