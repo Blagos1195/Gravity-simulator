@@ -227,6 +227,23 @@ func _advance_fleet(delta: float) -> void:
 	pending_debris.clear()
 	for stage_data in separated_stages:
 		_spawn_discarded_stage(stage_data)
+	var removed_active_debris := false
+	for index in range(fleet_sims.size() - 1, -1, -1):
+		var vehicle: SimulationView = fleet_sims[index]
+		if not vehicle.is_debris:
+			continue
+		var body := vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+		if body.is_empty() or float(body.get("distance", INF)) > float(body.get("radius", 0.0)) + 2.0:
+			continue
+		if vehicle == sim:
+			removed_active_debris = true
+		fleet_sims.remove_at(index)
+		vehicle.queue_free()
+	if removed_active_debris and not fleet_sims.is_empty():
+		_switch_vehicle(0)
+	elif removed_active_debris:
+		sim = null
+	_refresh_vehicle_selector()
 	for vehicle in fleet_sims:
 		vehicle.simulation_time_backlog = fleet_time_backlog
 	if is_instance_valid(sim):
