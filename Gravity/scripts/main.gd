@@ -378,13 +378,22 @@ func _show_vehicle_editor() -> void:
 	var payload_options := RocketDesign.payload_options()
 	var current_payload_mass := float(rocket_design.get("payload_mass", 500.0))
 	var selected_payload := -1
+	var saved_payload_type := str(rocket_design.get("payload_type", ""))
 	for payload_index in range(payload_options.size()):
 		var payload_option: Dictionary = payload_options[payload_index]
-		if is_equal_approx(float(payload_option.mass), current_payload_mass):
+		if str(payload_option.get("id", "")) == saved_payload_type:
 			selected_payload = payload_index
+			break
+	if selected_payload < 0 and saved_payload_type.is_empty():
+		for payload_index in range(payload_options.size()):
+			var payload_option: Dictionary = payload_options[payload_index]
+			if is_equal_approx(float(payload_option.mass), current_payload_mass):
+				selected_payload = payload_index
+				break
 	if selected_payload < 0:
+		var custom_payload_id := saved_payload_type if not saved_payload_type.is_empty() else "custom"
 		payload_options.insert(0, {
-			"id": "custom",
+			"id": custom_payload_id,
 			"label": "Custom payload · %.1f t" % (current_payload_mass / 1000.0),
 			"mass": current_payload_mass
 		})
