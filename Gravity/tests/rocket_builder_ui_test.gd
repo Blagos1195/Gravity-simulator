@@ -123,12 +123,3 @@ func _find_button(node: Node, button_text: String) -> Button:
 			return found
 	return null
 
-
-func _find_window(node: Node, window_title: String) -> Window:
-	for child in node.get_children():
-		if child is Window and child.title == window_title:
-			return child
-		var found := _find_window(child, window_title)
-		if found != null:
-			return found
-	return null
