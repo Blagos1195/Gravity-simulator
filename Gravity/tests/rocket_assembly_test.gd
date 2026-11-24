@@ -35,7 +35,15 @@ func _initialize() -> void:
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(reordered), RocketDesign.stage_total_dry_mass(with_engine)))
 	assert(RocketAssembly.move_component(with_engine, 0, -1).is_empty())
 	assert(RocketAssembly.move_component(with_engine, with_engine.components.size() - 1, 1).is_empty())
-	assert(RocketAssembly.component_options().size() >= 10)
+	assert(RocketAssembly.component_options().size() >= 14)
+	var mirrored_booster_stage := RocketAssembly.add_component(assembled, "solid_booster_pair", "radial", true, -1)
+	assert(not mirrored_booster_stage.is_empty())
+	assert(is_equal_approx(float(RocketDesign.stage_booster_stats(mirrored_booster_stage).dry_mass), 16000.0))
+	assert(is_equal_approx(float(RocketDesign.stage_booster_stats(mirrored_booster_stage).fuel_capacity), 84000.0))
+	assert(is_equal_approx(float(RocketDesign.stage_booster_stats(mirrored_booster_stage).vacuum_thrust), 1200000.0))
+	var single_booster_stage := RocketAssembly.add_component(assembled, "solid_booster_pair", "radial", false, 1)
+	assert(is_equal_approx(float(RocketDesign.stage_booster_stats(single_booster_stage).dry_mass), 8000.0))
+	assert(is_equal_approx(float(RocketDesign.stage_booster_stats(single_booster_stage).fuel_capacity), 42000.0))
 	assert(RocketAssembly.remove_component(assembled, 99).is_empty())
 	design["stages"][0] = with_engine
 	assert(RocketDesign.validation_errors(design).is_empty(), "A valid component-built stage failed rocket validation")
@@ -46,7 +54,7 @@ func _initialize() -> void:
 	main._show_vehicle_component_editor(0)
 	var editor_found := false
 	for child in main.get_children():
-		if child is Window and str(child.title).contains("COMPONENT ASSEMBLY"):
+		if child is Window and str(child.title).contains("VEHICLE ASSEMBLY BUILDING"):
 			editor_found = true
 			break
 	assert(editor_found, "The component assembly editor did not open")
@@ -54,7 +62,7 @@ func _initialize() -> void:
 	for child in main.get_children():
 		if child is Window and str(child.title).contains("COMPONENT ASSEMBLY"):
 			for label in child.find_children("*", "Label", true, false):
-				if str(label.text).contains("TWR") and str(label.text).contains("vehicle Δv"):
+				if str(label.text).contains("STAGE TWR") and str(label.text).contains("IDEAL ΔV"):
 					performance_summary_found = true
 					break
 	assert(performance_summary_found, "The component editor does not show live TWR and vehicle delta-v")
