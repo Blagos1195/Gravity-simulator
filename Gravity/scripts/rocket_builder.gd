@@ -234,6 +234,10 @@ func _build_interface() -> void:
 	)
 	header.add_child(name_input)
 	_vehicle_name = name_input
+	var preset_button := Button.new()
+	preset_button.text = "LOAD PRESET"
+	preset_button.pressed.connect(_show_preset_dialog)
+	header.add_child(preset_button)
 	var payload_label := Label.new()
 	payload_label.text = "PAYLOAD"
 	header.add_child(payload_label)
@@ -820,6 +824,51 @@ func _changed(refresh_inspector: bool = true) -> void:
 
 func _emit_design() -> void:
 	design_changed.emit(design.duplicate(true))
+
+func _show_preset_dialog() -> void:
+	var presets := RocketDesign.preset_options()
+	if presets.is_empty():
+		return
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "LOAD VEHICLE PRESET"
+	dialog.dialog_text = "Presets are optional starting points. Every part can be changed after loading."
+	dialog.min_size = Vector2i(480, 300)
+	var content := VBoxContainer.new()
+	dialog.add_child(content)
+	var selector := OptionButton.new()
+	selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for preset in presets:
+		selector.add_item(str(preset.get("label", preset.get("id", "Preset"))))
+		selector.set_item_metadata(selector.item_count - 1, str(preset.get("id", "")))
+	content.add_child(selector)
+	var description := Label.new()
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(description)
+	var update_description := func(index: int) -> void:
+		description.text = RocketDesign.preset_description(str(selector.get_item_metadata(index)))
+	selector.item_selected.connect(update_description)
+	selector.select(0)
+	update_description.call(0)
+	dialog.get_ok_button().text = "LOAD PRESET"
+	dialog.confirmed.connect(func():
+		var preset_design := RocketDesign.create_preset(str(selector.get_selected_metadata()))
+		if preset_design.is_empty():
+			return
+		_push_undo()
+		design = preset_design
+		var stages: Array = design.get("stages", [])
+		for index in range(stages.size()):
+			stages[index] = RocketAssembly.ensure_stage_components(stages[index])
+		design["stages"] = stages
+		selected_stage_index = 0
+		selected_component_index = -1
+		_changed()
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+	dialog.close_requested.connect(func(): dialog.queue_free())
+	add_child(dialog)
+	dialog.popup_centered()
 
 func _finish() -> void:
 	_emit_design()
