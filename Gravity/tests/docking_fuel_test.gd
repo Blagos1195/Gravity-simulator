@@ -25,6 +25,8 @@ func _initialize() -> void:
 	assert(main.docking_links.size() == 1)
 	assert(not child.input_enabled)
 	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass()))
+	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
+	assert(main._are_docked("Orbital Tug", child.vehicle_name))
 	var parent_capacity := float(parent._active_stage_data().get("fuel_capacity", 0.0))
 	parent.fuel = parent_capacity - 10000.0
 	parent.stage_fuel_remaining[0] = parent.fuel
