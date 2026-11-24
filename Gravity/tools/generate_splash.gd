@@ -38,11 +38,12 @@ func _generate_windows_icon() -> Error:
 	var svg := FileAccess.get_file_as_string("res://icon.svg")
 	if svg.is_empty():
 		return ERR_FILE_NOT_FOUND
-	var icon_image := Image.load_svg_from_string(svg, 1.0)
-	if icon_image == null or icon_image.is_empty():
-		return ERR_FILE_CANT_READ
+	var icon_image: Image = Image.new()
+	var svg_error: Error = icon_image.load_svg_from_string(svg, 1.0)
+	if svg_error != OK or icon_image.is_empty():
+		return ERR_FILE_CANT_READ if svg_error == OK else svg_error
 	icon_image.resize(256, 256, Image.INTERPOLATE_LANCZOS)
-	var png := icon_image.save_png_to_buffer()
+	var png: PackedByteArray = icon_image.save_png_to_buffer()
 	if png.is_empty():
 		return ERR_CANT_CREATE
 	var ico := PackedByteArray()
