@@ -1404,6 +1404,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				camera_zoom = maxf(0.00000000002, camera_zoom / 1.2)
 
+func _launch_pad_surface_normal() -> Vector2:
+	return launch_pad_normal.rotated(EARTH_ROTATION_RATE * (sim_time - launch_pad_reference_time)).normalized()
+
 func _smooth_circle_segments(radius: float) -> int:
 	return clampi(ceili(TAU * sqrt(maxf(1.0, radius) * 0.75)), 96, 4096)
 
@@ -1535,7 +1538,7 @@ func _draw() -> void:
 	var object_scale := RocketVisual.camera_scale(camera_zoom, world_scale_factor)
 	var pad_width := clampf(34.0 * object_scale, 0.5, 85.0)
 	var pad_height := clampf(7.0 * object_scale, 0.5, 18.0)
-	var pad_normal := launch_pad_normal.rotated(EARTH_ROTATION_RATE * (sim_time - launch_pad_reference_time)).normalized()
+	var pad_normal := _launch_pad_surface_normal()
 	var pad_tangent := Vector2(-pad_normal.y, pad_normal.x)
 	var pad_center := earth_screen + pad_normal * (radius_px + 2.0 * object_scale)
 	draw_line(pad_center - pad_tangent * pad_width, pad_center + pad_tangent * pad_width, Color(0.65, 0.72, 0.82), 3.0 * object_scale)
