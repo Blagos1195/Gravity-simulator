@@ -117,6 +117,25 @@ var passive_orbit_active := false
 var passive_orbit_forced := false
 var passive_orbit_data: Dictionary = {}
 var fleet_visuals: Array[Dictionary] = []
+var collision_effects: Array[Dictionary] = []
+
+func spawn_collision_effect(world_position: Vector2, intensity: float = 1.0) -> void:
+	collision_effects.append({
+		"position": world_position,
+		"age": 0.0,
+		"duration": 2.4,
+		"intensity": clampf(intensity, 0.5, 2.5)
+	})
+	queue_redraw()
+
+func _update_collision_effects(delta: float) -> void:
+	for index in range(collision_effects.size() - 1, -1, -1):
+		var effect: Dictionary = collision_effects[index]
+		effect["age"] = float(effect.get("age", 0.0)) + delta
+		if float(effect.age) >= float(effect.get("duration", 2.4)):
+			collision_effects.remove_at(index)
+		else:
+			collision_effects[index] = effect
 
 func _set_rocket_position_components(position_x: float, position_y: float) -> void:
 	rocket_position_precise = PackedFloat64Array([position_x, position_y])
@@ -247,6 +266,7 @@ func _prepare_small_body_belts() -> void:
 		})
 
 func _process(delta: float) -> void:
+	_update_collision_effects(delta)
 	if not paused and not crashed:
 		var current_body := _nearest_body_state(rocket_position)
 		var altitude: float = maxf(0.0, float(current_body.distance) - float(current_body.radius))
@@ -1554,9 +1574,16 @@ func _draw() -> void:
 			continue
 		var fleet_design: Dictionary = fleet_entry.get("design", {})
 		var fleet_stage := int(fleet_entry.get("stage_index", 0))
-		RocketVisual.draw_vehicle(self, fleet_design, fleet_screen, float(fleet_entry.get("rotation", 0.0)), object_scale * 0.72, fleet_stage, 0.0, false)
-	_draw_rocket(rocket_screen, object_scale)
+		if bool(fleet_entry.get("crashed", false)):
+			RocketVisual.draw_wreck(self, fleet_screen, float(fleet_entry.get("rotation", 0.0)), object_scale * 0.72)
+		else:
+			RocketVisual.draw_vehicle(self, fleet_design, fleet_screen, float(fleet_entry.get("rotation", 0.0)), object_scale * 0.72, fleet_stage, 0.0, false)
+	if crashed:
+		RocketVisual.draw_wreck(self, rocket_screen, rotation_angle, object_scale)
+	else:
+		_draw_rocket(rocket_screen, object_scale)
 	_draw_docked_visuals(rocket_screen, object_scale)
+	_draw_collision_effects(rocket_screen, altitude_visual_scale)
 	if show_vectors:
 		var velocity_end := rocket_screen + velocity.normalized() * 65.0
 		draw_line(rocket_screen, velocity_end, Color(0.25, 0.9, 0.55), 2.0)
@@ -1564,6 +1591,26 @@ func _draw() -> void:
 
 	_draw_hud()
 
+
+func _draw_collision_effects(rocket_screen: Vector2, scale: float) -> void:
+	for effect in collision_effects:
+		var duration := maxf(0.001, float(effect.get("duration", 2.4)))
+		var progress := clampf(float(effect.get("age", 0.0)) / duration, 0.0, 1.0)
+		var intensity := float(effect.get("intensity", 1.0))
+		var position: Vector2 = effect.get("position", rocket_position)
+		var screen_position := rocket_screen + (position - rocket_position) * scale
+		if screen_position.x < -180.0 or screen_position.x > size.x + 180.0 or screen_position.y < -180.0 or screen_position.y > size.y + 180.0:
+			continue
+		var radius := (10.0 + progress * 105.0) * sqrt(intensity)
+		var alpha := 1.0 - progress
+		draw_circle(screen_position, maxf(1.0, 13.0 * (1.0 - progress) * intensity), Color(1.0, 0.72, 0.28, alpha * 0.72))
+		draw_arc(screen_position, radius, 0.0, TAU, 48, Color(1.0, 0.36, 0.12, alpha * 0.9), maxf(1.0, 3.0 * (1.0 - progress)))
+		draw_arc(screen_position, radius * 0.68, 0.0, TAU, 40, Color(1.0, 0.82, 0.48, alpha * 0.7), maxf(1.0, 2.0 * (1.0 - progress)))
+		for spark_index in range(12):
+			var angle := TAU * float(spark_index) / 12.0 + float(effect.get("age", 0.0)) * (0.7 if spark_index % 2 == 0 else -0.5)
+			var distance := radius * (0.55 + 0.35 * sin(progress * PI))
+			var direction := Vector2.RIGHT.rotated(angle)
+			draw_line(screen_position + direction * radius * 0.2, screen_position + direction * distance, Color(1.0, 0.62, 0.24, alpha), 1.6)
 
 func _draw_docked_visuals(rocket_screen: Vector2, object_scale: float) -> void:
 	for attached in docked_visuals:
@@ -1983,6 +2030,9 @@ func _rocket_visual_design() -> Dictionary:
 	}
 
 func _draw_rocket(p: Vector2, object_scale: float, vehicle_design: Dictionary = {}, vehicle_stage_index: int = -1, vehicle_throttle: float = -1.0, engine_enabled: bool = true) -> void:
+	if crashed:
+		RocketVisual.draw_wreck(self, p, rotation_angle, object_scale)
+		return
 	var design := vehicle_design if not vehicle_design.is_empty() else _rocket_visual_design()
 	var visible_stage := stage_index if vehicle_stage_index < 0 else vehicle_stage_index
 	var active_throttle := throttle if vehicle_throttle < 0.0 else vehicle_throttle
