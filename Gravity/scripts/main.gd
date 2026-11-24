@@ -299,7 +299,7 @@ func _advance_fleet(delta: float) -> void:
 					var angular_momentum := orbit_relative_position.cross(orbit_relative_velocity)
 					var eccentricity_vector := Vector2(orbit_relative_velocity.y * angular_momentum, -orbit_relative_velocity.x * angular_momentum) / orbit_mu - orbit_relative_position.normalized()
 					var direction := eccentricity_vector.angle() if eccentricity > 0.0001 else orbit_relative_position.angle()
-					var host_position := vehicle.rocket_position - orbit_relative_position
+					var host_position: Vector2 = vehicle.rocket_position - orbit_relative_position
 					for point_index in range(97):
 						var theta := TAU * float(point_index) / 96.0
 						var orbit_radius := semi_major * (1.0 - eccentricity * eccentricity) / (1.0 + eccentricity * cos(theta))
@@ -773,12 +773,12 @@ func _fast_forward_simulation(seconds: float) -> bool:
 		for second_index in range(first_index + 1, fleet_sims.size()):
 			if fleet_sims[first_index].rocket_position.distance_to(fleet_sims[second_index].rocket_position) < 20000000.0:
 				return false
-	var start_time := sim.sim_time
-	var target_time := start_time + seconds
+	var start_time: float = float(sim.sim_time)
+	var target_time: float = start_time + seconds
 	var scan_samples := mini(25000, maxi(1, ceili(seconds / 7200.0)))
 	var scan_step := seconds / float(scan_samples)
 	for sample_index in range(1, scan_samples + 1):
-		var sample_time := start_time + scan_step * float(sample_index)
+		var sample_time: float = start_time + scan_step * float(sample_index)
 		sim.sim_time = sample_time
 		for vehicle in fleet_sims:
 			if not vehicle.telescope_active or vehicle.crashed or vehicle.landed or not orbit_data.has(vehicle):
