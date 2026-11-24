@@ -673,8 +673,8 @@ func _show_time_skip_dialog() -> void:
 		return
 	var window := Window.new()
 	window.title = "FAST FORWARD TIME"
-	window.size = Vector2i(500, 300)
-	window.min_size = Vector2i(440, 260)
+	window.size = Vector2i(620, 300)
+	window.min_size = Vector2i(520, 260)
 	window.transient = true
 	window.exclusive = true
 	window.close_requested.connect(window.queue_free)
@@ -696,7 +696,7 @@ func _show_time_skip_dialog() -> void:
 	var options := HBoxContainer.new()
 	options.add_theme_constant_override("separation", 8)
 	layout.add_child(options)
-	for option in [{"label": "1 DAY", "seconds": 86400.0}, {"label": "7 DAYS", "seconds": 604800.0}, {"label": "30 DAYS", "seconds": 2592000.0}, {"label": "1 YEAR", "seconds": 31557600.0}]:
+	for option in [{"label": "1 DAY", "seconds": 86400.0}, {"label": "7 DAYS", "seconds": 604800.0}, {"label": "30 DAYS", "seconds": 2592000.0}, {"label": "1 YEAR", "seconds": 31557600.0}, {"label": "5 YEARS", "seconds": 157788000.0}]:
 		var button := Button.new()
 		button.text = str(option.label)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -715,13 +715,15 @@ func _show_time_skip_dialog() -> void:
 
 
 func _fast_forward_simulation(seconds: float) -> bool:
-	if not is_instance_valid(sim) or sim.paused or seconds <= 0.0 or seconds > 31557600.0:
+	if not is_instance_valid(sim) or sim.paused or seconds <= 0.0 or seconds > 157788000.0:
 		return false
 	if not docking_assists.is_empty():
 		return false
 	var orbit_data: Dictionary = {}
 	for vehicle in fleet_sims:
-		if vehicle.crashed or vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled or vehicle.guidance_enabled:
+		if vehicle.crashed:
+			continue
+		if vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled or vehicle.guidance_enabled:
 			return false
 		if vehicle.landed:
 			continue
@@ -753,7 +755,9 @@ func _fast_forward_simulation(seconds: float) -> bool:
 		vehicle.simulation_time_backlog = 0.0
 		vehicle.ephemeris_cache_time = -INF
 		vehicle.ephemeris_output_cache_time = -INF
-		if vehicle.landed:
+		if vehicle.crashed:
+			vehicle.sim_time = target_time
+		elif vehicle.landed:
 			vehicle._physics_step(seconds)
 		else:
 			vehicle.passive_orbit_data = orbit_data[vehicle]
