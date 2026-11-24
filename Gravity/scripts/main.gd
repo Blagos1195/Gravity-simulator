@@ -2052,7 +2052,8 @@ func _load_game_from_path(path: String) -> void:
 	docking_links.clear()
 	var saved_docking_links: Variant = parsed.get("docking_links", [])
 	if saved_docking_links is Array:
-		var linked_names: Dictionary = {}
+		var linked_children: Dictionary = {}
+		var linked_parents: Dictionary = {}
 		for saved_link in saved_docking_links:
 			if not saved_link is Dictionary:
 				continue
@@ -2064,7 +2065,7 @@ func _load_game_from_path(path: String) -> void:
 				continue
 			if _find_vehicle_by_name(parent_name) == null or _find_vehicle_by_name(child_name) == null:
 				continue
-			if linked_names.has(parent_name) or linked_names.has(child_name):
+			if linked_children.has(child_name) or linked_children.has(parent_name) or linked_parents.has(child_name):
 				continue
 			if not (offset_x is float or offset_x is int) or not (offset_y is float or offset_y is int):
 				continue
@@ -2076,8 +2077,8 @@ func _load_game_from_path(path: String) -> void:
 				"offset_x": float(offset_x),
 				"offset_y": float(offset_y)
 			})
-			linked_names[parent_name] = true
-			linked_names[child_name] = true
+			linked_children[child_name] = true
+			linked_parents[parent_name] = true
 	_update_docked_masses()
 	_sync_docked_vehicles()
 	_switch_vehicle(active_vehicle_index)
