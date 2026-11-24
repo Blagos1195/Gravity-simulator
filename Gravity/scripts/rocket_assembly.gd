@@ -61,7 +61,6 @@ static func add_component(stage: Dictionary, component_id: String) -> Dictionary
 		return {}
 	var configured := ensure_stage_components(stage)
 	var components: Array = configured.get("components", []).duplicate(true)
-	definition.erase("kind")
 	components.append(definition)
 	configured["components"] = components
 	return compile_stage(configured, components)
