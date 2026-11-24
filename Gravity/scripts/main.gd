@@ -851,9 +851,10 @@ func _show_vehicle_editor() -> void:
 		edit_stage_button.pressed.connect(func():
 			_show_stage_editor(stage_index)
 		)
+		edit_stage_button.disabled = bool(stage.get("component_assembly", false))
 		stage_row.add_child(edit_stage_button)
 		var parts_button := Button.new()
-		parts_button.text = "PARTS"
+		parts_button.text = "PARTS %d" % stage.get("components", []).size() if bool(stage.get("component_assembly", false)) else "PARTS"
 		parts_button.tooltip_text = "Assemble this stage from individual tanks, engines, decouplers and structures."
 		parts_button.pressed.connect(func():
 			_show_vehicle_component_editor(stage_index)
@@ -1019,11 +1020,13 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 		component_list.add_child(row)
 		var details := Label.new()
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		details.text = "%s  •  %s  •  %.0f kg  •  %.1f m" % [
+		details.text = "%s  •  %s  •  %.0f kg  •  %.1f m  •  %.1f t propellant  •  %.2f MN thrust" % [
 			str(component.get("label", component.get("id", "Component"))),
 			str(component.get("kind", "structure")).to_upper(),
 			float(component.get("dry_mass", 0.0)),
-			float(component.get("length_m", 0.0))
+			float(component.get("length_m", 0.0)),
+			float(component.get("fuel_capacity", 0.0)) / 1000.0,
+			float(component.get("vacuum_thrust", component.get("thrust", 0.0))) / 1000000.0
 		]
 		row.add_child(details)
 		var remove_button := Button.new()
