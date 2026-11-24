@@ -141,6 +141,7 @@ func _active_stage_data() -> Dictionary:
 	stage["vacuum_thrust"] = RocketDesign.stage_total_thrust(stage, true)
 	stage["flow"] = RocketDesign.stage_total_flow(stage)
 	stage["engine_count"] = 1
+	stage.erase("boosters")
 	return stage
 
 func _remaining_stack_mass() -> float:
