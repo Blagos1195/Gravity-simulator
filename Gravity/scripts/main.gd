@@ -2218,6 +2218,7 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 	return amount
 
 func _build_flight_hud() -> void:
+	mode = "flight"
 	if is_instance_valid(hud_root):
 		hud_root.queue_free()
 	if is_instance_valid(sim):
