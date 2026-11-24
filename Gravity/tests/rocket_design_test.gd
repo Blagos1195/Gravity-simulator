@@ -7,6 +7,12 @@ const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
 	var design := RocketDesign.create_default()
+	assert(is_equal_approx(float(RocketDesign.payload_visual_data("satellite").get("telescope_range_au", 0.0)), 1.2))
+	assert(is_equal_approx(float(RocketDesign.payload_visual_data("survey_satellite").get("telescope_range_au", 0.0)), 3.5))
+	assert(is_equal_approx(float(RocketDesign.payload_visual_data("deep_space_telescope").get("telescope_range_au", 0.0)), 10.5))
+	var invalid_telescope_range := design.duplicate(true)
+	invalid_telescope_range["payload_visual"]["telescope_range_au"] = -1.0
+	assert(not RocketDesign.validation_errors(invalid_telescope_range).is_empty())
 	assert(RocketDesign.validation_errors(design).is_empty())
 	assert(is_equal_approx(RocketDesign.total_initial_mass(design), 364500.0))
 	assert(RocketDesign.total_delta_v(design) > 0.0)
