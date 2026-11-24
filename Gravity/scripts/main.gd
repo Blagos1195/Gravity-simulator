@@ -1034,6 +1034,9 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 		float(stage.get("fuel_capacity", 0.0)) / 1000.0,
 		float(stage.get("vacuum_thrust", 0.0)) / 1000000.0
 	]
+	var ignition_mass := RocketDesign.stage_ignition_mass(rocket_design, stage_index)
+	var stage_twr := RocketDesign.stage_total_thrust(stage, true) / maxf(1.0, ignition_mass * 9.80665)
+	summary.text += "  •  %.2f TWR  •  %.1f km/s vehicle Δv" % [stage_twr, RocketDesign.total_delta_v(rocket_design) / 1000.0]
 	layout.add_child(summary)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1067,7 +1070,7 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 			if not updated.is_empty():
 				rocket_design["stages"][stage_index] = updated
 				window.queue_free()
-				_show_vehicle_editor()
+				_show_vehicle_component_editor(stage_index)
 		)
 		row.add_child(move_up_button)
 		var move_down_button := Button.new()
@@ -1079,7 +1082,7 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 			if not updated.is_empty():
 				rocket_design["stages"][stage_index] = updated
 				window.queue_free()
-				_show_vehicle_editor()
+				_show_vehicle_component_editor(stage_index)
 		)
 		row.add_child(move_down_button)
 		var remove_button := Button.new()
@@ -1089,7 +1092,7 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 			if not updated.is_empty():
 				rocket_design["stages"][stage_index] = updated
 				window.queue_free()
-				_show_vehicle_editor()
+				_show_vehicle_component_editor(stage_index)
 		)
 		row.add_child(remove_button)
 	var add_row := HBoxContainer.new()
@@ -1107,7 +1110,7 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 		if not updated.is_empty():
 			rocket_design["stages"][stage_index] = updated
 			window.queue_free()
-			_show_vehicle_editor()
+			_show_vehicle_component_editor(stage_index)
 	)
 	add_row.add_child(add_button)
 	layout.add_child(add_row)
