@@ -66,6 +66,15 @@ func _initialize() -> void:
 	assert(is_equal_approx(red_input.max_value, 1.0))
 	assert(main.design_error_label.text == "DESIGN VALID")
 	stage_dialog.free()
+	var original_stage: Dictionary = main.rocket_design["stages"][0].duplicate(true)
+	var original_stage_count: int = main.rocket_design["stages"].size()
+	main._duplicate_stage(0)
+	assert(main.rocket_design["stages"].size() == original_stage_count + 1)
+	assert(main.rocket_design["stages"][1] == original_stage)
+	main.rocket_design["stages"][1]["visual_color_rgb"][0] = 0.9
+	assert(is_equal_approx(float(main.rocket_design["stages"][0]["visual_color_rgb"][0]), 0.12))
+	main.rocket_design["stages"].remove_at(1)
+	main._show_vehicle_editor()
 	main._start_flight()
 	main._show_new_vehicle_dialog()
 	var vehicle_dialog: Window
