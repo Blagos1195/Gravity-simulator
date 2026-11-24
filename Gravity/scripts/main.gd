@@ -549,6 +549,13 @@ func _show_vehicle_editor() -> void:
 			_show_vehicle_editor()
 		)
 		stage_row.add_child(move_down_button)
+		var copy_button := Button.new()
+		copy_button.text = "COPY"
+		copy_button.tooltip_text = "Duplicate this stage with all of its custom settings."
+		copy_button.pressed.connect(func():
+			_duplicate_stage(stage_index)
+		)
+		stage_row.add_child(copy_button)
 		var remove_button := Button.new()
 		remove_button.text = "REMOVE"
 		remove_button.disabled = rocket_design["stages"].size() <= RocketDesign.MIN_STAGES
@@ -585,6 +592,14 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _show_new_game_setup)
 	_update_design_stats()
+
+
+func _duplicate_stage(stage_index: int) -> void:
+	if stage_index < 0 or stage_index >= rocket_design["stages"].size():
+		return
+	var duplicate: Dictionary = rocket_design["stages"][stage_index].duplicate(true)
+	rocket_design["stages"].insert(stage_index + 1, duplicate)
+	_show_vehicle_editor()
 
 
 func _show_payload_editor() -> void:
