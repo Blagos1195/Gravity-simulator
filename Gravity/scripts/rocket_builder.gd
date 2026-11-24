@@ -183,6 +183,7 @@ var _part_filter: OptionButton
 var _search_input: LineEdit
 var _property_inputs: Dictionary = {}
 var _payload_selector: OptionButton
+var _payload_mass_input: SpinBox
 var _vehicle_name: LineEdit
 var _mirror_button: CheckButton
 
@@ -258,6 +259,22 @@ func _build_interface() -> void:
 	)
 	header.add_child(payload_selector)
 	_payload_selector = payload_selector
+	var payload_limits := RocketDesign.payload_mass_limits()
+	var payload_mass_input := SpinBox.new()
+	payload_mass_input.custom_minimum_size.x = 125.0
+	payload_mass_input.min_value = float(payload_limits.get("minimum", 0.001))
+	payload_mass_input.max_value = float(payload_limits.get("maximum", 1.0e300))
+	payload_mass_input.step = float(payload_limits.get("step", 1.0))
+	payload_mass_input.value = float(design.get("payload_mass", 500.0))
+	payload_mass_input.tooltip_text = "Payload mass in kilograms"
+	payload_mass_input.value_changed.connect(func(value: float):
+		design["payload_mass"] = value
+		design["payload_type"] = "custom"
+		_refresh_stats()
+		_emit_design()
+	)
+	header.add_child(payload_mass_input)
+	_payload_mass_input = payload_mass_input
 	var mirror := CheckButton.new()
 	mirror.text = "MIRROR NEW RADIAL PARTS"
 	mirror.button_pressed = true
@@ -498,6 +515,17 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 	if updated.is_empty():
 		return
 	var components: Array = updated.get("components", [])
+	if attachment == "radial" and insert_index >= 0:
+		var axial_indices: Array[int] = []
+		for index in range(components.size() - 1):
+			if str(components[index].get("attachment", "stack")) != "radial":
+				axial_indices.append(index)
+		if not axial_indices.is_empty():
+			var mount_index := axial_indices[0]
+			for candidate in axial_indices:
+				if absi(candidate - insert_index) < absi(mount_index - insert_index):
+					mount_index = candidate
+			components[components.size() - 1]["mount_index"] = mount_index
 	if attachment == "stack" and insert_index >= 0 and insert_index < components.size() - 1:
 		for index in range(components.size() - 1):
 			var existing_component: Dictionary = components[index]
@@ -620,6 +648,10 @@ func _refresh_inspector() -> void:
 		row.add_child(input)
 		_inspector.add_child(row)
 	var actions := HBoxContainer.new()
+	var duplicate := Button.new()
+	duplicate.text = "DUPLICATE"
+	duplicate.pressed.connect(_duplicate_selected_component)
+	actions.add_child(duplicate)
 	var remove := Button.new()
 	remove.text = "REMOVE PART"
 	remove.pressed.connect(_remove_selected_component)
@@ -637,6 +669,24 @@ func _update_component_property(key: String, value: Variant) -> void:
 	components[selected_component_index] = component
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(stage, components)
 	_changed(false)
+
+func _duplicate_selected_component() -> void:
+	var components: Array = _current_stage().get("components", []).duplicate(true)
+	if selected_component_index < 0 or selected_component_index >= components.size():
+		return
+	_push_undo()
+	var destination := selected_component_index + 1
+	var duplicate: Dictionary = components[selected_component_index].duplicate(true)
+	if str(duplicate.get("attachment", "stack")) == "stack":
+		for index in range(components.size()):
+			var component: Dictionary = components[index]
+			if str(component.get("attachment", "stack")) == "radial" and int(component.get("mount_index", -1)) >= destination:
+				component["mount_index"] = int(component.get("mount_index", -1)) + 1
+				components[index] = component
+	components.insert(destination, duplicate)
+	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(_current_stage(), components)
+	selected_component_index = destination
+	_changed()
 
 func _remove_selected_component() -> void:
 	var stage := _current_stage()
