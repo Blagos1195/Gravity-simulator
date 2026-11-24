@@ -208,7 +208,7 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 				_line(canvas, origin, Vector2(-half_width * 0.86, current_y + segment_height * 0.28), Vector2(half_width * 0.86, current_y + segment_height * 0.28), rotation, scale, Color(0.8, 0.86, 0.91), 0.8)
 				_line(canvas, origin, Vector2(-half_width * 0.9, current_y + segment_height * 0.78), Vector2(half_width * 0.9, current_y + segment_height * 0.78), rotation, scale, Color(0.2, 0.34, 0.46), 0.8)
 			"engine":
-				_polygon(canvas, origin, [Vector2(-half_width * 0.62, current_y), Vector2(half_width * 0.62, current_y), Vector2(half_width, current_y + segment_height), Vector2(-half_width, current_y + segment_height)], component_color)
+				_polygon(canvas, origin, [Vector2(-half_width * 0.62, current_y), Vector2(half_width * 0.62, current_y), Vector2(half_width, current_y + segment_height), Vector2(-half_width, current_y + segment_height)], rotation, scale, component_color)
 				_polygon(canvas, origin, [Vector2(-half_width * 0.72, current_y + segment_height * 0.72), Vector2(half_width * 0.72, current_y + segment_height * 0.72), Vector2(half_width * 0.88, current_y + segment_height), Vector2(-half_width * 0.88, current_y + segment_height)], rotation, scale, Color(0.34, 0.39, 0.46))
 				if engine_enabled and throttle > 0.0:
 					var flame_length := 7.0 + 8.0 * clampf(throttle, 0.0, 1.0)
