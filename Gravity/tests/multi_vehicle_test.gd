@@ -42,7 +42,9 @@ func _initialize() -> void:
 	second.telescope_active = true
 	main._scan_active_telescopes()
 	main._update_discovery_state()
-	assert(is_equal_approx(second.telescope_direction_angle, second.velocity.angle()), "Telescope did not maintain its prograde orbital pointing direction")
+	var telescope_body: Dictionary = second._nearest_body_state(second.rocket_position, second.rocket_position_precise)
+	var expected_telescope_angle := (second.velocity - Vector2(telescope_body.get("velocity", Vector2.ZERO))).angle()
+	assert(is_equal_approx(second.telescope_direction_angle, expected_telescope_angle), "Telescope did not maintain its prograde orbital pointing direction")
 	assert(not SpaceDiscovery.is_visited(main.discovery_state, "Mars"), "Telescope discovery incorrectly unlocked autopilot")
 	second.passive_orbit_forced = true
 	second.passive_orbit_active = false
