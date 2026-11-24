@@ -214,7 +214,7 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 					errors.append("Stage %d %s must be a positive finite number." % [i + 1, visual_key])
 		if stage.has("visual_color_rgb"):
 			var visual_color: Variant = stage["visual_color_rgb"]
-			var valid_color := visual_color is Array and visual_color.size() == 3
+			var valid_color: bool = visual_color is Array and visual_color.size() == 3
 			if valid_color:
 				for component in visual_color:
 					if not (component is int or component is float) or not is_finite(float(component)) or float(component) < 0.0 or float(component) > 1.0:
