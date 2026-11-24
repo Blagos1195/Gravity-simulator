@@ -2,7 +2,7 @@ extends RefCounted
 class_name RocketVisual
 
 static func camera_scale(camera_zoom: float, visual_scale: float = 1.0) -> float:
-	return clampf(camera_zoom * visual_scale * 100.0, 0.002, 5.0)
+	return clampf(camera_zoom * visual_scale * 10.0, 0.002, 5.0)
 
 static func _point(origin: Vector2, local: Vector2, rotation: float, scale: float) -> Vector2:
 	return origin + local.rotated(rotation) * scale
