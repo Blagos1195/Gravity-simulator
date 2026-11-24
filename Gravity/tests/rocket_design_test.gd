@@ -183,7 +183,7 @@ func _initialize() -> void:
 			},
 			"builder_options": {
 				"engine_counts_add": [5],
-				"payloads_add": [{"id": "test_payload", "label": "Test payload · 2 t", "mass": 2000.0}],
+				"payloads_add": [{"id": "test_payload", "label": "Test payload · 2 t", "mass": 2000.0, "visual_type": "cargo", "visual_width_factor": 1.4, "visual_height_factor": 1.1, "visual_color_rgb": [0.2, 0.4, 0.6]}],
 				"tank_scales_add": [{"label": "Test tank", "scale": 2.5}]
 			}
 		}
@@ -205,6 +205,13 @@ func _initialize() -> void:
 		if str(payload_option.id) == "test_payload":
 			has_test_payload = true
 	assert(has_test_payload)
+	var test_payload_visual := RocketDesign.payload_visual_data("test_payload")
+	assert(test_payload_visual.visual_type == "cargo")
+	assert(is_equal_approx(float(test_payload_visual.visual_width_factor), 1.4))
+	assert(test_payload_visual.visual_color_rgb == [0.2, 0.4, 0.6])
+	var invalid_payload_visual := design.duplicate(true)
+	invalid_payload_visual["payload_visual"] = {"visual_type": "spaceship"}
+	assert(not RocketDesign.validation_errors(invalid_payload_visual).is_empty())
 	var has_test_tank_scale := false
 	for tank_option in RocketDesign.tank_scale_options():
 		if is_equal_approx(float(tank_option.scale), 2.5):
