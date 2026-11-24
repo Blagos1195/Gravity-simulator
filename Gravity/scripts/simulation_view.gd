@@ -2,6 +2,7 @@ extends Control
 
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RocketVisual = preload("res://scripts/rocket_visual.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 static var G := PlanetarySystem.G
 static var EARTH_MASS := PlanetarySystem.EARTH_MASS
@@ -15,6 +16,7 @@ const MAX_PHYSICS_STEPS_PER_FRAME := 4000
 var rocket_stages: Array = []
 var stage_fuel_remaining: Array[float] = []
 var payload_mass := 500.0
+var payload_type := "probe"
 var vehicle_name := "Vehicle 1"
 var input_enabled := true
 var docked_mass := 0.0
@@ -114,6 +116,7 @@ func set_rocket_design(design: Dictionary) -> void:
 	if rocket_stages.size() < 2:
 		rocket_stages = RocketDesign.create_default()["stages"].duplicate(true)
 	payload_mass = float(design.get("payload_mass", 500.0))
+	payload_type = str(design.get("payload_type", "probe"))
 	stage_index = 0
 	stage_fuel_remaining.clear()
 	for stage in rocket_stages:
@@ -1488,7 +1491,7 @@ func _draw() -> void:
 		draw_line(rocket_screen + Vector2(-30.0, 13.0) * object_scale, rocket_screen + Vector2(30.0, 13.0) * object_scale, Color(0.72, 0.78, 0.86), 3.0 * object_scale)
 		draw_line(rocket_screen + Vector2(-18.0, 13.0) * object_scale, rocket_screen + Vector2(-18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
 		draw_line(rocket_screen + Vector2(18.0, 13.0) * object_scale, rocket_screen + Vector2(18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
-	_draw_rocket(rocket_screen + Vector2.UP.rotated(rotation_angle) * 14.0 * object_scale, object_scale)
+	_draw_rocket(rocket_screen, object_scale)
 	_draw_docked_visuals(rocket_screen, object_scale)
 	if show_vectors:
 		var velocity_end := rocket_screen + velocity.normalized() * 65.0
@@ -1508,7 +1511,8 @@ func _draw_docked_visuals(rocket_screen: Vector2, object_scale: float) -> void:
 		draw_line(rocket_screen, child_screen, Color(0.55, 0.82, 1.0, 0.9), 2.0 * object_scale)
 		draw_circle(child_screen, 3.5 * object_scale, Color(0.55, 0.82, 1.0))
 		var child_rotation := float(attached.get("rotation", rotation_angle))
-		_draw_rocket(child_screen + Vector2.UP.rotated(child_rotation) * 10.0 * object_scale, object_scale * 0.72)
+		var child_design: Dictionary = attached.get("design", {})
+		_draw_rocket(child_screen, object_scale * 0.72, child_design, int(attached.get("stage_index", 0)), 0.0, false)
 		draw_string(ThemeDB.fallback_font, child_screen + Vector2(10.0, 4.0) * object_scale, str(attached.get("name", "DOCKED")), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.68, 0.84, 1.0))
 
 func _draw_full_system_zoom(view_center: Vector2) -> void:
@@ -1859,18 +1863,20 @@ func _draw_orbit(rocket_screen: Vector2, factor: float) -> void:
 		points.append(rocket_screen + (local - relative_position) * camera_zoom * factor)
 	draw_polyline(points, Color(0.2, 0.75, 1.0, 0.5), 1.5)
 
-func _draw_rocket(p: Vector2, object_scale: float) -> void:
-	var forward := Vector2.UP.rotated(rotation_angle)
-	var side := Vector2.RIGHT.rotated(rotation_angle)
-	var tip := p + forward * 17.0 * object_scale
-	var left := p - forward * 12.0 * object_scale - side * 6.0 * object_scale
-	var right := p - forward * 12.0 * object_scale + side * 6.0 * object_scale
-	draw_colored_polygon(PackedVector2Array([tip, left, right]), Color(0.82, 0.88, 0.94))
-	draw_line(left, right, Color(0.25, 0.55, 0.78), 1.5)
-	if throttle > 0.0 and (infinite_weightless_fuel or fuel > 0.0):
-		var flame_base := p - forward * 12.0 * object_scale
-		var flame_tip := p - forward * (28.0 + randf_range(0, 8)) * object_scale
-		draw_colored_polygon(PackedVector2Array([flame_base - side * 3 * object_scale, flame_tip, flame_base + side * 3 * object_scale]), Color(1.0, 0.48, 0.12, 0.9))
+func _rocket_visual_design() -> Dictionary:
+	return {
+		"name": vehicle_name,
+		"payload_mass": payload_mass,
+		"payload_type": payload_type,
+		"stages": rocket_stages
+	}
+
+func _draw_rocket(p: Vector2, object_scale: float, vehicle_design: Dictionary = {}, vehicle_stage_index: int = -1, vehicle_throttle: float = -1.0, engine_enabled: bool = true) -> void:
+	var design := vehicle_design if not vehicle_design.is_empty() else _rocket_visual_design()
+	var visible_stage := stage_index if vehicle_stage_index < 0 else vehicle_stage_index
+	var active_throttle := throttle if vehicle_throttle < 0.0 else vehicle_throttle
+	RocketVisual.draw_vehicle(self, design, p, rotation_angle, object_scale, visible_stage, active_throttle, engine_enabled and (infinite_weightless_fuel or fuel > 0.0))
+
 
 func _draw_hud() -> void:
 	var ui_scale := clampf(minf(size.x / 1440.0, size.y / 900.0), 0.7, 1.0)
@@ -2085,7 +2091,7 @@ func get_save_data() -> Dictionary:
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
-		"rocket_design": {"payload_mass": payload_mass, "stages": rocket_stages.duplicate(true)},
+		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "stages": rocket_stages.duplicate(true)},
 		"vehicle_name": vehicle_name
 	}
 
