@@ -16,10 +16,11 @@ func _initialize() -> void:
 	var stage: Dictionary = builder.design.stages[0]
 	assert(stage.components.size() == 3)
 	assert(str(stage.components[2].id) == "medium_tank")
-	builder._add_component("solid_booster_pair", "radial", true, -1, -1)
+	builder._add_component("solid_booster_pair", "radial", true, -1, 1)
 	stage = builder.design.stages[0]
 	assert(bool(stage.components[3].mirror))
 	assert(str(stage.components[3].attachment) == "radial")
+	assert(int(stage.components[3].mount_index) == 1)
 	assert(is_equal_approx(float(RocketDesign.stage_booster_stats(stage).dry_mass), 16000.0))
 	assert(is_equal_approx(float(RocketDesign.stage_booster_stats(stage).fuel_capacity), 84000.0))
 	builder._update_component_property("mirror", false)
@@ -35,6 +36,7 @@ func _initialize() -> void:
 	builder._on_component_moved(2, 0)
 	stage = builder.design.stages[0]
 	assert(str(stage.components[0].id) == "medium_tank")
+	assert(int(stage.components[3].mount_index) == 2)
 	builder._remove_selected_component()
 	assert(RocketDesign.validation_errors(builder.design).is_empty())
 	builder._duplicate_selected_stage()
