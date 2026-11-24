@@ -173,14 +173,14 @@ func _process(delta: float) -> void:
 func _fit_windows_to_screen() -> void:
 	var screen_size := DisplayServer.screen_get_size()
 	var available := Vector2i(maxi(320, screen_size.x - 32), maxi(240, screen_size.y - 64))
-	for child in get_tree().root.get_children():
-		if not child is Window or child == get_tree().root:
+	for child in get_tree().root.find_children("*", "Window", true, false):
+		if not child is Window:
 			continue
 		var window := child as Window
+		window.min_size = Vector2i(mini(window.min_size.x, available.x), mini(window.min_size.y, available.y))
 		var target_size := Vector2i(mini(window.size.x, available.x), mini(window.size.y, available.y))
 		if target_size != window.size:
 			window.size = target_size
-		window.min_size = Vector2i(mini(window.min_size.x, available.x), mini(window.min_size.y, available.y))
 		var target_position := Vector2i(
 			clampi(window.position.x, 0, maxi(0, screen_size.x - window.size.x)),
 			clampi(window.position.y, 0, maxi(0, screen_size.y - window.size.y))
@@ -535,7 +535,12 @@ func _update_discovery_state() -> void:
 		var lifetime_days := float(vehicle.payload_visual.get("operational_lifetime_days", 0.0))
 		var operational := lifetime_days <= 0.0 or maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0) < lifetime_days
 		if vehicle.telescope_active and stable_orbit and operational and str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
-			var telescope_position: Vector2 = earth_position + vehicle.rocket_position
+			var host_heliocentric_position := earth_position
+			for heliocentric_body in heliocentric_bodies:
+				if str(heliocentric_body.get("name", "")) == body_name:
+					host_heliocentric_position = Vector2(heliocentric_body.get("position", earth_position))
+					break
+			var telescope_position := host_heliocentric_position + (vehicle.rocket_position - Vector2(body.get("relative_position", Vector2.ZERO)))
 			vehicle.telescope_direction_angle = relative_velocity.angle()
 			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies, vehicle.telescope_direction_angle, vehicle.telescope_field_of_view)
 			for discovered_name in telescope_discoveries:
