@@ -701,12 +701,19 @@ func _build_menu() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
+	var screen_size := DisplayServer.screen_get_size()
+	var menu_width := minf(480.0, maxf(280.0, screen_size.x - 48.0))
+	var menu_height := minf(640.0, maxf(240.0, screen_size.y - 48.0))
 	var menu_scroll := ScrollContainer.new()
-	menu_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_scroll.custom_minimum_size = Vector2(menu_width, menu_height)
+	menu_scroll.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	menu_scroll.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	menu_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	center.add_child(menu_scroll)
 	menu_root = VBoxContainer.new()
-	menu_root.custom_minimum_size = Vector2(minf(480.0, DisplayServer.screen_get_size().x - 48.0), 0)
+	menu_root.custom_minimum_size = Vector2(menu_width, 0)
+	menu_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	menu_root.add_theme_constant_override("separation", 18)
 	menu_scroll.add_child(menu_root)
 
