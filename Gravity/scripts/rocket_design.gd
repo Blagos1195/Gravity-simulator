@@ -76,6 +76,14 @@ static func create_stage_part(part_id: String) -> Dictionary:
 	return {}
 
 static func configure_stage(part_id: String, engine_count: int, tank_scale: float) -> Dictionary:
+	var stage := create_stage_part(part_id)
+	if stage.is_empty():
+		return {}
+	stage["engine_count"] = 1
+	stage["tank_scale"] = 1.0
+	return reconfigure_stage(stage, engine_count, tank_scale)
+
+static func reconfigure_stage(stage: Dictionary, engine_count: int, tank_scale: float) -> Dictionary:
 	var valid_engine_count := false
 	for option in engine_count_options():
 		if int(option) == engine_count and is_equal_approx(float(option), float(engine_count)):
@@ -90,17 +98,20 @@ static func configure_stage(part_id: String, engine_count: int, tank_scale: floa
 			break
 	if not valid_tank_scale:
 		return {}
-	var stage := create_stage_part(part_id)
-	if stage.is_empty():
+	var previous_engine_count := int(stage.get("engine_count", 1))
+	var previous_tank_scale := float(stage.get("tank_scale", 1.0))
+	if previous_engine_count < 1 or previous_tank_scale <= 0.0:
 		return {}
-	stage["engine_count"] = engine_count
-	stage["tank_scale"] = tank_scale
-	stage["dry_mass"] = float(stage["dry_mass"]) * tank_scale
-	stage["fuel_capacity"] = float(stage["fuel_capacity"]) * tank_scale
-	stage["thrust"] = float(stage["thrust"]) / float(engine_count)
-	stage["vacuum_thrust"] = float(stage["vacuum_thrust"]) / float(engine_count)
-	stage["flow"] = float(stage["flow"]) / float(engine_count)
-	return stage
+	var configured := stage.duplicate(true)
+	var tank_ratio := tank_scale / previous_tank_scale
+	configured["engine_count"] = engine_count
+	configured["tank_scale"] = tank_scale
+	configured["dry_mass"] = float(stage.get("dry_mass", 0.0)) * tank_ratio
+	configured["fuel_capacity"] = float(stage.get("fuel_capacity", 0.0)) * tank_ratio
+	configured["thrust"] = float(stage.get("thrust", 0.0)) * float(previous_engine_count) / float(engine_count)
+	configured["vacuum_thrust"] = float(stage.get("vacuum_thrust", 0.0)) * float(previous_engine_count) / float(engine_count)
+	configured["flow"] = float(stage.get("flow", 0.0)) * float(previous_engine_count) / float(engine_count)
+	return configured
 
 static func default_stage_part() -> Dictionary:
 	var parts: Array = stage_part_options()
