@@ -210,8 +210,6 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		var ignition_mass := stage_ignition_mass(design, i)
 		var ignition_thrust := sea_thrust if i == 0 else vacuum_thrust
 		var thrust_to_weight := ignition_thrust * engines / maxf(1.0, ignition_mass * G0)
-		var burnout_mass := ignition_mass - fuel
-		var burnout_twr := ignition_thrust * engines / maxf(1.0, burnout_mass * G0)
 		if i == 0 and thrust_to_weight < 1.0:
 			errors.append("First-stage pad TWR must be at least 1.00 to lift off from Earth.")
 	if total_mass > 0.0 and stages.size() >= MIN_STAGES:
