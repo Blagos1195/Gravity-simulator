@@ -18,6 +18,8 @@ var stage_fuel_remaining: Array[float] = []
 var payload_mass := 500.0
 var payload_type := "probe"
 var payload_visual: Dictionary = {}
+var payload_components: Array = []
+var fairing_jettisoned := false
 var vehicle_name := "Vehicle 1"
 var input_enabled := true
 var docked_mass := 0.0
@@ -126,12 +128,32 @@ func set_rocket_design(design: Dictionary) -> void:
 	payload_type = str(design.get("payload_type", "probe"))
 	var visual_data: Variant = design.get("payload_visual", {})
 	payload_visual = visual_data.duplicate(true) if visual_data is Dictionary else {}
+	var components: Variant = design.get("payload_components", [])
+	payload_components = components.duplicate(true) if components is Array else []
+	fairing_jettisoned = false
 	stage_index = 0
 	stage_fuel_remaining.clear()
 	for stage in rocket_stages:
 		stage_fuel_remaining.append(RocketDesign.stage_total_fuel_capacity(stage))
 	fuel = stage_fuel_remaining[0]
 	infinite_fuel_stage_remaining = fuel
+
+func can_jettison_fairing() -> bool:
+	if fairing_jettisoned or not RocketDesign.has_payload_component({"payload_components": payload_components}, "fairing"):
+		return false
+	var body: Dictionary = _nearest_body_state(rocket_position, rocket_position_precise)
+	if body.is_empty():
+		return false
+	var atmosphere_height := PlanetarySystem.planetary_atmosphere_height(str(body.get("name", "")))
+	var altitude := float(body.get("distance", 0.0)) - float(body.get("radius", 0.0))
+	return atmosphere_height <= 0.0 or altitude > atmosphere_height * 1.05
+
+func jettison_fairing() -> bool:
+	if not can_jettison_fairing():
+		return false
+	fairing_jettisoned = true
+	queue_redraw()
+	return true
 
 func _active_stage_data() -> Dictionary:
 	var stage: Dictionary = rocket_stages[clampi(stage_index, 0, rocket_stages.size() - 1)].duplicate(true)
@@ -145,7 +167,7 @@ func _active_stage_data() -> Dictionary:
 	return stage
 
 func _remaining_stack_mass() -> float:
-	var mass := payload_mass
+	var mass := RocketDesign.total_payload_mass({"payload_mass": payload_mass, "payload_components": payload_components}, fairing_jettisoned)
 	for i in range(stage_index + 1, rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[i]
 		mass += RocketDesign.stage_total_dry_mass(stage)
@@ -624,6 +646,8 @@ func _aerodynamic_acceleration(position: Vector2, current_velocity: Vector2, mas
 		if realism == "Hardcore":
 			drag_coefficient += 0.12 + 0.18 * pow(sin(angle_of_attack), 2.0)
 			lift_force = dynamic_pressure * LIFT_AREA * sin(2.0 * angle_of_attack) * (0.45 if realism == "Hardcore" else 0.35)
+	var fairing_reduction := 0.0 if fairing_jettisoned else float(RocketDesign.payload_component_value({"payload_components": payload_components}, "fairing", "drag_reduction", 0.0))
+	drag_coefficient *= 1.0 - clampf(fairing_reduction, 0.0, 0.95)
 	var drag_force := dynamic_pressure * DRAG_AREA * drag_coefficient
 	var lift_direction := Vector2(-direction.y, direction.x)
 	return -direction * (drag_force / maxf(1.0, mass)) + lift_direction * (lift_force / maxf(1.0, mass))
@@ -1900,6 +1924,7 @@ func _rocket_visual_design() -> Dictionary:
 		"payload_mass": payload_mass,
 		"payload_type": payload_type,
 		"payload_visual": payload_visual,
+		"payload_components": payload_components,
 		"stages": rocket_stages
 	}
 
@@ -1907,7 +1932,7 @@ func _draw_rocket(p: Vector2, object_scale: float, vehicle_design: Dictionary = 
 	var design := vehicle_design if not vehicle_design.is_empty() else _rocket_visual_design()
 	var visible_stage := stage_index if vehicle_stage_index < 0 else vehicle_stage_index
 	var active_throttle := throttle if vehicle_throttle < 0.0 else vehicle_throttle
-	RocketVisual.draw_vehicle(self, design, p, rotation_angle, object_scale, visible_stage, active_throttle, engine_enabled and (infinite_weightless_fuel or fuel > 0.0))
+	RocketVisual.draw_vehicle(self, design, p, rotation_angle, object_scale, visible_stage, active_throttle, engine_enabled and (infinite_weightless_fuel or fuel > 0.0), fairing_jettisoned)
 
 
 func _draw_hud() -> void:
@@ -2123,7 +2148,8 @@ func get_save_data() -> Dictionary:
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
-		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": rocket_stages.duplicate(true)},
+		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "payload_components": payload_components.duplicate(true), "stages": rocket_stages.duplicate(true)},
+		"fairing_jettisoned": fairing_jettisoned,
 		"vehicle_name": vehicle_name,
 		"passive_orbit_active": passive_orbit_active,
 		"passive_orbit_forced": passive_orbit_forced,
@@ -2218,6 +2244,7 @@ func load_save_data(data: Dictionary) -> bool:
 			else:
 				validated_stage_fuel.append(RocketDesign.stage_total_fuel_capacity(saved_stages[i]))
 	set_rocket_design(saved_design)
+	fairing_jettisoned = bool(data.get("fairing_jettisoned", false)) and RocketDesign.has_payload_component(saved_design, "fairing")
 	vehicle_name = str(data.get("vehicle_name", vehicle_name))
 	passive_orbit_active = bool(data.get("passive_orbit_active", false))
 	passive_orbit_forced = bool(data.get("passive_orbit_forced", false))
