@@ -163,6 +163,73 @@ static func _design_from_catalog(definition: Dictionary) -> Dictionary:
 		design["stages"].append(stage)
 	return design
 
+static func payload_component_options() -> Array:
+	var options: Array = _rocket_catalog().get("builder_options", {}).get("payload_components", [])
+	return options.duplicate(true)
+
+static func payload_component_definition(component_id: String) -> Dictionary:
+	for option in payload_component_options():
+		if str(option.get("id", "")) == component_id:
+			return option
+	return {}
+
+static func payload_component_definition_for_entry(entry: Dictionary) -> Dictionary:
+	var definition := payload_component_definition(str(entry.get("id", "")))
+	if definition.is_empty():
+		var saved_definition: Variant = entry.get("definition", {})
+		if saved_definition is Dictionary:
+			return saved_definition.duplicate(true)
+	return definition
+
+static func add_payload_component(design: Dictionary, component_id: String) -> bool:
+	var definition := payload_component_definition(component_id)
+	if definition.is_empty():
+		return false
+	var components: Array = design.get("payload_components", []).duplicate(true)
+	components.append({"id": component_id, "definition": definition.duplicate(true)})
+	design["payload_components"] = components
+	return true
+
+static func remove_payload_component(design: Dictionary, component_index: int) -> bool:
+	var components: Array = design.get("payload_components", []).duplicate(true)
+	if component_index < 0 or component_index >= components.size():
+		return false
+	components.remove_at(component_index)
+	design["payload_components"] = components
+	return true
+
+static func payload_component_mass(design: Dictionary, include_fairings: bool = true) -> float:
+	var total := 0.0
+	for entry_variant in design.get("payload_components", []):
+		if not entry_variant is Dictionary:
+			continue
+		var definition := payload_component_definition_for_entry(entry_variant)
+		if definition.is_empty():
+			continue
+		if not include_fairings and str(definition.get("component_type", "")) == "fairing":
+			continue
+		total += float(definition.get("dry_mass", 0.0))
+	return total
+
+static func total_payload_mass(design: Dictionary, fairing_jettisoned: bool = false) -> float:
+	return float(design.get("payload_mass", 0.0)) + payload_component_mass(design, not fairing_jettisoned)
+
+static func has_payload_component(design: Dictionary, component_type: String) -> bool:
+	for entry_variant in design.get("payload_components", []):
+		if not entry_variant is Dictionary:
+			continue
+		var definition := payload_component_definition_for_entry(entry_variant)
+		if str(definition.get("component_type", "")) == component_type:
+			return true
+	return false
+
+static func _payload_component_definition_is_valid(definition: Dictionary) -> bool:
+	var component_type := str(definition.get("component_type", ""))
+	if not ["fairing", "solar_panels", "antenna", "docking_port", "instrument"].has(component_type):
+		return false
+	var dry_mass: Variant = definition.get("dry_mass")
+	return (dry_mass is int or dry_mass is float) and is_finite(float(dry_mass)) and float(dry_mass) > 0.0
+
 static func booster_options() -> Array:
 	var options: Array = _rocket_catalog().get("builder_options", {}).get("booster_options", [])
 	return options.duplicate(true)
@@ -243,14 +310,14 @@ static func stage_total_flow(stage: Dictionary) -> float:
 
 static func total_initial_mass(design: Dictionary) -> float:
 	var stages: Array = design.get("stages", [])
-	var mass := float(design.get("payload_mass", 0.0))
+	var mass := total_payload_mass(design)
 	for stage in stages:
 		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage)
 	return mass
 
 static func stage_ignition_mass(design: Dictionary, stage_index: int) -> float:
 	var stages: Array = design.get("stages", [])
-	var mass := float(design.get("payload_mass", 0.0))
+	var mass := total_payload_mass(design)
 	for i in range(stage_index, stages.size()):
 		var stage: Dictionary = stages[i]
 		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage)
@@ -291,6 +358,21 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		errors.append("Payload mass must be positive.")
 	elif _rocket_catalog().get("builder_options", {}).has("payload_mass_limits") and (payload < minimum_payload or payload > maximum_payload):
 		errors.append("Payload must be between %.3f kg and %.0f kg." % [minimum_payload, maximum_payload])
+	var payload_components: Variant = design.get("payload_components", [])
+	if not payload_components is Array:
+		errors.append("Payload components must be an array.")
+	else:
+		for component_variant in payload_components:
+			if not component_variant is Dictionary:
+				errors.append("Payload components must contain objects.")
+			else:
+				var component_definition := payload_component_definition_for_entry(component_variant)
+				if component_definition.is_empty() or not _payload_component_definition_is_valid(component_definition):
+					errors.append("A payload component references an invalid module.")
+				else:
+					for visual_key in ["visual_width_factor", "visual_height_factor"]:
+						if component_definition.has(visual_key) and (not (component_definition[visual_key] is int or component_definition[visual_key] is float) or not is_finite(float(component_definition[visual_key])) or float(component_definition[visual_key]) <= 0.0):
+							errors.append("Payload component %s has an invalid %s." % [str(component_variant.get("id", "")), visual_key])
 	var payload_visual: Variant = design.get("payload_visual", {})
 	if not payload_visual is Dictionary:
 		errors.append("Payload appearance settings must be an object.")
