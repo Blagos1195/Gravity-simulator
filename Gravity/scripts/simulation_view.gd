@@ -1680,7 +1680,7 @@ func _draw_solar_system(center: Vector2) -> void:
 	var occupied: Array[Rect2] = []
 	var header := Rect2(Vector2(18.0, 14.0), Vector2(minf(size.x - 36.0, 370.0), 24.0))
 	draw_rect(header, Color(0.025, 0.045, 0.075, 0.9), true)
-	draw_string(ThemeDB.fallback_font, header.position + Vector2(7.0, 18.0), "LIVE SOLAR SYSTEM  •  SIMULATION EPHEMERIS", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
+	draw_string(ThemeDB.fallback_font, header.position + Vector2(7.0, 18.0), "SOLAR SYSTEM  •  KNOWN BODIES ONLY", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.8, 1.0))
 	occupied.append(header)
 	var sun_screen := center
 	var sun_color := PlanetarySystem.system_visual_color()
