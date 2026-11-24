@@ -210,6 +210,16 @@ func _advance_fleet(delta: float) -> void:
 	for vehicle in fleet_sims:
 		vehicle.simulation_time_backlog = fleet_time_backlog
 	if is_instance_valid(sim):
+		sim.fleet_visuals.clear()
+		for vehicle in fleet_sims:
+			if vehicle == sim or _is_docked_child(vehicle.vehicle_name):
+				continue
+			sim.fleet_visuals.append({
+				"position": vehicle.rocket_position,
+				"rotation": vehicle.rotation_angle,
+				"stage_index": vehicle.stage_index,
+				"design": {"name": vehicle.vehicle_name, "payload_mass": vehicle.payload_mass, "payload_type": vehicle.payload_type, "payload_visual": vehicle.payload_visual.duplicate(true), "stages": vehicle.rocket_stages.duplicate(true)}
+			})
 		_update_discovery_state()
 		_update_economy()
 		_update_missions()
@@ -592,6 +602,10 @@ func _show_vehicle_editor() -> void:
 	preset_selector.item_selected.connect(func(index: int):
 		var selected_preset_id := str(preset_selector.get_item_metadata(index))
 		preset_description.text = RocketDesign.preset_description(selected_preset_id)
+	)
+	_add_button(preset_row, "NEW CUSTOM", func():
+		rocket_design = RocketDesign.create_blank()
+		_show_vehicle_editor()
 	)
 	_add_button(preset_row, "LOAD PRESET", func():
 		var selected_preset_id := str(preset_selector.get_item_metadata(preset_selector.selected))
@@ -1461,6 +1475,7 @@ func _create_vehicle(design: Dictionary, name: String, saved_state: Dictionary =
 	vehicle.visible = false
 	vehicle.z_index = -1
 	vehicle.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vehicle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vehicle.set_rocket_design(design)
 	add_child(vehicle)
 	vehicle.set_process(false)
@@ -1592,6 +1607,14 @@ func _show_new_vehicle_dialog() -> void:
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	description.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	layout.add_child(description)
+	var custom_button := Button.new()
+	custom_button.text = "BUILD A CUSTOM ROCKET"
+	custom_button.custom_minimum_size.y = 40
+	custom_button.pressed.connect(func():
+		window.queue_free()
+		_show_fleet_custom_builder()
+	)
+	layout.add_child(custom_button)
 	var launch_button := Button.new()
 	launch_button.text = "LAUNCH SELECTED VEHICLE"
 	launch_button.custom_minimum_size.y = 44
@@ -1614,6 +1637,188 @@ func _show_new_vehicle_dialog() -> void:
 	else:
 		launch_button.disabled = true
 	window.call_deferred("popup_centered")
+
+func _show_fleet_custom_builder() -> void:
+	rocket_design = RocketDesign.create_blank()
+	var design: Dictionary = rocket_design
+	var window := Window.new()
+	window.title = "CUSTOM VEHICLE WORKSHOP"
+	window.size = Vector2i(760, 680)
+	window.min_size = Vector2i(600, 480)
+	window.transient = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	window.add_child(layout)
+	var name_input := LineEdit.new()
+	name_input.text = str(design.get("name", "Custom Vehicle"))
+	name_input.placeholder_text = "Vehicle name"
+	name_input.text_changed.connect(func(value: String): design["name"] = value)
+	layout.add_child(name_input)
+	var payload_row := HBoxContainer.new()
+	var payload_label := Label.new()
+	payload_label.text = "PAYLOAD MASS (KG)"
+	payload_row.add_child(payload_label)
+	var payload_mass := SpinBox.new()
+	payload_mass.min_value = 0.001
+	payload_mass.max_value = 1.0e300
+	payload_mass.step = 10.0
+	payload_mass.value = float(design.get("payload_mass", 500.0))
+	payload_mass.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	payload_mass.value_changed.connect(func(value: float): design["payload_mass"] = value)
+	payload_row.add_child(payload_mass)
+	layout.add_child(payload_row)
+	var payload_selector := OptionButton.new()
+	var payload_options := RocketDesign.payload_options()
+	for option in payload_options:
+		payload_selector.add_item(str(option.get("label", option.get("id", "Payload"))))
+		payload_selector.set_item_metadata(payload_selector.item_count - 1, option)
+	var current_payload_index := 0
+	for i in range(payload_options.size()):
+		if str(payload_options[i].get("id", "")) == str(design.get("payload_type", "")):
+			current_payload_index = i
+			break
+	if payload_selector.item_count > 0:
+		payload_selector.select(current_payload_index)
+		payload_selector.item_selected.connect(func(index: int):
+			var option: Dictionary = payload_selector.get_item_metadata(index)
+			design["payload_type"] = str(option.get("id", "custom"))
+			design["payload_mass"] = float(option.get("mass", design.get("payload_mass", 500.0)))
+			design["payload_visual"] = RocketDesign.payload_visual_data(str(option.get("id", "")))
+			payload_mass.set_value_no_signal(float(design["payload_mass"]))
+		)
+	layout.add_child(payload_selector)
+	var stage_heading := Label.new()
+	stage_heading.text = "STAGES  •  EDIT PARTS, ENGINES, TANKS AND BOOSTERS"
+	layout.add_child(stage_heading)
+	var stage_scroll := ScrollContainer.new()
+	stage_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(stage_scroll)
+	var stage_list := VBoxContainer.new()
+	stage_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stage_scroll.add_child(stage_list)
+	_populate_fleet_builder_stages(stage_list, design, window)
+	var add_row := HBoxContainer.new()
+	var part_selector := OptionButton.new()
+	part_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for option in RocketDesign.stage_part_options():
+		part_selector.add_item(str(option.get("label", option.get("id", "Stage"))))
+		part_selector.set_item_metadata(part_selector.item_count - 1, str(option.get("id", "")))
+	add_row.add_child(part_selector)
+	var add_stage_button := Button.new()
+	add_stage_button.text = "ADD STAGE"
+	add_stage_button.pressed.connect(func():
+		if part_selector.item_count == 0:
+			return
+		var stage := RocketDesign.configure_stage(str(part_selector.get_selected_metadata()), 1, 1.0)
+		if not stage.is_empty():
+			design["stages"].append(stage)
+			_populate_fleet_builder_stages(stage_list, design, window)
+	)
+	add_row.add_child(add_stage_button)
+	layout.add_child(add_row)
+	var actions := HBoxContainer.new()
+	var launch_button := Button.new()
+	launch_button.text = "LAUNCH CUSTOM VEHICLE"
+	launch_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	launch_button.pressed.connect(func():
+		design["name"] = name_input.text.strip_edges()
+		if str(design["name"]).is_empty():
+			design["name"] = "Custom Vehicle"
+		var errors := RocketDesign.validation_errors(design)
+		if not errors.is_empty():
+			return
+		_launch_vehicle_design(design.duplicate(true))
+		window.queue_free()
+	)
+	actions.add_child(launch_button)
+	_add_button(actions, "CLOSE", func(): window.queue_free())
+	layout.add_child(actions)
+	window.popup_centered()
+
+
+func _populate_fleet_builder_stages(stage_list: VBoxContainer, design: Dictionary, window: Window) -> void:
+	for child in stage_list.get_children():
+		child.queue_free()
+	var part_options := RocketDesign.stage_part_options()
+	var engine_options := RocketDesign.engine_count_options()
+	var tank_options := RocketDesign.tank_scale_options()
+	for stage_index in range(design.get("stages", []).size()):
+		var stage: Dictionary = design["stages"][stage_index]
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		stage_list.add_child(row)
+		var controls := HBoxContainer.new()
+		row.add_child(controls)
+		var part_selector := OptionButton.new()
+		part_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var selected_part := 0
+		for i in range(part_options.size()):
+			part_selector.add_item(str(part_options[i].get("label", part_options[i].get("id", "Stage"))))
+			part_selector.set_item_metadata(i, str(part_options[i].get("id", "")))
+			if str(stage.get("part_id", "")) == str(part_options[i].get("id", "")):
+				selected_part = i
+		if part_selector.item_count > 0:
+			part_selector.select(selected_part)
+		part_selector.item_selected.connect(func(option_index: int):
+			var replacement := RocketDesign.configure_stage(str(part_selector.get_item_metadata(option_index)), int(stage.get("engine_count", 1)), float(stage.get("tank_scale", 1.0)))
+			if not replacement.is_empty():
+				design["stages"][stage_index] = replacement
+				_populate_fleet_builder_stages(stage_list, design, window)
+		)
+		controls.add_child(part_selector)
+		var engine_selector := OptionButton.new()
+		for count in engine_options:
+			engine_selector.add_item("%d engines" % int(count))
+			engine_selector.set_item_metadata(engine_selector.item_count - 1, int(count))
+		var current_engine := int(stage.get("engine_count", 1))
+		var engine_index := engine_options.find(current_engine)
+		if engine_index >= 0:
+			engine_selector.select(engine_index)
+		engine_selector.item_selected.connect(func(option_index: int):
+			var configured := RocketDesign.reconfigure_stage(design["stages"][stage_index], int(engine_selector.get_item_metadata(option_index)), float(stage.get("tank_scale", 1.0)))
+			if not configured.is_empty():
+				design["stages"][stage_index] = configured
+				_populate_fleet_builder_stages(stage_list, design, window)
+		)
+		controls.add_child(engine_selector)
+		var tank_selector := OptionButton.new()
+		var tank_index := 0
+		for i in range(tank_options.size()):
+			tank_selector.add_item(str(tank_options[i].get("label", "Tank")))
+			tank_selector.set_item_metadata(i, float(tank_options[i].get("scale", 1.0)))
+			if is_equal_approx(float(stage.get("tank_scale", 1.0)), float(tank_options[i].get("scale", 1.0))):
+				tank_index = i
+		if tank_selector.item_count > 0:
+			tank_selector.select(tank_index)
+		tank_selector.item_selected.connect(func(option_index: int):
+			var configured := RocketDesign.reconfigure_stage(design["stages"][stage_index], int(stage.get("engine_count", 1)), float(tank_selector.get_item_metadata(option_index)))
+			if not configured.is_empty():
+				design["stages"][stage_index] = configured
+				_populate_fleet_builder_stages(stage_list, design, window)
+		)
+		controls.add_child(tank_selector)
+		var booster_button := Button.new()
+		booster_button.text = "BOOSTERS (%d)" % stage.get("boosters", []).size()
+		booster_button.pressed.connect(func():
+			rocket_design = design
+			_show_booster_editor(stage_index)
+		)
+		controls.add_child(booster_button)
+		var remove_button := Button.new()
+		remove_button.text = "REMOVE"
+		remove_button.disabled = design["stages"].size() <= RocketDesign.MIN_STAGES
+		remove_button.pressed.connect(func():
+			design["stages"].remove_at(stage_index)
+			_populate_fleet_builder_stages(stage_list, design, window)
+		)
+		controls.add_child(remove_button)
+		var stage_name := Label.new()
+		stage_name.text = "STAGE %02d  •  %s" % [stage_index + 1, str(stage.get("name", "CUSTOM STAGE"))]
+		row.add_child(stage_name)
+
 
 func _switch_vehicle(index: int) -> void:
 	if index < 0 or index >= fleet_sims.size():
