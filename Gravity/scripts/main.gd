@@ -72,7 +72,7 @@ var flight_hud_bottom: Label
 var flight_hud_right: VBoxContainer
 var scale_factor := 1.0
 var rocket_design: Dictionary = RocketDesign.create_default()
-var active_builder: Window
+var active_builder: Control
 var design_stats_label: Label
 var design_error_label: Label
 var design_preview: Control
@@ -791,13 +791,8 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 			active_builder = null
 		_show_new_game_setup()
 	)
-	if not is_inside_tree():
-		add_child(builder)
-		builder._build_interface()
-		builder._refresh()
-		return
-	get_tree().root.add_child(builder)
-	builder.popup()
+	builder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(builder)
 
 
 func _duplicate_stage(stage_index: int) -> void:

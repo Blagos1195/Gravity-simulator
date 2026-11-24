@@ -1,4 +1,4 @@
-extends Window
+extends Control
 class_name RocketBuilder
 
 signal design_changed(design: Dictionary)
@@ -219,21 +219,11 @@ func configure(source_design: Dictionary, stage_index: int = 0) -> void:
 	design["stages"] = stages
 
 func _ready() -> void:
-	title = "VEHICLE ASSEMBLY BUILDING"
-	var screen_size := DisplayServer.screen_get_size()
-	mode = Window.MODE_FULLSCREEN
-	position = Vector2i.ZERO
-	size = screen_size
-	min_size = Vector2i(800, 600)
-	transient = true
-	close_requested.connect(_finish)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_interface()
 	_refresh()
 
 func _build_interface() -> void:
-	title = "VEHICLE ASSEMBLY BUILDING"
-	transient = true
-	exclusive = true
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 8)
