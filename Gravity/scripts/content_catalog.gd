@@ -12,14 +12,6 @@ static func get_catalog() -> Dictionary:
 	if _loaded:
 		return _catalog
 	_loaded = true
-	if FileAccess.file_exists(MOD_PATH):
-		var mod_catalog := _read_catalog(MOD_PATH)
-		var mod_error := _catalog_error(mod_catalog)
-		if mod_error.is_empty():
-			_catalog = mod_catalog
-			source_path = MOD_PATH
-			return _catalog
-		push_error("Ignoring invalid mod catalog at %s: %s" % [MOD_PATH, mod_error])
 	var builtin_catalog := _read_catalog(BUILTIN_PATH)
 	var builtin_error := _catalog_error(builtin_catalog)
 	if not builtin_error.is_empty():
@@ -27,7 +19,64 @@ static func get_catalog() -> Dictionary:
 		return _catalog
 	_catalog = builtin_catalog
 	source_path = BUILTIN_PATH
+	if not FileAccess.file_exists(MOD_PATH):
+		return _catalog
+	var mod_catalog := _read_catalog(MOD_PATH)
+	if mod_catalog.is_empty() or int(mod_catalog.get("schema_version", 0)) != 1:
+		push_error("Ignoring invalid mod catalog at %s: schema_version must be 1." % MOD_PATH)
+		return _catalog
+	var merged_catalog := _merge_overlay(builtin_catalog, mod_catalog)
+	var mod_error := _catalog_error(merged_catalog)
+	if not mod_error.is_empty():
+		push_error("Ignoring invalid mod catalog at %s: %s" % [MOD_PATH, mod_error])
+		return _catalog
+	_catalog = merged_catalog
+	source_path = "%s + %s" % [BUILTIN_PATH, MOD_PATH]
 	return _catalog
+
+static func _merge_overlay(base: Dictionary, overlay: Dictionary) -> Dictionary:
+	var merged := base.duplicate(true)
+	for raw_key in overlay:
+		var key := str(raw_key)
+		if key.ends_with("_add"):
+			var target_key := key.trim_suffix("_add")
+			var existing: Variant = merged.get(target_key)
+			var additions: Variant = overlay[raw_key]
+			if existing is Array and additions is Array:
+				merged[target_key] = _merge_array_items(existing, additions)
+			elif existing is Dictionary and additions is Dictionary:
+				merged[target_key] = _merge_overlay(existing, additions)
+			elif existing == null and additions is Array:
+				merged[target_key] = _merge_array_items([], additions)
+			elif existing == null and additions is Dictionary:
+				merged[target_key] = _merge_overlay({}, additions)
+			else:
+				push_error("Ignoring unsupported mod extension field: %s" % key)
+		elif merged.get(key) is Dictionary and overlay[raw_key] is Dictionary:
+			merged[key] = _merge_overlay(merged[key], overlay[raw_key])
+		else:
+			var value: Variant = overlay[raw_key]
+			merged[key] = value.duplicate(true) if value is Dictionary or value is Array else value
+	return merged
+
+static func _merge_array_items(base: Array, additions: Array) -> Array:
+	var merged := base.duplicate(true)
+	for addition in additions:
+		var identity_key := ""
+		if addition is Dictionary:
+			identity_key = "id" if addition.has("id") else "name" if addition.has("name") else ""
+		var match_index := -1
+		if not identity_key.is_empty():
+			for index in range(merged.size()):
+				var existing: Variant = merged[index]
+				if existing is Dictionary and str(existing.get(identity_key, "")) == str(addition.get(identity_key, "")):
+					match_index = index
+					break
+		if match_index >= 0:
+				merged[match_index] = _merge_overlay(merged[match_index], addition)
+		else:
+			merged.append(_merge_overlay({}, addition) if addition is Dictionary else addition.duplicate(true) if addition is Array else addition)
+	return merged
 
 static func _read_catalog(path: String) -> Dictionary:
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -252,7 +301,7 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		return "The rocket section needs default_design, presets and stage_parts."
 	var presets: Variant = rocket.get("presets")
 	var stage_parts: Variant = rocket.get("stage_parts")
-	if not presets is Dictionary or not stage_parts is Array or stage_parts.is_empty():
+	if not presets is Dictionary or presets.is_empty() or not stage_parts is Array or stage_parts.is_empty():
 		return "The rocket presets or stage_parts have an invalid type."
 	var part_ids := {}
 	for part_variant in stage_parts:
@@ -268,6 +317,58 @@ static func _catalog_error(catalog: Dictionary) -> String:
 			return part_error
 		if not part.has("name") or float(part.dry_mass) <= 0.0 or float(part.fuel_capacity) <= 0.0 or float(part.thrust) <= 0.0 or float(part.vacuum_thrust) <= 0.0 or float(part.flow) <= 0.0 or int(part.engine_count) <= 0:
 			return "Rocket stage part %s has invalid name or engine values." % part_id
+	var builder_options: Variant = rocket.get("builder_options")
+	if not builder_options is Dictionary:
+		return "The rocket builder_options section is missing or invalid."
+	var payload_options: Variant = builder_options.get("payloads")
+	var engine_counts: Variant = builder_options.get("engine_counts")
+	var tank_scales: Variant = builder_options.get("tank_scales")
+	if not payload_options is Array or payload_options.is_empty() or not engine_counts is Array or engine_counts.is_empty() or not tank_scales is Array or tank_scales.is_empty():
+		return "Rocket builder payloads, engine_counts and tank_scales must be non-empty arrays."
+	var payload_mass_limits: Variant = builder_options.get("payload_mass_limits")
+	if not payload_mass_limits is Dictionary:
+		return "Rocket payload_mass_limits must be an object."
+	var payload_limits_error := _numeric_fields_error(payload_mass_limits, ["minimum", "maximum", "step"], "rocket payload_mass_limits")
+	if not payload_limits_error.is_empty():
+		return payload_limits_error
+	if float(payload_mass_limits.minimum) <= 0.0 or float(payload_mass_limits.maximum) <= float(payload_mass_limits.minimum) or float(payload_mass_limits.step) <= 0.0:
+		return "Rocket payload mass limits must have a positive minimum, maximum and step."
+	var payload_ids := {}
+	for payload_variant in payload_options:
+		if not payload_variant is Dictionary:
+			return "Every rocket payload option must be an object."
+		var payload: Dictionary = payload_variant
+		var payload_id := str(payload.get("id", ""))
+		if payload_id.is_empty() or payload_ids.has(payload_id) or str(payload.get("label", "")).is_empty():
+			return "Rocket payload option ids and labels must be non-empty and unique."
+		var payload_error := _numeric_fields_error(payload, ["mass"], "rocket payload %s" % payload_id)
+		if not payload_error.is_empty():
+			return payload_error
+		if float(payload.mass) < float(payload_mass_limits.minimum) or float(payload.mass) > float(payload_mass_limits.maximum):
+			return "Rocket payload %s mass is outside the configured payload limits." % payload_id
+		payload_ids[payload_id] = true
+	var engine_count_ids := {}
+	for engine_count in engine_counts:
+		if not (engine_count is int or engine_count is float) or int(engine_count) < 1 or int(engine_count) > 8 or float(engine_count) != float(int(engine_count)) or engine_count_ids.has(int(engine_count)):
+			return "Rocket builder engine_counts must contain unique whole numbers from 1 to 8."
+		engine_count_ids[int(engine_count)] = true
+	var tank_scale_values := []
+	for tank_option_variant in tank_scales:
+		if not tank_option_variant is Dictionary:
+			return "Every rocket tank scale option must be an object."
+		var tank_option: Dictionary = tank_option_variant
+		var tank_error := _numeric_fields_error(tank_option, ["scale"], "rocket tank scale")
+		if not tank_error.is_empty():
+			return tank_error
+		var tank_scale := float(tank_option.scale)
+		if str(tank_option.get("label", "")).is_empty() or tank_scale <= 0.0 or tank_scale > 4.0 or tank_scale_values.has(tank_scale):
+			return "Rocket tank scale options need unique positive scales no greater than 4."
+		tank_scale_values.append(tank_scale)
+	if not engine_count_ids.has(1) or not tank_scale_values.has(1.0):
+		return "Rocket builder options must include one engine and a standard 1.0 tank scale."
+	for part_variant in stage_parts:
+		if not engine_count_ids.has(int(part_variant.get("engine_count", 1))):
+			return "Rocket stage part %s uses an engine count not available in builder_options." % str(part_variant.get("id", "unnamed"))
 	var designs: Array = [rocket.get("default_design")]
 	for preset_id in presets:
 		designs.append(presets[preset_id])

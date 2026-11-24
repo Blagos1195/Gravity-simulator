@@ -40,25 +40,29 @@ static func _static_init() -> void:
 			"mass": float(planet.get("mass", 0.0)),
 			"period_days": float(planet.get("orbital_period", 0.0))
 		})
-	for planet in PlanetarySystem.PLANETS:
+	SATELLITE_TARGETS = _build_satellite_targets(PlanetarySystem.PLANETS)
+
+static func _build_satellite_targets(planets: Array) -> Array[Dictionary]:
+	var targets: Array[Dictionary] = []
+	for planet in planets:
 		var host_name := str(planet.get("name", ""))
-		if host_name == "Earth":
-			continue
-		var host_target_index := -1
-		for planet_index in range(PLANET_TARGETS.size()):
-			if str(PLANET_TARGETS[planet_index].get("name", "")) == host_name:
-				host_target_index = planet_index
-				break
+		var host_target_index := -2 if host_name == "Earth" else -1
+		if host_target_index != -2:
+			for planet_index in range(PLANET_TARGETS.size()):
+				if str(PLANET_TARGETS[planet_index].get("name", "")) == host_name:
+					host_target_index = planet_index
+					break
 		for satellite_variant in planet.get("satellites", []):
 			var satellite: Dictionary = satellite_variant
 			var satellite_name := str(satellite.get("name", ""))
-			SATELLITE_TARGETS.append({
-				"id": SATELLITE_TARGET_INDEX_BASE + SATELLITE_TARGETS.size(),
+			targets.append({
+				"id": SATELLITE_TARGET_INDEX_BASE + targets.size(),
 				"name": "%s %s" % [host_name, satellite_name],
 				"display_name": "%s (%s)" % [satellite_name, host_name],
 				"host_name": host_name,
 				"host_target_index": host_target_index
 			})
+	return targets
 
 static func _satellite_target_data(target_index: int) -> Dictionary:
 	var satellite_index := target_index - SATELLITE_TARGET_INDEX_BASE

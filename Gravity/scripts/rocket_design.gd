@@ -14,6 +14,26 @@ static func _rocket_catalog() -> Dictionary:
 	var catalog: Dictionary = ContentCatalog.get_catalog()
 	return catalog.get("rocket", {})
 
+static func payload_options() -> Array:
+	var options: Array = _rocket_catalog().get("builder_options", {}).get("payloads", [])
+	return options.duplicate(true)
+
+static func payload_mass_limits() -> Dictionary:
+	var limits: Dictionary = _rocket_catalog().get("builder_options", {}).get("payload_mass_limits", {})
+	return limits.duplicate(true)
+
+static func engine_count_options() -> Array:
+	var options: Array = _rocket_catalog().get("builder_options", {}).get("engine_counts", [1, 2, 3, 4, 6, 8])
+	return options.duplicate()
+
+static func tank_scale_options() -> Array:
+	var options: Array = _rocket_catalog().get("builder_options", {}).get("tank_scales", [
+		{"label": "Compact tank", "scale": 0.75},
+		{"label": "Standard tank", "scale": 1.0},
+		{"label": "Extended tank", "scale": 1.25}
+	])
+	return options.duplicate(true)
+
 static func preset_options() -> Array:
 	var presets: Dictionary = _rocket_catalog().get("presets", {})
 	var options: Array = []
@@ -55,7 +75,19 @@ static func create_stage_part(part_id: String) -> Dictionary:
 	return {}
 
 static func configure_stage(part_id: String, engine_count: int, tank_scale: float) -> Dictionary:
-	if engine_count not in [1, 2, 3, 4, 6, 8] or tank_scale not in [0.75, 1.0, 1.25]:
+	var valid_engine_count := false
+	for option in engine_count_options():
+		if int(option) == engine_count and is_equal_approx(float(option), float(engine_count)):
+			valid_engine_count = true
+			break
+	if not valid_engine_count:
+		return {}
+	var valid_tank_scale := false
+	for tank_option in tank_scale_options():
+		if is_equal_approx(float(tank_option.get("scale", 0.0)), tank_scale):
+			valid_tank_scale = true
+			break
+	if not valid_tank_scale:
 		return {}
 	var stage := create_stage_part(part_id)
 	if stage.is_empty():
@@ -140,10 +172,13 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 	var errors := PackedStringArray()
 	var stages: Array = design.get("stages", [])
 	var payload := float(design.get("payload_mass", 0.0))
+	var payload_limits := payload_mass_limits()
+	var minimum_payload := float(payload_limits.get("minimum", 10.0))
+	var maximum_payload := float(payload_limits.get("maximum", 100000.0))
 	if stages.size() < MIN_STAGES or stages.size() > MAX_STAGES:
 		errors.append("A vehicle must have between 2 and 8 stages.")
-	if payload < 10.0 or payload > 100000.0:
-		errors.append("Payload must be between 10 kg and 100,000 kg.")
+	if payload < minimum_payload or payload > maximum_payload:
+		errors.append("Payload must be between %.0f kg and %.0f kg." % [minimum_payload, maximum_payload])
 	if stages.is_empty():
 		return errors
 	var total_mass := total_initial_mass(design)

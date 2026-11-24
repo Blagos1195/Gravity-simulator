@@ -289,13 +289,20 @@ func _show_vehicle_editor() -> void:
 	root.add_child(preset_row)
 	var preset_selector := OptionButton.new()
 	preset_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for preset in RocketDesign.preset_options():
+	var preset_options := RocketDesign.preset_options()
+	var selected_preset_index := 0
+	for preset_index in range(preset_options.size()):
+		var preset: Dictionary = preset_options[preset_index]
 		preset_selector.add_item(str(preset.label))
 		preset_selector.set_item_metadata(preset_selector.item_count - 1, str(preset.id))
-	preset_selector.select(1)
+		if str(preset.id) == "LEO_CARGO":
+			selected_preset_index = preset_index
+	if not preset_options.is_empty():
+		preset_selector.select(selected_preset_index)
 	preset_row.add_child(preset_selector)
 	var preset_description := Label.new()
-	preset_description.text = RocketDesign.preset_description("LEO_CARGO")
+	var initial_preset_id := str(preset_selector.get_item_metadata(selected_preset_index)) if not preset_options.is_empty() else ""
+	preset_description.text = RocketDesign.preset_description(initial_preset_id)
 	preset_description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preset_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	preset_description.add_theme_color_override("font_color", Color(0.58, 0.68, 0.8))
@@ -362,32 +369,53 @@ func _show_vehicle_editor() -> void:
 	payload_label.text = "PAYLOAD"
 	payload_label.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 	assembly.add_child(payload_label)
+	var payload_row := HBoxContainer.new()
+	payload_row.add_theme_constant_override("separation", 8)
 	var payload_selector := OptionButton.new()
 	payload_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var payload_options := [
-		{"id": "custom", "label": "Custom payload · %.1f t" % (float(rocket_design.get("payload_mass", 500.0)) / 1000.0), "mass": float(rocket_design.get("payload_mass", 500.0))},
-		{"id": "satellite", "label": "Small satellite · 150 kg", "mass": 150.0},
-		{"id": "probe", "label": "Science probe · 1.8 t", "mass": 1800.0},
-		{"id": "crew", "label": "Crew capsule · 6.5 t", "mass": 6500.0},
-		{"id": "cargo", "label": "Cargo module · 8 t", "mass": 8000.0},
-		{"id": "heavy_cargo", "label": "Heavy cargo · 12 t", "mass": 12000.0}
-	]
-	var selected_payload := 0
+	var payload_options := RocketDesign.payload_options()
+	var current_payload_mass := float(rocket_design.get("payload_mass", 500.0))
+	var selected_payload := -1
+	for payload_index in range(payload_options.size()):
+		var payload_option: Dictionary = payload_options[payload_index]
+		if is_equal_approx(float(payload_option.mass), current_payload_mass):
+			selected_payload = payload_index
+	if selected_payload < 0:
+		payload_options.insert(0, {
+			"id": "custom",
+			"label": "Custom payload · %.1f t" % (current_payload_mass / 1000.0),
+			"mass": current_payload_mass
+		})
+		selected_payload = 0
 	for payload_index in range(payload_options.size()):
 		var payload_option: Dictionary = payload_options[payload_index]
 		payload_selector.add_item(str(payload_option.label))
 		payload_selector.set_item_metadata(payload_index, payload_option)
-		if is_equal_approx(float(payload_option.mass), float(rocket_design.get("payload_mass", 500.0))):
-			selected_payload = payload_index
 	payload_selector.select(selected_payload)
 	rocket_design["payload_type"] = str(payload_options[selected_payload].id)
+	payload_row.add_child(payload_selector)
+	var payload_limits := RocketDesign.payload_mass_limits()
+	var payload_mass_input := SpinBox.new()
+	payload_mass_input.min_value = float(payload_limits.get("minimum", 10.0))
+	payload_mass_input.max_value = float(payload_limits.get("maximum", 100000.0))
+	payload_mass_input.step = float(payload_limits.get("step", 10.0))
+	payload_mass_input.value = current_payload_mass
+	payload_mass_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	payload_mass_input.tooltip_text = "Set the payload mass directly in kilograms."
+	payload_mass_input.value_changed.connect(func(value: float):
+		rocket_design["payload_mass"] = value
+		rocket_design["payload_type"] = "custom"
+		_update_design_stats()
+	)
+	payload_row.add_child(payload_mass_input)
 	payload_selector.item_selected.connect(func(index: int):
 		var selected_payload_option: Dictionary = payload_selector.get_item_metadata(index)
 		rocket_design["payload_mass"] = float(selected_payload_option.mass)
 		rocket_design["payload_type"] = str(selected_payload_option.id)
+		payload_mass_input.set_value_no_signal(float(selected_payload_option.mass))
 		_update_design_stats()
 	)
-	assembly.add_child(payload_selector)
+	assembly.add_child(payload_row)
 	var stages_heading := Label.new()
 	stages_heading.text = "STAGE STACK  •  FIRST STAGE AT THE BOTTOM"
 	stages_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
@@ -432,12 +460,14 @@ func _show_vehicle_editor() -> void:
 		stage_row.add_child(part_selector)
 		var engine_selector := OptionButton.new()
 		engine_selector.tooltip_text = "Splits the stage's total thrust and fuel flow across this many smaller engines."
-		for engine_count in [1, 2, 3, 4, 6, 8]:
+		var engine_options := RocketDesign.engine_count_options()
+		var current_engine_count := int(stage.get("engine_count", 1))
+		if not engine_options.has(current_engine_count):
+			engine_options.append(current_engine_count)
+		for engine_count in engine_options:
 			engine_selector.add_item("%d engine%s" % [engine_count, "" if engine_count == 1 else "s"])
 			engine_selector.set_item_metadata(engine_selector.item_count - 1, engine_count)
-		var current_engine_count := int(stage.get("engine_count", 1))
-		var engine_options := [1, 2, 3, 4, 6, 8]
-		engine_selector.select(engine_options.find(current_engine_count) if current_engine_count in engine_options else 0)
+		engine_selector.select(engine_options.find(current_engine_count))
 		engine_selector.item_selected.connect(func(option_index: int):
 			var current_stage: Dictionary = rocket_design["stages"][stage_index]
 			var configured := RocketDesign.configure_stage(str(current_stage.get("part_id", "")), int(engine_selector.get_item_metadata(option_index)), float(current_stage.get("tank_scale", 1.0)))
@@ -447,17 +477,18 @@ func _show_vehicle_editor() -> void:
 		)
 		stage_row.add_child(engine_selector)
 		var tank_selector := OptionButton.new()
-		var tank_options := [
-			{"label": "Compact tank", "scale": 0.75},
-			{"label": "Standard tank", "scale": 1.0},
-			{"label": "Extended tank", "scale": 1.25}
-		]
-		var selected_tank_index := 1
+		var tank_options := RocketDesign.tank_scale_options()
+		var current_tank_scale := float(stage.get("tank_scale", 1.0))
+		var selected_tank_index := -1
 		for tank_index in range(tank_options.size()):
 			tank_selector.add_item(str(tank_options[tank_index].label))
 			tank_selector.set_item_metadata(tank_index, float(tank_options[tank_index].scale))
-			if is_equal_approx(float(stage.get("tank_scale", 1.0)), float(tank_options[tank_index].scale)):
+			if is_equal_approx(current_tank_scale, float(tank_options[tank_index].scale)):
 				selected_tank_index = tank_index
+		if selected_tank_index < 0:
+			tank_selector.add_item("Current tank scale · %.2fx" % current_tank_scale)
+			tank_selector.set_item_metadata(tank_selector.item_count - 1, current_tank_scale)
+			selected_tank_index = tank_selector.item_count - 1
 		tank_selector.select(selected_tank_index)
 		tank_selector.item_selected.connect(func(option_index: int):
 			var current_stage: Dictionary = rocket_design["stages"][stage_index]
@@ -956,7 +987,7 @@ func _show_new_vehicle_dialog() -> void:
 		description.text = str(options[0].get("description", ""))
 	else:
 		launch_button.disabled = true
-	window.popup_centered()
+	window.call_deferred("popup_centered")
 
 func _switch_vehicle(index: int) -> void:
 	if index < 0 or index >= fleet_sims.size():

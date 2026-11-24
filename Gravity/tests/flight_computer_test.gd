@@ -16,6 +16,31 @@ func _initialize() -> void:
 	var first_satellite_id := int(first_satellite_target.get("id", -1))
 	assert(first_satellite_id >= FlightComputer.SATELLITE_TARGET_INDEX_BASE)
 	assert(FlightComputer.target_body_name(first_satellite_id) == str(first_satellite_target.get("name", "")))
+	var modded_planets := PlanetarySystem.get_planet_catalog()
+	for planet_index in range(modded_planets.size()):
+		if str(modded_planets[planet_index].get("name", "")) == "Earth":
+			var earth: Dictionary = modded_planets[planet_index]
+			var earth_satellites: Array = earth.get("satellites", []).duplicate(true)
+			earth_satellites.append({
+				"name": "Test Moon",
+				"mass_kg": 1.0e15,
+				"radius_m": 10000.0,
+				"semi_major_axis_m": 100000000.0,
+				"orbital_period_s": 86400.0,
+				"phase_rad": 0.0,
+				"rotation_rate_rad_s": 0.0001,
+				"solid": true,
+				"color_rgb": [0.7, 0.7, 0.7]
+			})
+			earth["satellites"] = earth_satellites
+			modded_planets[planet_index] = earth
+	var modded_satellite_targets := FlightComputer._build_satellite_targets(modded_planets)
+	var earth_moon_target: Dictionary = {}
+	for satellite_target in modded_satellite_targets:
+		if str(satellite_target.get("name", "")) == "Earth Test Moon":
+			earth_moon_target = satellite_target
+	assert(not earth_moon_target.is_empty())
+	assert(int(earth_moon_target.get("host_target_index", -1)) == -2)
 	var first_satellite_state := FlightComputer._simulated_target_state(first_satellite_id, 0.0)
 	assert(str(first_satellite_state.get("name", "")) == str(first_satellite_target.get("name", "")))
 	var radius := FlightComputer.EARTH_RADIUS + 200000.0
