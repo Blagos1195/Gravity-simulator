@@ -222,7 +222,7 @@ func _advance_fleet(delta: float) -> void:
 			var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(body.get("name", "Earth")))
 			if float(body.distance) < float(body.soi) and altitude < atmosphere_height:
 				effective_warp = minf(effective_warp, 100.0)
-		fleet_time_backlog += effective_warp * delta
+		fleet_time_backlog = effective_warp * delta
 		var iterations := 0
 		var physics_budget_start_usec: int = Time.get_ticks_usec()
 		_update_docked_masses()
@@ -257,6 +257,7 @@ func _advance_fleet(delta: float) -> void:
 			_scan_active_telescopes()
 			fleet_time_backlog = maxf(0.0, fleet_time_backlog - step_delta)
 			iterations += 1
+		fleet_time_backlog = 0.0
 	var separated_stages := pending_debris.duplicate(true)
 	pending_debris.clear()
 	for stage_data in separated_stages:
@@ -285,12 +286,31 @@ func _advance_fleet(delta: float) -> void:
 		for vehicle in fleet_sims:
 			if vehicle == sim or _is_docked_child(vehicle.vehicle_name):
 				continue
+			var orbit_points := PackedVector2Array()
+			if not vehicle.crashed and not vehicle.landed:
+				var orbit_body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+				var orbit_relative_position: Vector2 = orbit_body.get("relative_position", Vector2.ZERO)
+				var orbit_relative_velocity: Vector2 = vehicle.velocity - Vector2(orbit_body.get("velocity", Vector2.ZERO))
+				var orbit_mu := FlightComputer.G * float(orbit_body.get("mass", 0.0))
+				var orbit_state := FlightComputer.orbital_state(orbit_relative_position, orbit_relative_velocity, orbit_mu)
+				if bool(orbit_state.get("bound", false)) and float(orbit_state.get("periapsis", 0.0)) > float(orbit_body.get("radius", 0.0)):
+					var semi_major := -orbit_mu / (2.0 * (orbit_relative_velocity.length_squared() * 0.5 - orbit_mu / orbit_relative_position.length()))
+					var eccentricity := float(orbit_state.get("eccentricity", 0.0))
+					var angular_momentum := orbit_relative_position.cross(orbit_relative_velocity)
+					var eccentricity_vector := Vector2(orbit_relative_velocity.y * angular_momentum, -orbit_relative_velocity.x * angular_momentum) / orbit_mu - orbit_relative_position.normalized()
+					var direction := eccentricity_vector.angle() if eccentricity > 0.0001 else orbit_relative_position.angle()
+					var host_position := vehicle.rocket_position - orbit_relative_position
+					for point_index in range(97):
+						var theta := TAU * float(point_index) / 96.0
+						var orbit_radius := semi_major * (1.0 - eccentricity * eccentricity) / (1.0 + eccentricity * cos(theta))
+						orbit_points.append(host_position + Vector2(cos(theta + direction), sin(theta + direction)) * orbit_radius)
 			sim.fleet_visuals.append({
 				"name": vehicle.vehicle_name,
 				"position": vehicle.rocket_position,
 				"rotation": vehicle.rotation_angle,
 				"stage_index": vehicle.stage_index,
 				"crashed": vehicle.crashed,
+				"orbit_points": orbit_points,
 				"design": {"name": vehicle.vehicle_name, "payload_mass": vehicle.payload_mass, "payload_type": vehicle.payload_type, "payload_visual": vehicle.payload_visual.duplicate(true), "stages": vehicle.rocket_stages.duplicate(true)}
 			})
 		_scan_active_telescopes()
@@ -309,6 +329,10 @@ func _resolve_spacecraft_collisions(positions_before: Dictionary) -> void:
 			if second.landed or not positions_before.has(second) or (first.crashed and second.crashed):
 				continue
 			if _are_docked(first.vehicle_name, second.vehicle_name):
+				continue
+			if first.separation_grace_until > sim.sim_time and second.separation_parent_name == first.vehicle_name:
+				continue
+			if second.separation_grace_until > sim.sim_time and first.separation_parent_name == second.vehicle_name:
 				continue
 			var first_radius := RocketDesign.vehicle_collision_radius_m({"stages": first.rocket_stages}, first.stage_index)
 			var second_radius := RocketDesign.vehicle_collision_radius_m({"stages": second.rocket_stages}, second.stage_index)
@@ -749,7 +773,20 @@ func _fast_forward_simulation(seconds: float) -> bool:
 		for second_index in range(first_index + 1, fleet_sims.size()):
 			if fleet_sims[first_index].rocket_position.distance_to(fleet_sims[second_index].rocket_position) < 20000000.0:
 				return false
-	var target_time := sim.sim_time + seconds
+	var start_time := sim.sim_time
+	var target_time := start_time + seconds
+	var scan_samples := mini(25000, maxi(1, ceili(seconds / 7200.0)))
+	var scan_step := seconds / float(scan_samples)
+	for sample_index in range(1, scan_samples + 1):
+		var sample_time := start_time + scan_step * float(sample_index)
+		sim.sim_time = sample_time
+		for vehicle in fleet_sims:
+			if not vehicle.telescope_active or vehicle.crashed or vehicle.landed or not orbit_data.has(vehicle):
+				continue
+			vehicle.passive_orbit_data = orbit_data[vehicle]
+			vehicle.passive_orbit_active = true
+			_advance_passive_vehicle(vehicle, sample_time)
+		_scan_active_telescopes()
 	fleet_time_backlog = 0.0
 	for vehicle in fleet_sims:
 		vehicle.simulation_time_backlog = 0.0
@@ -1757,6 +1794,7 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 	elif position_components is Array and position_components.size() >= 2:
 		debris._set_rocket_position_components(float(position_components[0]), float(position_components[1]))
 	debris.velocity = stage_data.get("velocity", Vector2.ZERO)
+	debris.separation_parent_name = str(stage_data.get("parent_vehicle_name", ""))
 	debris.rotation_angle = float(stage_data.get("rotation_angle", 0.0))
 	debris.sim_time = float(stage_data.get("sim_time", sim.sim_time if is_instance_valid(sim) else 0.0))
 	debris.launch_time = float(stage_data.get("launch_time", debris.sim_time))
