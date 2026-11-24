@@ -13,7 +13,7 @@ static func _polygon(canvas: CanvasItem, origin: Vector2, points: Array[Vector2]
 static func _line(canvas: CanvasItem, origin: Vector2, a: Vector2, b: Vector2, rotation: float, scale: float, color: Color, width: float = 1.0) -> void:
 	canvas.draw_line(_point(origin, a, rotation, scale), _point(origin, b, rotation, scale), color, maxf(0.7, width * scale), true)
 
-static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2, rotation: float, scale: float, active_stage_index: int = 0, throttle: float = 0.0, engine_enabled: bool = false, show_stage_labels: bool = false) -> void:
+static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2, rotation: float, scale: float, active_stage_index: int = 0, throttle: float = 0.0, engine_enabled: bool = false, show_stage_labels: bool = false, fairing_jettisoned: bool = false) -> void:
 	var stages: Array = design.get("stages", [])
 	if stages.is_empty():
 		return
@@ -24,7 +24,7 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		return
 	var stack_mass := 0.0
 	for stage in visible_stages:
-		stack_mass += float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
+		stack_mass += RocketDesign.stage_total_dry_mass(stage) + RocketDesign.stage_total_fuel_capacity(stage)
 	var heights: Array[float] = []
 	for stage in visible_stages:
 		var mass := float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
@@ -54,6 +54,26 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 	for height in heights:
 		total_height += height
 	var y := -total_height * 0.5
+	var payload_components: Array = design.get("payload_components", [])
+	if not fairing_jettisoned:
+		for component_entry in payload_components:
+			if not component_entry is Dictionary:
+				continue
+			var component := RocketDesign.payload_component_definition_for_entry(component_entry)
+			if str(component.get("component_type", "")) != "fairing":
+				continue
+			var fairing_width := payload_width * float(component.get("visual_width_factor", 1.8))
+			var fairing_height := payload_height * float(component.get("visual_height_factor", 1.25))
+			var fairing_top := y - (fairing_height - payload_height) * 0.5
+			var fairing_bottom := y + payload_height
+			var fairing_color := Color(0.85, 0.88, 0.92)
+			var fairing_color_data: Variant = component.get("visual_color_rgb", [])
+			if fairing_color_data is Array and fairing_color_data.size() == 3:
+				fairing_color = Color(float(fairing_color_data[0]), float(fairing_color_data[1]), float(fairing_color_data[2]))
+			_polygon(canvas, origin, [Vector2(-fairing_width * 0.5, fairing_top + fairing_height * 0.24), Vector2(0.0, fairing_top), Vector2(-payload_width * 0.48, fairing_bottom), Vector2(-fairing_width * 0.5, fairing_bottom)], rotation, scale, fairing_color)
+			_polygon(canvas, origin, [Vector2(fairing_width * 0.5, fairing_top + fairing_height * 0.24), Vector2(0.0, fairing_top), Vector2(payload_width * 0.48, fairing_bottom), Vector2(fairing_width * 0.5, fairing_bottom)], rotation, scale, fairing_color)
+			_line(canvas, origin, Vector2(-fairing_width * 0.5, fairing_top + fairing_height * 0.24), Vector2(0.0, fairing_top), rotation, scale, Color(0.3, 0.42, 0.55), 1.0)
+			_line(canvas, origin, Vector2(fairing_width * 0.5, fairing_top + fairing_height * 0.24), Vector2(0.0, fairing_top), rotation, scale, Color(0.3, 0.42, 0.55), 1.0)
 	if payload_type == "crew":
 		_polygon(canvas, origin, [Vector2(0.0, y), Vector2(-payload_width, y + payload_height), Vector2(payload_width, y + payload_height)], rotation, scale, payload_color)
 		_polygon(canvas, origin, [Vector2(0.0, y + 2.0), Vector2(-payload_width * 0.65, y + payload_height * 0.82), Vector2(payload_width * 0.65, y + payload_height * 0.82)], rotation, scale, Color(0.36, 0.65, 0.82))
@@ -68,6 +88,42 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 	else:
 		_polygon(canvas, origin, [Vector2(0.0, y), Vector2(-payload_width, y + payload_height), Vector2(payload_width, y + payload_height)], rotation, scale, payload_color)
 		_line(canvas, origin, Vector2(-payload_width * 0.65, y + payload_height * 0.7), Vector2(payload_width * 0.65, y + payload_height * 0.7), rotation, scale, Color(0.24, 0.55, 0.75), 1.2)
+	for component_index in range(payload_components.size()):
+		var component_entry: Variant = payload_components[component_index]
+		if not component_entry is Dictionary:
+			continue
+		var component := RocketDesign.payload_component_definition_for_entry(component_entry)
+		var component_type := str(component.get("component_type", ""))
+		var component_color := Color(0.7, 0.78, 0.86)
+		var component_color_data: Variant = component.get("visual_color_rgb", [])
+		if component_color_data is Array and component_color_data.size() == 3:
+			component_color = Color(float(component_color_data[0]), float(component_color_data[1]), float(component_color_data[2]))
+		var component_width := payload_width * float(component.get("visual_width_factor", 1.0))
+		var component_height := payload_height * float(component.get("visual_height_factor", 1.0))
+		match component_type:
+			"solar_panels":
+				var panel_height := maxf(2.0, component_height * 0.3)
+				var panel_y := y + payload_height * 0.42 + float(component_index) * 1.5
+				var panel_half_width := component_width * 0.5
+				_polygon(canvas, origin, [Vector2(-payload_width * 0.5 - panel_half_width, panel_y), Vector2(-payload_width * 0.5, panel_y), Vector2(-payload_width * 0.5, panel_y + panel_height), Vector2(-payload_width * 0.5 - panel_half_width, panel_y + panel_height)], rotation, scale, component_color)
+				_polygon(canvas, origin, [Vector2(payload_width * 0.5, panel_y), Vector2(payload_width * 0.5 + panel_half_width, panel_y), Vector2(payload_width * 0.5 + panel_half_width, panel_y + panel_height), Vector2(payload_width * 0.5, panel_y + panel_height)], rotation, scale, component_color)
+				for panel_line in range(1, 4):
+					var line_x := -payload_width * 0.5 - panel_half_width + panel_half_width * float(panel_line) / 4.0
+					_line(canvas, origin, Vector2(line_x, panel_y), Vector2(line_x, panel_y + panel_height), rotation, scale, Color(0.55, 0.72, 0.9), 0.65)
+					_line(canvas, origin, Vector2(-line_x, panel_y), Vector2(-line_x, panel_y + panel_height), rotation, scale, Color(0.55, 0.72, 0.9), 0.65)
+			"antenna":
+				var mast_x := payload_width * 0.38
+				var mast_top := y - component_height * 0.45
+				_line(canvas, origin, Vector2(mast_x, y + 2.0), Vector2(mast_x, mast_top), rotation, scale, component_color, 1.2)
+				_polygon(canvas, origin, [Vector2(mast_x - component_width * 0.32, mast_top + component_height * 0.18), Vector2(mast_x, mast_top), Vector2(mast_x + component_width * 0.32, mast_top + component_height * 0.18)], rotation, scale, component_color)
+			"docking_port":
+				var port_width := payload_width * 0.72
+				_polygon(canvas, origin, [Vector2(-port_width * 0.5, y + payload_height - 3.0), Vector2(port_width * 0.5, y + payload_height - 3.0), Vector2(port_width * 0.42, y + payload_height + component_height * 0.28), Vector2(-port_width * 0.42, y + payload_height + component_height * 0.28)], rotation, scale, component_color)
+				_polygon(canvas, origin, [Vector2(-port_width * 0.28, y + payload_height - 1.5), Vector2(port_width * 0.28, y + payload_height - 1.5), Vector2(port_width * 0.23, y + payload_height + component_height * 0.16), Vector2(-port_width * 0.23, y + payload_height + component_height * 0.16)], rotation, scale, Color(0.12, 0.18, 0.24))
+			"instrument":
+				var instrument_width := component_width * 0.42
+				var instrument_x := payload_width * 0.58
+				_polygon(canvas, origin, [Vector2(instrument_x, y + payload_height * 0.3), Vector2(instrument_x + instrument_width, y + payload_height * 0.3), Vector2(instrument_x + instrument_width, y + payload_height * 0.72), Vector2(instrument_x, y + payload_height * 0.72)], rotation, scale, component_color)
 	y += payload_height
 	for i in range(visible_stages.size() - 1, -1, -1):
 		var stage: Dictionary = visible_stages[i]
