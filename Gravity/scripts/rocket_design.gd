@@ -207,6 +207,21 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		var flow := float(stage.get("flow", 0.0))
 		var engine_value: Variant = stage.get("engine_count", 0)
 		var engines := int(engine_value) if engine_value is int or engine_value is float else 0
+		for visual_key in ["visual_length_factor", "visual_diameter_factor"]:
+			if stage.has(visual_key):
+				var visual_value: Variant = stage[visual_key]
+				if not (visual_value is int or visual_value is float) or not is_finite(float(visual_value)) or float(visual_value) <= 0.0:
+					errors.append("Stage %d %s must be a positive finite number." % [i + 1, visual_key])
+		if stage.has("visual_color_rgb"):
+			var visual_color: Variant = stage["visual_color_rgb"]
+			var valid_color: bool = visual_color is Array and visual_color.size() == 3
+			if valid_color:
+				for component in visual_color:
+					if not (component is int or component is float) or not is_finite(float(component)) or float(component) < 0.0 or float(component) > 1.0:
+						valid_color = false
+						break
+			if not valid_color:
+				errors.append("Stage %d body colour must contain three finite RGB values between zero and one." % (i + 1))
 		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0:
 			errors.append("Stage %d mass, propellant, thrust and flow values must all be positive." % (i + 1))
 		if not (engine_value is int or engine_value is float) or float(engine_value) != float(engines) or engines < 1:

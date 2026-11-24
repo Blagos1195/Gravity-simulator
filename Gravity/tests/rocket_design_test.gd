@@ -66,6 +66,20 @@ func _initialize() -> void:
 		}]
 	}
 	assert(RocketDesign.validation_errors(single_stage_design).is_empty())
+	var custom_visual_design := design.duplicate(true)
+	custom_visual_design["stages"][0]["visual_length_factor"] = 1.4
+	custom_visual_design["stages"][0]["visual_diameter_factor"] = 0.8
+	custom_visual_design["stages"][0]["visual_color_rgb"] = [0.2, 0.4, 0.6]
+	assert(RocketDesign.validation_errors(custom_visual_design).is_empty())
+	var invalid_visual_scale := custom_visual_design.duplicate(true)
+	invalid_visual_scale["stages"][0]["visual_length_factor"] = -1.0
+	assert(not RocketDesign.validation_errors(invalid_visual_scale).is_empty())
+	var invalid_visual_color := custom_visual_design.duplicate(true)
+	invalid_visual_color["stages"][0]["visual_color_rgb"] = [0.2, 1.4, 0.6]
+	assert(not RocketDesign.validation_errors(invalid_visual_color).is_empty())
+	var malformed_visual_color := custom_visual_design.duplicate(true)
+	malformed_visual_color["stages"][0]["visual_color_rgb"] = [0.2, "blue", 0.6]
+	assert(not RocketDesign.validation_errors(malformed_visual_color).is_empty())
 	var single_stage_sim := SimulationView.new()
 	single_stage_sim.set_rocket_design(single_stage_design)
 	assert(single_stage_sim.rocket_stages.size() == 1)
