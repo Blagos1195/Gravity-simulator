@@ -119,3 +119,8 @@ Satellite payload definitions may specify `satellite_role`, `revenue_per_day`, `
 ## Mission contracts
 
 The top-level `missions` array defines career contracts. Each mission needs a unique `id`, `title`, `description`, a supported `condition`, and a non-negative `reward`. Supported conditions are `orbit_body`, `visit_body`, `discover_body`, `discover_count`, and `operational_satellites`. Body conditions use the exact body name from the planetary catalog; count conditions use a positive whole-number `count`. Mods can add contracts through `missions_add` without replacing the built-in list.
+
+
+## Strap-on booster modules
+
+Add booster modules to `rocket.builder_options.booster_options`. Each module needs a unique `id` and `label`, plus per-booster `dry_mass`, `fuel_capacity`, `thrust`, `vacuum_thrust`, and `flow`. `pair_count` must be `2` so the renderer can place a symmetric pair. Optional `visual_width_factor`, `visual_length_factor`, and `visual_color_rgb` control the side-booster appearance. A stage can carry up to two booster-pair modules. Their mass, propellant, thrust and flow are included in vehicle performance and flight physics, and the boosters separate with their attached stage.
