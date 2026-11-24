@@ -2099,8 +2099,8 @@ func _build_flight_hud() -> void:
 		hud_root.queue_free()
 	if is_instance_valid(sim):
 		sim.visible = true
-		sim.set_process(true)
-		sim.set_physics_process(true)
+		sim.set_process(false)
+		sim.set_physics_process(false)
 	hud_root = Control.new()
 	hud_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud_root.mouse_filter = Control.MOUSE_FILTER_PASS
