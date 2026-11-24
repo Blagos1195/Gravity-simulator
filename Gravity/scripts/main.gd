@@ -233,26 +233,29 @@ func _vehicle_in_stable_orbit(vehicle: SimulationView) -> bool:
 func _update_economy() -> void:
 	if not is_instance_valid(sim):
 		return
-	var elapsed_seconds := maxf(0.0, sim.sim_time - economy_last_sim_time)
-	economy_last_sim_time = sim.sim_time
+	var previous_time := economy_last_sim_time
+	var current_time := sim.sim_time
+	var elapsed_seconds := maxf(0.0, current_time - previous_time)
+	economy_last_sim_time = current_time
 	if not career_enabled or elapsed_seconds <= 0.0:
 		_refresh_economy_display()
 		return
-	var elapsed_days := elapsed_seconds / 86400.0
 	for vehicle in fleet_sims:
 		var profile: Dictionary = vehicle.payload_visual
 		var role := str(profile.get("satellite_role", ""))
 		var lifetime_days := float(profile.get("operational_lifetime_days", 0.0))
 		if role.is_empty() or lifetime_days <= 0.0 or not _vehicle_in_stable_orbit(vehicle):
 			continue
-		var age_days := maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0)
-		if age_days >= lifetime_days:
+		var age_at_start := (previous_time - vehicle.launch_time) / 86400.0
+		var age_at_end := (current_time - vehicle.launch_time) / 86400.0
+		var active_days := maxf(0.0, minf(age_at_end, lifetime_days) - maxf(age_at_start, 0.0))
+		if active_days <= 0.0:
 			continue
 		var revenue := maxf(0.0, float(profile.get("revenue_per_day", 0.0)))
 		var operating_cost := maxf(0.0, float(profile.get("operating_cost_per_day", 0.0)))
-		funds += (revenue - operating_cost) * elapsed_days
-		total_revenue_earned += revenue * elapsed_days
-		total_operating_costs += operating_cost * elapsed_days
+		funds += (revenue - operating_cost) * active_days
+		total_revenue_earned += revenue * active_days
+		total_operating_costs += operating_cost * active_days
 	_refresh_economy_display()
 
 func _refresh_economy_display() -> void:
