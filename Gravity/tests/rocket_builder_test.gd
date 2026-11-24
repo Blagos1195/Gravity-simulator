@@ -14,6 +14,8 @@ func _initialize() -> void:
 	assert(builder._parts_list.get_child_count() >= 14)
 	assert(builder._stage_list.get_child_count() == design.stages.size())
 	builder._payload_mass_input.value = 900.0
+	if not is_equal_approx(float(builder.design.payload_mass), 900.0):
+		builder._payload_mass_input.value_changed.emit(900.0)
 	assert(is_equal_approx(float(builder.design.payload_mass), 900.0))
 	assert(str(builder.design.payload_type) == "custom")
 	builder._add_component("medium_tank", "stack", true, 1, -1)
