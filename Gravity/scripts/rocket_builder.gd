@@ -942,12 +942,28 @@ func _show_preset_dialog() -> void:
 	var presets := RocketDesign.preset_options()
 	if presets.is_empty():
 		return
-	var dialog := ConfirmationDialog.new()
-	dialog.title = "LOAD VEHICLE PRESET"
-	dialog.dialog_text = "Presets are optional starting points. Every part can be changed after loading."
-	dialog.min_size = Vector2i(480, 300)
+	var window := Window.new()
+	window.title = "LOAD VEHICLE PRESET"
+	window.size = Vector2i(540, 300)
+	window.min_size = Vector2i(440, 260)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	window.add_child(margin)
 	var content := VBoxContainer.new()
-	dialog.add_child(content)
+	content.add_theme_constant_override("separation", 12)
+	margin.add_child(content)
+	var intro := Label.new()
+	intro.text = "Presets are optional starting points. Every part can be changed after loading."
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(intro)
 	var selector := OptionButton.new()
 	selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for preset in presets:
@@ -955,6 +971,7 @@ func _show_preset_dialog() -> void:
 		selector.set_item_metadata(selector.item_count - 1, str(preset.get("id", "")))
 	content.add_child(selector)
 	var description := Label.new()
+	description.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(description)
 	var update_description := func(index: int) -> void:
@@ -962,8 +979,16 @@ func _show_preset_dialog() -> void:
 	selector.item_selected.connect(update_description)
 	selector.select(0)
 	update_description.call(0)
-	dialog.get_ok_button().text = "LOAD PRESET"
-	dialog.confirmed.connect(func():
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_END
+	content.add_child(buttons)
+	var cancel_button := Button.new()
+	cancel_button.text = "CANCEL"
+	cancel_button.pressed.connect(window.queue_free)
+	buttons.add_child(cancel_button)
+	var load_button := Button.new()
+	load_button.text = "LOAD PRESET"
+	load_button.pressed.connect(func():
 		var preset_design := RocketDesign.create_preset(str(selector.get_selected_metadata()))
 		if preset_design.is_empty():
 			return
@@ -983,12 +1008,10 @@ func _show_preset_dialog() -> void:
 		selected_stage_index = 0
 		selected_component_index = -1
 		_changed()
-		dialog.queue_free()
+		window.queue_free()
 	)
-	dialog.canceled.connect(func(): dialog.queue_free())
-	dialog.close_requested.connect(func(): dialog.queue_free())
-	add_child(dialog)
-	dialog.popup_centered()
+	buttons.add_child(load_button)
+	window.popup_centered()
 
 func _finish() -> void:
 	_emit_design()
