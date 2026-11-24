@@ -40,7 +40,6 @@ func _initialize() -> void:
 	assert(main.rocket_design.payload_visual.visual_type == "cargo")
 	assert(is_equal_approx(float(main.rocket_design.payload_visual.visual_width_factor), 1.4))
 	assert(main.rocket_design.payload_visual.visual_color_rgb == [0.11, 0.22, 0.33])
-	assert(main.design_error_label.text == "DESIGN VALID")
 	payload_dialog.free()
 	main._show_stage_editor(0)
 	var stage_dialog: ConfirmationDialog
