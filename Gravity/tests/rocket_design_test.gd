@@ -155,7 +155,7 @@ func _initialize() -> void:
 			"builder_options": {
 				"engine_counts_add": [5],
 				"payloads_add": [{"id": "test_payload", "label": "Test payload · 2 t", "mass": 2000.0}],
-				"tank_scales_add": [{"label": "Test tank", "scale": 1.5}]
+				"tank_scales_add": [{"label": "Test tank", "scale": 2.5}]
 			}
 		}
 	}
@@ -176,7 +176,7 @@ func _initialize() -> void:
 	assert(has_test_payload)
 	var has_test_tank_scale := false
 	for tank_option in RocketDesign.tank_scale_options():
-		if is_equal_approx(float(tank_option.scale), 1.5):
+		if is_equal_approx(float(tank_option.scale), 2.5):
 			has_test_tank_scale = true
 	assert(has_test_tank_scale)
 	var modded_stage := RocketDesign.configure_stage("explorer_first_stage", 5, 1.5)
