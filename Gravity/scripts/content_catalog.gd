@@ -388,7 +388,7 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		var booster_error := _numeric_fields_error(booster, ["dry_mass", "fuel_capacity", "thrust", "vacuum_thrust", "flow", "pair_count"], "rocket booster %s" % booster_id)
 		if not booster_error.is_empty():
 			return booster_error
-		if float(booster.dry_mass) <= 0.0 or float(booster.fuel_capacity) <= 0.0 or float(booster.thrust) <= 0.0 or float(booster.vacuum_thrust) < float(booster.thrust) or float(booster.flow) <= 0.0 or int(booster.pair_count) < 1 or float(booster.pair_count) != float(int(booster.pair_count)):
+		if float(booster.dry_mass) <= 0.0 or float(booster.fuel_capacity) <= 0.0 or float(booster.thrust) <= 0.0 or float(booster.vacuum_thrust) < float(booster.thrust) or float(booster.flow) <= 0.0 or int(booster.pair_count) != 2 or float(booster.pair_count) != float(int(booster.pair_count)):
 			return "Rocket booster %s has invalid physical values." % booster_id
 		for visual_key in ["visual_width_factor", "visual_length_factor"]:
 			if booster.has(visual_key) and (not (booster[visual_key] is int or booster[visual_key] is float) or float(booster[visual_key]) <= 0.0):
