@@ -231,6 +231,7 @@ func _advance_fleet(delta: float) -> void:
 				"position": vehicle.rocket_position,
 				"rotation": vehicle.rotation_angle,
 				"stage_index": vehicle.stage_index,
+				"crashed": vehicle.crashed,
 				"design": {"name": vehicle.vehicle_name, "payload_mass": vehicle.payload_mass, "payload_type": vehicle.payload_type, "payload_visual": vehicle.payload_visual.duplicate(true), "stages": vehicle.rocket_stages.duplicate(true)}
 			})
 		_update_discovery_state()
@@ -269,6 +270,13 @@ func _resolve_spacecraft_collisions(positions_before: Dictionary) -> void:
 			second._set_rocket_position_components(second_contact.x, second_contact.y)
 			first.crashed = true
 			second.crashed = true
+			first.passive_orbit_active = false
+			second.passive_orbit_active = false
+			first.passive_orbit_data.clear()
+			second.passive_orbit_data.clear()
+			if is_instance_valid(sim):
+				var impact_speed := first.velocity.distance_to(second.velocity)
+				sim.spawn_collision_effect(midpoint, clampf(impact_speed / 100.0, 0.7, 2.2))
 			first.thrust_key_down = false
 			second.thrust_key_down = false
 			first.autopilot_enabled = false
