@@ -233,7 +233,7 @@ func _build_interface() -> void:
 	transient = true
 	exclusive = true
 	var compact_layout := size.x < 1000.0 or size.y < 600.0
-	var root_parent: Control = self
+	var root_parent: Node = self
 	if compact_layout:
 		var outer_scroll := ScrollContainer.new()
 		outer_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
