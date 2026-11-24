@@ -22,6 +22,8 @@ class AssemblyCanvas extends Control:
 	signal component_selected(index: int)
 
 	var stage: Dictionary = {}
+	var design: Dictionary = {}
+	var selected_stage_index := 0
 	var selected_index := -1
 	var zoom := 1.0
 	var _component_rects: Array[Dictionary] = []
@@ -97,34 +99,50 @@ class AssemblyCanvas extends Control:
 			draw_line(Vector2(0.0, py), Vector2(size.x, py), Color(0.12, 0.17, 0.24, 0.5), 1.0)
 		var center_x := size.x * 0.5
 		draw_line(Vector2(center_x, 12.0), Vector2(center_x, size.y - 12.0), Color(0.3, 0.58, 0.8, 0.55), 1.2)
-		var components: Array = stage.get("components", [])
-		var axial: Array[Dictionary] = []
+		var stages: Array = design.get("stages", [])
+		if stages.is_empty():
+			draw_string(ThemeDB.fallback_font, Vector2(20.0, size.y * 0.5), "DRAG PARTS FROM THE CATALOGUE TO BEGIN", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.72, 0.86))
+			return
 		var total_length := 0.0
+		var max_radius := 0.5
+		for stage_data in stages:
+			for component in stage_data.get("components", []):
+				if str(component.get("attachment", "stack")) == "radial":
+					continue
+				total_length += maxf(0.5, float(component.get("length_m", 1.0)))
+				max_radius = maxf(max_radius, float(component.get("collision_radius_m", 1.0)))
+		var gap := 16.0 * zoom
+		var scale := minf(zoom * 5.0, (size.y - 72.0 - gap * float(maxi(0, stages.size() - 1))) / maxf(1.0, total_length))
+		var total_height := total_length * scale + gap * float(maxi(0, stages.size() - 1))
+		var current_y := (size.y - total_height) * 0.5
+		var width_scale := minf(15.0 * zoom, maxf(4.0, (size.x * 0.22) / max_radius))
+		for stage_index in range(stages.size() - 1, -1, -1):
+			var stage_data: Dictionary = stages[stage_index]
+			draw_string(ThemeDB.fallback_font, Vector2(12.0, current_y + 14.0), "STAGE %02d%s" % [stage_index + 1, "  EDITING" if stage_index == selected_stage_index else ""], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.48, 0.82, 1.0) if stage_index == selected_stage_index else Color(0.48, 0.58, 0.68))
+			current_y = _draw_stage(stage_data, stage_index, center_x, current_y, scale, width_scale, max_radius, stage_index == selected_stage_index)
+			if stage_index > 0:
+				draw_line(Vector2(center_x - max_radius * width_scale - 24.0, current_y + gap * 0.5), Vector2(center_x + max_radius * width_scale + 24.0, current_y + gap * 0.5), Color(0.85, 0.55, 0.28, 0.75), 1.5)
+				current_y += gap
+		draw_string(ThemeDB.fallback_font, Vector2(12.0, 22.0), "PAYLOAD END", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.5, 0.72, 0.9))
+		draw_string(ThemeDB.fallback_font, Vector2(12.0, size.y - 12.0), "ENGINE END", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.5, 0.72, 0.9))
+
+	func _draw_stage(stage_data: Dictionary, stage_index: int, center_x: float, start_y: float, scale: float, width_scale: float, max_radius: float, editable: bool) -> float:
+		var components: Array = stage_data.get("components", [])
+		var current_y := start_y
+		var axial_centers: Dictionary = {}
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
 			if str(component.get("attachment", "stack")) == "radial":
 				continue
-			axial.append({"index": index, "component": component})
-			total_length += maxf(0.5, float(component.get("length_m", 1.0)))
-		var scale := minf(zoom * 5.0, (size.y - 72.0) / maxf(1.0, total_length))
-		var total_height := total_length * scale
-		var current_y := (size.y - total_height) * 0.5
-		var max_radius := 0.5
-		var axial_centers: Dictionary = {}
-		for item in axial:
-			max_radius = maxf(max_radius, float(item.component.get("collision_radius_m", 1.0)))
-		var width_scale := minf(15.0 * zoom, maxf(4.0, (size.x * 0.22) / max_radius))
-		for item in axial:
-			var index := int(item.index)
-			var component: Dictionary = item.component
 			var height := maxf(12.0, float(component.get("length_m", 1.0)) * scale)
 			var half_width := clampf(float(component.get("collision_radius_m", 1.0)) * width_scale, 9.0, size.x * 0.2)
 			var rect := Rect2(Vector2(center_x - half_width, current_y), Vector2(half_width * 2.0, height))
-			_draw_part(rect, component, index == selected_index)
-			_component_rects.append({"index": index, "rect": rect})
+			_draw_part(rect, component, editable and index == selected_index, 1.0 if editable else 0.34)
 			axial_centers[index] = rect.get_center().y
-			draw_circle(Vector2(center_x, rect.position.y), 4.0, Color(0.35, 0.78, 1.0))
-			draw_circle(Vector2(center_x, rect.end.y), 4.0, Color(0.35, 0.78, 1.0))
+			if editable:
+				_component_rects.append({"index": index, "rect": rect})
+				draw_circle(Vector2(center_x, rect.position.y), 4.0, Color(0.35, 0.78, 1.0))
+				draw_circle(Vector2(center_x, rect.end.y), 4.0, Color(0.35, 0.78, 1.0))
 			current_y += height
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
@@ -132,21 +150,21 @@ class AssemblyCanvas extends Control:
 				continue
 			var height := maxf(16.0, float(component.get("length_m", 6.0)) * scale)
 			var width := maxf(14.0, float(component.get("collision_radius_m", 1.0)) * width_scale * 0.85)
+			var mount_index := int(component.get("mount_index", -1))
+			var y := float(axial_centers.get(mount_index, start_y + (current_y - start_y) * 0.5)) - height * 0.5
+			var offset := max_radius * width_scale + width * 0.9 + 12.0
 			var side := int(component.get("side", 1))
 			var mirrored := bool(component.get("mirror", true))
-			var mount_index := int(component.get("mount_index", -1))
-			var y := float(axial_centers.get(mount_index, size.y * 0.5)) - height * 0.5
-			var offset := max_radius * width_scale + width * 0.9 + 12.0
 			var sides: Array = [-1, 1] if mirrored else [side]
 			for direction in sides:
 				var rect := Rect2(Vector2(center_x + float(direction) * offset - width * 0.5, y), Vector2(width, height))
-				_draw_part(rect, component, index == selected_index)
-				_component_rects.append({"index": index, "rect": rect})
-				draw_line(Vector2(center_x + float(direction) * max_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84), 2.0)
-		draw_string(ThemeDB.fallback_font, Vector2(12.0, 22.0), "PAYLOAD END", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.5, 0.72, 0.9))
-		draw_string(ThemeDB.fallback_font, Vector2(12.0, size.y - 12.0), "ENGINE END", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.5, 0.72, 0.9))
+				_draw_part(rect, component, editable and index == selected_index, 1.0 if editable else 0.34)
+				if editable:
+					_component_rects.append({"index": index, "rect": rect})
+				draw_line(Vector2(center_x + float(direction) * max_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
+		return current_y
 
-	func _draw_part(rect: Rect2, component: Dictionary, selected: bool) -> void:
+	func _draw_part(rect: Rect2, component: Dictionary, selected: bool, opacity: float = 1.0) -> void:
 		var color := Color(0.42, 0.62, 0.76)
 		var rgb: Variant = component.get("color_rgb", component.get("visual_color_rgb", []))
 		if rgb is Array and rgb.size() == 3:
@@ -162,9 +180,9 @@ class AssemblyCanvas extends Control:
 				polygon = PackedVector2Array([rect.position + Vector2(rect.size.x * 0.5, 0.0), rect.position + Vector2(rect.size.x, rect.size.y * 0.5), rect.position + Vector2(rect.size.x * 0.8, rect.size.y), rect.position + Vector2(rect.size.x * 0.2, rect.size.y), rect.position + Vector2(0.0, rect.size.y * 0.5)])
 			_:
 				polygon = PackedVector2Array([rect.position, rect.position + Vector2(rect.size.x, 0.0), rect.end, rect.position + Vector2(0.0, rect.size.y)])
-		draw_colored_polygon(polygon, color)
-		draw_rect(rect, Color(0.65, 0.84, 1.0) if selected else Color(0.12, 0.18, 0.25), false, 2.0 if selected else 1.0)
-		draw_string(ThemeDB.fallback_font, rect.position + Vector2(4.0, minf(16.0, rect.size.y - 2.0)), str(component.get("label", component.get("id", "PART"))), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 8.0, 10, Color(0.04, 0.06, 0.09))
+		draw_colored_polygon(polygon, Color(color.r, color.g, color.b, opacity))
+		draw_rect(rect, Color(0.65, 0.84, 1.0, opacity) if selected else Color(0.12, 0.18, 0.25, opacity), false, 2.0 if selected else 1.0)
+		draw_string(ThemeDB.fallback_font, rect.position + Vector2(4.0, minf(16.0, rect.size.y - 2.0)), str(component.get("label", component.get("id", "PART"))), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 8.0, 10, Color(0.04, 0.06, 0.09, opacity))
 
 var design: Dictionary = {}
 var selected_stage_index := 0
@@ -475,6 +493,8 @@ func _refresh() -> void:
 	if not is_instance_valid(_canvas):
 		return
 	_canvas.stage = _current_stage()
+	_canvas.design = design
+	_canvas.selected_stage_index = selected_stage_index
 	_canvas.selected_index = selected_component_index
 	_canvas.set_meta("mirror_enabled", mirror_enabled)
 	_canvas.queue_redraw()
@@ -829,6 +849,8 @@ func _changed(refresh_inspector: bool = true) -> void:
 		_refresh()
 	else:
 		_canvas.stage = _current_stage()
+		_canvas.design = design
+		_canvas.selected_stage_index = selected_stage_index
 		_canvas.queue_redraw()
 		_refresh_stats()
 	_emit_design()
