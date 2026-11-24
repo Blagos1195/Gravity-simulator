@@ -495,6 +495,13 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 		return
 	var components: Array = updated.get("components", [])
 	if attachment == "stack" and insert_index >= 0 and insert_index < components.size() - 1:
+		for index in range(components.size() - 1):
+			var existing_component: Dictionary = components[index]
+			if str(existing_component.get("attachment", "stack")) == "radial":
+				var mount_index := int(existing_component.get("mount_index", -1))
+				if mount_index >= insert_index:
+					existing_component["mount_index"] = mount_index + 1
+					components[index] = existing_component
 		var added: Variant = components.pop_back()
 		components.insert(insert_index, added)
 		updated = RocketAssembly.compile_stage(updated, components)
@@ -508,7 +515,20 @@ func _on_component_moved(from_index: int, to_index: int) -> void:
 		return
 	_push_undo()
 	var item: Variant = components.pop_at(from_index)
-	components.insert(clampi(to_index, 0, components.size()), item)
+	var destination := clampi(to_index, 0, components.size())
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		if str(component.get("attachment", "stack")) != "radial":
+			continue
+		var mount_index := int(component.get("mount_index", -1))
+		if mount_index == from_index:
+			component["mount_index"] = destination
+		elif from_index < destination and mount_index > from_index and mount_index <= destination:
+			component["mount_index"] = mount_index - 1
+		elif destination < from_index and mount_index >= destination and mount_index < from_index:
+			component["mount_index"] = mount_index + 1
+		components[index] = component
+	components.insert(destination, item)
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(_current_stage(), components)
 	selected_component_index = to_index
 	_changed()
@@ -610,11 +630,27 @@ func _update_component_property(key: String, value: Variant) -> void:
 
 func _remove_selected_component() -> void:
 	var stage := _current_stage()
-	var updated := RocketAssembly.remove_component(stage, selected_component_index)
-	if updated.is_empty():
+	var components: Array = stage.get("components", []).duplicate(true)
+	if selected_component_index < 0 or selected_component_index >= components.size():
 		return
 	_push_undo()
-	design["stages"][selected_stage_index] = updated
+	components.remove_at(selected_component_index)
+	var axial_indices: Array[int] = []
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		if str(component.get("attachment", "stack")) != "radial":
+			axial_indices.append(index)
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		if str(component.get("attachment", "stack")) != "radial":
+			continue
+		var mount_index := int(component.get("mount_index", -1))
+		if mount_index > selected_component_index:
+			component["mount_index"] = mount_index - 1
+		elif mount_index == selected_component_index:
+			component["mount_index"] = axial_indices[mini(axial_indices.size() - 1, selected_component_index)] if not axial_indices.is_empty() else -1
+		components[index] = component
+	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(stage, components)
 	selected_component_index = -1
 	_changed()
 
