@@ -243,13 +243,17 @@ func _build_interface() -> void:
 	add_child(root)
 	var header := VBoxContainer.new()
 	root.add_child(header)
-	var header_primary := HBoxContainer.new()
+	var header_primary := VBoxContainer.new()
 	header.add_child(header_primary)
+	var identity_row := HBoxContainer.new()
+	header_primary.add_child(identity_row)
+	var payload_row := HBoxContainer.new()
+	header_primary.add_child(payload_row)
 	var title_label := Label.new()
 	title_label.text = "VEHICLE ASSEMBLY BUILDING"
 	title_label.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
 	title_label.add_theme_font_size_override("font_size", 20)
-	header_primary.add_child(title_label)
+	identity_row.add_child(title_label)
 	var name_input := LineEdit.new()
 	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_input.placeholder_text = "Vehicle name"
@@ -258,15 +262,15 @@ func _build_interface() -> void:
 		design["name"] = value
 		_emit_design()
 	)
-	header_primary.add_child(name_input)
+	identity_row.add_child(name_input)
 	_vehicle_name = name_input
 	var preset_button := Button.new()
 	preset_button.text = "LOAD PRESET"
 	preset_button.pressed.connect(_show_preset_dialog)
-	header_primary.add_child(preset_button)
+	identity_row.add_child(preset_button)
 	var payload_label := Label.new()
 	payload_label.text = "PAYLOAD"
-	header_primary.add_child(payload_label)
+	payload_row.add_child(payload_label)
 	var payload_selector := OptionButton.new()
 	payload_selector.custom_minimum_size.x = 180
 	var payload_options := RocketDesign.payload_options()
@@ -289,7 +293,7 @@ func _build_interface() -> void:
 		_emit_design()
 		_refresh_stats()
 	)
-	header_primary.add_child(payload_selector)
+	payload_row.add_child(payload_selector)
 	_payload_selector = payload_selector
 	var payload_limits := RocketDesign.payload_mass_limits()
 	var payload_mass_input := SpinBox.new()
@@ -305,9 +309,10 @@ func _build_interface() -> void:
 		_refresh_stats()
 		_emit_design()
 	)
-	header_primary.add_child(payload_mass_input)
+	payload_row.add_child(payload_mass_input)
 	_payload_mass_input = payload_mass_input
-	var header_actions := HBoxContainer.new()
+	var header_actions := GridContainer.new()
+	header_actions.columns = 3
 	header.add_child(header_actions)
 	var payload_edit := Button.new()
 	payload_edit.text = "EDIT PAYLOAD"
