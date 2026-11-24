@@ -1574,6 +1574,9 @@ func _draw_full_system_zoom(view_center: Vector2) -> void:
 			draw_circle(screen_position, body_radius + 5.0, Color(body_color.r, body_color.g, body_color.b, 0.14))
 		else:
 			body_color = PlanetarySystem.planet_visual_data(body_name).get("color", Color(0.72, 0.78, 0.86))
+			if not visited_body_names.has(body_name):
+				body_color = body_color.darkened(0.62).lerp(Color(0.38, 0.48, 0.62), 0.35)
+				draw_circle(screen_position, body_radius + 3.0, Color(0.36, 0.58, 0.82, 0.16))
 		draw_circle(screen_position, body_radius, body_color)
 		if body_radius >= 2.0 or body_name in ["Sun", "Earth", "Moon"]:
 			var label_position := screen_position + Vector2(body_radius + 4.0, 3.0)
@@ -1748,9 +1751,15 @@ func _draw_solar_system(center: Vector2) -> void:
 		var planet_radius: float = clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
 		var planet_visual := PlanetarySystem.planet_visual_data(planet_name)
 		var planet_color: Color = planet_visual.get("color", Color(0.65, 0.72, 0.82))
-		_draw_planet_rings(planet_screen, planet_radius, planet_visual, 0.85)
+		var visited := visited_body_names.has(planet_name)
+		if not visited:
+			planet_color = planet_color.darkened(0.58).lerp(Color(0.32, 0.43, 0.58), 0.4)
+		_draw_planet_rings(planet_screen, planet_radius, planet_visual, 0.85 if visited else 0.2)
+		if not visited:
+			draw_circle(planet_screen, planet_radius + 4.0, Color(0.34, 0.58, 0.84, 0.2))
+			draw_circle(planet_screen, planet_radius, Color(0.025, 0.045, 0.075, 0.42))
 		draw_circle(planet_screen, planet_radius, planet_color)
-		_draw_solar_label(planet_name.to_upper(), planet_screen, 10, Color(0.82, 0.88, 0.96), occupied)
+		_draw_solar_label(planet_name.to_upper(), planet_screen, 10, Color(0.82, 0.88, 0.96) if visited else Color(0.43, 0.56, 0.72), occupied)
 	for planet in PlanetarySystem.PLANETS:
 		var planet_name: String = str(planet.name)
 		if not discovered_body_names.has(planet_name):
@@ -1768,8 +1777,13 @@ func _draw_solar_system(center: Vector2) -> void:
 			var orbit_ratio := maxf(1.0, float(satellite.get("semi_major_axis_m", 0.0)) / float(planet.radius))
 			var orbit_radius_px := host_radius + 2.0 + log(orbit_ratio) * 1.6
 			var satellite_color := PlanetarySystem.color_from_rgb(satellite.get("color_rgb", []), Color(0.75, 0.78, 0.82))
-			draw_arc(host_screen, orbit_radius_px, 0.0, TAU, 32, Color(satellite_color.r, satellite_color.g, satellite_color.b, 0.22), 1.0)
+			var satellite_visited := visited_body_names.has(satellite_name)
+			if not satellite_visited:
+				satellite_color = satellite_color.darkened(0.58).lerp(Color(0.34, 0.44, 0.58), 0.4)
+			draw_arc(host_screen, orbit_radius_px, 0.0, TAU, 32, Color(satellite_color.r, satellite_color.g, satellite_color.b, 0.22 if satellite_visited else 0.08), 1.0)
 			var satellite_screen := host_screen + relative_direction * orbit_radius_px
+			if not satellite_visited:
+				draw_circle(satellite_screen, maxf(2.8, host_radius * 0.55), Color(0.34, 0.58, 0.84, 0.18))
 			draw_circle(satellite_screen, maxf(1.3, host_radius * 0.45), satellite_color)
 			if solar_map_zoom >= 2.0:
 				_draw_solar_label(str(satellite.get("name", "MOON")).to_upper(), satellite_screen, 8, satellite_color, occupied)
@@ -1781,8 +1795,13 @@ func _draw_solar_system(center: Vector2) -> void:
 	var moon_orbit_display_radius := earth_marker_radius + 2.0 + log(PlanetarySystem.MOON_ORBIT_RADIUS / PlanetarySystem.EARTH_RADIUS) * 1.6
 	draw_arc(earth_screen, moon_orbit_display_radius, 0.0, TAU, 32, Color(0.65, 0.69, 0.77, 0.22), 1.0)
 	var moon_screen := earth_screen + moon_offset * moon_orbit_display_radius
-	draw_circle(moon_screen, 2.5, PlanetarySystem.planet_visual_data("Moon").get("color", Color(0.72, 0.74, 0.78)))
-	_draw_solar_label("MOON", moon_screen, 9, Color(0.78, 0.82, 0.9), occupied)
+	if discovered_body_names.has("Moon"):
+		var moon_color: Color = PlanetarySystem.planet_visual_data("Moon").get("color", Color(0.72, 0.74, 0.78))
+		if not visited_body_names.has("Moon"):
+			moon_color = moon_color.darkened(0.58).lerp(Color(0.34, 0.44, 0.58), 0.4)
+			draw_circle(moon_screen, 5.0, Color(0.34, 0.58, 0.84, 0.18))
+		draw_circle(moon_screen, 2.5, moon_color)
+		_draw_solar_label("MOON", moon_screen, 9, Color(0.78, 0.82, 0.9) if visited_body_names.has("Moon") else Color(0.43, 0.56, 0.72), occupied)
 	var rocket_heliocentric: Vector2 = earth_heliocentric + rocket_position
 	var rocket_screen: Vector2 = center + Vector2(rocket_heliocentric.x, -rocket_heliocentric.y) * map_scale
 	draw_line(rocket_screen + Vector2(-6.0, 0.0), rocket_screen + Vector2(6.0, 0.0), Color(0.3, 1.0, 0.65), 2.0)
