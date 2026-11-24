@@ -103,6 +103,10 @@ func _initialize() -> void:
 	for i in range(12):
 		main._add_new_vehicle()
 	assert(main.fleet_sims.size() == 14)
+	first.landed = false
+	first.crashed = false
+	first._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
+	first.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
 	var parent_position := first.rocket_position_precise.duplicate()
 	var parent_velocity := first.velocity
 	var separated_fuel := first.fuel
