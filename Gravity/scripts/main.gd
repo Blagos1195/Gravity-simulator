@@ -241,6 +241,7 @@ func _advance_fleet(delta: float) -> void:
 					_advance_passive_vehicle(vehicle, sim.sim_time)
 			_resolve_spacecraft_collisions(positions_before)
 			_sync_docked_vehicles()
+			_scan_active_telescopes()
 			fleet_time_backlog = maxf(0.0, fleet_time_backlog - step_delta)
 			iterations += 1
 	var separated_stages := pending_debris.duplicate(true)
@@ -279,6 +280,7 @@ func _advance_fleet(delta: float) -> void:
 				"crashed": vehicle.crashed,
 				"design": {"name": vehicle.vehicle_name, "payload_mass": vehicle.payload_mass, "payload_type": vehicle.payload_type, "payload_visual": vehicle.payload_visual.duplicate(true), "stages": vehicle.rocket_stages.duplicate(true)}
 			})
+		_scan_active_telescopes()
 		_update_discovery_state()
 		_update_economy()
 		_update_missions()
@@ -531,21 +533,6 @@ func _update_discovery_state() -> void:
 			orbited_body_names[body_name] = true
 		if stable_orbit and SpaceDiscovery.mark_visited(discovery_state, body_name) and not newly_discovered.has(body_name):
 			newly_discovered.append(body_name)
-		var telescope_range_au := float(vehicle.payload_visual.get("telescope_range_au", 0.0))
-		var lifetime_days := float(vehicle.payload_visual.get("operational_lifetime_days", 0.0))
-		var operational := lifetime_days <= 0.0 or maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0) < lifetime_days
-		if vehicle.telescope_active and stable_orbit and operational and str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
-			var host_heliocentric_position := earth_position
-			for heliocentric_body in heliocentric_bodies:
-				if str(heliocentric_body.get("name", "")) == body_name:
-					host_heliocentric_position = Vector2(heliocentric_body.get("position", earth_position))
-					break
-			var telescope_position: Vector2 = host_heliocentric_position + (vehicle.rocket_position - Vector2(body.get("relative_position", Vector2.ZERO)))
-			vehicle.telescope_direction_angle = relative_velocity.angle()
-			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies, vehicle.telescope_direction_angle, vehicle.telescope_field_of_view)
-			for discovered_name in telescope_discoveries:
-				if not newly_discovered.has(discovered_name):
-					newly_discovered.append(discovered_name)
 	var spotted := SpaceDiscovery.spotted_names(discovery_state)
 	var visited := SpaceDiscovery.visited_names(discovery_state)
 	for vehicle in fleet_sims:
@@ -554,6 +541,43 @@ func _update_discovery_state() -> void:
 	if not newly_discovered.is_empty() and is_instance_valid(status_label):
 		status_label.text = "NEW DISCOVERY  •  " + ", ".join(newly_discovered).to_upper()
 	_refresh_telescope_control()
+
+func _scan_active_telescopes() -> void:
+	if fleet_sims.is_empty() or not is_instance_valid(sim):
+		return
+	var ephemeris := PlanetarySystem.gravity_body_states(sim.sim_time)
+	var heliocentric_bodies: Array = ephemeris.get("heliocentric_bodies", [])
+	var earth_position: Vector2 = ephemeris.get("earth_heliocentric_position", Vector2.ZERO)
+	for vehicle in fleet_sims:
+		if not vehicle.telescope_active or vehicle.crashed or vehicle.landed or str(vehicle.payload_visual.get("visual_type", "")) != "satellite":
+			continue
+		var telescope_range_au := float(vehicle.payload_visual.get("telescope_range_au", 0.0))
+		var lifetime_days := float(vehicle.payload_visual.get("operational_lifetime_days", 0.0))
+		var operational := lifetime_days <= 0.0 or maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0) < lifetime_days
+		if telescope_range_au <= 0.0 or not operational:
+			continue
+		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+		if body.is_empty() or float(body.get("distance", INF)) > float(body.get("soi", 0.0)):
+			continue
+		var relative_position: Vector2 = body.get("relative_position", Vector2.ZERO)
+		var relative_velocity: Vector2 = vehicle.velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(body.get("mass", 0.0)))
+		if not bool(orbit.get("bound", false)):
+			continue
+		var body_name := str(body.get("name", ""))
+		var body_radius := float(body.get("radius", 0.0))
+		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(body_name, body_radius)
+		var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(body.get("soi", 0.0)))
+		if float(orbit.get("periapsis", 0.0)) <= body_radius + minimum_altitude or float(orbit.get("apoapsis", INF)) >= body_radius + maximum_altitude:
+			continue
+		var host_heliocentric_position := earth_position
+		for heliocentric_body in heliocentric_bodies:
+			if str(heliocentric_body.get("name", "")) == body_name:
+				host_heliocentric_position = Vector2(heliocentric_body.get("position", earth_position))
+				break
+		var telescope_position: Vector2 = host_heliocentric_position + (vehicle.rocket_position - relative_position)
+		vehicle.telescope_direction_angle = relative_velocity.angle()
+		SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies, vehicle.telescope_direction_angle, vehicle.telescope_field_of_view)
 
 func _update_passive_orbit_states() -> void:
 	for vehicle in fleet_sims:
