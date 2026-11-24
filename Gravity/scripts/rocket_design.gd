@@ -239,7 +239,7 @@ static func stage_ignition_mass(design: Dictionary, stage_index: int) -> float:
 	var mass := float(design.get("payload_mass", 0.0))
 	for i in range(stage_index, stages.size()):
 		var stage: Dictionary = stages[i]
-		mass += float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
+		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage)
 	return mass
 
 static func stage_specific_impulse(stage: Dictionary, vacuum: bool) -> float:
@@ -345,6 +345,13 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 			errors.append("Stage %d must have a positive whole-number engine count." % (i + 1))
 		if stage.has("engine_layout") and not ["linear", "cluster", "radial"].has(str(stage.engine_layout)):
 			errors.append("Stage %d has an unsupported engine layout." % (i + 1))
+		var boosters: Variant = stage.get("boosters", [])
+		if not boosters is Array or boosters.size() > 2:
+			errors.append("Stage %d can have at most two booster pairs." % (i + 1))
+		elif boosters is Array:
+			for booster_variant in boosters:
+				if not booster_variant is Dictionary or booster_definition(str(booster_variant.get("id", ""))).is_empty():
+					errors.append("Stage %d references an unknown booster module." % (i + 1))
 		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0 or not (engine_value is int or engine_value is float) or float(engine_value) != float(engines) or engines < 1:
 			continue
 		if vacuum_thrust < sea_thrust:
