@@ -2121,6 +2121,7 @@ func _quit_game() -> void:
 
 class RocketPreview:
 	extends Control
+	const RocketVisual = preload("res://scripts/rocket_visual.gd")
 	var design: Dictionary = {}
 
 	func _draw() -> void:
