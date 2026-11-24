@@ -18,6 +18,9 @@ const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
 const DOCKING_CAPTURE_DISTANCE := 100.0
 const DOCKING_CAPTURE_SPEED := 2.5
+const DOCKING_ASSIST_MAX_RANGE := 2000000.0
+const DOCKING_ASSIST_ACCELERATION := 0.15
+const DOCKING_ASSIST_MAX_CLOSING_SPEED := 8.0
 
 var mode := "menu"
 var realism := "Realistic"
@@ -43,6 +46,7 @@ var mission_state: Dictionary = MissionSystem.new_state()
 var orbited_body_names: Dictionary = {}
 var vehicle_selector: OptionButton
 var docking_links: Array[Dictionary] = []
+var docking_assists: Dictionary = {}
 var autosave_elapsed := 0.0
 var autosave_enabled := true
 var rebinding_action := ""
@@ -206,6 +210,7 @@ func _advance_fleet(delta: float) -> void:
 			var positions_before: Dictionary = {}
 			for vehicle in fleet_sims:
 				positions_before[vehicle] = vehicle.rocket_position
+			_apply_docking_assists(step_delta)
 			for vehicle in fleet_sims:
 				if not _is_docked_child(vehicle.vehicle_name) and not vehicle.passive_orbit_active:
 					vehicle._physics_step(step_delta)
@@ -290,6 +295,29 @@ func _resolve_spacecraft_collisions(positions_before: Dictionary) -> void:
 			second.throttle = 0.0
 			first.status_message = "COLLISION WITH %s" % second.vehicle_name.to_upper()
 			second.status_message = "COLLISION WITH %s" % first.vehicle_name.to_upper()
+
+func _apply_docking_assists(delta: float) -> void:
+	for vehicle_name_variant in docking_assists.keys():
+		var vehicle_name := str(vehicle_name_variant)
+		var target_name := str(docking_assists.get(vehicle_name, ""))
+		var vehicle := _find_vehicle_by_name(vehicle_name)
+		var target := _find_vehicle_by_name(target_name)
+		if vehicle == null or target == null or vehicle == target or vehicle.landed or vehicle.crashed or target.landed or target.crashed or _is_vehicle_docked(vehicle_name) or _is_vehicle_docked(target_name):
+			docking_assists.erase(vehicle_name)
+			continue
+		if vehicle.passive_orbit_active:
+			vehicle.passive_orbit_active = false
+			vehicle.passive_orbit_data.clear()
+		var relative_position: Vector2 = target.rocket_position - vehicle.rocket_position
+		var separation := relative_position.length()
+		if separation > DOCKING_ASSIST_MAX_RANGE or separation < 0.001:
+			docking_assists.erase(vehicle_name)
+			continue
+		var direction := relative_position / separation
+		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, separation - DOCKING_CAPTURE_DISTANCE)))
+		var desired_velocity: Vector2 = target.velocity + direction * desired_closing_speed
+		var velocity_correction := (desired_velocity - vehicle.velocity).limit_length(DOCKING_ASSIST_ACCELERATION)
+		vehicle.velocity += velocity_correction * maxf(0.0, delta)
 
 func _launch_cost_for_design(design: Dictionary) -> float:
 	return LAUNCH_BASE_COST + RocketDesign.total_initial_mass(design) * LAUNCH_COST_PER_KG
@@ -565,6 +593,7 @@ func _build_menu() -> void:
 	vehicle_selector = null
 	fleet_time_backlog = 0.0
 	docking_links.clear()
+	docking_assists.clear()
 	rebinding_action = ""
 	rebinding_button = null
 	for child in get_children():
@@ -2145,6 +2174,12 @@ func _rename_vehicle(vehicle_name: String, requested_name: String) -> bool:
 			return false
 	var previous_name := vehicle.vehicle_name
 	vehicle.vehicle_name = clean_name
+	if docking_assists.has(previous_name):
+		docking_assists[clean_name] = docking_assists[previous_name]
+		docking_assists.erase(previous_name)
+	for assist_vehicle in docking_assists.keys():
+		if str(docking_assists[assist_vehicle]) == previous_name:
+			docking_assists[assist_vehicle] = clean_name
 	for link in docking_links:
 		if str(link.get("parent_name", "")) == previous_name:
 			link["parent_name"] = clean_name
@@ -2383,6 +2418,11 @@ func _dock_vehicle(target_name: String) -> bool:
 		"offset_x": local_offset.x,
 		"offset_y": local_offset.y
 	})
+	docking_assists.erase(sim.vehicle_name)
+	docking_assists.erase(target.vehicle_name)
+	for assist_vehicle in docking_assists.keys():
+		if str(docking_assists[assist_vehicle]) == target.vehicle_name:
+			docking_assists.erase(assist_vehicle)
 	target.autopilot_enabled = false
 	target.guidance_enabled = false
 	target.thrust_key_down = false
@@ -2949,7 +2989,7 @@ func _show_docking_panel() -> void:
 	layout.add_theme_constant_override("separation", 12)
 	window.add_child(layout)
 	var intro := Label.new()
-	intro.text = "Rendezvous with another spacecraft, match its velocity and dock within the capture limits."
+	intro.text = "Use rendezvous assist to match the other spacecraft's velocity and close the gap. Docking still requires a slow, close approach."
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(intro)
 	var parent_name: String = str(sim.vehicle_name)
@@ -2972,6 +3012,10 @@ func _show_docking_panel() -> void:
 	dock_button.text = "DOCK"
 	dock_button.custom_minimum_size.y = 44
 	layout.add_child(dock_button)
+	var assist_button := Button.new()
+	assist_button.text = "START RENDEZVOUS ASSIST"
+	assist_button.custom_minimum_size.y = 44
+	layout.add_child(assist_button)
 	var undock_button := Button.new()
 	undock_button.text = "UNDOCK"
 	undock_button.custom_minimum_size.y = 44
@@ -3001,6 +3045,7 @@ func _show_docking_panel() -> void:
 		if sim.vehicle_name != parent_name:
 			status.text = "The selected spacecraft changed. Close this panel and reopen it for the new vehicle."
 			dock_button.disabled = true
+			assist_button.disabled = true
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			fuel_direction.disabled = true
@@ -3008,6 +3053,7 @@ func _show_docking_panel() -> void:
 		if target_selector.item_count == 0:
 			status.text = "Launch another vehicle before attempting to dock."
 			dock_button.disabled = true
+			assist_button.disabled = true
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			fuel_direction.disabled = true
@@ -3017,20 +3063,28 @@ func _show_docking_panel() -> void:
 		if target == null:
 			status.text = "The selected spacecraft is no longer available."
 			dock_button.disabled = true
+			assist_button.disabled = true
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			return
 		var separation: float = sim.rocket_position.distance_to(target.rocket_position)
 		var relative_speed: float = (sim.velocity - target.velocity).length()
 		var docked := _are_docked(parent_name, target_name)
-		var available_to_dock: bool = not docked and not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
+		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
+		var free_flying := not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
+		var available_to_dock: bool = not docked and free_flying and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
+		var available_to_assist: bool = not docked and free_flying and separation <= DOCKING_ASSIST_MAX_RANGE
 		if docked:
 			status.text = "DOCKED  •  %s\nCombined mass is included in the parent spacecraft's flight dynamics." % target_name
 		elif available_to_dock:
 			status.text = "DOCKING CONDITIONS MET\nRange: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
+		elif assist_active:
+			status.text = "RENDEZVOUS ASSIST ACTIVE\nRange: %.1f m  •  Relative speed: %.2f m/s\nGuidance is matching velocity and closing at up to %.1f m/s." % [separation, relative_speed, DOCKING_ASSIST_MAX_CLOSING_SPEED]
 		else:
-			status.text = "Range: %.1f m / %.0f m\nRelative speed: %.2f / %.2f m/s\nBoth spacecraft must be free-flying and undocked." % [separation, DOCKING_CAPTURE_DISTANCE, relative_speed, DOCKING_CAPTURE_SPEED]
+			status.text = "Range: %.1f m / %.0f m\nRelative speed: %.2f / %.2f m/s\nRendezvous assist works within %.0f km." % [separation, DOCKING_CAPTURE_DISTANCE, relative_speed, DOCKING_CAPTURE_SPEED, DOCKING_ASSIST_MAX_RANGE / 1000.0]
 		dock_button.disabled = not available_to_dock
+		assist_button.disabled = not available_to_assist and not assist_active
+		assist_button.text = "STOP RENDEZVOUS ASSIST" if assist_active else "START RENDEZVOUS ASSIST"
 		undock_button.disabled = not docked
 		fuel_direction.disabled = not docked
 		transfer_button.disabled = not docked
@@ -3050,6 +3104,7 @@ func _show_docking_panel() -> void:
 		else:
 			fuel_status.text = "Dock spacecraft to enable transfer. Transfers fill the receiver's active tank first, then its later stages."
 	var target_changed := func(_index: int) -> void:
+		docking_assists.erase(parent_name)
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
 		refresh_fuel_direction.call(target_name)
 		refresh_panel.call()
@@ -3062,6 +3117,17 @@ func _show_docking_panel() -> void:
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
 		if _dock_vehicle(target_name):
 			fuel_status.text = "Docking complete."
+		refresh_panel.call()
+	)
+	assist_button.pressed.connect(func():
+		if sim.vehicle_name != parent_name or target_selector.item_count == 0:
+			refresh_panel.call()
+			return
+		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
+		if str(docking_assists.get(parent_name, "")) == target_name:
+			docking_assists.erase(parent_name)
+		else:
+			docking_assists[parent_name] = target_name
 		refresh_panel.call()
 	)
 	undock_button.pressed.connect(func():
@@ -3181,6 +3247,7 @@ func _save_game(automatic: bool) -> void:
 	data["vehicles"] = saved_vehicles
 	data["active_vehicle_index"] = active_vehicle_index
 	data["docking_links"] = docking_links.duplicate(true)
+	data["docking_assists"] = docking_assists.duplicate(true)
 	data["realism"] = realism
 	data["world_scale"] = world_scale
 	data["career_enabled"] = career_enabled
@@ -3362,6 +3429,16 @@ func _load_game_from_path(path: String) -> void:
 			linked_parents[parent_name] = true
 	_update_docked_masses()
 	_sync_docked_vehicles()
+	docking_assists.clear()
+	var saved_assists: Variant = parsed.get("docking_assists", {})
+	if saved_assists is Dictionary:
+		for vehicle_name_variant in saved_assists:
+			var vehicle_name := str(vehicle_name_variant)
+			var target_name := str(saved_assists[vehicle_name_variant])
+			var vehicle := _find_vehicle_by_name(vehicle_name)
+			var target := _find_vehicle_by_name(target_name)
+			if vehicle != null and target != null and not vehicle.landed and not vehicle.crashed and not target.landed and not target.crashed and not _is_vehicle_docked(vehicle_name) and not _is_vehicle_docked(target_name):
+				docking_assists[vehicle_name] = target_name
 	_switch_vehicle(active_vehicle_index)
 	infinite_weightless_fuel = sim.infinite_weightless_fuel
 	for vehicle in fleet_sims:
