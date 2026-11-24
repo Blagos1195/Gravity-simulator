@@ -34,6 +34,7 @@ var economy_last_sim_time := 0.0
 var total_revenue_earned := 0.0
 var total_operating_costs := 0.0
 var funds_label: Label
+var fairing_button: Button
 var mission_state: Dictionary = MissionSystem.new_state()
 var orbited_body_names: Dictionary = {}
 var vehicle_selector: OptionButton
@@ -213,6 +214,7 @@ func _advance_fleet(delta: float) -> void:
 		_update_discovery_state()
 		_update_economy()
 		_update_missions()
+		_refresh_fairing_button()
 		sim.queue_redraw()
 
 func _launch_cost_for_design(design: Dictionary) -> float:
@@ -261,6 +263,11 @@ func _update_economy() -> void:
 		total_revenue_earned += revenue * active_days
 		total_operating_costs += operating_cost * active_days
 	_refresh_economy_display()
+
+func _refresh_fairing_button() -> void:
+	if not is_instance_valid(fairing_button):
+		return
+	fairing_button.visible = is_instance_valid(sim) and sim.can_jettison_fairing()
 
 func _refresh_economy_display() -> void:
 	if not is_instance_valid(funds_label):
@@ -2091,6 +2098,15 @@ func _build_flight_hud() -> void:
 	_add_button(right, "VELOCITY VECTOR  [V]", func(): sim.show_vectors = not sim.show_vectors)
 	_add_button(right, "MISSIONS / CONTRACTS", _show_missions_panel)
 	_add_button(right, "AUTOPILOT", _show_autopilot_panel)
+	fairing_button = Button.new()
+	fairing_button.text = "JETTISON PAYLOAD FAIRING"
+	fairing_button.visible = false
+	fairing_button.pressed.connect(func():
+		if is_instance_valid(sim) and sim.jettison_fairing():
+			status_label.text = "PAYLOAD FAIRING JETTISONED"
+			_refresh_fairing_button()
+	)
+	right.add_child(fairing_button)
 	_add_button(right, "FLIGHT COMPUTER", _show_flight_computer)
 	_add_button(right, "PREDICTED PATH  [P]", func():
 		sim.show_predicted_trajectory = not sim.show_predicted_trajectory
