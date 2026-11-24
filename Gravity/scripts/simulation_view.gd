@@ -139,7 +139,7 @@ func set_rocket_design(design: Dictionary) -> void:
 	infinite_fuel_stage_remaining = fuel
 
 func can_jettison_fairing() -> bool:
-	if fairing_jettisoned or not RocketDesign.has_payload_component({"payload_components": payload_components}, "fairing"):
+	if landed or crashed or fairing_jettisoned or not RocketDesign.has_payload_component({"payload_components": payload_components}, "fairing"):
 		return false
 	var body: Dictionary = _nearest_body_state(rocket_position, rocket_position_precise)
 	if body.is_empty():
