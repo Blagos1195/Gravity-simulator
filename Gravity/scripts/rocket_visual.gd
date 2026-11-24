@@ -27,7 +27,7 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		stack_mass += RocketDesign.stage_total_dry_mass(stage) + RocketDesign.stage_total_fuel_capacity(stage)
 	var heights: Array[float] = []
 	for stage in visible_stages:
-		var mass := float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
+		var mass := RocketDesign.stage_total_dry_mass(stage) + RocketDesign.stage_total_fuel_capacity(stage)
 		var length_factor := maxf(0.25, float(stage.get("visual_length_factor", 1.0)))
 		heights.append(clampf((15.0 + 12.0 * sqrt(mass / maxf(1.0, stack_mass))) * length_factor, 8.0, 60.0))
 	var widest_stage := 0.0
