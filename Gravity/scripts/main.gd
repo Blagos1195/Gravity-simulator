@@ -3000,7 +3000,13 @@ func _save_game(automatic: bool) -> void:
 			return
 		history_file.store_string(current_data)
 		history_file.flush()
+		var history_error := history_file.get_error()
 		history_file.close()
+		if history_error != OK:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(history_path))
+			if status_label:
+				status_label.text = "SAVE HISTORY COULD NOT BE WRITTEN"
+			return
 		_prune_autosave_history(save_slot)
 	if not _write_save_file(path, data):
 		if status_label:
