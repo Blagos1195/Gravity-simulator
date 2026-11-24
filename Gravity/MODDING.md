@@ -109,3 +109,13 @@ Inactive spacecraft in stable, bound orbits are analytically propagated with Kep
 ## Telescope payloads and planetary discovery
 
 Payload definitions may include `telescope_range_au`, a non-negative detection radius in astronomical units. The built-in scout telescope has a 1.2 AU range, the survey telescope has a 3.5 AU range, and the deep-space telescope has a 10.5 AU range. A telescope only scans while its spacecraft is in a stable orbit. Its heliocentric range permanently spots planets and moons; a spotted body is visible on the system map but is not an autopilot destination until one of the player's spacecraft has established a stable orbit around it. Telescope range and payload type are data-driven and can be extended or overridden by mods.
+
+
+## Satellite operations and career economy
+
+Satellite payload definitions may specify `satellite_role`, `revenue_per_day`, `operating_cost_per_day`, and `operational_lifetime_days`. Revenue and operating costs are measured in credits per simulated day. A satellite only earns revenue and incurs operating costs while it is in a stable orbit and its operational lifetime has not expired. Expired spacecraft remain in the simulation but no longer earn revenue or provide telescope coverage. These values are configurable per payload, so mods can add new satellite services and balance their own operating costs and lifetimes.
+
+
+## Mission contracts
+
+The top-level `missions` array defines career contracts. Each mission needs a unique `id`, `title`, `description`, a supported `condition`, and a non-negative `reward`. Supported conditions are `orbit_body`, `visit_body`, `discover_body`, `discover_count`, and `operational_satellites`. Body conditions use the exact body name from the planetary catalog; count conditions use a positive whole-number `count`. Mods can add contracts through `missions_add` without replacing the built-in list.

@@ -363,6 +363,14 @@ static func _catalog_error(catalog: Dictionary) -> String:
 				return "Rocket payload %s has an invalid %s." % [payload_id, visual_key]
 		if payload.has("telescope_range_au") and (not (payload.telescope_range_au is int or payload.telescope_range_au is float) or not is_finite(float(payload.telescope_range_au)) or float(payload.telescope_range_au) < 0.0):
 			return "Rocket payload %s has an invalid telescope_range_au." % payload_id
+		for economy_key in ["revenue_per_day", "operating_cost_per_day", "operational_lifetime_days"]:
+			if payload.has(economy_key):
+				var economy_value: Variant = payload[economy_key]
+				var minimum_value := 0.0 if economy_key != "operational_lifetime_days" else 0.000001
+				if not (economy_value is int or economy_value is float) or not is_finite(float(economy_value)) or float(economy_value) < minimum_value:
+					return "Rocket payload %s has an invalid %s." % [payload_id, economy_key]
+		if payload.has("satellite_role") and not str(payload.satellite_role).is_empty() and str(payload.get("visual_type", "satellite")) != "satellite":
+			return "Rocket payload %s assigns a satellite role to a non-satellite visual." % payload_id
 		if payload.has("visual_color_rgb"):
 			var payload_visual_color_error := _color_field_error(payload, "visual_color_rgb", "rocket payload %s" % payload_id)
 			if not payload_visual_color_error.is_empty():
@@ -411,6 +419,32 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		for part_id_variant in design.get("stages", []):
 			if not part_ids.has(str(part_id_variant)):
 				return "Rocket design %s references unknown stage part %s." % [str(design.get("name", "unnamed")), str(part_id_variant)]
+	var missions: Variant = catalog.get("missions", [])
+	if not missions is Array:
+		return "The missions section must be an array."
+	var mission_ids := {}
+	var mission_conditions := ["orbit_body", "visit_body", "discover_body", "discover_count", "operational_satellites"]
+	for mission_variant in missions:
+		if not mission_variant is Dictionary:
+			return "Every mission entry must be an object."
+		var mission: Dictionary = mission_variant
+		var mission_id := str(mission.get("id", ""))
+		var condition := str(mission.get("condition", ""))
+		if mission_id.is_empty() or mission_ids.has(mission_id) or str(mission.get("title", "")).is_empty() or str(mission.get("description", "")).is_empty():
+			return "Mission ids, titles and descriptions must be non-empty and unique."
+		if not mission_conditions.has(condition):
+			return "Mission %s has an unsupported condition." % mission_id
+		var mission_reward_error := _numeric_fields_error(mission, ["reward"], "mission %s" % mission_id)
+		if not mission_reward_error.is_empty() or not is_finite(float(mission.reward)) or float(mission.reward) < 0.0:
+			return "Mission %s has an invalid reward." % mission_id
+		if condition in ["orbit_body", "visit_body", "discover_body"] and str(mission.get("body", "")).is_empty():
+			return "Mission %s needs a body name." % mission_id
+		if condition in ["discover_count", "operational_satellites"]:
+			var count_value: Variant = mission.get("count")
+			var count_type := typeof(count_value)
+			if (count_type != TYPE_INT and count_type != TYPE_FLOAT) or int(count_value) < 1 or not is_equal_approx(float(count_value), float(int(count_value))):
+				return "Mission %s needs a positive whole-number count." % mission_id
+		mission_ids[mission_id] = true
 	return ""
 
 static func _numeric_fields_error(data: Dictionary, fields: Array, context: String) -> String:
