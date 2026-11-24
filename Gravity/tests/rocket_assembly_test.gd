@@ -61,10 +61,9 @@ func _initialize() -> void:
 	var performance_summary_found := false
 	for child in main.get_children():
 		if child is Control and child.name == "RocketBuilder":
-			var stats := child.get("_stats") as Label
-			if is_instance_valid(stats):
-				child.call("_refresh_stats")
-				performance_summary_found = str(stats.text).contains("STAGE TWR") and str(stats.text).contains("IDEAL ΔV")
+			child.call("_refresh_stats")
+			var stats_text := str(child.call("performance_summary_text"))
+			performance_summary_found = stats_text.contains("STAGE TWR") and stats_text.contains("IDEAL ΔV")
 			break
 	assert(performance_summary_found, "The component editor does not show live TWR and vehicle delta-v")
 	print("Rocket component assembly tests passed.")
