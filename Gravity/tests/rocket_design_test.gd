@@ -3,6 +3,7 @@ extends SceneTree
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const ContentCatalog = preload("res://scripts/content_catalog.gd")
+const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
 	var design := RocketDesign.create_default()
@@ -65,6 +66,11 @@ func _initialize() -> void:
 		}]
 	}
 	assert(RocketDesign.validation_errors(single_stage_design).is_empty())
+	var single_stage_sim := SimulationView.new()
+	single_stage_sim.set_rocket_design(single_stage_design)
+	assert(single_stage_sim.rocket_stages.size() == 1)
+	assert(is_equal_approx(float(single_stage_sim.rocket_stages[0].dry_mass), 5000.0))
+	single_stage_sim.free()
 	var incomplete := design.duplicate(true)
 	incomplete["stages"].clear()
 	assert(not RocketDesign.validation_errors(incomplete).is_empty())
