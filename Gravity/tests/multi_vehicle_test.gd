@@ -139,6 +139,8 @@ func _initialize() -> void:
 	main._advance_fleet(0.02)
 	assert(first.crashed, "First spacecraft did not crash after a swept collision")
 	assert(collision_target.crashed, "Second spacecraft did not crash after a swept collision")
+	assert(not first.collision_effects.is_empty(), "A spacecraft collision did not create an explosion effect")
+	assert(not collision_target.input_enabled or collision_target.crashed, "A crashed spacecraft remained operational")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Multi-vehicle simulation test passed.")
 	main.queue_free()
