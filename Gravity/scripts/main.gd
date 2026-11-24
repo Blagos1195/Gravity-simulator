@@ -2,6 +2,7 @@ extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RocketVisual = preload("res://scripts/rocket_visual.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
@@ -850,6 +851,7 @@ func _add_new_vehicle() -> void:
 	var design := {
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
+		"payload_type": sim.payload_type,
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	_launch_vehicle_design(design)
@@ -879,6 +881,7 @@ func _show_new_vehicle_dialog() -> void:
 	var current_design := {
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
+		"payload_type": sim.payload_type,
 		"stages": sim.rocket_stages.duplicate(true)
 	}
 	options.append({
@@ -1163,7 +1166,9 @@ func _sync_docked_vehicles() -> void:
 		parent.docked_visuals.append({
 			"name": child.vehicle_name,
 			"direction": world_offset.normalized(),
-			"rotation": parent.rotation_angle
+			"rotation": parent.rotation_angle,
+			"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "stages": child.rocket_stages},
+			"stage_index": child.stage_index
 		})
 		child.rocket_position = parent.rocket_position + world_offset
 		child.velocity = parent.velocity
@@ -2118,58 +2123,12 @@ class RocketPreview:
 	var design: Dictionary = {}
 
 	func _draw() -> void:
-		var stages: Array = design.get("stages", [])
-		if stages.is_empty():
+		if design.get("stages", []).is_empty():
 			return
-		var center_x := size.x * 0.5
-		var top := 18.0
-		var available_height := maxf(100.0, size.y - 70.0)
-		var payload_height := clampf(available_height * 0.13, 32.0, 52.0)
-		var total_stage_mass := 0.0
-		for stage in stages:
-			total_stage_mass += float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
-		var stage_heights: Array[float] = []
-		for stage in stages:
-			var stage_mass := float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
-			stage_heights.append(clampf((available_height - payload_height) * stage_mass / maxf(1.0, total_stage_mass), 34.0, 86.0))
-		var total_height := payload_height
-		for stage_height in stage_heights:
-			total_height += stage_height
-		var scale_height := minf(1.0, available_height / maxf(1.0, total_height))
-		payload_height *= scale_height
-		for index in range(stage_heights.size()):
-			stage_heights[index] *= scale_height
-		var rocket_width := minf(92.0, size.x * 0.34)
-		var payload_type := str(design.get("payload_type", "probe"))
-		var payload_rect := Rect2(center_x - rocket_width * 0.32, top + 16.0, rocket_width * 0.64, payload_height - 16.0)
-		if payload_type == "satellite":
-			draw_rect(Rect2(center_x - rocket_width * 0.72, top + 22.0, rocket_width * 0.4, 12.0), Color(0.16, 0.42, 0.72))
-			draw_rect(Rect2(center_x + rocket_width * 0.32, top + 22.0, rocket_width * 0.4, 12.0), Color(0.16, 0.42, 0.72))
-			draw_rect(payload_rect, Color(0.78, 0.7, 0.42))
-		elif payload_type == "crew":
-			draw_colored_polygon(PackedVector2Array([Vector2(center_x, top), Vector2(center_x - rocket_width * 0.32, top + payload_height), Vector2(center_x + rocket_width * 0.32, top + payload_height)]), Color(0.82, 0.86, 0.92))
-			draw_circle(Vector2(center_x, top + payload_height * 0.62), 7.0, Color(0.2, 0.52, 0.72))
-		else:
-			draw_colored_polygon(PackedVector2Array([Vector2(center_x, top), Vector2(center_x - rocket_width * 0.32, top + payload_height), Vector2(center_x + rocket_width * 0.32, top + payload_height)]), Color(0.78, 0.84, 0.9))
-			draw_rect(Rect2(center_x - 8.0, top + payload_height * 0.62, 16.0, 10.0), Color(0.22, 0.52, 0.72))
-		var y := top + payload_height
-		for i in range(stages.size() - 1, -1, -1):
-			var stage: Dictionary = stages[i]
-			var stage_height: float = stage_heights[i]
-			var stage_width := rocket_width * (0.9 - 0.18 * float(i) / float(maxi(1, stages.size() - 1)))
-			var stage_rect := Rect2(center_x - stage_width * 0.5, y, stage_width, stage_height)
-			draw_rect(stage_rect, Color(0.34, 0.57, 0.72))
-			draw_rect(Rect2(stage_rect.position + Vector2(5.0, 5.0), Vector2(stage_width - 10.0, stage_height * 0.58)), Color(0.48, 0.68, 0.78))
-			draw_rect(Rect2(center_x - stage_width * 0.5, y + stage_height * 0.76, stage_width, stage_height * 0.12), Color(0.88, 0.65, 0.28))
-			draw_string(ThemeDB.fallback_font, Vector2(center_x + stage_width * 0.5 + 8.0, y + stage_height * 0.58), "S%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.65, 0.8, 0.92))
-			var engine_count := int(stage.get("engine_count", 1))
-			var nozzle_width := minf(9.0, stage_width * 0.12)
-			var engine_spacing := minf(20.0, stage_width * 0.68 / float(maxi(1, engine_count - 1)))
-			for engine_index in range(engine_count):
-				var engine_x := center_x + (float(engine_index) - float(engine_count - 1) * 0.5) * engine_spacing
-				draw_colored_polygon(PackedVector2Array([Vector2(engine_x - nozzle_width, y + stage_height), Vector2(engine_x + nozzle_width, y + stage_height), Vector2(engine_x + nozzle_width * 0.65, y + stage_height + 12.0), Vector2(engine_x - nozzle_width * 0.65, y + stage_height + 12.0)]), Color(0.58, 0.62, 0.7))
-			y += stage_height
+		var scale := minf(1.0, maxf(0.55, (size.y - 52.0) / 190.0))
+		RocketVisual.draw_vehicle(self, design, Vector2(size.x * 0.5, size.y * 0.48), 0.0, scale, 0, 0.0, false, true)
 		draw_string(ThemeDB.fallback_font, Vector2(12.0, size.y - 12.0), str(design.get("name", "CUSTOM VEHICLE")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.65, 0.8, 0.92))
+
 
 class Starfield:
 	extends Control
