@@ -149,3 +149,15 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		if engines > visible_engines:
 			canvas.draw_string(ThemeDB.fallback_font, _point(origin, Vector2(half + 4.0, y + height), rotation, scale), "×%d" % engines, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.8, 0.92))
 		y += height + 4.0
+
+static func draw_wreck(canvas: CanvasItem, origin: Vector2, rotation: float, scale: float) -> void:
+	var size := clampf(scale, 0.12, 5.0)
+	var hull := Color(0.18, 0.2, 0.23)
+	var scorched := Color(0.34, 0.22, 0.16)
+	_polygon(canvas, origin, [Vector2(-7.0, -24.0), Vector2(3.0, -19.0), Vector2(6.0, -8.0), Vector2(2.0, 3.0), Vector2(8.0, 17.0), Vector2(-4.0, 22.0), Vector2(-9.0, 8.0), Vector2(-5.0, -4.0)], rotation, size, hull)
+	_polygon(canvas, origin, [Vector2(-5.0, -18.0), Vector2(2.0, -15.0), Vector2(4.0, -7.0), Vector2(-3.0, -4.0)], rotation, size, scorched)
+	_polygon(canvas, origin, [Vector2(2.0, 4.0), Vector2(7.0, 15.0), Vector2(0.0, 18.0), Vector2(-3.0, 9.0)], rotation, size, Color(0.12, 0.14, 0.17))
+	_line(canvas, origin, Vector2(-6.0, -5.0), Vector2(7.0, 1.0), rotation, size, Color(0.72, 0.35, 0.16), 1.8)
+	_line(canvas, origin, Vector2(-3.0, 16.0), Vector2(-13.0, 25.0), rotation, size, Color(0.38, 0.42, 0.48), 1.4)
+	_line(canvas, origin, Vector2(4.0, -12.0), Vector2(13.0, -18.0), rotation, size, Color(0.38, 0.42, 0.48), 1.4)
+	canvas.draw_circle(_point(origin, Vector2(0.0, -8.0), rotation, size), maxf(1.0, 2.0 * size), Color(1.0, 0.42, 0.12, 0.9))
