@@ -2339,7 +2339,8 @@ func _show_autosave_history() -> void:
 		entries.add_child(empty)
 	for history_path in history_paths:
 		var history_time: int = FileAccess.get_modified_time(history_path)
-		var history_label := "LOAD  •  %s" % Time.get_datetime_string_from_unix_time(history_time, true)
+		var history_kind := "MANUAL BACKUP" if history_path.get_file().begins_with("manual_") else "AUTOSAVE"
+		var history_label := "LOAD  •  %s  •  %s" % [history_kind, Time.get_datetime_string_from_unix_time(history_time, true)]
 		_add_button(entries, history_label, _load_history_in_flight.bind(history_path, window))
 	_add_button(layout, "CLOSE", func(): window.queue_free())
 	window.popup_centered()
