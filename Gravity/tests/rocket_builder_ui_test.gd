@@ -94,7 +94,7 @@ func _initialize() -> void:
 	main._show_new_vehicle_dialog()
 	var vehicle_dialog: Window
 	for child in main.get_children():
-		if child is Window:
+		if child is Window and child.title == "BUILD OR SELECT A VEHICLE":
 			vehicle_dialog = child
 			break
 	assert(is_instance_valid(vehicle_dialog))

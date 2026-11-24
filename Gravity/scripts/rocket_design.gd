@@ -179,12 +179,11 @@ static func booster_definition(booster_id: String) -> Dictionary:
 	return {}
 
 static func booster_definition_for_entry(booster_entry: Dictionary) -> Dictionary:
-	var definition := booster_definition(str(booster_entry.get("id", "")))
-	if definition.is_empty():
-		var saved_definition: Variant = booster_entry.get("definition", {})
-		if saved_definition is Dictionary:
-			return saved_definition.duplicate(true)
-	return definition
+	var saved_definition: Variant = booster_entry.get("definition", {})
+	if saved_definition is Dictionary and not saved_definition.is_empty():
+		return saved_definition.duplicate(true)
+	return booster_definition(str(booster_entry.get("id", "")))
+
 
 static func add_booster_pair(design: Dictionary, stage_index: int, booster_id: String) -> bool:
 	var stages: Array = design.get("stages", [])
@@ -218,7 +217,7 @@ static func _booster_definition_is_valid(booster: Dictionary) -> bool:
 		if not (value is int or value is float) or not is_finite(float(value)) or float(value) <= 0.0:
 			return false
 	var pair_count: Variant = booster.get("pair_count", 0)
-	return (pair_count is int or pair_count is float) and int(pair_count) == 2 and float(pair_count) == 2.0 and float(booster.vacuum_thrust) >= float(booster.thrust)
+	return (pair_count is int or pair_count is float) and int(pair_count) in [1, 2] and float(pair_count) == float(int(pair_count)) and float(booster.vacuum_thrust) >= float(booster.thrust)
 
 static func stage_booster_stats(stage: Dictionary) -> Dictionary:
 	var totals := {"dry_mass": 0.0, "fuel_capacity": 0.0, "thrust": 0.0, "vacuum_thrust": 0.0, "flow": 0.0}

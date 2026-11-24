@@ -186,11 +186,18 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 	var total_length := 0.0
 	var widest_radius := 0.1
 	for component in ordered:
+		if str(component.get("attachment", "stack")) == "radial":
+			continue
 		total_length += maxf(0.1, float(component.get("length_m", 1.0)))
 		widest_radius = maxf(widest_radius, float(component.get("collision_radius_m", 1.0)))
 	var current_y := y
-	for component in ordered:
+	var mount_positions: Dictionary = {}
+	for component_index in range(ordered.size()):
+		var component: Dictionary = ordered[component_index]
+		if str(component.get("attachment", "stack")) == "radial":
+			continue
 		var segment_height := stage_height * maxf(0.1, float(component.get("length_m", 1.0))) / maxf(0.1, total_length)
+		mount_positions[component_index] = current_y + segment_height * 0.5
 		var radius := maxf(0.1, float(component.get("collision_radius_m", widest_radius)))
 		var half_width := stage_width * 0.5 * clampf(radius / widest_radius, 0.48, 1.0)
 		var kind := str(component.get("kind", "structure"))
@@ -225,11 +232,15 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 		var booster_half := booster_width * 0.5
 		var booster_offset := stage_width * 0.5 + booster_width * 0.7 + 2.0 + float(booster_index) * (booster_width + 2.0)
 		var booster_y := y + (stage_height - booster_height) * 0.5
+		var mount_index := int(booster_entry.get("mount_index", -1))
+		if mount_positions.has(mount_index):
+			booster_y = float(mount_positions[mount_index]) - booster_height * 0.5
 		var booster_color := Color(0.72, 0.74, 0.78)
 		var booster_color_data: Variant = booster.get("visual_color_rgb", [])
 		if booster_color_data is Array and booster_color_data.size() == 3:
 			booster_color = Color(float(booster_color_data[0]), float(booster_color_data[1]), float(booster_color_data[2]))
-		for side in [-1.0, 1.0]:
+		var booster_sides: Array = [-1.0, 1.0] if int(booster.get("pair_count", 2)) == 2 else [float(booster_entry.get("side", 1))]
+		for side in booster_sides:
 			var booster_x: float = float(side) * booster_offset
 			_polygon(canvas, origin, [Vector2(booster_x - booster_half, booster_y), Vector2(booster_x + booster_half, booster_y), Vector2(booster_x + booster_half * 0.88, booster_y + booster_height), Vector2(booster_x - booster_half * 0.88, booster_y + booster_height)], rotation, scale, booster_color)
 			if engine_enabled and throttle > 0.0:

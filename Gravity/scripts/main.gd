@@ -3,6 +3,7 @@ extends Control
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
+const RocketBuilder = preload("res://scripts/rocket_builder.gd")
 const RocketVisual = preload("res://scripts/rocket_visual.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
@@ -66,6 +67,7 @@ var settings_root: VBoxContainer
 var hud_root: Control
 var scale_factor := 1.0
 var rocket_design: Dictionary = RocketDesign.create_default()
+var active_builder: Window
 var design_stats_label: Label
 var design_error_label: Label
 var design_preview: Control
@@ -1006,120 +1008,34 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _show_new_game_setup)
 	_update_design_stats()
+	if is_inside_tree() and not is_instance_valid(active_builder):
+		_show_vehicle_component_editor(0)
 
 
 func _show_vehicle_component_editor(stage_index: int) -> void:
+	if is_instance_valid(active_builder):
+		active_builder.queue_free()
+		active_builder = null
 	if stage_index < 0 or stage_index >= rocket_design.get("stages", []).size():
 		return
-	rocket_design["stages"][stage_index] = RocketAssembly.ensure_stage_components(rocket_design["stages"][stage_index])
-	var stage: Dictionary = rocket_design["stages"][stage_index]
-	var window := Window.new()
-	window.title = "STAGE %02d COMPONENT ASSEMBLY" % (stage_index + 1)
-	window.size = Vector2i(640, 560)
-	window.min_size = Vector2i(500, 400)
-	window.transient = true
-	window.close_requested.connect(window.queue_free)
-	add_child(window)
-	var layout := VBoxContainer.new()
-	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layout.add_theme_constant_override("separation", 8)
-	window.add_child(layout)
-	var heading := Label.new()
-	heading.text = "INDIVIDUAL COMPONENTS  •  PARTS STACK FROM PAYLOAD TO ENGINE"
-	heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
-	layout.add_child(heading)
-	var summary := Label.new()
-	summary.text = "%.1f t dry  •  %.1f t propellant  •  %.2f MN thrust" % [
-		float(stage.get("dry_mass", 0.0)) / 1000.0,
-		float(stage.get("fuel_capacity", 0.0)) / 1000.0,
-		float(stage.get("vacuum_thrust", 0.0)) / 1000000.0
-	]
-	var ignition_mass := RocketDesign.stage_ignition_mass(rocket_design, stage_index)
-	var stage_twr := RocketDesign.stage_total_thrust(stage, true) / maxf(1.0, ignition_mass * 9.80665)
-	summary.text += "  •  %.2f TWR  •  %.1f km/s vehicle Δv" % [stage_twr, RocketDesign.total_delta_v(rocket_design) / 1000.0]
-	layout.add_child(summary)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	layout.add_child(scroll)
-	var component_list := VBoxContainer.new()
-	component_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	component_list.add_theme_constant_override("separation", 6)
-	scroll.add_child(component_list)
-	var components: Array = stage.get("components", [])
-	for component_index in range(components.size()):
-		var component: Dictionary = components[component_index]
-		var row := HBoxContainer.new()
-		component_list.add_child(row)
-		var details := Label.new()
-		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		details.text = "%s  •  %s  •  %.0f kg  •  %.1f m  •  %.1f t propellant  •  %.2f MN thrust" % [
-			str(component.get("label", component.get("id", "Component"))),
-			str(component.get("kind", "structure")).to_upper(),
-			float(component.get("dry_mass", 0.0)),
-			float(component.get("length_m", 0.0)),
-			float(component.get("fuel_capacity", 0.0)) / 1000.0,
-			float(component.get("vacuum_thrust", component.get("thrust", 0.0))) / 1000000.0
-		]
-		row.add_child(details)
-		var move_up_button := Button.new()
-		move_up_button.text = "↑"
-		move_up_button.tooltip_text = "Move this component towards the payload."
-		move_up_button.disabled = component_index == 0
-		move_up_button.pressed.connect(func():
-			var updated := RocketAssembly.move_component(rocket_design["stages"][stage_index], component_index, -1)
-			if not updated.is_empty():
-				rocket_design["stages"][stage_index] = updated
-				window.queue_free()
-				_show_vehicle_component_editor(stage_index)
-		)
-		row.add_child(move_up_button)
-		var move_down_button := Button.new()
-		move_down_button.text = "↓"
-		move_down_button.tooltip_text = "Move this component towards the engine."
-		move_down_button.disabled = component_index == components.size() - 1
-		move_down_button.pressed.connect(func():
-			var updated := RocketAssembly.move_component(rocket_design["stages"][stage_index], component_index, 1)
-			if not updated.is_empty():
-				rocket_design["stages"][stage_index] = updated
-				window.queue_free()
-				_show_vehicle_component_editor(stage_index)
-		)
-		row.add_child(move_down_button)
-		var remove_button := Button.new()
-		remove_button.text = "REMOVE"
-		remove_button.pressed.connect(func():
-			var updated := RocketAssembly.remove_component(rocket_design["stages"][stage_index], component_index)
-			if not updated.is_empty():
-				rocket_design["stages"][stage_index] = updated
-				window.queue_free()
-				_show_vehicle_component_editor(stage_index)
-		)
-		row.add_child(remove_button)
-	var add_row := HBoxContainer.new()
-	var component_selector := OptionButton.new()
-	component_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for option in RocketAssembly.component_options():
-		component_selector.add_item("%s  ·  %s" % [str(option.get("kind", "part")).capitalize(), str(option.get("label", option.get("id", "Component")))])
-		component_selector.set_item_metadata(component_selector.item_count - 1, str(option.get("id", "")))
-	add_row.add_child(component_selector)
-	var add_button := Button.new()
-	add_button.text = "ADD COMPONENT"
-	add_button.disabled = component_selector.item_count == 0
-	add_button.pressed.connect(func():
-		var updated := RocketAssembly.add_component(rocket_design["stages"][stage_index], str(component_selector.get_selected_metadata()))
-		if not updated.is_empty():
-			rocket_design["stages"][stage_index] = updated
-			window.queue_free()
-			_show_vehicle_component_editor(stage_index)
+	var builder := RocketBuilder.new()
+	active_builder = builder
+	builder.tree_exited.connect(func():
+		if active_builder == builder:
+			active_builder = null
 	)
-	add_row.add_child(add_button)
-	layout.add_child(add_row)
-	var note := Label.new()
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.text = "Components are compiled into the flight model automatically. Remove or add engines and tanks independently; a stage without an engine or propellant cannot launch."
-	layout.add_child(note)
-	_add_button(layout, "CLOSE", func(): window.queue_free())
-	window.popup_centered()
+	builder.configure(rocket_design, stage_index)
+	builder.design_changed.connect(func(updated_design: Dictionary):
+		rocket_design = updated_design.duplicate(true)
+		_update_design_stats()
+	)
+	if not is_inside_tree():
+		add_child(builder)
+		builder._build_interface()
+		builder._refresh()
+		return
+	get_tree().root.add_child(builder)
+	builder.popup_centered()
 
 
 func _duplicate_stage(stage_index: int) -> void:
