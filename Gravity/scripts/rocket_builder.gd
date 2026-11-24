@@ -427,7 +427,8 @@ func _build_interface() -> void:
 	canvas_tools.add_child(fit)
 	center_column.add_child(canvas_tools)
 	var right_panel := PanelContainer.new()
-	right_panel.custom_minimum_size.x = 250.0
+	right_panel.custom_minimum_size.x = 280.0
+	right_panel.size_flags_horizontal = Control.SIZE_SHRINK_END
 	right_panel.name = "STAGING & INSPECTOR"
 	workspace.add_child(right_panel)
 	var right_column := VBoxContainer.new()
@@ -496,9 +497,12 @@ func _build_interface() -> void:
 	selected_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
 	right_column.add_child(selected_heading)
 	var inspector_scroll := ScrollContainer.new()
+	inspector_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inspector_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	inspector_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	right_column.add_child(inspector_scroll)
 	_inspector = VBoxContainer.new()
+	_inspector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_inspector.add_theme_constant_override("separation", 6)
 	inspector_scroll.add_child(_inspector)
 	_refresh_inspector()
@@ -742,8 +746,10 @@ func _refresh_inspector() -> void:
 		if not component.has(field.key):
 			continue
 		var row := VBoxContainer.new()
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var label := Label.new()
 		label.text = str(field.label)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(label)
 		var input := SpinBox.new()
 		input.min_value = 0.0
@@ -755,12 +761,15 @@ func _refresh_inspector() -> void:
 		row.add_child(input)
 		_inspector.add_child(row)
 	var actions := HBoxContainer.new()
+	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var duplicate := Button.new()
+	duplicate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	duplicate.text = "DUPLICATE"
 	duplicate.pressed.connect(_duplicate_selected_component)
 	actions.add_child(duplicate)
 	var remove := Button.new()
 	remove.text = "REMOVE PART"
+	remove.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	remove.pressed.connect(_remove_selected_component)
 	actions.add_child(remove)
 	_inspector.add_child(actions)
@@ -890,6 +899,9 @@ func _refresh_stats() -> void:
 	var status := "DESIGN VALID" if errors.is_empty() else "CHECK: %s" % str(errors[0])
 	_stats.text = "TOTAL MASS  %.1f t     STAGE TWR  %.2f     IDEAL ΔV  %.2f km/s     STAGES  %d\n%s" % [mass / 1000.0, twr, RocketDesign.total_delta_v(design) / 1000.0, design.get("stages", []).size(), status]
 	_stats.add_theme_color_override("font_color", Color(0.95, 0.48, 0.38) if not errors.is_empty() else Color(0.76, 0.85, 0.94))
+
+func performance_summary_text() -> String:
+	return _stats.text if is_instance_valid(_stats) else ""
 
 func _changed(refresh_inspector: bool = true) -> void:
 	if refresh_inspector:

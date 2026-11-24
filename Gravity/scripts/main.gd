@@ -766,6 +766,7 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 	if stage_index < 0 or stage_index >= rocket_design.get("stages", []).size():
 		return
 	var builder := RocketBuilder.new()
+	builder.name = "RocketBuilder"
 	active_builder = builder
 	builder.tree_exited.connect(func():
 		if active_builder == builder:

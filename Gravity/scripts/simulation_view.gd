@@ -40,8 +40,8 @@ var ephemeris_cache_time := -INF
 var ephemeris_cache: Dictionary = {}
 var ephemeris_output_cache_time := -INF
 var ephemeris_output_cache: Dictionary = {}
-var rocket_position_precise := PackedFloat64Array([0.0, -EARTH_RADIUS - 2.0])
-var _rocket_position_display := Vector2(0.0, -EARTH_RADIUS - 2.0)
+var rocket_position_precise := PackedFloat64Array([0.0, -EARTH_RADIUS - 0.5])
+var _rocket_position_display := Vector2(0.0, -EARTH_RADIUS - 0.5)
 var rocket_position: Vector2:
 	get:
 		return _rocket_position_display
@@ -111,6 +111,8 @@ var landed := true
 var crashed := false
 var landed_body_name := "Earth"
 var landed_surface_normal := Vector2.UP
+var launch_pad_normal := Vector2.UP
+var launch_pad_reference_time := 0.0
 var discovered_body_names: Dictionary = {"Earth": true, "Moon": true}
 var telescope_active := false
 var telescope_direction_angle := 0.0
@@ -1402,6 +1404,32 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				camera_zoom = maxf(0.00000000002, camera_zoom / 1.2)
 
+func _launch_pad_surface_normal() -> Vector2:
+	return launch_pad_normal.rotated(EARTH_ROTATION_RATE * (sim_time - launch_pad_reference_time)).normalized()
+
+func _smooth_circle_segments(radius: float) -> int:
+	return clampi(ceili(TAU * sqrt(maxf(1.0, radius) * 0.75)), 96, 4096)
+
+func _draw_smooth_disc(center: Vector2, radius: float, color: Color) -> void:
+	if radius <= 0.0:
+		return
+	var segments := _smooth_circle_segments(radius)
+	var points := PackedVector2Array()
+	for index in range(segments):
+		var angle := TAU * float(index) / float(segments)
+		points.append(center + Vector2(cos(angle), sin(angle)) * radius)
+	draw_colored_polygon(points, color)
+
+func _draw_smooth_circle(center: Vector2, radius: float, color: Color, width: float = 1.0) -> void:
+	if radius <= 0.0:
+		return
+	var segments := _smooth_circle_segments(radius)
+	var points := PackedVector2Array()
+	for index in range(segments + 1):
+		var angle := TAU * float(index % segments) / float(segments)
+		points.append(center + Vector2(cos(angle), sin(angle)) * radius)
+	draw_polyline(points, color, width, true)
+
 func _draw_atmosphere(center: Vector2, planet_radius: float, atmosphere_height: float, atmosphere_color: Color) -> void:
 	if atmosphere_height <= 0.0:
 		return
@@ -1412,8 +1440,8 @@ func _draw_atmosphere(center: Vector2, planet_radius: float, atmosphere_height: 
 		var fraction := float(ring) / float(rings)
 		var ring_radius := planet_radius + visible_thickness * fraction
 		var alpha := 0.012 + 0.075 * (1.0 - fraction)
-		draw_circle(center, ring_radius, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, alpha))
-	draw_arc(center, planet_radius + visible_thickness, 0.0, TAU, 128, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, 0.34), 1.0)
+		_draw_smooth_disc(center, ring_radius, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, alpha))
+	_draw_smooth_circle(center, planet_radius + visible_thickness, Color(atmosphere_color.r, atmosphere_color.g, atmosphere_color.b, 0.34), 1.0)
 
 func _draw_planet_rings(center: Vector2, planet_radius: float, visual_data: Dictionary, opacity_scale: float = 1.0) -> void:
 	if not bool(visual_data.get("has_rings", false)):
@@ -1424,7 +1452,7 @@ func _draw_planet_rings(center: Vector2, planet_radius: float, visual_data: Dict
 	var alpha := float(visual_data.get("ring_opacity", 0.5)) * opacity_scale
 	var line_width := maxf(1.0, (outer_radius - inner_radius) * 0.16)
 	for ring_radius in [inner_radius, (inner_radius + outer_radius) * 0.5, outer_radius]:
-		draw_arc(center, ring_radius, 0.0, TAU, 64, Color(ring_color.r, ring_color.g, ring_color.b, alpha), line_width)
+		_draw_smooth_circle(center, ring_radius, Color(ring_color.r, ring_color.g, ring_color.b, alpha), line_width)
 
 func _planet_atmosphere_visual(name: String) -> Dictionary:
 	var visual_data := PlanetarySystem.planet_visual_data(name)
@@ -1501,19 +1529,21 @@ func _draw() -> void:
 
 	var earth_visual := PlanetarySystem.planet_visual_data("Earth")
 	_draw_atmosphere(earth_screen, radius_px, float(earth_visual.get("atmosphere_height", 100000.0)), earth_visual.get("atmosphere_color", Color(0.22, 0.62, 1.0)))
-	draw_circle(earth_screen, radius_px + 7, Color(0.15, 0.35, 0.58, 0.12))
+	_draw_smooth_disc(earth_screen, radius_px + 7.0, Color(0.15, 0.35, 0.58, 0.12))
 	var earth_color: Color = earth_visual.get("surface_color", Color(0.10, 0.28, 0.53))
-	draw_circle(earth_screen, radius_px, earth_color)
-	draw_arc(earth_screen, radius_px, 0, TAU, 120, earth_color.lightened(0.25), 2.0)
-	draw_arc(earth_screen, radius_px * 0.76, -0.4, 2.4, 48, Color(0.18, 0.43, 0.48, 0.45), 2.0)
-	draw_arc(earth_screen, radius_px * 0.53, 2.2, 5.4, 48, Color(0.18, 0.43, 0.48, 0.35), 2.0)
+	_draw_smooth_disc(earth_screen, radius_px, earth_color)
+	_draw_smooth_circle(earth_screen, radius_px, earth_color.lightened(0.25), 2.0)
+	draw_arc(earth_screen, radius_px * 0.76, -0.4, 2.4, 96, Color(0.18, 0.43, 0.48, 0.45), 2.0, true)
+	draw_arc(earth_screen, radius_px * 0.53, 2.2, 5.4, 96, Color(0.18, 0.43, 0.48, 0.35), 2.0, true)
 	var object_scale := RocketVisual.camera_scale(camera_zoom, world_scale_factor)
 	var pad_width := clampf(34.0 * object_scale, 0.5, 85.0)
 	var pad_height := clampf(7.0 * object_scale, 0.5, 18.0)
-	var pad_y := earth_screen.y - radius_px - 2.0 * object_scale
-	draw_line(Vector2(earth_screen.x - pad_width, pad_y), Vector2(earth_screen.x + pad_width, pad_y), Color(0.65, 0.72, 0.82), 3.0 * object_scale)
-	draw_line(Vector2(earth_screen.x - 20.0 * object_scale, pad_y), Vector2(earth_screen.x - 20.0 * object_scale, pad_y + pad_height), Color(0.65, 0.72, 0.82), 2.0 * object_scale)
-	draw_line(Vector2(earth_screen.x + 20.0 * object_scale, pad_y), Vector2(earth_screen.x + 20.0 * object_scale, pad_y + pad_height), Color(0.65, 0.72, 0.82), 2.0 * object_scale)
+	var pad_normal := _launch_pad_surface_normal()
+	var pad_tangent := Vector2(-pad_normal.y, pad_normal.x)
+	var pad_center := earth_screen + pad_normal * (radius_px + 2.0 * object_scale)
+	draw_line(pad_center - pad_tangent * pad_width, pad_center + pad_tangent * pad_width, Color(0.65, 0.72, 0.82), 3.0 * object_scale)
+	draw_line(pad_center - pad_tangent * pad_width * 0.58, pad_center - pad_tangent * pad_width * 0.58 - pad_normal * pad_height, Color(0.65, 0.72, 0.82), 2.0 * object_scale)
+	draw_line(pad_center + pad_tangent * pad_width * 0.58, pad_center + pad_tangent * pad_width * 0.58 - pad_normal * pad_height, Color(0.65, 0.72, 0.82), 2.0 * object_scale)
 	draw_string(ThemeDB.fallback_font, earth_screen + Vector2(radius_px + 12, 4), "EARTH", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.78, 1.0))
 
 	var moon_world := PlanetarySystem.moon_position(sim_time)
@@ -1526,8 +1556,8 @@ func _draw() -> void:
 			draw_circle(moon_screen, moon_radius_px + 5.0, Color(0.34, 0.58, 0.84, 0.18))
 		else:
 			draw_circle(moon_screen, moon_radius_px + 3.0, Color(0.55, 0.58, 0.66, 0.16))
-		draw_circle(moon_screen, moon_radius_px, moon_color.darkened(0.2))
-		draw_arc(moon_screen, moon_radius_px, 0.0, TAU, 64, moon_color, 1.0)
+		_draw_smooth_disc(moon_screen, moon_radius_px, moon_color.darkened(0.2))
+		_draw_smooth_circle(moon_screen, moon_radius_px, moon_color, 1.0)
 		draw_string(ThemeDB.fallback_font, moon_screen + Vector2(moon_radius_px + 8.0, 4.0), "MOON", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.75, 0.78, 0.84) if visited_body_names.has("Moon") else Color(0.43, 0.56, 0.72))
 
 	var destination := _nearest_body_state(rocket_position)
@@ -1541,10 +1571,10 @@ func _draw() -> void:
 				destination_color = destination_color.darkened(0.58).lerp(Color(0.32, 0.43, 0.58), 0.4)
 			var atmosphere_visual: Dictionary = _planet_atmosphere_visual(str(destination.name))
 			_draw_atmosphere(destination_screen, destination_radius, float(atmosphere_visual.get("height", 0.0)), atmosphere_visual.get("color", Color.TRANSPARENT))
-			draw_circle(destination_screen, destination_radius + 5.0, Color(0.45, 0.7, 1.0, 0.12))
+			_draw_smooth_disc(destination_screen, destination_radius + 5.0, Color(0.45, 0.7, 1.0, 0.12))
 			_draw_planet_rings(destination_screen, destination_radius, destination_visual)
-			draw_circle(destination_screen, destination_radius, destination_color)
-			draw_arc(destination_screen, destination_radius, 0.0, TAU, 80, Color(0.9, 0.92, 1.0, 0.8), 1.0)
+			_draw_smooth_disc(destination_screen, destination_radius, destination_color)
+			_draw_smooth_circle(destination_screen, destination_radius, Color(0.9, 0.92, 1.0, 0.8), 1.0)
 			draw_string(ThemeDB.fallback_font, destination_screen + Vector2(destination_radius + 8.0, 4.0), str(destination.name).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.8, 0.88, 1.0))
 			_draw_destination_satellites(str(destination.name), destination_screen, destination_radius, destination)
 		var soi_pixels := float(destination.soi) * altitude_visual_scale
@@ -1668,14 +1698,14 @@ func _draw_full_system_zoom(view_center: Vector2) -> void:
 			if not visited_body_names.has(body_name):
 				body_color = body_color.darkened(0.62).lerp(Color(0.38, 0.48, 0.62), 0.35)
 				draw_circle(screen_position, body_radius + 3.0, Color(0.36, 0.58, 0.82, 0.16))
-		draw_circle(screen_position, body_radius, body_color)
+		_draw_smooth_disc(screen_position, body_radius, body_color)
 		if body_radius >= 2.0 or body_name in ["Sun", "Earth", "Moon"]:
 			var label_position := screen_position + Vector2(body_radius + 4.0, 3.0)
 			draw_string(ThemeDB.fallback_font, label_position, body_name.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, body_color.lightened(0.2))
 	var earth_screen := view_center - rocket_position * scale
 	var earth_radius := clampf(PlanetarySystem.EARTH_RADIUS * scale, 1.5, 9.0)
 	var earth_color: Color = PlanetarySystem.planet_visual_data("Earth").get("color", Color(0.25, 0.55, 0.82))
-	draw_circle(earth_screen, earth_radius, earth_color)
+	_draw_smooth_disc(earth_screen, earth_radius, earth_color)
 	if earth_screen.distance_to(view_center) > 12.0:
 		draw_string(ThemeDB.fallback_font, earth_screen + Vector2(earth_radius + 4.0, 3.0), "EARTH", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, earth_color)
 	draw_circle(view_center, 3.0, Color(0.3, 1.0, 0.65))
@@ -1851,9 +1881,9 @@ func _draw_solar_system(center: Vector2) -> void:
 			planet_color = planet_color.darkened(0.58).lerp(Color(0.32, 0.43, 0.58), 0.4)
 		_draw_planet_rings(planet_screen, planet_radius, planet_visual, 0.85 if visited else 0.2)
 		if not visited:
-			draw_circle(planet_screen, planet_radius + 4.0, Color(0.34, 0.58, 0.84, 0.2))
-			draw_circle(planet_screen, planet_radius, Color(0.025, 0.045, 0.075, 0.42))
-		draw_circle(planet_screen, planet_radius, planet_color)
+			_draw_smooth_disc(planet_screen, planet_radius + 4.0, Color(0.34, 0.58, 0.84, 0.2))
+			_draw_smooth_disc(planet_screen, planet_radius, Color(0.025, 0.045, 0.075, 0.42))
+		_draw_smooth_disc(planet_screen, planet_radius, planet_color)
 		_draw_solar_label(planet_name.to_upper(), planet_screen, 10, Color(0.82, 0.88, 0.96) if visited else Color(0.43, 0.56, 0.72), occupied)
 	for planet in PlanetarySystem.PLANETS:
 		var planet_name: String = str(planet.name)
@@ -2238,6 +2268,9 @@ func get_save_data() -> Dictionary:
 		"landed_body_name": landed_body_name,
 		"landed_surface_normal_x": landed_surface_normal.x,
 		"landed_surface_normal_y": landed_surface_normal.y,
+		"launch_pad_normal_x": launch_pad_normal.x,
+		"launch_pad_normal_y": launch_pad_normal.y,
+		"launch_pad_reference_time": launch_pad_reference_time,
 		"autopilot_burn_direction_x": autopilot_burn_direction.x,
 		"autopilot_burn_direction_y": autopilot_burn_direction.y,
 		"autopilot_route_nodes": autopilot_route_nodes.duplicate(true),
@@ -2441,6 +2474,8 @@ func load_save_data(data: Dictionary) -> bool:
 	crashed = bool(data.get("crashed", false))
 	landed_body_name = str(data.get("landed_body_name", "Earth"))
 	landed_surface_normal = Vector2(float(data.get("landed_surface_normal_x", 0.0)), float(data.get("landed_surface_normal_y", -1.0))).normalized()
+	launch_pad_normal = Vector2(float(data.get("launch_pad_normal_x", 0.0)), float(data.get("launch_pad_normal_y", -1.0))).normalized()
+	launch_pad_reference_time = float(data.get("launch_pad_reference_time", 0.0))
 	autopilot_burn_direction = Vector2(float(data.get("autopilot_burn_direction_x", 0.0)), float(data.get("autopilot_burn_direction_y", 0.0)))
 	autopilot_route_nodes.clear()
 	var saved_route_nodes: Variant = data.get("autopilot_route_nodes", [])

@@ -7,11 +7,13 @@ func _initialize() -> void:
 	var main := Main.new()
 	main.size = Vector2(1280.0, 720.0)
 	root.add_child(main)
+	await process_frame
 	main.rocket_design = RocketDesign.create_default()
 	main._show_vehicle_editor()
+	await process_frame
 	assert(main.mode == "editor")
 	assert(is_instance_valid(main.active_builder))
-	assert(main.active_builder.title == "VEHICLE ASSEMBLY BUILDING")
+	assert(_find_label(main.active_builder, "VEHICLE BUILDER"))
 	var payload_input: SpinBox = main.active_builder._payload_mass_input
 	assert(is_instance_valid(payload_input))
 	payload_input.value = 1200.0
@@ -24,6 +26,15 @@ func _initialize() -> void:
 	main.active_builder.free()
 	main.queue_free()
 	quit()
+
+
+func _find_label(node: Node, expected_text: String) -> bool:
+	if node is Label and node.text == expected_text:
+		return true
+	for child in node.get_children():
+		if _find_label(child, expected_text):
+			return true
+	return false
 
 
 func _find_button(node: Node, button_text: String) -> Button:

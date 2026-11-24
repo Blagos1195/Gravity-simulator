@@ -11,6 +11,7 @@ func _initialize() -> void:
 	_validate_staging()
 	_validate_atmospheric_forces()
 	_validate_surface_contact()
+	_validate_launch_pad_anchor()
 	_validate_small_body_collision()
 	print("Simulation lifecycle tests passed.")
 	quit()
@@ -130,6 +131,23 @@ func _validate_surface_contact() -> void:
 	assert(not simulation.crashed)
 	assert(simulation.landed_body_name == "Earth")
 	simulation.free()
+
+func _validate_launch_pad_anchor() -> void:
+	var simulation: Variant = SimulationView.new()
+	simulation.set_rocket_design(RocketDesign.create_default())
+	assert(is_equal_approx(simulation.rocket_position.length(), PlanetarySystem.EARTH_RADIUS + 0.5))
+	simulation.sim_time = 1200.0
+	var expected := Vector2.UP.rotated(PlanetarySystem.EARTH_ROTATION_RATE * 1200.0)
+	assert(simulation._launch_pad_surface_normal().distance_to(expected) < 0.000001)
+	simulation.launch_pad_normal = Vector2.RIGHT
+	simulation.launch_pad_reference_time = 500.0
+	var save_data: Dictionary = simulation.get_save_data()
+	var restored: Variant = SimulationView.new()
+	assert(restored.load_save_data(save_data))
+	restored.sim_time = 1200.0
+	assert(restored._launch_pad_surface_normal().distance_to(simulation._launch_pad_surface_normal()) < 0.000001)
+	simulation.free()
+	restored.free()
 
 func _validate_small_body_collision() -> void:
 	var simulation: Variant = SimulationView.new()
