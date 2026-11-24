@@ -254,6 +254,8 @@ func _build_interface() -> void:
 		design["payload_mass"] = float(option.get("mass", design.get("payload_mass", 500.0)))
 		design["payload_type"] = str(option.get("id", "probe"))
 		design["payload_visual"] = RocketDesign.payload_visual_data(str(option.get("id", "probe")))
+		if is_instance_valid(_payload_mass_input):
+			_payload_mass_input.set_value_no_signal(float(option.get("mass", 500.0)))
 		_emit_design()
 		_refresh_stats()
 	)
@@ -677,12 +679,13 @@ func _duplicate_selected_component() -> void:
 	_push_undo()
 	var destination := selected_component_index + 1
 	var duplicate: Dictionary = components[selected_component_index].duplicate(true)
-	if str(duplicate.get("attachment", "stack")) == "stack":
-		for index in range(components.size()):
-			var component: Dictionary = components[index]
-			if str(component.get("attachment", "stack")) == "radial" and int(component.get("mount_index", -1)) >= destination:
-				component["mount_index"] = int(component.get("mount_index", -1)) + 1
-				components[index] = component
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		if str(component.get("attachment", "stack")) == "radial" and int(component.get("mount_index", -1)) >= destination:
+			component["mount_index"] = int(component.get("mount_index", -1)) + 1
+			components[index] = component
+	if str(duplicate.get("attachment", "stack")) == "radial" and int(duplicate.get("mount_index", -1)) >= destination:
+		duplicate["mount_index"] = int(duplicate.get("mount_index", -1)) + 1
 	components.insert(destination, duplicate)
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(_current_stage(), components)
 	selected_component_index = destination
