@@ -76,7 +76,7 @@ static func scan_telescope(state: Dictionary, telescope_position: Vector2, range
 		if body_name.is_empty() or body_name == "Sun" or is_spotted(state, body_name):
 			continue
 		var offset: Vector2 = Vector2(body.get("position", Vector2.ZERO)) - telescope_position
-		if offset.length_squared() > range_squared or offset.length_squared() < 1.0:
+		if offset.length_squared() > range_squared or offset.length_squared() < 0.000001:
 			continue
 		var angular_offset := absf(wrapf(offset.angle() - pointing_angle, -PI, PI))
 		if angular_offset <= half_field_of_view and mark_spotted(state, body_name):
