@@ -7,8 +7,10 @@ func _initialize() -> void:
 	var main := Main.new()
 	main.size = Vector2(1280.0, 720.0)
 	root.add_child(main)
+	await process_frame
 	main.rocket_design = RocketDesign.create_default()
 	main._show_vehicle_editor()
+	await process_frame
 	assert(main.mode == "editor")
 	assert(is_instance_valid(main.active_builder))
 	assert(_find_label(main.active_builder, "VEHICLE BUILDER"))
