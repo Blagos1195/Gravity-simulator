@@ -26,7 +26,6 @@ var simulate_belt_collisions := false
 var save_slot := 1
 var sim
 var fleet_sims: Array = []
-var editing_active_vehicle := false
 var active_vehicle_index := 0
 var fleet_time_backlog := 0.0
 var discovery_state: Dictionary = SpaceDiscovery.new_campaign_state()
@@ -900,13 +899,7 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "LOAD DESIGN", _load_rocket_design)
 	_add_button(actions, "SAVE DESIGN", _save_rocket_design)
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
-	if editing_active_vehicle:
-		_add_button(actions, "CANCEL EDIT", func():
-			editing_active_vehicle = false
-			_build_flight_hud()
-		)
-	else:
-		_add_button(actions, "BACK", _show_new_game_setup)
+	_add_button(actions, "BACK", _show_new_game_setup)
 	_update_design_stats()
 
 
@@ -1259,21 +1252,6 @@ func _launch_designed_vehicle() -> void:
 	if not errors.is_empty():
 		_update_design_stats()
 		return
-	if editing_active_vehicle and is_instance_valid(sim):
-		var edited_position := sim.rocket_position
-		var edited_velocity := sim.velocity
-		var edited_time := sim.sim_time
-		var edited_warp := sim.time_warp
-		var edited_name := sim.vehicle_name
-		sim.set_rocket_design(rocket_design.duplicate(true))
-		sim.rocket_position = edited_position
-		sim.velocity = edited_velocity
-		sim.sim_time = edited_time
-		sim.time_warp = edited_warp
-		sim.vehicle_name = edited_name
-		editing_active_vehicle = false
-		_build_flight_hud()
-		return
 	_start_flight()
 
 func _begin_new_game() -> void:
@@ -1568,20 +1546,6 @@ func _launch_vehicle_design(design: Dictionary) -> void:
 	fleet_sims.append(vehicle)
 	_refresh_vehicle_selector()
 	_switch_vehicle(fleet_sims.size() - 1)
-
-func _edit_active_vehicle() -> void:
-	if not is_instance_valid(sim):
-		return
-	editing_active_vehicle = true
-	rocket_design = {
-		"name": sim.vehicle_name,
-		"payload_mass": sim.payload_mass,
-		"payload_type": sim.payload_type,
-		"payload_visual": sim.payload_visual.duplicate(true),
-		"stages": sim.rocket_stages.duplicate(true)
-	}
-	_show_vehicle_editor()
-
 
 func _show_new_vehicle_dialog() -> void:
 	if not is_instance_valid(sim):
@@ -2275,7 +2239,6 @@ func _build_flight_hud() -> void:
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
 	_add_button(right, "TOGGLE FULL SIMULATION", _set_selected_vehicle_full_simulation)
-	_add_button(right, "EDIT ACTIVE VEHICLE", _edit_active_vehicle)
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
 	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
