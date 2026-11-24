@@ -227,6 +227,15 @@ func _advance_fleet(delta: float) -> void:
 			for vehicle in fleet_sims:
 				if not _is_docked_child(vehicle.vehicle_name) and not vehicle.passive_orbit_active:
 					step_delta = minf(step_delta, vehicle._adaptive_step_size())
+				if vehicle.telescope_active and not vehicle.landed and not vehicle.crashed:
+					var telescope_body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+					if not telescope_body.is_empty():
+						var telescope_relative_position: Vector2 = telescope_body.get("relative_position", Vector2.ZERO)
+						var telescope_relative_velocity: Vector2 = vehicle.velocity - Vector2(telescope_body.get("velocity", Vector2.ZERO))
+						var telescope_orbit := FlightComputer.orbital_state(telescope_relative_position, telescope_relative_velocity, FlightComputer.G * float(telescope_body.get("mass", 0.0)))
+						var telescope_period := float(telescope_orbit.get("period", INF))
+						if bool(telescope_orbit.get("bound", false)) and telescope_period > 0.0 and is_finite(telescope_period):
+							step_delta = minf(step_delta, telescope_period / 24.0)
 			if step_delta <= 0.000001:
 				break
 			var positions_before: Dictionary = {}
