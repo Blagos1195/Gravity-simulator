@@ -90,6 +90,7 @@ func _initialize() -> void:
 	assert(main.fleet_sims.size() == 2)
 	assert(main.active_vehicle_index == 1)
 	assert(main.sim.vehicle_name == "Lunar Relay")
+	first = main.fleet_sims[0]
 	assert(is_equal_approx(main.fleet_sims[0].sim_time, main.fleet_sims[1].sim_time))
 	for i in range(12):
 		main._add_new_vehicle()
@@ -121,6 +122,23 @@ func _initialize() -> void:
 			saved_debris_found = true
 			break
 	assert(saved_debris_found, "Discarded stage was not persisted in the campaign save")
+	var collision_target: SimulationView = main.fleet_sims[1]
+	for vehicle in main.fleet_sims:
+		vehicle.landed = true
+		vehicle.crashed = false
+		vehicle.passive_orbit_active = false
+		vehicle.thrust_key_down = false
+		vehicle.autopilot_enabled = false
+	first.landed = false
+	collision_target.landed = false
+	first._set_rocket_position_components(1000000000.0, 0.0)
+	collision_target._set_rocket_position_components(1000000010.0, 0.0)
+	first.velocity = Vector2(1000.0, 0.0)
+	collision_target.velocity = Vector2(-1000.0, 0.0)
+	main._switch_vehicle(0)
+	main._advance_fleet(0.02)
+	assert(first.crashed, "First spacecraft did not crash after a swept collision")
+	assert(collision_target.crashed, "Second spacecraft did not crash after a swept collision")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Multi-vehicle simulation test passed.")
 	main.queue_free()

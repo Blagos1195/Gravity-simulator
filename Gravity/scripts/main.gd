@@ -9,6 +9,7 @@ const RoutePlanner = preload("res://scripts/route_planner.gd")
 const OrbitalPropagator = preload("res://scripts/orbital_propagator.gd")
 const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
 const MissionSystem = preload("res://scripts/mission_system.gd")
+const SpaceObjectPhysics = preload("res://scripts/space_object_physics.gd")
 const STARTING_FUNDS := 150000000.0
 const LAUNCH_BASE_COST := 1000000.0
 const LAUNCH_COST_PER_KG := 75.0
@@ -201,12 +202,16 @@ func _advance_fleet(delta: float) -> void:
 					step_delta = minf(step_delta, vehicle._adaptive_step_size())
 			if step_delta <= 0.000001:
 				break
+			var positions_before: Dictionary = {}
+			for vehicle in fleet_sims:
+				positions_before[vehicle] = vehicle.rocket_position
 			for vehicle in fleet_sims:
 				if not _is_docked_child(vehicle.vehicle_name) and not vehicle.passive_orbit_active:
 					vehicle._physics_step(step_delta)
 			for vehicle in fleet_sims:
 				if vehicle.passive_orbit_active:
 					_advance_passive_vehicle(vehicle, sim.sim_time)
+			_resolve_spacecraft_collisions(positions_before)
 			_sync_docked_vehicles()
 			fleet_time_backlog = maxf(0.0, fleet_time_backlog - step_delta)
 			iterations += 1
@@ -232,6 +237,48 @@ func _advance_fleet(delta: float) -> void:
 		_update_economy()
 		_update_missions()
 		sim.queue_redraw()
+
+func _resolve_spacecraft_collisions(positions_before: Dictionary) -> void:
+	for first_index in range(fleet_sims.size()):
+		var first: SimulationView = fleet_sims[first_index]
+		if first.crashed or first.landed or not positions_before.has(first):
+			continue
+		for second_index in range(first_index + 1, fleet_sims.size()):
+			var second: SimulationView = fleet_sims[second_index]
+			if second.crashed or second.landed or not positions_before.has(second):
+				continue
+			if _are_docked(first.vehicle_name, second.vehicle_name):
+				continue
+			var first_radius := RocketDesign.vehicle_collision_radius_m({"stages": first.rocket_stages}, first.stage_index)
+			var second_radius := RocketDesign.vehicle_collision_radius_m({"stages": second.rocket_stages}, second.stage_index)
+			var contact := SpaceObjectPhysics.swept_circle_contact(
+				positions_before[first],
+				first.rocket_position,
+				first_radius,
+				positions_before[second],
+				second.rocket_position,
+				second_radius
+			)
+			if contact.is_empty():
+				continue
+			var normal: Vector2 = contact.normal
+			var midpoint: Vector2 = contact.impact_point
+			var first_contact := midpoint + normal * first_radius
+			var second_contact := midpoint - normal * second_radius
+			first._set_rocket_position_components(first_contact.x, first_contact.y)
+			second._set_rocket_position_components(second_contact.x, second_contact.y)
+			first.crashed = true
+			second.crashed = true
+			first.thrust_key_down = false
+			second.thrust_key_down = false
+			first.autopilot_enabled = false
+			second.autopilot_enabled = false
+			first.guidance_enabled = false
+			second.guidance_enabled = false
+			first.throttle = 0.0
+			second.throttle = 0.0
+			first.status_message = "COLLISION WITH %s" % second.vehicle_name.to_upper()
+			second.status_message = "COLLISION WITH %s" % first.vehicle_name.to_upper()
 
 func _launch_cost_for_design(design: Dictionary) -> float:
 	return LAUNCH_BASE_COST + RocketDesign.total_initial_mass(design) * LAUNCH_COST_PER_KG

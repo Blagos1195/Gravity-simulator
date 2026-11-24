@@ -233,6 +233,25 @@ static func stage_booster_stats(stage: Dictionary) -> Dictionary:
 			totals[key] += float(booster.get(key, 0.0)) * pair_count
 	return totals
 
+static func stage_collision_radius_m(stage: Dictionary) -> float:
+	var fallback_radius := maxf(0.5, sqrt(maxf(1.0, float(stage.get("dry_mass", 1.0))) * 0.00018))
+	var radius := maxf(0.1, float(stage.get("collision_radius_m", fallback_radius)))
+	for booster_variant in stage.get("boosters", []):
+		if not booster_variant is Dictionary:
+			continue
+		var booster := booster_definition_for_entry(booster_variant)
+		if booster.is_empty():
+			continue
+		radius = maxf(radius, float(stage.get("collision_radius_m", fallback_radius)) + maxf(0.1, float(booster.get("collision_radius_m", 0.8))))
+	return radius
+
+static func vehicle_collision_radius_m(design: Dictionary, first_stage_index: int = 0) -> float:
+	var stages: Array = design.get("stages", [])
+	var radius := maxf(0.1, sqrt(maxf(0.001, float(design.get("payload_mass", 0.001))) * 0.00018))
+	for index in range(clampi(first_stage_index, 0, stages.size())):
+		radius = maxf(radius, stage_collision_radius_m(stages[index]))
+	return radius
+
 static func stage_total_dry_mass(stage: Dictionary) -> float:
 	return float(stage.get("dry_mass", 0.0)) + float(stage_booster_stats(stage).dry_mass)
 

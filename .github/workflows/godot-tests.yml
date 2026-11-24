@@ -54,9 +54,10 @@ jobs:
           if echo "$changed_files" | grep -Eq 'main.gd'; then
             run_check rocket_builder_ui_test
           fi
-          if echo "$changed_files" | grep -Eq 'main.gd|simulation_view'; then
+          if echo "$changed_files" | grep -Eq 'main.gd|simulation_view|space_object_physics|rocket_design'; then
             run_check multi_vehicle_test
             run_check docking_fuel_test
+            run_check spacecraft_collision_test
           fi
           if echo "$changed_files" | grep -Eq 'simulation_view|rocket_design|rocket_visual'; then
             run_check booster_physics_test
@@ -105,6 +106,7 @@ jobs:
           run_check booster_physics_test
           run_check multi_vehicle_test
           run_check docking_fuel_test
+          run_check spacecraft_collision_test
           run_check flight_computer_test
           run_check orbital_stability_test
           run_check simulation_lifecycle_test
