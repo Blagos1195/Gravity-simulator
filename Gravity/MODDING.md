@@ -104,3 +104,8 @@ Back up your mod before changing it. Keep IDs stable once a saved vehicle or pre
 ## Passive orbital simulation
 
 Inactive spacecraft in stable, bound orbits are analytically propagated with Keplerian orbital elements instead of being stepped through the full n-body flight simulation. The game promotes a spacecraft back to full simulation when it becomes the active vehicle, is forced into full simulation, or an active spacecraft approaches within 20,000 km. Unsafe, atmospheric, unbound, manoeuvring, landed and docked vehicles remain in full simulation. Passive orbit state is stored in the save file and is revalidated when simulation resumes.
+
+
+## Telescope payloads and planetary discovery
+
+Payload definitions may include `telescope_range_au`, a non-negative detection radius in astronomical units. The built-in scout telescope has a 1.2 AU range, the survey telescope has a 3.5 AU range, and the deep-space telescope has a 10.5 AU range. A telescope only scans while its spacecraft is in a stable orbit. Its heliocentric range permanently spots planets and moons; a spotted body is visible on the system map but is not an autopilot destination until one of the player's spacecraft has established a stable orbit around it. Telescope range and payload type are data-driven and can be extended or overridden by mods.
