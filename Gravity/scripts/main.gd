@@ -553,6 +553,7 @@ func _update_discovery_state() -> void:
 		vehicle.visited_body_names = visited.duplicate()
 	if not newly_discovered.is_empty() and is_instance_valid(status_label):
 		status_label.text = "NEW DISCOVERY  •  " + ", ".join(newly_discovered).to_upper()
+	_refresh_telescope_control()
 
 func _update_passive_orbit_states() -> void:
 	for vehicle in fleet_sims:
