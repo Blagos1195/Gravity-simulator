@@ -78,7 +78,6 @@ var design_error_label: Label
 var design_preview: Control
 
 func _ready() -> void:
-	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
 	_configure_input_actions()
 	_load_general_settings()
@@ -109,11 +108,14 @@ func _load_general_settings() -> void:
 	config.load("user://settings.cfg")
 	autosave_enabled = bool(config.get_value("general", "autosave", true))
 	simulate_belt_collisions = bool(config.get_value("general", "simulate_belt_collisions", false))
+	var fullscreen := bool(config.get_value("general", "fullscreen", false))
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
 
 func _save_general_settings() -> void:
 	var config := ConfigFile.new()
 	config.set_value("general", "autosave", autosave_enabled)
 	config.set_value("general", "simulate_belt_collisions", simulate_belt_collisions)
+	config.set_value("general", "fullscreen", DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN)
 	config.save("user://settings.cfg")
 
 func _input(event: InputEvent) -> void:
@@ -179,8 +181,6 @@ func _fit_windows_to_screen() -> void:
 		if not child is Window:
 			continue
 		var window := child as Window
-		if window.mode == Window.MODE_FULLSCREEN:
-			continue
 		window.min_size = Vector2i(mini(window.min_size.x, available.x), mini(window.min_size.y, available.y))
 		var target_size := Vector2i(mini(window.size.x, available.x), mini(window.size.y, available.y))
 		if target_size != window.size:
@@ -1401,10 +1401,14 @@ func _show_settings() -> void:
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 30)
 	settings_root.add_child(heading)
-	var fullscreen_label := Label.new()
-	fullscreen_label.text = "DISPLAY MODE  •  FULLSCREEN"
-	fullscreen_label.add_theme_color_override("font_color", Color(0.4, 0.72, 0.94))
-	settings_root.add_child(fullscreen_label)
+	var fullscreen := CheckButton.new()
+	fullscreen.text = "Fullscreen"
+	fullscreen.button_pressed = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+	fullscreen.toggled.connect(func(enabled: bool):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if enabled else DisplayServer.WINDOW_MODE_WINDOWED)
+		_save_general_settings()
+	)
+	settings_root.add_child(fullscreen)
 	var autosave := CheckButton.new()
 	autosave.text = "Automatic saving every 60 seconds"
 	autosave.button_pressed = autosave_enabled
