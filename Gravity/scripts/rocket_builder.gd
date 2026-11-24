@@ -110,6 +110,7 @@ class AssemblyCanvas extends Control:
 		var total_height := total_length * scale
 		var current_y := (size.y - total_height) * 0.5
 		var max_radius := 0.5
+		var axial_centers: Dictionary = {}
 		for item in axial:
 			max_radius = maxf(max_radius, float(item.component.get("collision_radius_m", 1.0)))
 		var width_scale := minf(15.0 * zoom, maxf(4.0, (size.x * 0.22) / max_radius))
@@ -121,6 +122,9 @@ class AssemblyCanvas extends Control:
 			var rect := Rect2(Vector2(center_x - half_width, current_y), Vector2(half_width * 2.0, height))
 			_draw_part(rect, component, index == selected_index)
 			_component_rects.append({"index": index, "rect": rect})
+			axial_centers[index] = rect.get_center().y
+			draw_circle(Vector2(center_x, rect.position.y), 4.0, Color(0.35, 0.78, 1.0))
+			draw_circle(Vector2(center_x, rect.end.y), 4.0, Color(0.35, 0.78, 1.0))
 			current_y += height
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
@@ -130,7 +134,8 @@ class AssemblyCanvas extends Control:
 			var width := maxf(14.0, float(component.get("collision_radius_m", 1.0)) * width_scale * 0.85)
 			var side := int(component.get("side", 1))
 			var mirrored := bool(component.get("mirror", true))
-			var y := (size.y - height) * 0.5
+			var mount_index := int(component.get("mount_index", -1))
+			var y := float(axial_centers.get(mount_index, size.y * 0.5)) - height * 0.5
 			var offset := max_radius * width_scale + width * 0.9 + 12.0
 			var sides: Array = [-1, 1] if mirrored else [side]
 			for direction in sides:
@@ -311,7 +316,7 @@ func _build_interface() -> void:
 	center_column.add_theme_constant_override("separation", 6)
 	center_panel.add_child(center_column)
 	var canvas_heading := Label.new()
-	canvas_heading.text = "ASSEMBLY VIEW  •  DRAG PARTS ONTO THE ROCKET OR ITS SIDES"
+	canvas_heading.text = "ASSEMBLY VIEW  •  SNAP PARTS TO STACK NODES OR SIDE MOUNTS"
 	canvas_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	canvas_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
 	center_column.add_child(canvas_heading)
@@ -427,7 +432,7 @@ func _build_interface() -> void:
 	footer.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(footer)
 	var note := Label.new()
-	note.text = "Drag from the catalogue to stack or mount parts. Drag installed parts to reorder them. Mirroring duplicates radial mounts."
+	note.text = "Drag parts onto the stack nodes or side mounts. Drag installed parts to reorder them. Mirroring duplicates radial mounts."
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	footer.add_child(note)
@@ -485,7 +490,7 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 	if stage.is_empty():
 		return
 	_push_undo()
-	var updated := RocketAssembly.add_component(stage, component_id, attachment, mirrored, side)
+	var updated := RocketAssembly.add_component(stage, component_id, attachment, mirrored, side, insert_index)
 	if updated.is_empty():
 		return
 	var components: Array = updated.get("components", [])
