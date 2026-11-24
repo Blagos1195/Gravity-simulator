@@ -80,7 +80,7 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		var spacing := width * 0.76 / float(maxi(1, visible_engines - 1))
 		var nozzle_width := minf(minf(2.5, width * 0.13), maxf(0.1, spacing * 0.38))
 		for engine_index in range(visible_engines):
-			var engine_x := (float(engine_index) - float(engines - 1) * 0.5) * spacing
+			var engine_x := (float(engine_index) - float(visible_engines - 1) * 0.5) * spacing
 			_polygon(canvas, origin, [Vector2(engine_x - nozzle_width, y + height), Vector2(engine_x + nozzle_width, y + height), Vector2(engine_x + nozzle_width * 0.7, y + height + 4.0), Vector2(engine_x - nozzle_width * 0.7, y + height + 4.0)], rotation, scale, Color(0.56, 0.61, 0.68))
 			if engine_enabled and i == 0 and throttle > 0.0:
 				var flame_length := 7.0 + 8.0 * clampf(throttle, 0.0, 1.0)
