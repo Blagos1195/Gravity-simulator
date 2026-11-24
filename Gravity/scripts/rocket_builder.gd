@@ -621,6 +621,7 @@ func _refresh_inspector() -> void:
 	mirror_selected.text = "MIRROR THIS RADIAL PART"
 	mirror_selected.disabled = str(component.get("attachment", "stack")) != "radial"
 	mirror_selected.button_pressed = bool(component.get("mirror", false))
+	var side_selector: OptionButton
 	mirror_selected.toggled.connect(func(enabled: bool):
 		_update_component_property("mirror", enabled)
 		if is_instance_valid(side_selector):
@@ -631,7 +632,7 @@ func _refresh_inspector() -> void:
 		var side_label := Label.new()
 		side_label.text = "Mount side"
 		_inspector.add_child(side_label)
-		var side_selector := OptionButton.new()
+		side_selector = OptionButton.new()
 		side_selector.add_item("Left")
 		side_selector.set_item_metadata(0, -1)
 		side_selector.add_item("Right")
