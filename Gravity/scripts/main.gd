@@ -1058,6 +1058,30 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 			float(component.get("vacuum_thrust", component.get("thrust", 0.0))) / 1000000.0
 		]
 		row.add_child(details)
+		var move_up_button := Button.new()
+		move_up_button.text = "↑"
+		move_up_button.tooltip_text = "Move this component towards the payload."
+		move_up_button.disabled = component_index == 0
+		move_up_button.pressed.connect(func():
+			var updated := RocketAssembly.move_component(rocket_design["stages"][stage_index], component_index, -1)
+			if not updated.is_empty():
+				rocket_design["stages"][stage_index] = updated
+				window.queue_free()
+				_show_vehicle_editor()
+		)
+		row.add_child(move_up_button)
+		var move_down_button := Button.new()
+		move_down_button.text = "↓"
+		move_down_button.tooltip_text = "Move this component towards the engine."
+		move_down_button.disabled = component_index == components.size() - 1
+		move_down_button.pressed.connect(func():
+			var updated := RocketAssembly.move_component(rocket_design["stages"][stage_index], component_index, 1)
+			if not updated.is_empty():
+				rocket_design["stages"][stage_index] = updated
+				window.queue_free()
+				_show_vehicle_editor()
+		)
+		row.add_child(move_down_button)
 		var remove_button := Button.new()
 		remove_button.text = "REMOVE"
 		remove_button.pressed.connect(func():
