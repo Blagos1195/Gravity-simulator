@@ -1395,7 +1395,10 @@ func _draw_destination_satellites(host_name: String, host_screen: Vector2, host_
 		return
 	for satellite_variant in host_planet.get("satellites", []):
 		var satellite: Dictionary = satellite_variant
-		var satellite_state := _surface_body_state("%s %s" % [host_name, str(satellite.get("name", "Moon"))])
+		var satellite_name := "%s %s" % [host_name, str(satellite.get("name", "Moon"))]
+		if not discovered_body_names.has(satellite_name):
+			continue
+		var satellite_state := _surface_body_state(satellite_name)
 		if satellite_state.is_empty():
 			continue
 		var host_position: Vector2 = host_state.get("position", Vector2.ZERO)
@@ -1405,8 +1408,13 @@ func _draw_destination_satellites(host_name: String, host_screen: Vector2, host_
 		var orbit_ratio := maxf(1.0, float(satellite.get("semi_major_axis_m", 0.0)) / float(host_planet.get("radius", 1.0)))
 		var orbit_radius_px := host_radius_px + 4.0 + log(orbit_ratio) * maxf(1.5, host_radius_px * 0.08)
 		var satellite_color := PlanetarySystem.color_from_rgb(satellite.get("color_rgb", []), Color(0.75, 0.78, 0.82))
-		draw_arc(host_screen, orbit_radius_px, 0.0, TAU, 48, Color(satellite_color.r, satellite_color.g, satellite_color.b, 0.3), 1.0)
+		var satellite_visited := visited_body_names.has(satellite_name)
+		if not satellite_visited:
+			satellite_color = satellite_color.darkened(0.58).lerp(Color(0.34, 0.44, 0.58), 0.4)
+		draw_arc(host_screen, orbit_radius_px, 0.0, TAU, 48, Color(satellite_color.r, satellite_color.g, satellite_color.b, 0.3 if satellite_visited else 0.1), 1.0)
 		var satellite_screen := host_screen + direction * orbit_radius_px
+		if not satellite_visited:
+			draw_circle(satellite_screen, maxf(3.5, host_radius_px * 0.09), Color(0.34, 0.58, 0.84, 0.18))
 		draw_circle(satellite_screen, maxf(1.5, host_radius_px * 0.06), satellite_color)
 		if host_radius_px >= 16.0:
 			draw_string(ThemeDB.fallback_font, satellite_screen + Vector2(4.0, -3.0), str(satellite.get("name", "Moon")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, satellite_color)
@@ -1472,7 +1480,7 @@ func _draw() -> void:
 			draw_circle(moon_screen, moon_radius_px + 3.0, Color(0.55, 0.58, 0.66, 0.16))
 		draw_circle(moon_screen, moon_radius_px, moon_color.darkened(0.2))
 		draw_arc(moon_screen, moon_radius_px, 0.0, TAU, 64, moon_color, 1.0)
-		draw_string(ThemeDB.fallback_font, moon_screen + Vector2(moon_radius_px + 8.0, 4.0), "MOON", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.75, 0.78, 0.84))
+		draw_string(ThemeDB.fallback_font, moon_screen + Vector2(moon_radius_px + 8.0, 4.0), "MOON", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.75, 0.78, 0.84) if visited_body_names.has("Moon") else Color(0.43, 0.56, 0.72))
 
 	var destination := _nearest_body_state(rocket_position)
 	if str(destination.name) not in ["Earth", "Moon"] and float(destination.distance) < float(destination.soi):
