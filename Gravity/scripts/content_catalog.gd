@@ -439,8 +439,11 @@ static func _catalog_error(catalog: Dictionary) -> String:
 			return "Mission %s has an invalid reward." % mission_id
 		if condition in ["orbit_body", "visit_body", "discover_body"] and str(mission.get("body", "")).is_empty():
 			return "Mission %s needs a body name." % mission_id
-		if condition in ["discover_count", "operational_satellites"] and (not mission.get("count") is int or int(mission.count) < 1):
-			return "Mission %s needs a positive whole-number count." % mission_id
+		if condition in ["discover_count", "operational_satellites"]:
+			var count_value: Variant = mission.get("count")
+			var count_type := typeof(count_value)
+			if (count_type != TYPE_INT and count_type != TYPE_FLOAT) or int(count_value) < 1 or not is_equal_approx(float(count_value), float(int(count_value))):
+				return "Mission %s needs a positive whole-number count." % mission_id
 		mission_ids[mission_id] = true
 	return ""
 
