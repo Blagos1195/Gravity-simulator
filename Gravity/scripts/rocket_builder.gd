@@ -349,21 +349,21 @@ func _build_interface() -> void:
 	var right_panel := PanelContainer.new()
 	right_panel.custom_minimum_size.x = 285.0
 	workspace.add_child(right_panel)
-	_inspector = VBoxContainer.new()
-	_inspector.add_theme_constant_override("separation", 6)
-	right_panel.add_child(_inspector)
+	var right_column := VBoxContainer.new()
+	right_column.add_theme_constant_override("separation", 6)
+	right_panel.add_child(right_column)
 	var stage_heading := Label.new()
 	stage_heading.text = "STAGING"
 	stage_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-	_inspector.add_child(stage_heading)
+	right_column.add_child(stage_heading)
 	var stage_scroll := ScrollContainer.new()
 	stage_scroll.custom_minimum_size.y = 155.0
 	stage_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_inspector.add_child(stage_scroll)
+	right_column.add_child(stage_scroll)
 	_stage_list = VBoxContainer.new()
 	stage_scroll.add_child(_stage_list)
 	var stage_tools := HBoxContainer.new()
-	_inspector.add_child(stage_tools)
+	right_column.add_child(stage_tools)
 	var stage_options := OptionButton.new()
 	stage_options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for option in RocketDesign.stage_part_options():
@@ -394,7 +394,7 @@ func _build_interface() -> void:
 	delete_stage.pressed.connect(_delete_selected_stage)
 	stage_tools.add_child(delete_stage)
 	var move_stage_row := HBoxContainer.new()
-	_inspector.add_child(move_stage_row)
+	right_column.add_child(move_stage_row)
 	var stage_up := Button.new()
 	stage_up.text = "MOVE TOWARD PAYLOAD"
 	stage_up.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -406,11 +406,17 @@ func _build_interface() -> void:
 	stage_down.pressed.connect(func(): _move_stage(-1))
 	move_stage_row.add_child(stage_down)
 	var separator := HSeparator.new()
-	_inspector.add_child(separator)
+	right_column.add_child(separator)
 	var selected_heading := Label.new()
 	selected_heading.text = "PART INSPECTOR"
 	selected_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-	_inspector.add_child(selected_heading)
+	right_column.add_child(selected_heading)
+	var inspector_scroll := ScrollContainer.new()
+	inspector_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_column.add_child(inspector_scroll)
+	_inspector = VBoxContainer.new()
+	_inspector.add_theme_constant_override("separation", 6)
+	inspector_scroll.add_child(_inspector)
 	_refresh_inspector()
 	var stats := Label.new()
 	stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -595,7 +601,7 @@ func _update_component_property(key: String, value: Variant) -> void:
 	component[key] = value
 	components[selected_component_index] = component
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(stage, components)
-	_changed()
+	_changed(false)
 
 func _remove_selected_component() -> void:
 	var stage := _current_stage()
@@ -673,8 +679,13 @@ func _refresh_stats() -> void:
 	var twr := thrust / maxf(1.0, RocketDesign.stage_ignition_mass(design, selected_stage_index) * RocketDesign.G0)
 	_stats.text = "TOTAL MASS  %.1f t     STAGE TWR  %.2f     IDEAL ΔV  %.2f km/s     STAGES  %d" % [mass / 1000.0, twr, RocketDesign.total_delta_v(design) / 1000.0, design.get("stages", []).size()]
 
-func _changed() -> void:
-	_refresh()
+func _changed(refresh_inspector: bool = true) -> void:
+	if refresh_inspector:
+		_refresh()
+	else:
+		_canvas.stage = _current_stage()
+		_canvas.queue_redraw()
+		_refresh_stats()
 	_emit_design()
 
 func _emit_design() -> void:
