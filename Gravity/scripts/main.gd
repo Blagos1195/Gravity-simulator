@@ -248,11 +248,11 @@ func _advance_fleet(delta: float) -> void:
 func _resolve_spacecraft_collisions(positions_before: Dictionary) -> void:
 	for first_index in range(fleet_sims.size()):
 		var first: SimulationView = fleet_sims[first_index]
-		if first.crashed or first.landed or not positions_before.has(first):
+		if first.landed or not positions_before.has(first):
 			continue
 		for second_index in range(first_index + 1, fleet_sims.size()):
 			var second: SimulationView = fleet_sims[second_index]
-			if second.crashed or second.landed or not positions_before.has(second):
+			if second.landed or not positions_before.has(second) or (first.crashed and second.crashed):
 				continue
 			if _are_docked(first.vehicle_name, second.vehicle_name):
 				continue
