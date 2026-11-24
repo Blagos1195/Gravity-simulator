@@ -40,6 +40,7 @@ func _initialize() -> void:
 	main._update_discovery_state()
 	assert(not SpaceDiscovery.is_spotted(main.discovery_state, "Mars"), "An inactive telescope revealed Mars")
 	second.telescope_active = true
+	main._scan_active_telescopes()
 	main._update_discovery_state()
 	assert(is_equal_approx(second.telescope_direction_angle, second.velocity.angle()), "Telescope did not maintain its prograde orbital pointing direction")
 	assert(not SpaceDiscovery.is_visited(main.discovery_state, "Mars"), "Telescope discovery incorrectly unlocked autopilot")
