@@ -1465,8 +1465,12 @@ func _draw() -> void:
 	var moon_radius_px := maxf(2.0, PlanetarySystem.MOON_RADIUS * camera_zoom * world_scale_factor)
 	if moon_screen.x > -moon_radius_px and moon_screen.x < size.x + moon_radius_px and moon_screen.y > -moon_radius_px and moon_screen.y < size.y + moon_radius_px:
 		var moon_color: Color = PlanetarySystem.planet_visual_data("Moon").get("color", Color(0.72, 0.74, 0.78))
-		draw_circle(moon_screen, moon_radius_px + 3.0, Color(0.55, 0.58, 0.66, 0.16))
-		draw_circle(moon_screen, moon_radius_px, moon_color.darkened(0.35))
+		if not visited_body_names.has("Moon"):
+			moon_color = moon_color.darkened(0.58).lerp(Color(0.34, 0.44, 0.58), 0.4)
+			draw_circle(moon_screen, moon_radius_px + 5.0, Color(0.34, 0.58, 0.84, 0.18))
+		else:
+			draw_circle(moon_screen, moon_radius_px + 3.0, Color(0.55, 0.58, 0.66, 0.16))
+		draw_circle(moon_screen, moon_radius_px, moon_color.darkened(0.2))
 		draw_arc(moon_screen, moon_radius_px, 0.0, TAU, 64, moon_color, 1.0)
 		draw_string(ThemeDB.fallback_font, moon_screen + Vector2(moon_radius_px + 8.0, 4.0), "MOON", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.75, 0.78, 0.84))
 
@@ -1557,9 +1561,11 @@ func _draw_full_system_zoom(view_center: Vector2) -> void:
 	for planet in PlanetarySystem.PLANETS:
 		if not discovered_body_names.has(str(planet.get("name", ""))):
 			continue
+		var planet_name := str(planet.get("name", ""))
 		var orbit_radius := float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT * scale
 		if orbit_radius > 2.0 and orbit_radius < maxf(size.x, size.y) * 1.5:
-			draw_arc(sun_screen, orbit_radius, 0.0, TAU, 160, Color(0.28, 0.43, 0.58, 0.28), 1.0)
+			var orbit_alpha := 0.28 if visited_body_names.has(planet_name) else 0.1
+			draw_arc(sun_screen, orbit_radius, 0.0, TAU, 160, Color(0.28, 0.43, 0.58, orbit_alpha), 1.0)
 	for body_variant in bodies:
 		var body: Dictionary = body_variant
 		var body_name := str(body.get("name", ""))
@@ -1722,8 +1728,10 @@ func _draw_solar_system(center: Vector2) -> void:
 	for planet in PlanetarySystem.PLANETS:
 		if not discovered_body_names.has(str(planet.get("name", ""))):
 			continue
+		var planet_name := str(planet.get("name", ""))
 		var orbit_radius: float = float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT
-		draw_arc(center, orbit_radius * map_scale, 0.0, TAU, 180, Color(0.28, 0.43, 0.58, 0.34), 1.0)
+		var orbit_alpha := 0.34 if visited_body_names.has(planet_name) else 0.12
+		draw_arc(center, orbit_radius * map_scale, 0.0, TAU, 180, Color(0.28, 0.43, 0.58, orbit_alpha), 1.0)
 	for belt in solar_belt_particles:
 		var belt_inner_radius := float(belt.get("inner_radius_m", 0.0))
 		var belt_outer_radius := float(belt.get("outer_radius_m", 0.0))
