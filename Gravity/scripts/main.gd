@@ -67,6 +67,7 @@ var settings_root: VBoxContainer
 var hud_root: Control
 var scale_factor := 1.0
 var rocket_design: Dictionary = RocketDesign.create_default()
+var active_builder: Window
 var design_stats_label: Label
 var design_error_label: Label
 var design_preview: Control
@@ -1007,12 +1008,22 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _show_new_game_setup)
 	_update_design_stats()
+	if not is_instance_valid(active_builder):
+		_show_vehicle_component_editor(0)
 
 
 func _show_vehicle_component_editor(stage_index: int) -> void:
+	if is_instance_valid(active_builder):
+		active_builder.queue_free()
+		active_builder = null
 	if stage_index < 0 or stage_index >= rocket_design.get("stages", []).size():
 		return
 	var builder := RocketBuilder.new()
+	active_builder = builder
+	builder.tree_exited.connect(func():
+		if active_builder == builder:
+			active_builder = null
+	)
 	builder.configure(rocket_design, stage_index)
 	builder.design_changed.connect(func(updated_design: Dictionary):
 		rocket_design = updated_design.duplicate(true)
