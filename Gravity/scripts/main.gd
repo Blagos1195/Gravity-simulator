@@ -3071,7 +3071,7 @@ func _show_docking_panel() -> void:
 		var relative_speed: float = (sim.velocity - target.velocity).length()
 		var docked := _are_docked(parent_name, target_name)
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
-		var free_flying := not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
+		var free_flying: bool = not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
 		var available_to_dock: bool = not docked and free_flying and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
 		var available_to_assist: bool = not docked and free_flying and separation <= DOCKING_ASSIST_MAX_RANGE
 		if docked:
