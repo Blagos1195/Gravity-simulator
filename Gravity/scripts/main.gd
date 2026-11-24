@@ -668,6 +668,113 @@ func _set_selected_vehicle_full_simulation() -> void:
 		if status_label:
 			status_label.text = "AUTOMATIC ORBIT SIMULATION ENABLED  •  %s" % sim.vehicle_name.to_upper()
 
+func _show_time_skip_dialog() -> void:
+	if not is_instance_valid(sim) or sim.paused:
+		return
+	var window := Window.new()
+	window.title = "FAST FORWARD TIME"
+	window.size = Vector2i(500, 300)
+	window.min_size = Vector2i(440, 260)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	window.add_child(margin)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 12)
+	margin.add_child(layout)
+	var description := Label.new()
+	description.text = "Skip ahead while every vehicle is landed or in a safe, stable orbit. Active burns, autopilot, close encounters and unstable trajectories prevent skipping."
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(description)
+	var options := HBoxContainer.new()
+	options.add_theme_constant_override("separation", 8)
+	layout.add_child(options)
+	for option in [{"label": "1 DAY", "seconds": 86400.0}, {"label": "7 DAYS", "seconds": 604800.0}, {"label": "30 DAYS", "seconds": 2592000.0}, {"label": "1 YEAR", "seconds": 31557600.0}]:
+		var button := Button.new()
+		button.text = str(option.label)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(func():
+			if _fast_forward_simulation(float(option.seconds)):
+				window.queue_free()
+			else:
+				description.text = "Cannot skip safely right now. Land all vehicles or place them in stable orbits, stop burns and autopilot, and move spacecraft apart."
+		)
+		options.add_child(button)
+	var close := Button.new()
+	close.text = "CLOSE"
+	close.pressed.connect(window.queue_free)
+	layout.add_child(close)
+	window.popup_centered()
+
+
+func _fast_forward_simulation(seconds: float) -> bool:
+	if not is_instance_valid(sim) or sim.paused or seconds <= 0.0 or seconds > 31557600.0:
+		return false
+	if not docking_assists.is_empty():
+		return false
+	var orbit_data: Dictionary = {}
+	for vehicle in fleet_sims:
+		if vehicle.crashed or vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled or vehicle.guidance_enabled:
+			return false
+		if vehicle.landed:
+			continue
+		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+		if body.is_empty() or float(body.get("distance", INF)) > float(body.get("soi", 0.0)):
+			return false
+		var relative_position: Vector2 = body.get("relative_position", Vector2.ZERO)
+		var relative_velocity: Vector2 = vehicle.velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var mu := FlightComputer.G * float(body.get("mass", 0.0))
+		var orbit := FlightComputer.orbital_state(relative_position, relative_velocity, mu)
+		if not bool(orbit.get("bound", false)):
+			return false
+		var body_radius := float(body.get("radius", 0.0))
+		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(str(body.get("name", "")), body_radius)
+		var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(body.get("soi", 0.0)))
+		if float(orbit.get("periapsis", 0.0)) <= body_radius + minimum_altitude or float(orbit.get("apoapsis", INF)) >= body_radius + maximum_altitude:
+			return false
+		var elements := OrbitalPropagator.elements_from_state(relative_position, relative_velocity, mu, vehicle.sim_time)
+		if elements.is_empty():
+			return false
+		orbit_data[vehicle] = {"host_body_name": str(body.get("name", "")), "elements": elements}
+	for first_index in range(fleet_sims.size()):
+		for second_index in range(first_index + 1, fleet_sims.size()):
+			if fleet_sims[first_index].rocket_position.distance_to(fleet_sims[second_index].rocket_position) < 20000000.0:
+				return false
+	var target_time := sim.sim_time + seconds
+	fleet_time_backlog = 0.0
+	for vehicle in fleet_sims:
+		vehicle.simulation_time_backlog = 0.0
+		vehicle.ephemeris_cache_time = -INF
+		vehicle.ephemeris_output_cache_time = -INF
+		if vehicle.landed:
+			vehicle._physics_step(seconds)
+		else:
+			vehicle.passive_orbit_data = orbit_data[vehicle]
+			vehicle.passive_orbit_active = true
+			_advance_passive_vehicle(vehicle, target_time)
+		vehicle.sim_time = target_time
+		vehicle.ephemeris_cache_time = -INF
+		vehicle.ephemeris_output_cache_time = -INF
+	sim.sim_time = target_time
+	_update_docked_masses()
+	_scan_active_telescopes()
+	_update_discovery_state()
+	_update_economy()
+	_update_missions()
+	_refresh_vehicle_selector()
+	if status_label:
+		status_label.text = "TIME SKIPPED  •  %s" % sim._format_time(sim.sim_time)
+	sim.queue_redraw()
+	return true
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if mode != "flight" or not event is InputEventKey or not event.pressed or event.echo:
 		return
@@ -677,6 +784,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_load_game()
 	elif event.keycode == KEY_ESCAPE:
 		_pause_simulation()
+	elif event.keycode == KEY_J:
+		_show_time_skip_dialog()
 
 func _build_menu() -> void:
 	mode = "menu"
@@ -2405,7 +2514,7 @@ func _build_flight_hud() -> void:
 	bottom.offset_top = -58
 	bottom.offset_bottom = -8
 	bottom.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     T TELESCOPE ON/OFF     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
+	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     T TELESCOPE ON/OFF     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     J FAST FORWARD     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
