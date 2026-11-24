@@ -497,9 +497,9 @@ func _update_discovery_state() -> void:
 		var telescope_range_au := float(vehicle.payload_visual.get("telescope_range_au", 0.0))
 		var lifetime_days := float(vehicle.payload_visual.get("operational_lifetime_days", 0.0))
 		var operational := lifetime_days <= 0.0 or maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0) < lifetime_days
-		if stable_orbit and operational and str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
+		if vehicle.telescope_active and stable_orbit and operational and str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
 			var telescope_position: Vector2 = earth_position + vehicle.rocket_position
-			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies)
+			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies, vehicle.telescope_direction_angle, vehicle.telescope_field_of_view)
 			for discovered_name in telescope_discoveries:
 				if not newly_discovered.has(discovered_name):
 					newly_discovered.append(discovered_name)
@@ -2137,6 +2137,16 @@ func _build_flight_hud() -> void:
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
 	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
+	if str(sim.payload_visual.get("visual_type", "")) == "satellite" and float(sim.payload_visual.get("telescope_range_au", 0.0)) > 0.0:
+		var telescope_button := Button.new()
+		telescope_button.text = "ACTIVATE TELESCOPE  [T]"
+		telescope_button.pressed.connect(func():
+			sim.telescope_active = not sim.telescope_active
+			telescope_button.text = "TELESCOPE ACTIVE  [T]" if sim.telescope_active else "ACTIVATE TELESCOPE  [T]"
+			if is_instance_valid(status_label):
+				status_label.text = "TELESCOPE ACTIVE  •  AIM WITH , AND ." if sim.telescope_active else "TELESCOPE STANDBY"
+		)
+		right.add_child(telescope_button)
 
 	_add_button(right, "SOLAR SYSTEM VIEW  [M]", func(): sim.show_solar_system = not sim.show_solar_system)
 	_add_button(right, "VELOCITY VECTOR  [V]", func(): sim.show_vectors = not sim.show_vectors)
