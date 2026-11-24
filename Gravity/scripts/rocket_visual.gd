@@ -30,11 +30,6 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		var mass := float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
 		var length_factor := maxf(0.25, float(stage.get("visual_length_factor", 1.0)))
 		heights.append(clampf((15.0 + 12.0 * sqrt(mass / maxf(1.0, stack_mass))) * length_factor, 8.0, 60.0))
-	var payload_height := 13.0
-	var total_height := payload_height
-	for height in heights:
-		total_height += height
-	var y := -total_height * 0.5
 	var widest_stage := 0.0
 	for i in range(visible_stages.size()):
 		var stage: Dictionary = visible_stages[i]
@@ -55,6 +50,10 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 	var payload_color_data: Variant = payload_visual.get("visual_color_rgb", [])
 	if payload_color_data is Array and payload_color_data.size() == 3:
 		payload_color = Color(float(payload_color_data[0]), float(payload_color_data[1]), float(payload_color_data[2]))
+	var total_height := payload_height
+	for height in heights:
+		total_height += height
+	var y := -total_height * 0.5
 	if payload_type == "crew":
 		_polygon(canvas, origin, [Vector2(0.0, y), Vector2(-payload_width, y + payload_height), Vector2(payload_width, y + payload_height)], rotation, scale, payload_color)
 		_polygon(canvas, origin, [Vector2(0.0, y + 2.0), Vector2(-payload_width * 0.65, y + payload_height * 0.82), Vector2(payload_width * 0.65, y + payload_height * 0.82)], rotation, scale, Color(0.36, 0.65, 0.82))
