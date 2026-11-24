@@ -10,6 +10,9 @@ func _initialize() -> void:
 	assert(is_equal_approx(float(RocketDesign.payload_visual_data("satellite").get("telescope_range_au", 0.0)), 1.2))
 	assert(is_equal_approx(float(RocketDesign.payload_visual_data("survey_satellite").get("telescope_range_au", 0.0)), 3.5))
 	assert(is_equal_approx(float(RocketDesign.payload_visual_data("deep_space_telescope").get("telescope_range_au", 0.0)), 10.5))
+	assert(str(RocketDesign.payload_visual_data("satellite").get("satellite_role", "")) == "observation")
+	assert(is_equal_approx(float(RocketDesign.payload_visual_data("satellite").get("revenue_per_day", 0.0)), 15000.0))
+	assert(is_equal_approx(float(RocketDesign.payload_visual_data("satellite").get("operational_lifetime_days", 0.0)), 3650.0))
 	var invalid_telescope_range := RocketDesign.create_preset("SMALL_SAT")
 	invalid_telescope_range["payload_visual"]["telescope_range_au"] = -1.0
 	assert(not RocketDesign.validation_errors(invalid_telescope_range).is_empty())
