@@ -30,6 +30,7 @@ var infinite_weightless_fuel := false
 var simulate_belt_collisions := false
 var paused := false
 var sim_time := 0.0
+var launch_time := 0.0
 var time_warp := 1.0
 var simulation_time_backlog := 0.0
 var ephemeris_cache_time := -INF
@@ -2061,6 +2062,7 @@ func _saved_manual_flight_plan() -> Dictionary:
 func get_save_data() -> Dictionary:
 	return {
 		"sim_time": sim_time,
+		"launch_time": launch_time,
 		"position": [rocket_position.x, rocket_position.y],
 		"position_precise": [rocket_position_precise[0], rocket_position_precise[1]],
 		"velocity": [velocity.x, velocity.y],
@@ -2219,6 +2221,7 @@ func load_save_data(data: Dictionary) -> bool:
 		passive_orbit_data.clear()
 	stage_index = clampi(int(data.get("stage_index", 0)), 0, maxi(0, rocket_stages.size() - 1))
 	sim_time = float(data.get("sim_time", 0.0))
+	launch_time = clampf(float(data.get("launch_time", sim_time)), 0.0, maxf(sim_time, 0.0))
 	var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 2.0])
 	var precise_position: Array = data.get("position_precise", p)
 	var v: Array = data.get("velocity", [EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0])
