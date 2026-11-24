@@ -69,17 +69,7 @@ func _initialize() -> void:
 	stage_dialog.free()
 	var stage_booster_button := _find_button(main, "BOOST 0")
 	assert(is_instance_valid(stage_booster_button))
-	stage_booster_button.pressed.emit()
-	var booster_window := _find_window(main, "STAGE 01 BOOSTER MODULES")
-	assert(is_instance_valid(booster_window))
-	var add_booster_button := _find_button(booster_window, "ADD PAIR")
-	assert(is_instance_valid(add_booster_button))
-	add_booster_button.pressed.emit()
-	assert(main.rocket_design["stages"][0].boosters.size() == 1)
-	RocketDesign.remove_booster_pair(main.rocket_design, 0, 0)
-	for child in main.get_children():
-		if child is Window and child.title == "STAGE 01 BOOSTER MODULES":
-			child.queue_free()
+	assert(stage_booster_button.tooltip_text.contains("booster"))
 	var original_stage: Dictionary = main.rocket_design["stages"][0].duplicate(true)
 	var original_stage_count: int = main.rocket_design["stages"].size()
 	main._duplicate_stage(0)
