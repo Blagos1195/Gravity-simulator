@@ -46,9 +46,9 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		_polygon(canvas, origin, [Vector2(0.0, y), Vector2(-payload_width, y + payload_height), Vector2(payload_width, y + payload_height)], rotation, scale, Color(0.84, 0.88, 0.94))
 		_polygon(canvas, origin, [Vector2(0.0, y + 2.0), Vector2(-payload_width * 0.65, y + payload_height * 0.82), Vector2(payload_width * 0.65, y + payload_height * 0.82)], rotation, scale, Color(0.36, 0.65, 0.82))
 	elif payload_type == "satellite":
-		canvas.draw_rect(Rect2(_point(origin, Vector2(-payload_width * 2.2, y + 4.0), rotation, scale), Vector2(payload_width * 1.5, 4.0) * scale), Color(0.16, 0.42, 0.72))
-		canvas.draw_rect(Rect2(_point(origin, Vector2(payload_width * 0.7, y + 4.0), rotation, scale), Vector2(payload_width * 1.5, 4.0) * scale), Color(0.16, 0.42, 0.72))
-		canvas.draw_rect(Rect2(_point(origin, Vector2(-payload_width * 0.55, y + 2.0), rotation, scale), Vector2(payload_width * 1.1, payload_height - 3.0) * scale), Color(0.78, 0.7, 0.42))
+		_polygon(canvas, origin, [Vector2(-payload_width * 2.2, y + 4.0), Vector2(-payload_width * 0.7, y + 4.0), Vector2(-payload_width * 0.7, y + 8.0), Vector2(-payload_width * 2.2, y + 8.0)], rotation, scale, Color(0.16, 0.42, 0.72))
+		_polygon(canvas, origin, [Vector2(payload_width * 0.7, y + 4.0), Vector2(payload_width * 2.2, y + 4.0), Vector2(payload_width * 2.2, y + 8.0), Vector2(payload_width * 0.7, y + 8.0)], rotation, scale, Color(0.16, 0.42, 0.72))
+		_polygon(canvas, origin, [Vector2(-payload_width * 0.55, y + 2.0), Vector2(payload_width * 0.55, y + 2.0), Vector2(payload_width * 0.55, y + payload_height - 1.0), Vector2(-payload_width * 0.55, y + payload_height - 1.0)], rotation, scale, Color(0.78, 0.7, 0.42))
 	else:
 		_polygon(canvas, origin, [Vector2(0.0, y), Vector2(-payload_width, y + payload_height), Vector2(payload_width, y + payload_height)], rotation, scale, Color(0.82, 0.87, 0.93))
 		_line(canvas, origin, Vector2(-payload_width * 0.65, y + payload_height * 0.7), Vector2(payload_width * 0.65, y + payload_height * 0.7), rotation, scale, Color(0.24, 0.55, 0.75), 1.2)
