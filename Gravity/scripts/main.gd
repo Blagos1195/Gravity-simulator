@@ -210,10 +210,18 @@ func _update_discovery_state() -> void:
 	var earth_position: Vector2 = ephemeris.get("earth_heliocentric_position", Vector2.ZERO)
 	var newly_discovered: Array[String] = []
 	for vehicle in fleet_sims:
-		if vehicle.landed or vehicle.crashed:
+		if vehicle.landed:
+			var landed_name := str(vehicle.landed_body_name)
+			if SpaceDiscovery.mark_spotted(discovery_state, landed_name) and not newly_discovered.has(landed_name):
+				newly_discovered.append(landed_name)
 			continue
 		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
 		if body.is_empty() or float(body.get("distance", INF)) > float(body.get("soi", 0.0)):
+			continue
+		var body_name := str(body.get("name", ""))
+		if SpaceDiscovery.mark_spotted(discovery_state, body_name) and not newly_discovered.has(body_name):
+			newly_discovered.append(body_name)
+		if vehicle.crashed:
 			continue
 		var relative_position: Vector2 = body.relative_position
 		var relative_velocity: Vector2 = vehicle.velocity - Vector2(body.get("velocity", Vector2.ZERO))
@@ -221,16 +229,13 @@ func _update_discovery_state() -> void:
 		if not bool(orbit.get("bound", false)):
 			continue
 		var body_radius := float(body.get("radius", 0.0))
-		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(str(body.get("name", "")), body_radius)
+		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(body_name, body_radius)
 		var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(body.get("soi", 0.0)))
 		var stable_orbit := float(orbit.get("periapsis", 0.0)) > body_radius + minimum_altitude and float(orbit.get("apoapsis", INF)) < body_radius + maximum_altitude
-		if not stable_orbit:
-			continue
-		var body_name := str(body.get("name", ""))
-		if SpaceDiscovery.mark_visited(discovery_state, body_name):
+		if stable_orbit and SpaceDiscovery.mark_visited(discovery_state, body_name) and not newly_discovered.has(body_name):
 			newly_discovered.append(body_name)
 		var telescope_range_au := float(vehicle.payload_visual.get("telescope_range_au", 0.0))
-		if str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
+		if stable_orbit and str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
 			var telescope_position: Vector2 = earth_position + vehicle.rocket_position
 			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies)
 			for discovered_name in telescope_discoveries:
