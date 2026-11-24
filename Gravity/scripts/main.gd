@@ -1101,14 +1101,14 @@ func _update_design_stats() -> void:
 	var delta_v := RocketDesign.total_delta_v(rocket_design)
 	var stages: Array = rocket_design["stages"]
 	var first: Dictionary = stages[0]
-	var initial_twr := float(first["thrust"]) * float(first.get("engine_count", 1)) / maxf(1.0, total_mass * 9.80665)
+	var initial_twr := RocketDesign.stage_total_thrust(first) / maxf(1.0, total_mass * 9.80665)
 	var engine_report := PackedStringArray()
 	for i in range(stages.size()):
 		var stage: Dictionary = stages[i]
 		var sea_isp := RocketDesign.stage_specific_impulse(stage, false)
 		var vacuum_isp := RocketDesign.stage_specific_impulse(stage, true)
 		var ignition_mass := RocketDesign.stage_ignition_mass(rocket_design, i)
-		var stage_thrust := float(stage["thrust"] if i == 0 else stage["vacuum_thrust"]) * float(stage.get("engine_count", 1))
+		var stage_thrust := RocketDesign.stage_total_thrust(stage, i != 0)
 		var stage_twr := stage_thrust / maxf(1.0, ignition_mass * 9.80665)
 		engine_report.append("STAGE %d  •  Isp %.0f / %.0f s  •  TWR %.2f" % [i + 1, sea_isp, vacuum_isp, stage_twr])
 	design_stats_label.text = "INITIAL MASS\n%.1f tonnes\n\nIDEAL ΔV\n%.2f km/s\n\nPAD TWR\n%.2f\n\n%s" % [total_mass / 1000.0, delta_v / 1000.0, initial_twr, "\n".join(engine_report)]
