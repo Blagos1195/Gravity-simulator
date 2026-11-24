@@ -194,12 +194,13 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		var sea_thrust := float(stage.get("thrust", 0.0))
 		var vacuum_thrust := float(stage.get("vacuum_thrust", 0.0))
 		var flow := float(stage.get("flow", 0.0))
-		var engines := int(stage.get("engine_count", 0))
+		var engine_value: Variant = stage.get("engine_count", 0)
+		var engines := int(engine_value) if engine_value is int or engine_value is float else 0
 		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0:
 			errors.append("Stage %d mass, propellant, thrust and flow values must all be positive." % (i + 1))
-		if engines < 1:
-			errors.append("Stage %d must have at least one engine." % (i + 1))
-		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0 or engines < 1:
+		if not (engine_value is int or engine_value is float) or float(engine_value) != float(engines) or engines < 1:
+			errors.append("Stage %d must have a positive whole-number engine count." % (i + 1))
+		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0 or not (engine_value is int or engine_value is float) or float(engine_value) != float(engines) or engines < 1:
 			continue
 		if vacuum_thrust < sea_thrust:
 			errors.append("Stage %d vacuum thrust cannot be lower than sea-level thrust." % (i + 1))
