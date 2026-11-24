@@ -2,6 +2,7 @@ extends RefCounted
 class_name RocketAssembly
 
 const ContentCatalog = preload("res://scripts/content_catalog.gd")
+const RocketDesign = preload("res://scripts/rocket_design.gd")
 
 static func _catalog() -> Dictionary:
 	return ContentCatalog.get_catalog().get("rocket", {}).get("components", {})
@@ -13,6 +14,13 @@ static func component_options() -> Array:
 			var option: Dictionary = definition.duplicate(true)
 			option["kind"] = category.trim_suffix("s")
 			options.append(option)
+	for definition in RocketDesign.booster_options():
+		var option: Dictionary = definition.duplicate(true)
+		option["kind"] = "radial"
+		option["length_m"] = 12.0 * float(option.get("visual_length_factor", 1.0))
+		option["collision_radius_m"] = float(option.get("collision_radius_m", 1.0))
+		option["color_rgb"] = option.get("visual_color_rgb", [0.72, 0.74, 0.78]).duplicate(true)
+		options.append(option)
 	return options
 
 static func component_definition(component_id: String) -> Dictionary:
@@ -55,12 +63,16 @@ static func ensure_stage_components(stage: Dictionary) -> Dictionary:
 	]
 	return compile_stage(configured, configured["components"])
 
-static func add_component(stage: Dictionary, component_id: String) -> Dictionary:
+static func add_component(stage: Dictionary, component_id: String, attachment: String = "stack", mirrored: bool = true, side: int = 1) -> Dictionary:
 	var definition := component_definition(component_id)
-	if definition.is_empty():
+	if definition.is_empty() or not ["stack", "radial"].has(attachment):
 		return {}
 	var configured := ensure_stage_components(stage)
 	var components: Array = configured.get("components", []).duplicate(true)
+	definition["attachment"] = attachment
+	if attachment == "radial":
+		definition["mirror"] = mirrored
+		definition["side"] = -1 if side < 0 else 1
 	components.append(definition)
 	configured["components"] = components
 	return compile_stage(configured, components)
@@ -95,8 +107,18 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	var total_length := 0.0
 	var maximum_radius := 0.1
 	var tank_color: Variant = configured.get("visual_color_rgb", [0.43, 0.63, 0.75])
+	var radial_boosters: Array = []
 	for component in components:
 		if not component is Dictionary:
+			continue
+		if str(component.get("attachment", "stack")) == "radial":
+			var radial_definition: Dictionary = component.duplicate(true)
+			radial_definition["pair_count"] = 2 if bool(component.get("mirror", true)) else 1
+			radial_definition["visual_color_rgb"] = component.get("color_rgb", component.get("visual_color_rgb", [0.72, 0.74, 0.78])).duplicate(true)
+			radial_definition["visual_width_factor"] = float(component.get("visual_width_factor", 0.5))
+			radial_definition["visual_length_factor"] = float(component.get("visual_length_factor", 1.0))
+			radial_definition["source_component_id"] = str(component.get("id", ""))
+			radial_boosters.append({"id": str(component.get("id", "")), "definition": radial_definition, "source_component_id": str(component.get("id", "")), "side": int(component.get("side", 1))})
 			continue
 		dry_mass += maxf(0.0, float(component.get("dry_mass", 0.0)))
 		fuel_capacity += maxf(0.0, float(component.get("fuel_capacity", 0.0)))
@@ -107,6 +129,12 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 		maximum_radius = maxf(maximum_radius, float(component.get("collision_radius_m", 0.1)))
 		if str(component.get("kind", "")) == "tank":
 			tank_color = component.get("color_rgb", tank_color)
+	var boosters: Array = []
+	for existing in configured.get("boosters", []):
+		if not (existing is Dictionary and existing.has("source_component_id")):
+			boosters.append(existing.duplicate(true) if existing is Dictionary else existing)
+	boosters.append_array(radial_boosters)
+	configured["boosters"] = boosters
 	configured["components"] = components.duplicate(true)
 	configured["component_assembly"] = true
 	configured["dry_mass"] = dry_mass
@@ -119,7 +147,7 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	configured["collision_radius_m"] = maximum_radius
 	var original_length := maxf(1.0, float(stage.get("physical_length_m", total_length)))
 	var original_radius := maxf(0.1, float(stage.get("collision_radius_m", maximum_radius)))
-	configured["visual_length_factor"] = clampf(float(stage.get("visual_length_factor", 1.0)) * total_length / original_length, 0.35, 4.0)
+	configured["visual_length_factor"] = clampf(float(stage.get("visual_length_factor", 1.0)) * maxf(1.0, total_length) / original_length, 0.35, 4.0)
 	configured["visual_diameter_factor"] = clampf(float(stage.get("visual_diameter_factor", 1.0)) * maximum_radius / original_radius, 0.35, 4.0)
 	if tank_color is Array and tank_color.size() == 3:
 		configured["visual_color_rgb"] = tank_color.duplicate(true)
