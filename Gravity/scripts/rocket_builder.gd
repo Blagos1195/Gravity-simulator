@@ -241,13 +241,15 @@ func _build_interface() -> void:
 	root.add_theme_constant_override("margin_top", 10)
 	root.add_theme_constant_override("margin_bottom", 10)
 	add_child(root)
-	var header := HBoxContainer.new()
+	var header := VBoxContainer.new()
 	root.add_child(header)
+	var header_primary := HBoxContainer.new()
+	header.add_child(header_primary)
 	var title_label := Label.new()
 	title_label.text = "VEHICLE ASSEMBLY BUILDING"
 	title_label.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
 	title_label.add_theme_font_size_override("font_size", 20)
-	header.add_child(title_label)
+	header_primary.add_child(title_label)
 	var name_input := LineEdit.new()
 	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_input.placeholder_text = "Vehicle name"
@@ -256,15 +258,15 @@ func _build_interface() -> void:
 		design["name"] = value
 		_emit_design()
 	)
-	header.add_child(name_input)
+	header_primary.add_child(name_input)
 	_vehicle_name = name_input
 	var preset_button := Button.new()
 	preset_button.text = "LOAD PRESET"
 	preset_button.pressed.connect(_show_preset_dialog)
-	header.add_child(preset_button)
+	header_primary.add_child(preset_button)
 	var payload_label := Label.new()
 	payload_label.text = "PAYLOAD"
-	header.add_child(payload_label)
+	header_primary.add_child(payload_label)
 	var payload_selector := OptionButton.new()
 	payload_selector.custom_minimum_size.x = 180
 	var payload_options := RocketDesign.payload_options()
@@ -287,7 +289,7 @@ func _build_interface() -> void:
 		_emit_design()
 		_refresh_stats()
 	)
-	header.add_child(payload_selector)
+	header_primary.add_child(payload_selector)
 	_payload_selector = payload_selector
 	var payload_limits := RocketDesign.payload_mass_limits()
 	var payload_mass_input := SpinBox.new()
@@ -303,12 +305,14 @@ func _build_interface() -> void:
 		_refresh_stats()
 		_emit_design()
 	)
-	header.add_child(payload_mass_input)
+	header_primary.add_child(payload_mass_input)
 	_payload_mass_input = payload_mass_input
+	var header_actions := HBoxContainer.new()
+	header.add_child(header_actions)
 	var payload_edit := Button.new()
 	payload_edit.text = "EDIT PAYLOAD"
 	payload_edit.pressed.connect(func(): payload_edit_requested.emit())
-	header.add_child(payload_edit)
+	header_actions.add_child(payload_edit)
 	var new_vehicle := Button.new()
 	new_vehicle.text = "NEW"
 	new_vehicle.tooltip_text = "Start a blank vehicle design"
@@ -319,7 +323,7 @@ func _build_interface() -> void:
 		selected_component_index = -1
 		_changed()
 	)
-	header.add_child(new_vehicle)
+	header_actions.add_child(new_vehicle)
 	var mirror := CheckButton.new()
 	mirror.text = "MIRROR NEW RADIAL PARTS"
 	mirror.button_pressed = true
@@ -328,22 +332,22 @@ func _build_interface() -> void:
 		if is_instance_valid(_canvas):
 			_canvas.set_meta("mirror_enabled", enabled)
 	)
-	header.add_child(mirror)
+	header_actions.add_child(mirror)
 	_mirror_button = mirror
 	var undo_button := Button.new()
 	undo_button.text = "UNDO"
 	undo_button.pressed.connect(_undo_change)
-	header.add_child(undo_button)
+	header_actions.add_child(undo_button)
 	var redo_button := Button.new()
 	redo_button.text = "REDO"
 	redo_button.pressed.connect(_redo_change)
-	header.add_child(redo_button)
+	header_actions.add_child(redo_button)
 	var workspace := HSplitContainer.new()
 	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	workspace.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(workspace)
 	var parts_panel := PanelContainer.new()
-	parts_panel.custom_minimum_size.x = 245.0
+	parts_panel.custom_minimum_size.x = 215.0
 	workspace.add_child(parts_panel)
 	var parts_column := VBoxContainer.new()
 	parts_column.add_theme_constant_override("separation", 6)
@@ -418,7 +422,7 @@ func _build_interface() -> void:
 	canvas_tools.add_child(fit)
 	center_column.add_child(canvas_tools)
 	var right_panel := PanelContainer.new()
-	right_panel.custom_minimum_size.x = 285.0
+	right_panel.custom_minimum_size.x = 270.0
 	workspace.add_child(right_panel)
 	var right_column := VBoxContainer.new()
 	right_column.add_theme_constant_override("separation", 6)
@@ -433,7 +437,8 @@ func _build_interface() -> void:
 	right_column.add_child(stage_scroll)
 	_stage_list = VBoxContainer.new()
 	stage_scroll.add_child(_stage_list)
-	var stage_tools := HBoxContainer.new()
+	var stage_tools := GridContainer.new()
+	stage_tools.columns = 3
 	right_column.add_child(stage_tools)
 	var stage_options := OptionButton.new()
 	stage_options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -467,12 +472,14 @@ func _build_interface() -> void:
 	var move_stage_row := HBoxContainer.new()
 	right_column.add_child(move_stage_row)
 	var stage_up := Button.new()
-	stage_up.text = "MOVE TOWARD PAYLOAD"
+	stage_up.text = "TO PAYLOAD"
+	stage_up.tooltip_text = "Move selected stage toward the payload"
 	stage_up.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage_up.pressed.connect(func(): _move_stage(1))
 	move_stage_row.add_child(stage_up)
 	var stage_down := Button.new()
-	stage_down.text = "MOVE TOWARD ENGINE"
+	stage_down.text = "TO ENGINE"
+	stage_down.tooltip_text = "Move selected stage toward the engine"
 	stage_down.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage_down.pressed.connect(func(): _move_stage(-1))
 	move_stage_row.add_child(stage_down)
