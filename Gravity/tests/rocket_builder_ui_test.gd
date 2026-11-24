@@ -8,8 +8,10 @@ func _initialize() -> void:
 	main.size = Vector2(1280.0, 720.0)
 	root.add_child(main)
 	main.rocket_design = RocketDesign.create_default()
+	main.rocket_design["payload_type"] = "modded_probe"
 	main.rocket_design["payload_visual"] = {"visual_type": "probe", "visual_color_rgb": [0.1, 0.2, 0.3]}
 	main._show_vehicle_editor()
+	assert(main.rocket_design.payload_type == "modded_probe")
 	assert(main.rocket_design.payload_visual.visual_color_rgb == [0.1, 0.2, 0.3])
 	assert(main.mode == "editor")
 	assert(is_instance_valid(main.design_preview))

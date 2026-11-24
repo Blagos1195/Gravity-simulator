@@ -190,7 +190,8 @@ func _initialize() -> void:
 			"presets_add": {
 				"TEST_MOD_PRESET": {
 					"name": "Test Mod Vehicle",
-					"payload_mass": 500.0,
+					"payload_mass": 2000.0,
+					"payload_id": "test_payload",
 					"stages": ["explorer_first_stage", "test_mod_stage"]
 				}
 			},
@@ -205,6 +206,10 @@ func _initialize() -> void:
 	invalid_payload_overlay["rocket"]["builder_options"]["payloads_add"][0]["visual_type"] = "spaceship"
 	var invalid_payload_catalog := ContentCatalog._merge_overlay(ContentCatalog.get_catalog(), invalid_payload_overlay)
 	assert(not ContentCatalog._catalog_error(invalid_payload_catalog).is_empty())
+	var invalid_preset_overlay: Dictionary = mod_overlay.duplicate(true)
+	invalid_preset_overlay["rocket"]["presets_add"]["TEST_MOD_PRESET"]["payload_id"] = "missing_payload"
+	var invalid_preset_catalog := ContentCatalog._merge_overlay(ContentCatalog.get_catalog(), invalid_preset_overlay)
+	assert(not ContentCatalog._catalog_error(invalid_preset_catalog).is_empty())
 	var merged_catalog := ContentCatalog._merge_overlay(ContentCatalog.get_catalog(), mod_overlay)
 	assert(ContentCatalog._catalog_error(merged_catalog).is_empty())
 	assert(merged_catalog.planets.size() == ContentCatalog.get_catalog().planets.size() + 1)
@@ -216,6 +221,9 @@ func _initialize() -> void:
 	assert(merged_rocket.presets.has("TEST_MOD_PRESET"))
 	var original_catalog: Dictionary = ContentCatalog._catalog
 	ContentCatalog._catalog = merged_catalog
+	var modded_payload_preset := RocketDesign.create_preset("TEST_MOD_PRESET")
+	assert(modded_payload_preset.payload_type == "test_payload")
+	assert(modded_payload_preset.payload_visual.visual_type == "cargo")
 	assert(RocketDesign.engine_count_options().has(5))
 	var has_test_payload := false
 	for payload_option in RocketDesign.payload_options():

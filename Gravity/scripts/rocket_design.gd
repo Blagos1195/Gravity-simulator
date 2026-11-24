@@ -138,12 +138,15 @@ static func _design_from_catalog(definition: Dictionary) -> Dictionary:
 		"payload_mass": float(definition.get("payload_mass", 500.0)),
 		"stages": []
 	}
-	for payload_option in payload_options():
-		if is_equal_approx(float(payload_option.get("mass", -1.0)), float(design["payload_mass"])):
-			var payload_id := str(payload_option.get("id", "probe"))
-			design["payload_type"] = payload_id
-			design["payload_visual"] = payload_visual_data(payload_id)
-			break
+	var selected_payload_id := str(definition.get("payload_id", ""))
+	if selected_payload_id.is_empty():
+		for payload_option in payload_options():
+			if is_equal_approx(float(payload_option.get("mass", -1.0)), float(design["payload_mass"])):
+				selected_payload_id = str(payload_option.get("id", "probe"))
+				break
+	if not selected_payload_id.is_empty():
+		design["payload_type"] = selected_payload_id
+		design["payload_visual"] = payload_visual_data(selected_payload_id)
 	var stage_parts: Dictionary = {}
 	for part in _rocket_catalog().get("stage_parts", []):
 		stage_parts[str(part.get("id", ""))] = part
