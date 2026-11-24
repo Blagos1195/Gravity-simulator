@@ -1001,7 +1001,7 @@ func _show_booster_editor(stage_index: int) -> void:
 	var stage: Dictionary = rocket_design["stages"][stage_index]
 	var boosters: Array = stage.get("boosters", [])
 	var heading := Label.new()
-	heading.text = "ATTACHED PAIRS  •  %d / 2" % boosters.size()
+	heading.text = "ATTACHED PAIRS  •  %d" % boosters.size()
 	layout.add_child(heading)
 	for booster_index in range(boosters.size()):
 		var booster_entry: Dictionary = boosters[booster_index]
@@ -1038,7 +1038,7 @@ func _show_booster_editor(stage_index: int) -> void:
 	add_row.add_child(booster_selector)
 	var add_button := Button.new()
 	add_button.text = "ADD PAIR"
-	add_button.disabled = boosters.size() >= 2 or options.is_empty()
+	add_button.disabled = options.is_empty()
 	add_button.pressed.connect(func():
 		if RocketDesign.add_booster_pair(rocket_design, stage_index, str(booster_selector.get_selected_metadata())):
 			_update_design_stats()
