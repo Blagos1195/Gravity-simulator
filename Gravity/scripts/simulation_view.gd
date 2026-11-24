@@ -668,10 +668,10 @@ func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
 		return
 	var separated_stage: Dictionary = rocket_stages[stage_index].duplicate(true)
-	var separated_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else fuel
+	var separated_fuel := fuel
 	var separated_dry_mass := RocketDesign.stage_total_dry_mass(separated_stage)
 	var separated_mass := separated_dry_mass + separated_fuel
-	var vehicle_mass_before := _current_vehicle_mass(infinite_fuel_stage_remaining if infinite_weightless_fuel else -1.0)
+	var vehicle_mass_before := _current_vehicle_mass()
 	var upper_stack_mass := maxf(0.001, vehicle_mass_before - separated_mass)
 	var total_separated_mass := maxf(0.001, separated_mass + upper_stack_mass)
 	var separation_direction := Vector2.UP.rotated(rotation_angle)
