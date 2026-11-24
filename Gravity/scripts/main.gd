@@ -289,7 +289,6 @@ func _advance_passive_vehicle(vehicle: SimulationView, target_time: float) -> vo
 	vehicle._set_rocket_position_components(host_components[0] + local_position.x, host_components[1] + local_position.y)
 	vehicle.velocity = Vector2(host.get("velocity", Vector2.ZERO)) + Vector2(local_state.velocity)
 	vehicle.rotation_angle = local_position.angle() + PI * 0.5
-	vehicle.trail_timer = 0.0
 
 func _set_selected_vehicle_full_simulation() -> void:
 	if not is_instance_valid(sim):
