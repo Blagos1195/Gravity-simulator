@@ -1522,7 +1522,8 @@ func _show_new_vehicle_dialog() -> void:
 		description.text = str(options[0].get("description", ""))
 	else:
 		launch_button.disabled = true
-	window.call_deferred("popup_centered")
+	if is_inside_tree():
+		window.call_deferred("popup_centered")
 
 func _show_fleet_custom_builder() -> void:
 	rocket_design = RocketDesign.create_blank()
