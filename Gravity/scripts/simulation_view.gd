@@ -17,6 +17,7 @@ var rocket_stages: Array = []
 var stage_fuel_remaining: Array[float] = []
 var payload_mass := 500.0
 var payload_type := "probe"
+var payload_visual: Dictionary = {}
 var vehicle_name := "Vehicle 1"
 var input_enabled := true
 var docked_mass := 0.0
@@ -117,6 +118,8 @@ func set_rocket_design(design: Dictionary) -> void:
 		rocket_stages = RocketDesign.create_default()["stages"].duplicate(true)
 	payload_mass = float(design.get("payload_mass", 500.0))
 	payload_type = str(design.get("payload_type", "probe"))
+	var visual_data: Variant = design.get("payload_visual", {})
+	payload_visual = visual_data.duplicate(true) if visual_data is Dictionary else {}
 	stage_index = 0
 	stage_fuel_remaining.clear()
 	for stage in rocket_stages:
@@ -1868,6 +1871,7 @@ func _rocket_visual_design() -> Dictionary:
 		"name": vehicle_name,
 		"payload_mass": payload_mass,
 		"payload_type": payload_type,
+		"payload_visual": payload_visual,
 		"stages": rocket_stages
 	}
 
@@ -2091,7 +2095,7 @@ func get_save_data() -> Dictionary:
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
-		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "stages": rocket_stages.duplicate(true)},
+		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": rocket_stages.duplicate(true)},
 		"vehicle_name": vehicle_name
 	}
 
