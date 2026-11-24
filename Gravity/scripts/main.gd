@@ -766,6 +766,14 @@ func _show_vehicle_editor() -> void:
 			_show_stage_editor(stage_index)
 		)
 		stage_row.add_child(edit_stage_button)
+		var booster_button := Button.new()
+		var stage_boosters: Array = stage.get("boosters", [])
+		booster_button.text = "BOOST %d" % stage_boosters.size()
+		booster_button.tooltip_text = "Add or remove strap-on booster pairs for this stage."
+		booster_button.pressed.connect(func():
+			_show_booster_editor(stage_index)
+		)
+		stage_row.add_child(booster_button)
 		var engine_selector := OptionButton.new()
 		engine_selector.tooltip_text = "Splits the stage's total thrust and fuel flow across this many smaller engines."
 		var engine_options := RocketDesign.engine_count_options()
@@ -975,6 +983,70 @@ func _apply_payload_editor_values(values: Dictionary) -> void:
 	rocket_design["payload_visual"] = visual
 	_update_design_stats()
 
+
+func _show_booster_editor(stage_index: int) -> void:
+	if stage_index < 0 or stage_index >= rocket_design.get("stages", []).size():
+		return
+	var window := Window.new()
+	window.title = "STAGE %02d BOOSTER MODULES" % (stage_index + 1)
+	window.size = Vector2i(520, 390)
+	window.min_size = Vector2i(440, 300)
+	window.transient = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	window.add_child(layout)
+	var stage: Dictionary = rocket_design["stages"][stage_index]
+	var boosters: Array = stage.get("boosters", [])
+	var heading := Label.new()
+	heading.text = "ATTACHED PAIRS  •  %d / 2" % boosters.size()
+	layout.add_child(heading)
+	for booster_index in range(boosters.size()):
+		var booster_entry: Dictionary = boosters[booster_index]
+		var definition := RocketDesign.booster_definition(str(booster_entry.get("id", "")))
+		var row := HBoxContainer.new()
+		var details := Label.new()
+		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details.text = "%s  •  %.0f t dry  •  %.0f t propellant  •  %.2f MN thrust" % [
+			str(definition.get("label", booster_entry.get("id", "Unknown booster"))),
+			RocketDesign.stage_booster_stats({"boosters": [booster_entry]}).dry_mass / 1000.0,
+			RocketDesign.stage_booster_stats({"boosters": [booster_entry]}).fuel_capacity / 1000.0,
+			RocketDesign.stage_booster_stats({"boosters": [booster_entry]}).thrust / 1000000.0
+		]
+		row.add_child(details)
+		var remove_button := Button.new()
+		remove_button.text = "REMOVE"
+		remove_button.pressed.connect(func():
+			RocketDesign.remove_booster_pair(rocket_design, stage_index, booster_index)
+			_update_design_stats()
+			window.queue_free()
+			_show_booster_editor(stage_index)
+		)
+		row.add_child(remove_button)
+		layout.add_child(row)
+	var add_row := HBoxContainer.new()
+	var booster_selector := OptionButton.new()
+	booster_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var options := RocketDesign.booster_options()
+	for option in options:
+		booster_selector.add_item(str(option.get("label", option.get("id", "Booster"))))
+		booster_selector.set_item_metadata(booster_selector.item_count - 1, str(option.get("id", "")))
+	add_row.add_child(booster_selector)
+	var add_button := Button.new()
+	add_button.text = "ADD PAIR"
+	add_button.disabled = boosters.size() >= 2 or options.is_empty()
+	add_button.pressed.connect(func():
+		if RocketDesign.add_booster_pair(rocket_design, stage_index, str(booster_selector.get_item_metadata(booster_selector.selected))):
+			_update_design_stats()
+			window.queue_free()
+			_show_booster_editor(stage_index)
+	)
+	add_row.add_child(add_button)
+	layout.add_child(add_row)
+	_add_button(layout, "CLOSE", func(): window.queue_free())
+	window.popup_centered()
 
 func _show_stage_editor(stage_index: int) -> void:
 	if stage_index < 0 or stage_index >= rocket_design["stages"].size():
