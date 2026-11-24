@@ -457,8 +457,9 @@ func _show_vehicle_editor() -> void:
 		stage_row.add_theme_constant_override("separation", 8)
 		stage_panel.add_child(stage_row)
 		var stage_number := Label.new()
-		stage_number.text = "STAGE %02d" % (stage_index + 1)
-		stage_number.custom_minimum_size.x = 90
+		stage_number.text = "STAGE %02d\n%s" % [stage_index + 1, str(stage.get("name", "CUSTOM STAGE"))]
+		stage_number.custom_minimum_size.x = 112
+		stage_number.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		stage_number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		stage_row.add_child(stage_number)
 		var part_selector := OptionButton.new()
@@ -706,6 +707,18 @@ func _show_stage_editor(stage_index: int) -> void:
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
 	dialog.add_child(content)
+	var name_row := HBoxContainer.new()
+	var name_label := Label.new()
+	name_label.text = "Stage name"
+	name_label.custom_minimum_size.x = 220
+	name_row.add_child(name_label)
+	var name_input := LineEdit.new()
+	name_input.text = str(stage.get("name", "CUSTOM STAGE"))
+	name_input.placeholder_text = "Stage name"
+	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_input.tooltip_text = "stage_name"
+	name_row.add_child(name_input)
+	content.add_child(name_row)
 	var layout_row := HBoxContainer.new()
 	var layout_label := Label.new()
 	layout_label.text = "Engine arrangement"
@@ -757,7 +770,7 @@ func _show_stage_editor(stage_index: int) -> void:
 	dialog.get_ok_button().text = "APPLY"
 	dialog.get_cancel_button().text = "CANCEL"
 	dialog.confirmed.connect(func():
-		var values: Dictionary = {"engine_layout": str(engine_layout_selector.get_item_metadata(engine_layout_selector.selected))}
+		var values: Dictionary = {"name": name_input.text.strip_edges(), "engine_layout": str(engine_layout_selector.get_item_metadata(engine_layout_selector.selected))}
 		for key in inputs:
 			values[key] = inputs[key].value
 		_apply_stage_editor_values(stage_index, values)
@@ -776,6 +789,9 @@ func _apply_stage_editor_values(stage_index: int, values: Dictionary) -> void:
 	if stage_index < 0 or stage_index >= rocket_design["stages"].size():
 		return
 	var updated_stage: Dictionary = rocket_design["stages"][stage_index].duplicate(true)
+	if values.has("name"):
+		var stage_name := str(values["name"]).strip_edges()
+		updated_stage["name"] = stage_name if not stage_name.is_empty() else "CUSTOM STAGE"
 	if values.has("engine_layout"):
 		updated_stage["engine_layout"] = str(values["engine_layout"])
 	for key in ["dry_mass", "fuel_capacity", "thrust", "vacuum_thrust", "flow", "visual_length_factor", "visual_diameter_factor"]:
