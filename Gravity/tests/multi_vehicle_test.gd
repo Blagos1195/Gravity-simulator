@@ -29,9 +29,6 @@ func _initialize() -> void:
 	second.landed = false
 	second.rocket_position = Vector2(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
 	second.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
-	var passive_body := second._nearest_body_state(second.rocket_position, second.rocket_position_precise)
-	var passive_orbit := FlightComputer.orbital_state(passive_body.relative_position, second.velocity - Vector2(passive_body.velocity), FlightComputer.G * float(passive_body.mass))
-	print("PASSIVE DIAGNOSTIC active=", main.sim == first, "body=", passive_body, "orbit=", passive_orbit, "landed=", second.landed, "forced=", second.passive_orbit_forced, "throttle=", second.throttle)
 	main._update_passive_orbit_states()
 	assert(second.passive_orbit_active, "Inactive stable spacecraft was not moved to passive orbit propagation")
 	var passive_start := second.rocket_position
