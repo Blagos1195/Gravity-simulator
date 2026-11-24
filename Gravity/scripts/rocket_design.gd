@@ -173,13 +173,21 @@ static func booster_definition(booster_id: String) -> Dictionary:
 			return option
 	return {}
 
+static func booster_definition_for_entry(booster_entry: Dictionary) -> Dictionary:
+	var definition := booster_definition(str(booster_entry.get("id", "")))
+	if definition.is_empty():
+		var saved_definition: Variant = booster_entry.get("definition", {})
+		if saved_definition is Dictionary:
+			return saved_definition.duplicate(true)
+	return definition
+
 static func add_booster_pair(design: Dictionary, stage_index: int, booster_id: String) -> bool:
 	var stages: Array = design.get("stages", [])
 	if stage_index < 0 or stage_index >= stages.size() or booster_definition(booster_id).is_empty():
 		return false
 	var stage: Dictionary = stages[stage_index].duplicate(true)
 	var boosters: Array = stage.get("boosters", []).duplicate(true)
-	boosters.append({"id": booster_id})
+	boosters.append({"id": booster_id, "definition": booster_definition(booster_id).duplicate(true)})
 	stage["boosters"] = boosters
 	stages[stage_index] = stage
 	design["stages"] = stages
@@ -199,12 +207,20 @@ static func remove_booster_pair(design: Dictionary, stage_index: int, booster_in
 	design["stages"] = stages
 	return true
 
+static func _booster_definition_is_valid(booster: Dictionary) -> bool:
+	for key in ["dry_mass", "fuel_capacity", "thrust", "vacuum_thrust", "flow"]:
+		var value: Variant = booster.get(key)
+		if not (value is int or value is float) or not is_finite(float(value)) or float(value) <= 0.0:
+			return false
+	var pair_count: Variant = booster.get("pair_count", 0)
+	return (pair_count is int or pair_count is float) and int(pair_count) == 2 and float(pair_count) == 2.0 and float(booster.vacuum_thrust) >= float(booster.thrust)
+
 static func stage_booster_stats(stage: Dictionary) -> Dictionary:
 	var totals := {"dry_mass": 0.0, "fuel_capacity": 0.0, "thrust": 0.0, "vacuum_thrust": 0.0, "flow": 0.0}
 	for booster_variant in stage.get("boosters", []):
 		if not booster_variant is Dictionary:
 			continue
-		var booster := booster_definition(str(booster_variant.get("id", "")))
+		var booster := booster_definition_for_entry(booster_variant)
 		if booster.is_empty():
 			continue
 		var pair_count := maxi(1, int(booster.get("pair_count", 2)))
@@ -348,8 +364,12 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 			errors.append("Stage %d booster modules must be an array." % (i + 1))
 		else:
 			for booster_variant in boosters:
-				if not booster_variant is Dictionary or booster_definition(str(booster_variant.get("id", ""))).is_empty():
-					errors.append("Stage %d references an unknown booster module." % (i + 1))
+				if not booster_variant is Dictionary:
+					errors.append("Stage %d contains an invalid booster module." % (i + 1))
+				else:
+					var booster_definition_data := booster_definition_for_entry(booster_variant)
+					if booster_definition_data.is_empty() or not _booster_definition_is_valid(booster_definition_data):
+						errors.append("Stage %d references an invalid booster module." % (i + 1))
 		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0 or not (engine_value is int or engine_value is float) or float(engine_value) != float(engines) or engines < 1:
 			continue
 		if vacuum_thrust < sea_thrust:
