@@ -777,6 +777,7 @@ func _fast_forward_simulation(seconds: float) -> bool:
 	var scan_step := seconds / float(scan_samples)
 	for sample_index in range(1, scan_samples + 1):
 		var sample_time := start_time + scan_step * float(sample_index)
+		sim.sim_time = sample_time
 		for vehicle in fleet_sims:
 			if not vehicle.telescope_active or vehicle.crashed or vehicle.landed or not orbit_data.has(vehicle):
 				continue
