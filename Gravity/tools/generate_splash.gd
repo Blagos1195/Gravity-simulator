@@ -14,6 +14,7 @@ func _generate() -> void:
 	viewport.add_child(renderer)
 	await process_frame
 	await process_frame
+	await RenderingServer.frame_post_draw
 	var image := viewport.get_texture().get_image()
 	if image.is_empty():
 		push_error("Splash renderer produced an empty image.")
