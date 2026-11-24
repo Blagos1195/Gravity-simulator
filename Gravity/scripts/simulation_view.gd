@@ -107,6 +107,9 @@ var landed := true
 var crashed := false
 var landed_body_name := "Earth"
 var landed_surface_normal := Vector2.DOWN
+var passive_orbit_active := false
+var passive_orbit_forced := false
+var passive_orbit_data: Dictionary = {}
 
 func _set_rocket_position_components(position_x: float, position_y: float) -> void:
 	rocket_position_precise = PackedFloat64Array([position_x, position_y])
@@ -2096,7 +2099,10 @@ func get_save_data() -> Dictionary:
 		"time_warp": time_warp,
 		"paused": paused,
 		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": rocket_stages.duplicate(true)},
-		"vehicle_name": vehicle_name
+		"vehicle_name": vehicle_name,
+		"passive_orbit_active": passive_orbit_active,
+		"passive_orbit_forced": passive_orbit_forced,
+		"passive_orbit_data": passive_orbit_data.duplicate(true)
 	}
 
 func load_save_data(data: Dictionary) -> bool:
@@ -2188,6 +2194,13 @@ func load_save_data(data: Dictionary) -> bool:
 				validated_stage_fuel.append(float(saved_stages[i].get("fuel_capacity", 0.0)))
 	set_rocket_design(saved_design)
 	vehicle_name = str(data.get("vehicle_name", vehicle_name))
+	passive_orbit_active = bool(data.get("passive_orbit_active", false))
+	passive_orbit_forced = bool(data.get("passive_orbit_forced", false))
+	var saved_passive_orbit: Variant = data.get("passive_orbit_data", {})
+	passive_orbit_data = saved_passive_orbit.duplicate(true) if saved_passive_orbit is Dictionary else {}
+	if passive_orbit_active and (str(passive_orbit_data.get("host_body_name", "")).is_empty() or not passive_orbit_data.get("elements", {}) is Dictionary):
+		passive_orbit_active = false
+		passive_orbit_data.clear()
 	stage_index = clampi(int(data.get("stage_index", 0)), 0, maxi(0, rocket_stages.size() - 1))
 	sim_time = float(data.get("sim_time", 0.0))
 	var p: Array = data.get("position", [0.0, -EARTH_RADIUS - 2.0])
