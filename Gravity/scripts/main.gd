@@ -1008,7 +1008,7 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _show_new_game_setup)
 	_update_design_stats()
-	if not is_instance_valid(active_builder):
+	if is_inside_tree() and not is_instance_valid(active_builder):
 		_show_vehicle_component_editor(0)
 
 
