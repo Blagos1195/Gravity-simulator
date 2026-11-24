@@ -20,7 +20,7 @@ static func payload_visual_data(payload_id: String) -> Dictionary:
 		if str(option.get("id", "")) != payload_id:
 			continue
 		var visual := {}
-		for key in ["visual_type", "visual_width_factor", "visual_height_factor", "visual_color_rgb", "telescope_range_au"]:
+		for key in ["visual_type", "visual_width_factor", "visual_height_factor", "visual_color_rgb", "telescope_range_au", "satellite_role", "revenue_per_day", "operating_cost_per_day", "operational_lifetime_days"]:
 			if option.has(key):
 				visual[key] = option[key]
 		return visual
@@ -228,6 +228,14 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 			var telescope_range: Variant = payload_visual.telescope_range_au
 			if not (telescope_range is int or telescope_range is float) or not is_finite(float(telescope_range)) or float(telescope_range) < 0.0:
 				errors.append("Payload telescope_range_au must be a finite non-negative number.")
+		if payload_visual.has("satellite_role") and not str(payload_visual.satellite_role).is_empty() and str(payload_visual.get("visual_type", "satellite")) != "satellite":
+			errors.append("Satellite roles require a satellite payload visual.")
+		for economy_key in ["revenue_per_day", "operating_cost_per_day", "operational_lifetime_days"]:
+			if payload_visual.has(economy_key):
+				var economy_value: Variant = payload_visual[economy_key]
+				var minimum_value := 0.0 if economy_key != "operational_lifetime_days" else 0.000001
+				if not (economy_value is int or economy_value is float) or not is_finite(float(economy_value)) or float(economy_value) < minimum_value:
+					errors.append("Payload %s must be a positive finite number." % economy_key)
 		if payload_visual.has("visual_color_rgb"):
 			var payload_color: Variant = payload_visual.visual_color_rgb
 			var valid_payload_color: bool = payload_color is Array and payload_color.size() == 3
