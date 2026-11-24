@@ -2,6 +2,10 @@ extends Window
 class_name RocketBuilder
 
 signal design_changed(design: Dictionary)
+signal save_requested
+signal load_requested
+signal launch_requested
+signal back_requested
 
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
@@ -482,11 +486,23 @@ func _build_interface() -> void:
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	footer.add_child(note)
-	var done := Button.new()
-	done.text = "DONE"
-	done.custom_minimum_size.x = 110.0
-	done.pressed.connect(_finish)
-	footer.add_child(done)
+	var save_button := Button.new()
+	save_button.text = "SAVE DESIGN"
+	save_button.pressed.connect(func(): save_requested.emit())
+	footer.add_child(save_button)
+	var load_button := Button.new()
+	load_button.text = "LOAD DESIGN"
+	load_button.pressed.connect(func(): load_requested.emit())
+	footer.add_child(load_button)
+	var launch_button := Button.new()
+	launch_button.text = "LAUNCH"
+	launch_button.custom_minimum_size.x = 110.0
+	launch_button.pressed.connect(func(): launch_requested.emit())
+	footer.add_child(launch_button)
+	var back_button := Button.new()
+	back_button.text = "BACK"
+	back_button.pressed.connect(func(): back_requested.emit())
+	footer.add_child(back_button)
 	_canvas.set_meta("mirror_enabled", mirror_enabled)
 
 func _refresh() -> void:
