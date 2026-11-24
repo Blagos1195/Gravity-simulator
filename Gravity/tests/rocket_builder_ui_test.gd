@@ -22,6 +22,20 @@ func _initialize() -> void:
 		payload_input.value_changed.emit(payload_input.value)
 	assert(is_equal_approx(float(main.rocket_design.payload_mass), 1200.0))
 	assert(main.design_error_label.text == "DESIGN VALID")
+	main._show_stage_editor(0)
+	var stage_dialog: ConfirmationDialog
+	for child in main.get_children():
+		if child is ConfirmationDialog:
+			stage_dialog = child
+			break
+	assert(is_instance_valid(stage_dialog))
+	var dry_mass_input := _find_tooltip_spinbox(stage_dialog, "dry_mass")
+	assert(is_instance_valid(dry_mass_input))
+	var edited_dry_mass := float(main.rocket_design["stages"][0].dry_mass) + 1000.0
+	main._apply_stage_editor_values(0, {"dry_mass": edited_dry_mass})
+	assert(is_equal_approx(float(main.rocket_design["stages"][0].dry_mass), edited_dry_mass))
+	assert(main.design_error_label.text == "DESIGN VALID")
+	stage_dialog.free()
 	main._start_flight()
 	main._show_new_vehicle_dialog()
 	var vehicle_dialog: Window
@@ -42,6 +56,16 @@ func _find_spinbox(node: Node) -> SpinBox:
 		return node
 	for child in node.get_children():
 		var found := _find_spinbox(child)
+		if found != null:
+			return found
+	return null
+
+
+func _find_tooltip_spinbox(node: Node, tooltip: String) -> SpinBox:
+	if node is SpinBox and node.tooltip_text == tooltip:
+		return node
+	for child in node.get_children():
+		var found := _find_tooltip_spinbox(child, tooltip)
 		if found != null:
 			return found
 	return null
