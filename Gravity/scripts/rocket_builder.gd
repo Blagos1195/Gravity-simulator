@@ -623,8 +623,29 @@ func _refresh_inspector() -> void:
 	mirror_selected.button_pressed = bool(component.get("mirror", false))
 	mirror_selected.toggled.connect(func(enabled: bool):
 		_update_component_property("mirror", enabled)
+		if is_instance_valid(side_selector):
+			side_selector.disabled = enabled
 	)
 	_inspector.add_child(mirror_selected)
+	if str(component.get("attachment", "stack")) == "radial":
+		var side_label := Label.new()
+		side_label.text = "Mount side"
+		_inspector.add_child(side_label)
+		var side_selector := OptionButton.new()
+		side_selector.add_item("Left")
+		side_selector.set_item_metadata(0, -1)
+		side_selector.add_item("Right")
+		side_selector.set_item_metadata(1, 1)
+		side_selector.select(0 if int(component.get("side", 1)) < 0 else 1)
+		side_selector.disabled = bool(component.get("mirror", false))
+		side_selector.item_selected.connect(func(index: int):
+			_update_component_property("side", int(side_selector.get_item_metadata(index)))
+		)
+		_inspector.add_child(side_selector)
+		var mount_label := Label.new()
+		mount_label.text = "Attachment node  •  %s" % ("automatic centre" if int(component.get("mount_index", -1)) < 0 else "stack segment %d" % (int(component.get("mount_index", -1)) + 1))
+		mount_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_inspector.add_child(mount_label)
 	var fields := [
 		{"key":"dry_mass","label":"Dry mass (kg)","max":100000000.0},
 		{"key":"fuel_capacity","label":"Propellant (kg)","max":1000000000.0},
