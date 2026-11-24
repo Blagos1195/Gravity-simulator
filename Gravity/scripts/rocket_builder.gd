@@ -468,7 +468,7 @@ func _refresh_parts() -> void:
 		card.custom_minimum_size.y = 58.0
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		card.pressed.connect(func(): _add_component(str(option.get("id", "")), "stack", true, 1, -1))
+		card.pressed.connect(func(): _add_component(str(option.get("id", "")), "radial" if kind == "radial" else "stack", mirror_enabled, 1, -1))
 		_parts_list.add_child(card)
 
 func _on_component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int) -> void:
