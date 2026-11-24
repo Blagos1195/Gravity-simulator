@@ -399,14 +399,14 @@ func _build_interface() -> void:
 	canvas_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
 	center_column.add_child(canvas_heading)
 	_canvas = AssemblyCanvas.new()
-	if compact_layout:
-		_canvas.custom_minimum_size = Vector2(0, 300)
 	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_canvas.component_dropped.connect(_on_component_dropped)
 	_canvas.component_moved.connect(_on_component_moved)
 	_canvas.component_selected.connect(_on_component_selected)
 	center_column.add_child(_canvas)
+	if compact_layout:
+		_canvas.custom_minimum_size = Vector2(0, 300)
 	var canvas_tools := HBoxContainer.new()
 	canvas_tools.alignment = BoxContainer.ALIGNMENT_CENTER
 	var zoom_out := Button.new()
