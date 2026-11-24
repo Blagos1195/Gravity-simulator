@@ -1423,7 +1423,11 @@ func _show_game_load() -> void:
 				parsed = JSON.parse_string(file.get_as_text())
 				file.close()
 			if parsed is Dictionary:
-				var label := "SLOT %02d  •  %s  •  %s" % [slot, str(parsed.get("realism", "Unknown")), str(parsed.get("world_scale", "Unknown"))]
+				var vehicle_count := parsed.get("vehicles", []).size() if parsed.get("vehicles", []) is Array else 1
+				var saved_at := int(parsed.get("saved_at_unix", FileAccess.get_modified_time(path)))
+				var saved_text := Time.get_datetime_string_from_unix_time(saved_at, true)
+				var save_name := str(parsed.get("save_name", "Unnamed campaign"))
+				var label := "SLOT %02d  •  %s  •  %d VEHICLES  •  %s" % [slot, save_name, vehicle_count, saved_text]
 				_add_button(root, label, _load_menu_slot.bind(slot))
 			else:
 				var corrupt_label := Label.new()
@@ -1436,7 +1440,8 @@ func _show_game_load() -> void:
 		var history_paths: Array[String] = _autosave_history_paths(slot)
 		for history_path in history_paths:
 			var history_time: int = FileAccess.get_modified_time(history_path)
-			var history_label := "     ↳ AUTOSAVE  •  %s" % Time.get_datetime_string_from_unix_time(history_time, true)
+			var history_kind := "MANUAL BACKUP" if history_path.get_file().begins_with("manual_") else "AUTOSAVE"
+			var history_label := "     ↳ %s  •  %s" % [history_kind, Time.get_datetime_string_from_unix_time(history_time, true)]
 			_add_button(root, history_label, _load_menu_path.bind(slot, history_path))
 	_add_button(layout, "BACK", _build_menu)
 
@@ -2917,8 +2922,9 @@ func _write_save_file(path: String, data: Dictionary) -> bool:
 		return false
 	file.store_string(JSON.stringify(data, "\t"))
 	file.flush()
+	var write_error := file.get_error()
 	file.close()
-	if FileAccess.get_open_error() != OK:
+	if write_error != OK:
 		DirAccess.remove_absolute(temporary_path)
 		return false
 	if FileAccess.file_exists(path):
