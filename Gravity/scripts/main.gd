@@ -2624,7 +2624,8 @@ func _load_game_from_path(path: String) -> void:
 	funds = float(parsed.get("funds", STARTING_FUNDS))
 	total_revenue_earned = maxf(0.0, float(parsed.get("total_revenue_earned", 0.0)))
 	total_operating_costs = maxf(0.0, float(parsed.get("total_operating_costs", 0.0)))
-	economy_last_sim_time = sim.sim_time
+	economy_last_sim_time = fleet_sims[active_vehicle_index].sim_time if not fleet_sims.is_empty() else 0.0
+	_refresh_economy_display()
 	discovery_state = SpaceDiscovery.sanitize_state(parsed.get("discovery_state", SpaceDiscovery.new_campaign_state()))
 	for vehicle in fleet_sims:
 		vehicle.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
