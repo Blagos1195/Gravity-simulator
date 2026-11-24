@@ -363,6 +363,14 @@ static func _catalog_error(catalog: Dictionary) -> String:
 				return "Rocket payload %s has an invalid %s." % [payload_id, visual_key]
 		if payload.has("telescope_range_au") and (not (payload.telescope_range_au is int or payload.telescope_range_au is float) or not is_finite(float(payload.telescope_range_au)) or float(payload.telescope_range_au) < 0.0):
 			return "Rocket payload %s has an invalid telescope_range_au." % payload_id
+		for economy_key in ["revenue_per_day", "operating_cost_per_day", "operational_lifetime_days"]:
+			if payload.has(economy_key):
+				var economy_value: Variant = payload[economy_key]
+				var minimum_value := 0.0 if economy_key != "operational_lifetime_days" else 0.000001
+				if not (economy_value is int or economy_value is float) or not is_finite(float(economy_value)) or float(economy_value) < minimum_value:
+					return "Rocket payload %s has an invalid %s." % [payload_id, economy_key]
+		if payload.has("satellite_role") and not str(payload.satellite_role).is_empty() and str(payload.get("visual_type", "satellite")) != "satellite":
+			return "Rocket payload %s assigns a satellite role to a non-satellite visual." % payload_id
 		if payload.has("visual_color_rgb"):
 			var payload_visual_color_error := _color_field_error(payload, "visual_color_rgb", "rocket payload %s" % payload_id)
 			if not payload_visual_color_error.is_empty():
