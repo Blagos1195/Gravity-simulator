@@ -296,7 +296,9 @@ func _advance_fleet(delta: float) -> void:
 				if bool(orbit_state.get("bound", false)) and float(orbit_state.get("periapsis", 0.0)) > float(orbit_body.get("radius", 0.0)):
 					var semi_major := -orbit_mu / (2.0 * (orbit_relative_velocity.length_squared() * 0.5 - orbit_mu / orbit_relative_position.length()))
 					var eccentricity := float(orbit_state.get("eccentricity", 0.0))
-					var direction := orbit_relative_position.angle()
+					var angular_momentum := orbit_relative_position.cross(orbit_relative_velocity)
+					var eccentricity_vector := Vector2(orbit_relative_velocity.y * angular_momentum, -orbit_relative_velocity.x * angular_momentum) / orbit_mu - orbit_relative_position.normalized()
+					var direction := eccentricity_vector.angle() if eccentricity > 0.0001 else orbit_relative_position.angle()
 					var host_position := vehicle.rocket_position - orbit_relative_position
 					for point_index in range(97):
 						var theta := TAU * float(point_index) / 96.0
@@ -773,7 +775,7 @@ func _fast_forward_simulation(seconds: float) -> bool:
 				return false
 	var start_time := sim.sim_time
 	var target_time := start_time + seconds
-	var scan_samples := mini(2000, maxi(1, ceili(seconds / 86400.0)))
+	var scan_samples := mini(25000, maxi(1, ceili(seconds / 7200.0)))
 	var scan_step := seconds / float(scan_samples)
 	for sample_index in range(1, scan_samples + 1):
 		var sample_time := start_time + scan_step * float(sample_index)
