@@ -154,7 +154,7 @@ func _remaining_stack_mass() -> float:
 func total_propellant_remaining() -> float:
 	var total := 0.0
 	for i in range(stage_index, rocket_stages.size()):
-		total += fuel if i == stage_index else (stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else float(rocket_stages[i].get("fuel_capacity", 0.0)))
+		total += fuel if i == stage_index else (stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(rocket_stages[i]))
 	return total
 
 func total_propellant_capacity() -> float:
