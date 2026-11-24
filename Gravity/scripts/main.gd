@@ -580,6 +580,10 @@ func _show_stage_editor(stage_index: int) -> void:
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
 	dialog.add_child(content)
+	var default_color := [0.35, 0.57, 0.71] if stage_index % 2 == 0 else [0.43, 0.63, 0.75]
+	var stage_color: Variant = stage.get("visual_color_rgb", default_color)
+	if not stage_color is Array or stage_color.size() != 3:
+		stage_color = default_color
 	var fields := [
 		{"key": "dry_mass", "label": "Dry mass (kg)", "step": 1.0},
 		{"key": "fuel_capacity", "label": "Propellant capacity (kg)", "step": 1.0},
@@ -587,7 +591,10 @@ func _show_stage_editor(stage_index: int) -> void:
 		{"key": "vacuum_thrust", "label": "Vacuum thrust per engine (N)", "step": 100.0},
 		{"key": "flow", "label": "Fuel flow per engine (kg/s)", "step": 0.1},
 		{"key": "visual_length_factor", "label": "Visual length multiplier", "step": 0.05, "minimum": 0.25, "maximum": 100.0},
-		{"key": "visual_diameter_factor", "label": "Visual diameter multiplier", "step": 0.05, "minimum": 0.25, "maximum": 100.0}
+		{"key": "visual_diameter_factor", "label": "Visual diameter multiplier", "step": 0.05, "minimum": 0.25, "maximum": 100.0},
+		{"key": "visual_color_r", "label": "Body colour · red", "step": 0.01, "minimum": 0.0, "maximum": 1.0, "default_value": float(stage_color[0])},
+		{"key": "visual_color_g", "label": "Body colour · green", "step": 0.01, "minimum": 0.0, "maximum": 1.0, "default_value": float(stage_color[1])},
+		{"key": "visual_color_b", "label": "Body colour · blue", "step": 0.01, "minimum": 0.0, "maximum": 1.0, "default_value": float(stage_color[2])}
 	]
 	var inputs: Dictionary = {}
 	for field in fields:
@@ -600,7 +607,7 @@ func _show_stage_editor(stage_index: int) -> void:
 		input.min_value = float(field.get("minimum", 0.001))
 		input.max_value = float(field.get("maximum", 1.0e300))
 		input.step = float(field.step)
-		input.value = float(stage.get(str(field.key), 1.0))
+		input.value = float(field.get("default_value", stage.get(str(field.key), 1.0)))
 		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		input.tooltip_text = str(field.key)
 		row.add_child(input)
@@ -631,6 +638,18 @@ func _apply_stage_editor_values(stage_index: int, values: Dictionary) -> void:
 	for key in ["dry_mass", "fuel_capacity", "thrust", "vacuum_thrust", "flow", "visual_length_factor", "visual_diameter_factor"]:
 		if values.has(key):
 			updated_stage[key] = float(values[key])
+	var color_keys := ["visual_color_r", "visual_color_g", "visual_color_b"]
+	var has_color_value := false
+	var color: Variant = updated_stage.get("visual_color_rgb", [0.35, 0.57, 0.71] if stage_index % 2 == 0 else [0.43, 0.63, 0.75])
+	if not color is Array or color.size() != 3:
+		color = [0.35, 0.57, 0.71] if stage_index % 2 == 0 else [0.43, 0.63, 0.75]
+	color = color.duplicate()
+	for channel in range(color_keys.size()):
+		if values.has(color_keys[channel]):
+			color[channel] = clampf(float(values[color_keys[channel]]), 0.0, 1.0)
+			has_color_value = true
+	if has_color_value:
+		updated_stage["visual_color_rgb"] = color
 	rocket_design["stages"][stage_index] = updated_stage
 	_update_design_stats()
 
