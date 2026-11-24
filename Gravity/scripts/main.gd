@@ -460,6 +460,13 @@ func _show_vehicle_editor() -> void:
 			_show_vehicle_editor()
 		)
 		stage_row.add_child(part_selector)
+		var edit_stage_button := Button.new()
+		edit_stage_button.text = "EDIT"
+		edit_stage_button.tooltip_text = "Edit this stage's physical and visual properties."
+		edit_stage_button.pressed.connect(func():
+			_show_stage_editor(stage_index)
+		)
+		stage_row.add_child(edit_stage_button)
 		var engine_selector := OptionButton.new()
 		engine_selector.tooltip_text = "Splits the stage's total thrust and fuel flow across this many smaller engines."
 		var engine_options := RocketDesign.engine_count_options()
@@ -472,7 +479,7 @@ func _show_vehicle_editor() -> void:
 		engine_selector.select(engine_options.find(current_engine_count))
 		engine_selector.item_selected.connect(func(option_index: int):
 			var current_stage: Dictionary = rocket_design["stages"][stage_index]
-			var configured := RocketDesign.configure_stage(str(current_stage.get("part_id", "")), int(engine_selector.get_item_metadata(option_index)), float(current_stage.get("tank_scale", 1.0)))
+			var configured := RocketDesign.reconfigure_stage(current_stage, int(engine_selector.get_item_metadata(option_index)), float(current_stage.get("tank_scale", 1.0)))
 			if not configured.is_empty():
 				rocket_design["stages"][stage_index] = configured
 				_update_design_stats()
@@ -494,7 +501,7 @@ func _show_vehicle_editor() -> void:
 		tank_selector.select(selected_tank_index)
 		tank_selector.item_selected.connect(func(option_index: int):
 			var current_stage: Dictionary = rocket_design["stages"][stage_index]
-			var configured := RocketDesign.configure_stage(str(current_stage.get("part_id", "")), int(current_stage.get("engine_count", 1)), float(tank_selector.get_item_metadata(option_index)))
+			var configured := RocketDesign.reconfigure_stage(current_stage, int(current_stage.get("engine_count", 1)), float(tank_selector.get_item_metadata(option_index)))
 			if not configured.is_empty():
 				rocket_design["stages"][stage_index] = configured
 				_update_design_stats()
@@ -560,6 +567,64 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _show_new_game_setup)
 	_update_design_stats()
+
+
+func _show_stage_editor(stage_index: int) -> void:
+	if stage_index < 0 or stage_index >= rocket_design["stages"].size():
+		return
+	var stage: Dictionary = rocket_design["stages"][stage_index].duplicate(true)
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "EDIT STAGE %02d" % (stage_index + 1)
+	dialog.dialog_text = "Physical values are per engine. Visual factors change the workshop and flight model."
+	dialog.min_size = Vector2i(520, 480)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 8)
+	dialog.add_child(content)
+	var fields := [
+		{"key": "dry_mass", "label": "Dry mass (kg)", "step": 1.0},
+		{"key": "fuel_capacity", "label": "Propellant capacity (kg)", "step": 1.0},
+		{"key": "thrust", "label": "Sea-level thrust per engine (N)", "step": 100.0},
+		{"key": "vacuum_thrust", "label": "Vacuum thrust per engine (N)", "step": 100.0},
+		{"key": "flow", "label": "Fuel flow per engine (kg/s)", "step": 0.1},
+		{"key": "visual_length_factor", "label": "Visual length multiplier", "step": 0.05, "minimum": 0.25, "maximum": 100.0},
+		{"key": "visual_diameter_factor", "label": "Visual diameter multiplier", "step": 0.05, "minimum": 0.25, "maximum": 100.0}
+	]
+	var inputs: Dictionary = {}
+	for field in fields:
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = str(field.label)
+		label.custom_minimum_size.x = 220
+		row.add_child(label)
+		var input := SpinBox.new()
+		input.min_value = float(field.get("minimum", 0.001))
+		input.max_value = float(field.get("maximum", 1.0e300))
+		input.step = float(field.step)
+		input.value = float(stage.get(str(field.key), 1.0))
+		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		input.tooltip_text = str(field.key)
+		row.add_child(input)
+		content.add_child(row)
+		inputs[str(field.key)] = input
+	dialog.get_ok_button().text = "APPLY"
+	dialog.get_cancel_button().text = "CANCEL"
+	dialog.confirmed.connect(func():
+		if stage_index >= 0 and stage_index < rocket_design["stages"].size():
+			var updated_stage: Dictionary = rocket_design["stages"][stage_index].duplicate(true)
+			for key in inputs:
+				updated_stage[key] = inputs[key].value
+			rocket_design["stages"][stage_index] = updated_stage
+			_update_design_stats()
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(func():
+		dialog.queue_free()
+	)
+	dialog.close_requested.connect(func():
+		dialog.queue_free()
+	)
+	add_child(dialog)
+	dialog.popup_centered()
 
 func _update_design_stats() -> void:
 	if not is_instance_valid(design_stats_label) or not is_instance_valid(design_error_label):
