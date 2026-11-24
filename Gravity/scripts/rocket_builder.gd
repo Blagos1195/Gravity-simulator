@@ -860,6 +860,13 @@ func _show_preset_dialog() -> void:
 		for index in range(stages.size()):
 			stages[index] = RocketAssembly.ensure_stage_components(stages[index])
 		design["stages"] = stages
+		_vehicle_name.text = str(design.get("name", "Custom Vehicle"))
+		_payload_mass_input.set_value_no_signal(float(design.get("payload_mass", 500.0)))
+		for index in range(_payload_selector.item_count):
+			var payload_option: Dictionary = _payload_selector.get_item_metadata(index)
+			if str(payload_option.get("id", "")) == str(design.get("payload_type", "")):
+				_payload_selector.select(index)
+				break
 		selected_stage_index = 0
 		selected_component_index = -1
 		_changed()
