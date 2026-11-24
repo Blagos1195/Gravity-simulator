@@ -413,6 +413,11 @@ func _show_vehicle_editor() -> void:
 		_update_design_stats()
 	)
 	payload_row.add_child(payload_mass_input)
+	var payload_edit_button := Button.new()
+	payload_edit_button.text = "EDIT"
+	payload_edit_button.tooltip_text = "Edit the payload's shape, proportions and colour."
+	payload_edit_button.pressed.connect(_show_payload_editor)
+	payload_row.add_child(payload_edit_button)
 	payload_selector.item_selected.connect(func(index: int):
 		var selected_payload_option: Dictionary = payload_selector.get_item_metadata(index)
 		rocket_design["payload_mass"] = float(selected_payload_option.mass)
@@ -570,6 +575,99 @@ func _show_vehicle_editor() -> void:
 	_add_button(actions, "SAVE DESIGN", _save_rocket_design)
 	_add_button(actions, "LAUNCH VEHICLE", _launch_designed_vehicle)
 	_add_button(actions, "BACK", _show_new_game_setup)
+	_update_design_stats()
+
+
+func _show_payload_editor() -> void:
+	var visual: Dictionary = rocket_design.get("payload_visual", {}).duplicate(true)
+	var visual_type := str(visual.get("visual_type", rocket_design.get("payload_type", "probe")))
+	if not ["probe", "crew", "satellite", "cargo"].has(visual_type):
+		visual_type = "probe"
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "EDIT PAYLOAD APPEARANCE"
+	dialog.dialog_text = "Change the payload silhouette independently of its physical mass."
+	dialog.min_size = Vector2i(500, 390)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 8)
+	dialog.add_child(content)
+	var type_row := HBoxContainer.new()
+	var type_label := Label.new()
+	type_label.text = "Payload shape"
+	type_label.custom_minimum_size.x = 220
+	type_row.add_child(type_label)
+	var type_selector := OptionButton.new()
+	for option in ["probe", "crew", "satellite", "cargo"]:
+		type_selector.add_item(option.capitalize())
+		type_selector.set_item_metadata(type_selector.item_count - 1, option)
+	var selected_type_index := ["probe", "crew", "satellite", "cargo"].find(visual_type)
+	type_selector.select(maxi(0, selected_type_index))
+	type_row.add_child(type_selector)
+	content.add_child(type_row)
+	var color: Variant = visual.get("visual_color_rgb", [0.82, 0.87, 0.93])
+	if not color is Array or color.size() != 3:
+		color = [0.82, 0.87, 0.93]
+	var fields := [
+		{"key": "visual_width_factor", "label": "Width multiplier", "step": 0.05, "minimum": 0.25, "maximum": 4.0, "default_value": float(visual.get("visual_width_factor", 1.0))},
+		{"key": "visual_height_factor", "label": "Height multiplier", "step": 0.05, "minimum": 0.25, "maximum": 4.0, "default_value": float(visual.get("visual_height_factor", 1.0))},
+		{"key": "visual_color_r", "label": "Body colour · red", "step": 0.01, "minimum": 0.0, "maximum": 1.0, "default_value": float(color[0])},
+		{"key": "visual_color_g", "label": "Body colour · green", "step": 0.01, "minimum": 0.0, "maximum": 1.0, "default_value": float(color[1])},
+		{"key": "visual_color_b", "label": "Body colour · blue", "step": 0.01, "minimum": 0.0, "maximum": 1.0, "default_value": float(color[2])}
+	]
+	var inputs: Dictionary = {}
+	for field in fields:
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = str(field.label)
+		label.custom_minimum_size.x = 220
+		row.add_child(label)
+		var input := SpinBox.new()
+		input.min_value = float(field.minimum)
+		input.max_value = float(field.maximum)
+		input.step = float(field.step)
+		input.value = float(field.default_value)
+		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		input.tooltip_text = str(field.key)
+		row.add_child(input)
+		content.add_child(row)
+		inputs[str(field.key)] = input
+	dialog.get_ok_button().text = "APPLY"
+	dialog.get_cancel_button().text = "CANCEL"
+	dialog.confirmed.connect(func():
+		var values: Dictionary = {"visual_type": str(type_selector.get_item_metadata(type_selector.selected))}
+		for key in inputs:
+			values[key] = inputs[key].value
+		_apply_payload_editor_values(values)
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(func():
+		dialog.queue_free()
+	)
+	dialog.close_requested.connect(func():
+		dialog.queue_free()
+	)
+	add_child(dialog)
+	dialog.popup_centered()
+
+
+func _apply_payload_editor_values(values: Dictionary) -> void:
+	var visual: Dictionary = rocket_design.get("payload_visual", {}).duplicate(true)
+	var visual_type := str(values.get("visual_type", visual.get("visual_type", rocket_design.get("payload_type", "probe"))))
+	if not ["probe", "crew", "satellite", "cargo"].has(visual_type):
+		return
+	visual["visual_type"] = visual_type
+	for key in ["visual_width_factor", "visual_height_factor"]:
+		if values.has(key):
+			visual[key] = clampf(float(values[key]), 0.25, 4.0)
+	var color: Variant = visual.get("visual_color_rgb", [0.82, 0.87, 0.93])
+	if not color is Array or color.size() != 3:
+		color = [0.82, 0.87, 0.93]
+	color = color.duplicate()
+	for channel in range(3):
+		var key := ["visual_color_r", "visual_color_g", "visual_color_b"][channel]
+		if values.has(key):
+			color[channel] = clampf(float(values[key]), 0.0, 1.0)
+	visual["visual_color_rgb"] = color
+	rocket_design["payload_visual"] = visual
 	_update_design_stats()
 
 
