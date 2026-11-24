@@ -52,6 +52,7 @@ func _initialize() -> void:
 	main.rocket_design = design
 	main._show_vehicle_editor()
 	main._show_vehicle_component_editor(0)
+	await process_frame
 	var editor_found := false
 	for child in main.get_children():
 		if child is Control and child.name == "RocketBuilder":
