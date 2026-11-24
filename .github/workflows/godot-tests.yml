@@ -51,6 +51,9 @@ jobs:
           if echo "$changed_files" | grep -Eq 'rocket_design|content_catalog'; then
             run_check rocket_design_test
           fi
+          if echo "$changed_files" | grep -Eq 'rocket_assembly|main.gd|content_catalog'; then
+            run_check rocket_assembly_test
+          fi
           if echo "$changed_files" | grep -Eq 'main.gd'; then
             run_check rocket_builder_ui_test
           fi
@@ -102,6 +105,7 @@ jobs:
           run_check career_economy_test
           run_check mission_system_test
           run_check rocket_design_test
+          run_check rocket_assembly_test
           run_check rocket_builder_ui_test
           run_check booster_physics_test
           run_check multi_vehicle_test
