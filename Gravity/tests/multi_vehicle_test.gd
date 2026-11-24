@@ -5,6 +5,7 @@ const RocketDesign = preload("res://scripts/rocket_design.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
+const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -66,6 +67,7 @@ func _initialize() -> void:
 	assert(main._rename_vehicle("Vehicle 2", "Lunar Relay"))
 	assert(not main._rename_vehicle("Lunar Relay", "Vehicle 1"))
 	assert(main.fleet_sims[1].vehicle_name == "Lunar Relay")
+	SpaceDiscovery.mark_visited(main.discovery_state, "Mars")
 	main.save_slot = 8
 	main._save_game(false)
 	var save_path := "user://saves/slot_08.json"
@@ -75,7 +77,10 @@ func _initialize() -> void:
 	save_file.close()
 	assert(saved_data.get("vehicles", []).size() == 2)
 	assert(int(saved_data.get("active_vehicle_index", -1)) == 1)
+	assert(bool(saved_data.discovery_state.Mars.visited))
+	main.discovery_state = SpaceDiscovery.new_campaign_state()
 	main._load_game_from_path(save_path)
+	assert(SpaceDiscovery.is_visited(main.discovery_state, "Mars"), "Saved planetary discoveries were not restored")
 	assert(main.fleet_sims.size() == 2)
 	assert(main.active_vehicle_index == 1)
 	assert(main.sim.vehicle_name == "Lunar Relay")
