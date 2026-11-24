@@ -1005,7 +1005,7 @@ func _show_booster_editor(stage_index: int) -> void:
 	layout.add_child(heading)
 	for booster_index in range(boosters.size()):
 		var booster_entry: Dictionary = boosters[booster_index]
-		var definition := RocketDesign.booster_definition(str(booster_entry.get("id", "")))
+		var definition := RocketDesign.booster_definition_for_entry(booster_entry)
 		var row := HBoxContainer.new()
 		var details := Label.new()
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
