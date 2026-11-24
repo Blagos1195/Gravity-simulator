@@ -2978,8 +2978,8 @@ func _show_flight_computer() -> void:
 func _show_docking_panel() -> void:
 	var window := Window.new()
 	window.title = "DOCKING AND FUEL TRANSFER"
-	window.size = Vector2i(500, 520)
-	window.min_size = Vector2i(420, 420)
+	window.size = Vector2i(500, 580)
+	window.min_size = Vector2i(420, 480)
 	window.transient = true
 	window.exclusive = true
 	add_child(window)
