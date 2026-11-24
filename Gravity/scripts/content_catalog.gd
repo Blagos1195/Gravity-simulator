@@ -402,6 +402,8 @@ static func _catalog_error(catalog: Dictionary) -> String:
 			return design_error
 		if float(design.payload_mass) <= 0.0:
 			return "Rocket design %s must have positive payload mass." % str(design.get("name", "unnamed"))
+		if design.has("payload_id") and not payload_ids.has(str(design.payload_id)):
+			return "Rocket design %s references unknown payload %s." % [str(design.get("name", "unnamed")), str(design.payload_id)]
 		for part_id_variant in design.get("stages", []):
 			if not part_ids.has(str(part_id_variant)):
 				return "Rocket design %s references unknown stage part %s." % [str(design.get("name", "unnamed")), str(part_id_variant)]
