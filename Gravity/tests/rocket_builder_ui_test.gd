@@ -16,7 +16,7 @@ func _initialize() -> void:
 	assert(main.mode == "editor")
 	assert(is_instance_valid(main.active_builder))
 	assert(main.active_builder.title == "VEHICLE ASSEMBLY BUILDING")
-	var payload_input := _find_spinbox(main.active_builder)
+	var payload_input: SpinBox = main.active_builder._payload_mass_input
 	assert(is_instance_valid(payload_input))
 	payload_input.value = 1200.0
 	if not is_equal_approx(float(main.rocket_design.payload_mass), 1200.0):
