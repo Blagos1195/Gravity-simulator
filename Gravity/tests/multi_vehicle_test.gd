@@ -37,6 +37,7 @@ func _initialize() -> void:
 	second.passive_orbit_forced = true
 	second.passive_orbit_active = false
 	second.passive_orbit_data.clear()
+	second.sim_time = first.sim_time
 	first.rocket_position = Vector2(0.0, -PlanetarySystem.EARTH_RADIUS - 2.0)
 	main._switch_vehicle(0)
 	var key_event := InputEventKey.new()
