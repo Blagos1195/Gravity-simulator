@@ -521,6 +521,16 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 	if updated.is_empty():
 		return
 	var components: Array = updated.get("components", [])
+	if attachment == "stack" and insert_index < 0 and str(components.back().get("kind", "")) != "engine":
+		insert_index = components.size() - 1
+		for index in range(components.size() - 1):
+			var existing_component: Dictionary = components[index]
+			if str(existing_component.get("attachment", "stack")) == "radial":
+				insert_index = index
+				break
+			if str(existing_component.get("kind", "")) == "engine":
+				insert_index = index
+				break
 	if attachment == "radial":
 		var axial_indices: Array[int] = []
 		for index in range(components.size() - 1):
