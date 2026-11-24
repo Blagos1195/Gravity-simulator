@@ -263,7 +263,8 @@ func _build_interface() -> void:
 	var title_label := Label.new()
 	title_label.text = "VEHICLE ASSEMBLY BUILDING"
 	title_label.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-	title_label.add_theme_font_size_override("font_size", 20)
+	title_label.add_theme_font_size_override("font_size", 16 if compact_layout else 20)
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	identity_row.add_child(title_label)
 	var name_input := LineEdit.new()
 	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -323,7 +324,7 @@ func _build_interface() -> void:
 	payload_row.add_child(payload_mass_input)
 	_payload_mass_input = payload_mass_input
 	var header_actions := GridContainer.new()
-	header_actions.columns = 2 if compact_layout else 3
+	header_actions.columns = 1 if size.x < 560.0 else 2 if compact_layout else 3
 	header.add_child(header_actions)
 	var payload_edit := Button.new()
 	payload_edit.text = "EDIT PAYLOAD"
@@ -407,6 +408,9 @@ func _build_interface() -> void:
 	var canvas_heading := Label.new()
 	canvas_heading.text = "ASSEMBLY VIEW  •  SNAP PARTS TO STACK NODES OR SIDE MOUNTS"
 	canvas_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	canvas_heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if compact_layout:
+		canvas_heading.add_theme_font_size_override("font_size", 12)
 	canvas_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
 	center_column.add_child(canvas_heading)
 	_canvas = AssemblyCanvas.new()
