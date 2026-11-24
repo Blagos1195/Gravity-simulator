@@ -148,10 +148,11 @@ func _advance_fleet(delta: float) -> void:
 	for vehicle in fleet_sims:
 		vehicle.time_warp = sim.time_warp
 		vehicle.paused = sim.paused
-		vehicle.prediction_timer += delta
-		if vehicle.show_predicted_trajectory and vehicle.prediction_timer >= 0.35:
-			vehicle.prediction_timer = 0.0
-			vehicle._calculate_predicted_trajectory()
+		if vehicle == sim and vehicle.show_predicted_trajectory:
+			vehicle.prediction_timer += delta
+			if vehicle.prediction_timer >= 0.35:
+				vehicle.prediction_timer = 0.0
+				vehicle._calculate_predicted_trajectory()
 		vehicle.trail_timer += delta
 		if vehicle.trail_timer >= 0.12:
 			vehicle.trail_timer = 0.0
@@ -979,6 +980,8 @@ func _switch_vehicle(index: int) -> void:
 	sim.input_enabled = not _is_docked_child(sim.vehicle_name)
 	sim.visible = true
 	sim.time_warp = fleet_sims[0].time_warp
+	if sim.show_predicted_trajectory:
+		sim._calculate_predicted_trajectory()
 	rocket_design = {
 		"name": sim.vehicle_name,
 		"payload_mass": sim.payload_mass,
