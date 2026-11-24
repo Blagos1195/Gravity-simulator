@@ -53,7 +53,7 @@ func _initialize() -> void:
 	main._show_vehicle_editor()
 	main._show_vehicle_component_editor(0)
 	var editor_found := false
-	for child in main.get_children():
+	for child in root.get_children():
 		if child is Window and str(child.title).contains("VEHICLE ASSEMBLY BUILDING"):
 			editor_found = true
 			break
