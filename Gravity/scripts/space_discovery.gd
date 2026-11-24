@@ -62,7 +62,7 @@ static func visited_names(state: Dictionary) -> Dictionary:
 			result[str(body_name)] = true
 	return result
 
-static func scan_telescope(state: Dictionary, telescope_position: Vector2, range_m: float, body_states: Array, pointing_angle: float = 0.0, field_of_view: float = deg_to_rad(30.0)) -> Array[String]:
+static func scan_telescope(state: Dictionary, telescope_position: Vector2, range_m: float, body_states: Array, pointing_angle: float = 0.0, field_of_view: float = PI / 6.0) -> Array[String]:
 	var discovered: Array[String] = []
 	if range_m <= 0.0 or field_of_view <= 0.0:
 		return discovered
