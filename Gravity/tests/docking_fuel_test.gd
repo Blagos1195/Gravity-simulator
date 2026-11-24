@@ -20,12 +20,25 @@ func _initialize() -> void:
 	second_child.landed = false
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
+	parent.velocity = Vector2(12.0, 0.0)
+	child.velocity = Vector2.ZERO
+	child.rocket_position = parent.rocket_position + Vector2(10000.0, 0.0)
+	main.docking_assists[parent.vehicle_name] = child.vehicle_name
+	main._apply_docking_assists(1.0)
+	assert(parent.velocity.x < 12.0 and parent.velocity.x > 0.0, "Rendezvous assist did not brake relative closing speed")
+	parent.velocity = Vector2.ZERO
+	main._apply_docking_assists(1.0)
+	assert(is_equal_approx(parent.velocity.x, 0.15), "Rendezvous assist did not accelerate towards its target within its thrust limit")
+	main.docking_assists.clear()
+	parent.rocket_position = Vector2(1000000.0, 2000000.0)
+	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
 	parent.velocity = Vector2(0.0, 1000.0)
 	child.velocity = Vector2(0.0, 1003.0)
 	assert(not main._dock_vehicle(child.vehicle_name))
 	child.velocity = Vector2(0.0, 1001.0)
 	assert(main._dock_vehicle(child.vehicle_name))
 	assert(main.docking_links.size() == 1)
+	assert(main.docking_assists.is_empty(), "Docking did not stop rendezvous assist")
 	assert(not child.input_enabled)
 	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass()))
 	second_child.rocket_position = parent.rocket_position + Vector2(-25.0, 0.0)
@@ -69,6 +82,10 @@ func _initialize() -> void:
 	assert(main._undock_vehicle(loaded_second_child.vehicle_name))
 	assert(main.docking_links.is_empty())
 	assert(is_zero_approx(loaded_parent.docked_mass))
+	main.docking_assists[loaded_parent.vehicle_name] = loaded_child.vehicle_name
+	main._save_game(false)
+	main._load_game_from_path(save_path)
+	assert(str(main.docking_assists.get(loaded_parent.vehicle_name, "")) == loaded_child.vehicle_name, "Rendezvous assist state was not restored from save")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Docking and fuel transfer test passed.")
 	main.queue_free()
