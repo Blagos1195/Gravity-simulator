@@ -1477,6 +1477,8 @@ func _draw() -> void:
 		if destination_screen.x > -destination_radius - 30.0 and destination_screen.x < size.x + destination_radius + 30.0 and destination_screen.y > -destination_radius - 30.0 and destination_screen.y < size.y + destination_radius + 30.0:
 			var destination_visual := PlanetarySystem.planet_visual_data(str(destination.name))
 			var destination_color: Color = destination_visual.get("color", Color(0.82, 0.38, 0.25))
+			if not visited_body_names.has(str(destination.name)):
+				destination_color = destination_color.darkened(0.58).lerp(Color(0.32, 0.43, 0.58), 0.4)
 			var atmosphere_visual: Dictionary = _planet_atmosphere_visual(str(destination.name))
 			_draw_atmosphere(destination_screen, destination_radius, float(atmosphere_visual.get("height", 0.0)), atmosphere_visual.get("color", Color.TRANSPARENT))
 			draw_circle(destination_screen, destination_radius + 5.0, Color(0.45, 0.7, 1.0, 0.12))
@@ -1626,6 +1628,8 @@ func _draw_offscreen_body_indicators(view_center: Vector2, scale: float) -> void
 		var edge_position := view_center + direction * edge_distance
 		edge_position.y = clampf(edge_position.y + (float(index) - float(count - 1) * 0.5) * 24.0, 28.0, size.y - 28.0)
 		var color: Color = candidate.color
+		if not visited_body_names.has(str(candidate.name)):
+			color = color.darkened(0.58).lerp(Color(0.32, 0.43, 0.58), 0.4)
 		var side := direction
 		var tip := edge_position + side * 9.0
 		var base := edge_position - side * 7.0
