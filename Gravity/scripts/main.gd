@@ -797,7 +797,7 @@ func _show_vehicle_component_editor(stage_index: int) -> void:
 		builder._refresh()
 		return
 	get_tree().root.add_child(builder)
-	builder.popup_centered()
+	builder.popup()
 
 
 func _duplicate_stage(stage_index: int) -> void:
