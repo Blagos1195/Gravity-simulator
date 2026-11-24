@@ -76,7 +76,7 @@ Stage parts are reusable components. Presets are vehicle designs made from stage
 }
 ```
 
-Payload entries may define `visual_type` (`probe`, `crew`, `satellite` or `cargo`), `visual_width_factor`, `visual_height_factor` and `visual_color_rgb`. These settings control the payload silhouette in both the workshop and flight view. Custom payload entries without visual fields retain the default probe appearance. Payload visual settings are copied into saved craft designs, so their appearance survives changes to the catalog.
+Payload entries may define `visual_type` (`probe`, `crew`, `satellite` or `cargo`), `visual_width_factor`, `visual_height_factor` and `visual_color_rgb`. The workshop also exposes these properties in the payload editor, so they can be changed per craft without editing the mod file. These settings control the payload silhouette in both the workshop and flight view. Custom payload entries without visual fields retain the default probe appearance. Payload visual settings are copied into saved craft designs, so their appearance survives changes to the catalog.
 
 The workshop reads payload, engine-count and tank-scale choices from `rocket.builder_options`. Add choices with `payloads_add`, `engine_counts_add` and `tank_scales_add`. Payload mass, stage count, engine count, total vehicle mass and tank scale have no built-in upper design caps. A mod can optionally define `payload_mass_limits` when it wants to constrain its own payload choices. Engine counts must be positive whole numbers, and tank scales must be positive. The list must retain a 1.0 standard scale.
 
