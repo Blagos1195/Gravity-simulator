@@ -315,7 +315,7 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		var part_error := _numeric_fields_error(part, ["dry_mass", "fuel_capacity", "thrust", "vacuum_thrust", "flow", "engine_count"], "rocket stage part %s" % part_id)
 		if not part_error.is_empty():
 			return part_error
-		if not part.has("name") or float(part.dry_mass) <= 0.0 or float(part.fuel_capacity) <= 0.0 or float(part.thrust) <= 0.0 or float(part.vacuum_thrust) <= 0.0 or float(part.flow) <= 0.0 or int(part.engine_count) <= 0:
+		if not part.has("name") or float(part.dry_mass) <= 0.0 or float(part.fuel_capacity) <= 0.0 or float(part.thrust) <= 0.0 or float(part.vacuum_thrust) <= 0.0 or float(part.flow) <= 0.0 or int(part.engine_count) <= 0 or float(part.engine_count) != float(int(part.engine_count)):
 			return "Rocket stage part %s has invalid name or engine values." % part_id
 	var builder_options: Variant = rocket.get("builder_options")
 	if not builder_options is Dictionary:
@@ -326,13 +326,14 @@ static func _catalog_error(catalog: Dictionary) -> String:
 	if not payload_options is Array or payload_options.is_empty() or not engine_counts is Array or engine_counts.is_empty() or not tank_scales is Array or tank_scales.is_empty():
 		return "Rocket builder payloads, engine_counts and tank_scales must be non-empty arrays."
 	var payload_mass_limits: Variant = builder_options.get("payload_mass_limits")
-	if not payload_mass_limits is Dictionary:
-		return "Rocket payload_mass_limits must be an object."
-	var payload_limits_error := _numeric_fields_error(payload_mass_limits, ["minimum", "maximum", "step"], "rocket payload_mass_limits")
-	if not payload_limits_error.is_empty():
-		return payload_limits_error
-	if float(payload_mass_limits.minimum) <= 0.0 or float(payload_mass_limits.maximum) <= float(payload_mass_limits.minimum) or float(payload_mass_limits.step) <= 0.0:
-		return "Rocket payload mass limits must have a positive minimum, maximum and step."
+	if payload_mass_limits != null:
+		if not payload_mass_limits is Dictionary:
+			return "Rocket payload_mass_limits must be an object."
+		var payload_limits_error := _numeric_fields_error(payload_mass_limits, ["minimum", "maximum", "step"], "rocket payload_mass_limits")
+		if not payload_limits_error.is_empty():
+			return payload_limits_error
+		if float(payload_mass_limits.minimum) <= 0.0 or float(payload_mass_limits.maximum) <= float(payload_mass_limits.minimum) or float(payload_mass_limits.step) <= 0.0:
+			return "Rocket payload mass limits must have a positive minimum, maximum and step."
 	var payload_ids := {}
 	for payload_variant in payload_options:
 		if not payload_variant is Dictionary:
@@ -344,13 +345,13 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		var payload_error := _numeric_fields_error(payload, ["mass"], "rocket payload %s" % payload_id)
 		if not payload_error.is_empty():
 			return payload_error
-		if float(payload.mass) < float(payload_mass_limits.minimum) or float(payload.mass) > float(payload_mass_limits.maximum):
+		if payload_mass_limits is Dictionary and (float(payload.mass) < float(payload_mass_limits.minimum) or float(payload.mass) > float(payload_mass_limits.maximum)):
 			return "Rocket payload %s mass is outside the configured payload limits." % payload_id
 		payload_ids[payload_id] = true
 	var engine_count_ids := {}
 	for engine_count in engine_counts:
-		if not (engine_count is int or engine_count is float) or int(engine_count) < 1 or int(engine_count) > 8 or float(engine_count) != float(int(engine_count)) or engine_count_ids.has(int(engine_count)):
-			return "Rocket builder engine_counts must contain unique whole numbers from 1 to 8."
+		if not (engine_count is int or engine_count is float) or int(engine_count) < 1 or float(engine_count) != float(int(engine_count)) or engine_count_ids.has(int(engine_count)):
+			return "Rocket builder engine_counts must contain unique positive whole numbers."
 		engine_count_ids[int(engine_count)] = true
 	var tank_scale_values := []
 	for tank_option_variant in tank_scales:
@@ -361,8 +362,8 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		if not tank_error.is_empty():
 			return tank_error
 		var tank_scale := float(tank_option.scale)
-		if str(tank_option.get("label", "")).is_empty() or tank_scale <= 0.0 or tank_scale > 4.0 or tank_scale_values.has(tank_scale):
-			return "Rocket tank scale options need unique positive scales no greater than 4."
+		if str(tank_option.get("label", "")).is_empty() or tank_scale <= 0.0 or tank_scale_values.has(tank_scale):
+			return "Rocket tank scale options need unique positive scales."
 		tank_scale_values.append(tank_scale)
 	if not engine_count_ids.has(1) or not tank_scale_values.has(1.0):
 		return "Rocket builder options must include one engine and a standard 1.0 tank scale."
@@ -378,8 +379,8 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		var design: Dictionary = design_variant
 		if not design.get("stages") is Array:
 			return "Rocket design %s must have a stages array." % str(design.get("name", "unnamed"))
-		if design.stages.size() < 2 or design.stages.size() > 8:
-			return "Rocket design %s must have between 2 and 8 stages." % str(design.get("name", "unnamed"))
+		if design.stages.is_empty():
+			return "Rocket design %s must have at least one stage." % str(design.get("name", "unnamed"))
 		var design_error := _numeric_fields_error(design, ["payload_mass"], "rocket design %s" % str(design.get("name", "unnamed")))
 		if not design_error.is_empty():
 			return design_error
