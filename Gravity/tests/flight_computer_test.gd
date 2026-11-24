@@ -478,6 +478,8 @@ func _initialize() -> void:
 	var planner_sim: Variant = SimulationView.new()
 	planner_sim.set_rocket_design(RocketDesign.create_default())
 	planner_sim.landed = false
+	planner_sim.visited_body_names["Moon"] = true
+	planner_sim.visited_body_names["Mars"] = true
 	planner_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
 	planner_sim.velocity = Vector2(manoeuvre_speed, 0.0)
 	var route_planner_window: Window = RoutePlanner.new()
@@ -563,6 +565,7 @@ func _initialize() -> void:
 	surface_sim.set_rocket_design(RocketDesign.create_default())
 	surface_sim.landed = true
 	surface_sim.landed_body_name = "Earth"
+	surface_sim.visited_body_names["Moon"] = true
 	surface_sim.landed_surface_normal = Vector2.UP
 	surface_sim._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 0.5)
 	var surface_planner_window: Window = RoutePlanner.new()
@@ -620,6 +623,7 @@ func _initialize() -> void:
 	var recovery_sim: Variant = SimulationView.new()
 	recovery_sim.set_rocket_design(RocketDesign.create_default())
 	recovery_sim.landed = false
+	recovery_sim.visited_body_names["Moon"] = true
 	recovery_sim._set_rocket_position_components(0.0, -unstable_radius)
 	recovery_sim.velocity = Vector2(unstable_speed, 0.0)
 	var recovery_planner_window: Window = RoutePlanner.new()
@@ -639,6 +643,7 @@ func _initialize() -> void:
 	var low_altitude_sim: Variant = SimulationView.new()
 	low_altitude_sim.set_rocket_design(RocketDesign.create_default())
 	low_altitude_sim.landed = false
+	low_altitude_sim.visited_body_names["Moon"] = true
 	var low_altitude_radius := PlanetarySystem.EARTH_RADIUS + 50000.0
 	low_altitude_sim._set_rocket_position_components(0.0, -low_altitude_radius)
 	low_altitude_sim.velocity = Vector2(FlightComputer.circular_orbit_speed(low_altitude_radius) * 0.8, 0.0)
