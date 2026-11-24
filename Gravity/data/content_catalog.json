@@ -331,6 +331,10 @@
         {"id": "cargo", "label": "Cargo module · 8 t", "mass": 8000, "visual_type": "cargo", "visual_width_factor": 1, "visual_height_factor": 1, "visual_color_rgb": [0.62, 0.68, 0.76] },
         {"id": "heavy_cargo", "label": "Heavy cargo · 12 t", "mass": 12000, "visual_type": "cargo", "visual_width_factor": 1.35, "visual_height_factor": 1.2, "visual_color_rgb": [0.5, 0.58, 0.68] }
       ],
+      "booster_options": [
+        {"id": "solid_booster_pair", "label": "Solid strap-on booster pair", "dry_mass": 8000, "fuel_capacity": 42000, "thrust": 550000, "vacuum_thrust": 600000, "flow": 180, "pair_count": 2, "visual_width_factor": 0.48, "visual_length_factor": 0.88, "visual_color_rgb": [0.72, 0.74, 0.78]},
+        {"id": "liquid_booster_pair", "label": "Liquid strap-on booster pair", "dry_mass": 11000, "fuel_capacity": 65000, "thrust": 800000, "vacuum_thrust": 900000, "flow": 240, "pair_count": 2, "visual_width_factor": 0.56, "visual_length_factor": 1.0, "visual_color_rgb": [0.62, 0.7, 0.8]}
+      ],
       "engine_counts": [1, 2, 3, 4, 6, 8, 12, 16, 20, 24, 32],
       "tank_scales": [
         {"label": "Compact tank", "scale": 0.75},
