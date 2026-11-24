@@ -147,6 +147,14 @@ func _initialize() -> void:
 	assert(first.rocket_position.distance_to(wreck_start) > 0.1, "A crashed wreck stopped moving instead of continuing under physics")
 	assert(first.velocity.distance_to(wreck_velocity) > 0.000001, "A crashed wreck stopped responding to gravity")
 	assert(first.crashed and not first.input_enabled and is_zero_approx(first.throttle), "Wreck physics restored control or engine thrust")
+	first._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
+	first.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
+	main._switch_vehicle(1)
+	main._update_passive_orbit_states()
+	assert(first.passive_orbit_active, "A stable wreck was excluded from normal passive orbit simulation")
+	var passive_wreck_start := first.rocket_position
+	main._advance_passive_vehicle(first, first.sim_time + 60.0)
+	assert(first.rocket_position.distance_to(passive_wreck_start) > 100.0, "A passively simulated wreck did not continue around its orbit")
 	var live_vehicle: SimulationView = main.fleet_sims[2]
 	live_vehicle.landed = false
 	live_vehicle.crashed = false
