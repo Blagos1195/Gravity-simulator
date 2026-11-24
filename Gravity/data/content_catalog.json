@@ -343,5 +343,16 @@
         {"label": "Extreme tank", "scale": 10.0}
       ]
     }
-  }
+   },
+  "missions": [
+    {"id": "first_orbit", "title": "First Orbit", "description": "Establish a stable orbit around Earth.", "condition": "orbit_body", "body": "Earth", "reward": 5000000},
+    {"id": "lunar_orbit", "title": "Lunar Survey", "description": "Establish a stable orbit around the Moon.", "condition": "orbit_body", "body": "Moon", "reward": 15000000},
+    {"id": "mars_discovery", "title": "Red Planet Reconnaissance", "description": "Spot Mars with a telescope or by visiting its sphere of influence.", "condition": "discover_body", "body": "Mars", "reward": 12000000},
+    {"id": "inner_survey", "title": "Inner System Survey", "description": "Permanently discover four planets.", "condition": "discover_count", "count": 4, "reward": 20000000},
+    {"id": "jovian_discovery", "title": "Jovian Reconnaissance", "description": "Permanently discover Jupiter.", "condition": "discover_body", "body": "Jupiter", "reward": 35000000},
+    {"id": "saturn_orbit", "title": "Saturn Operations", "description": "Establish a stable orbit around Saturn.", "condition": "orbit_body", "body": "Saturn", "reward": 50000000},
+    {"id": "uranus_discovery", "title": "Uranus Reconnaissance", "description": "Permanently discover Uranus.", "condition": "discover_body", "body": "Uranus", "reward": 75000000},
+    {"id": "neptune_discovery", "title": "Neptune Exploration", "description": "Permanently discover Neptune.", "condition": "discover_body", "body": "Neptune", "reward": 100000000},
+    {"id": "satellite_network", "title": "Orbital Network", "description": "Operate three satellites simultaneously.", "condition": "operational_satellites", "count": 3, "reward": 25000000}
+  ]
 }
