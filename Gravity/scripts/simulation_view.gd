@@ -1789,6 +1789,13 @@ func _draw_solar_system(center: Vector2) -> void:
 	draw_line(rocket_screen + Vector2(0.0, -6.0), rocket_screen + Vector2(0.0, 6.0), Color(0.3, 1.0, 0.65), 2.0)
 	draw_circle(rocket_screen, 3.0, Color(0.3, 1.0, 0.65))
 	_draw_solar_label("ROCKET", rocket_screen, 10, Color(0.4, 1.0, 0.72), occupied)
+	for fleet_entry in fleet_visuals:
+		var fleet_position: Vector2 = fleet_entry.get("position", rocket_position)
+		var fleet_heliocentric := earth_heliocentric + fleet_position
+		var fleet_marker := center + Vector2(fleet_heliocentric.x, -fleet_heliocentric.y) * map_scale
+		draw_circle(fleet_marker, 2.4, Color(0.35, 0.78, 1.0))
+		if solar_map_zoom >= 2.0:
+			_draw_solar_label(str(fleet_entry.get("name", "SPACECRAFT")).to_upper(), fleet_marker, 8, Color(0.55, 0.82, 1.0), occupied)
 	var footer_text: String = "SIM TIME  %.2f DAYS     MAP SCALE  %.2f×     WHEEL TO ZOOM" % [sim_time / 86400.0, solar_map_zoom]
 	var footer_size: Vector2 = ThemeDB.fallback_font.get_string_size(footer_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11)
 	var footer_rect := Rect2(Vector2(18.0, size.y - 34.0), Vector2(footer_size.x + 14.0, 23.0))
