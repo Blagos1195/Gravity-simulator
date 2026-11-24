@@ -46,8 +46,21 @@ func _initialize() -> void:
 	low_thrust_upper_stage["stages"][1]["thrust"] = 80000.0
 	low_thrust_upper_stage["stages"][1]["flow"] = 25.3
 	assert(RocketDesign.validation_errors(low_thrust_upper_stage).is_empty())
+	var single_stage_design := {
+		"name": "Single Stage",
+		"payload_mass": 500.0,
+		"stages": [{
+			"dry_mass": 5000.0,
+			"fuel_capacity": 100000.0,
+			"thrust": 3000000.0,
+			"vacuum_thrust": 3500000.0,
+			"flow": 1000.0,
+			"engine_count": 1
+		}]
+	}
+	assert(RocketDesign.validation_errors(single_stage_design).is_empty())
 	var incomplete := design.duplicate(true)
-	incomplete["stages"].pop_back()
+	incomplete["stages"].clear()
 	assert(not RocketDesign.validation_errors(incomplete).is_empty())
 	for preset in RocketDesign.preset_options():
 		var preset_id := str(preset.get("id", ""))
