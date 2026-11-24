@@ -179,12 +179,11 @@ static func booster_definition(booster_id: String) -> Dictionary:
 	return {}
 
 static func booster_definition_for_entry(booster_entry: Dictionary) -> Dictionary:
-	var definition := booster_definition(str(booster_entry.get("id", "")))
-	if definition.is_empty():
-		var saved_definition: Variant = booster_entry.get("definition", {})
-		if saved_definition is Dictionary:
-			return saved_definition.duplicate(true)
-	return definition
+	var saved_definition: Variant = booster_entry.get("definition", {})
+	if saved_definition is Dictionary and not saved_definition.is_empty():
+		return saved_definition.duplicate(true)
+	return booster_definition(str(booster_entry.get("id", "")))
+
 
 static func add_booster_pair(design: Dictionary, stage_index: int, booster_id: String) -> bool:
 	var stages: Array = design.get("stages", [])
