@@ -71,7 +71,7 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 			canvas.draw_string(ThemeDB.fallback_font, _point(origin, Vector2(half + 4.0, y + height * 0.65), rotation, scale), "S%d" % (active_stage_index + i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.8, 0.92))
 		var engines := maxi(1, int(stage.get("engine_count", 1)))
 		var spacing := width * 0.76 / float(maxi(1, engines - 1))
-		var nozzle_width := minf(2.5, width * 0.13, maxf(0.35, spacing * 0.38))
+		var nozzle_width := minf(minf(2.5, width * 0.13), maxf(0.35, spacing * 0.38))
 		for engine_index in range(engines):
 			var engine_x := (float(engine_index) - float(engines - 1) * 0.5) * spacing
 			_polygon(canvas, origin, [Vector2(engine_x - nozzle_width, y + height), Vector2(engine_x + nozzle_width, y + height), Vector2(engine_x + nozzle_width * 0.7, y + height + 4.0), Vector2(engine_x - nozzle_width * 0.7, y + height + 4.0)], rotation, scale, Color(0.56, 0.61, 0.68))
