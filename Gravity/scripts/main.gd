@@ -228,7 +228,7 @@ func _update_discovery_state() -> void:
 		SpaceDiscovery.mark_visited(discovery_state, str(body.get("name", "")))
 		var telescope_range_au := float(vehicle.payload_visual.get("telescope_range_au", 0.0))
 		if str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
-			var telescope_position := earth_position + vehicle.rocket_position
+			var telescope_position: Vector2 = earth_position + vehicle.rocket_position
 			SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies)
 	var spotted := SpaceDiscovery.spotted_names(discovery_state)
 	var visited := SpaceDiscovery.visited_names(discovery_state)
