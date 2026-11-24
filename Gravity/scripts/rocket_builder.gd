@@ -6,6 +6,7 @@ signal save_requested
 signal load_requested
 signal launch_requested
 signal back_requested
+signal payload_edit_requested
 
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
@@ -304,6 +305,21 @@ func _build_interface() -> void:
 	)
 	header.add_child(payload_mass_input)
 	_payload_mass_input = payload_mass_input
+	var payload_edit := Button.new()
+	payload_edit.text = "EDIT PAYLOAD"
+	payload_edit.pressed.connect(func(): payload_edit_requested.emit())
+	header.add_child(payload_edit)
+	var new_vehicle := Button.new()
+	new_vehicle.text = "NEW"
+	new_vehicle.tooltip_text = "Start a blank vehicle design"
+	new_vehicle.pressed.connect(func():
+		_push_undo()
+		design = RocketDesign.create_blank()
+		selected_stage_index = 0
+		selected_component_index = -1
+		_changed()
+	)
+	header.add_child(new_vehicle)
 	var mirror := CheckButton.new()
 	mirror.text = "MIRROR NEW RADIAL PARTS"
 	mirror.button_pressed = true
