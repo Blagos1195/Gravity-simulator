@@ -1590,9 +1590,22 @@ func _show_fleet_management_panel() -> void:
 		var fuel_capacity := vehicle.total_propellant_capacity()
 		var fuel_percent := 100.0 * vehicle.total_propellant_remaining() / maxf(1.0, fuel_capacity)
 		var state := "DOCKED" if _is_vehicle_docked(vehicle.vehicle_name) else ("LANDED" if vehicle.landed else ("CRASHED" if vehicle.crashed else ("AUTOPILOT" if vehicle.autopilot_enabled else "MANUAL")))
+		var simulation_state := "PASSIVE ORBIT" if vehicle.passive_orbit_active else "FULL SIMULATION"
+		var profile: Dictionary = vehicle.payload_visual
+		var role := str(profile.get("satellite_role", ""))
+		var lifetime_days := float(profile.get("operational_lifetime_days", 0.0))
+		var age_days := maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0)
+		var operation_state := ""
+		if not role.is_empty():
+			operation_state = "SATELLITE  •  %s  •  %s" % [role.to_upper(), "EXPIRED" if lifetime_days > 0.0 and age_days >= lifetime_days else "OPERATIONAL"]
+			if lifetime_days > 0.0:
+				operation_state += "  •  %.1f YEARS LEFT" % (maxf(0.0, lifetime_days - age_days) / 365.25)
+			var telescope_range := float(profile.get("telescope_range_au", 0.0))
+			if telescope_range > 0.0:
+				operation_state += "  •  %.1f AU TELESCOPE" % telescope_range
 		var details := Label.new()
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		details.text = "%s\n%s  •  %s  •  %.0f km altitude  •  %.0f%% fuel" % [vehicle.vehicle_name, state, str(body.get("name", "Deep space")), altitude / 1000.0, fuel_percent]
+		details.text = "%s\n%s  •  %s  •  %.0f km altitude  •  %.0f%% fuel\n%s  •  %s" % [vehicle.vehicle_name, state, str(body.get("name", "Deep space")), altitude / 1000.0, fuel_percent, simulation_state, operation_state]
 		details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		row.add_child(details)
 		var select_button := Button.new()
@@ -1606,9 +1619,45 @@ func _show_fleet_management_panel() -> void:
 		rename_button.text = "RENAME"
 		rename_button.pressed.connect(_show_rename_vehicle_dialog.bind(vehicle))
 		row.add_child(rename_button)
+		var remove_button := Button.new()
+		remove_button.text = "DECOMMISSION"
+		remove_button.disabled = fleet_sims.size() <= 1 or _is_vehicle_docked(vehicle.vehicle_name)
+		remove_button.pressed.connect(_show_decommission_vehicle_dialog.bind(vehicle, window))
+		row.add_child(remove_button)
 	_add_button(layout, "CLOSE", func(): window.queue_free())
 	window.popup_centered()
 
+
+func _show_decommission_vehicle_dialog(vehicle: SimulationView, fleet_window: Window) -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "DECOMMISSION SPACECRAFT"
+	dialog.dialog_text = "Permanently remove %s from the active fleet?" % vehicle.vehicle_name
+	dialog.confirmed.connect(func():
+		if _decommission_vehicle(vehicle):
+			fleet_window.queue_free()
+			_show_fleet_management_panel()
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered()
+
+func _decommission_vehicle(vehicle: SimulationView) -> bool:
+	if fleet_sims.size() <= 1 or _is_vehicle_docked(vehicle.vehicle_name):
+		return false
+	var index := fleet_sims.find(vehicle)
+	if index < 0:
+		return false
+	if index == active_vehicle_index:
+		_switch_vehicle((index + 1) % fleet_sims.size())
+	elif index < active_vehicle_index:
+		active_vehicle_index -= 1
+	fleet_sims.remove_at(index)
+	vehicle.queue_free()
+	active_vehicle_index = clampi(active_vehicle_index, 0, fleet_sims.size() - 1)
+	_refresh_vehicle_selector()
+	_switch_vehicle(active_vehicle_index)
+	return true
 
 func _is_docked_child(vehicle_name: String) -> bool:
 	for link in docking_links:
