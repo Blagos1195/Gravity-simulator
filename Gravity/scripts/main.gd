@@ -27,6 +27,8 @@ var save_slot := 1
 var new_game_slot := 1
 var sim
 var fleet_sims: Array = []
+var pending_debris: Array[Dictionary] = []
+var debris_sequence := 0
 var active_vehicle_index := 0
 var fleet_time_backlog := 0.0
 var discovery_state: Dictionary = SpaceDiscovery.new_campaign_state()
@@ -208,6 +210,10 @@ func _advance_fleet(delta: float) -> void:
 			_sync_docked_vehicles()
 			fleet_time_backlog = maxf(0.0, fleet_time_backlog - step_delta)
 			iterations += 1
+	var separated_stages := pending_debris.duplicate(true)
+	pending_debris.clear()
+	for stage_data in separated_stages:
+		_spawn_discarded_stage(stage_data)
 	for vehicle in fleet_sims:
 		vehicle.simulation_time_backlog = fleet_time_backlog
 	if is_instance_valid(sim):
@@ -1521,6 +1527,7 @@ func _create_vehicle(design: Dictionary, name: String, saved_state: Dictionary =
 	vehicle.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	vehicle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vehicle.set_rocket_design(design)
+	vehicle.stage_separated.connect(_queue_discarded_stage)
 	add_child(vehicle)
 	vehicle.set_process(false)
 	if not saved_state.is_empty() and not vehicle.load_save_data(saved_state):
@@ -1530,6 +1537,50 @@ func _create_vehicle(design: Dictionary, name: String, saved_state: Dictionary =
 	vehicle.visible = false
 	vehicle.set_process(false)
 	return vehicle
+
+func _queue_discarded_stage(stage_data: Dictionary) -> void:
+	pending_debris.append(stage_data.duplicate(true))
+
+func _spawn_discarded_stage(stage_data: Dictionary) -> void:
+	var stage: Variant = stage_data.get("stage", {})
+	if not stage is Dictionary or stage.is_empty():
+		return
+	debris_sequence += 1
+	var debris_name := "Debris %04d" % debris_sequence
+	var design := {
+		"name": debris_name,
+		"payload_mass": 0.001,
+		"payload_type": "debris",
+		"stages": [stage.duplicate(true)]
+	}
+	var debris := _create_vehicle(design, debris_name)
+	if debris == null:
+		return
+	var remaining_fuel := maxf(0.0, float(stage_data.get("fuel", 0.0)))
+	debris.fuel = remaining_fuel
+	debris.infinite_fuel_stage_remaining = remaining_fuel
+	debris.stage_fuel_remaining[0] = remaining_fuel
+	var position_components: Variant = stage_data.get("position_components", PackedFloat64Array([0.0, 0.0]))
+	if position_components is PackedFloat64Array and position_components.size() >= 2:
+		debris._set_rocket_position_components(float(position_components[0]), float(position_components[1]))
+	elif position_components is Array and position_components.size() >= 2:
+		debris._set_rocket_position_components(float(position_components[0]), float(position_components[1]))
+	debris.velocity = stage_data.get("velocity", Vector2.ZERO)
+	debris.rotation_angle = float(stage_data.get("rotation_angle", 0.0))
+	debris.sim_time = float(stage_data.get("sim_time", sim.sim_time if is_instance_valid(sim) else 0.0))
+	debris.launch_time = float(stage_data.get("launch_time", debris.sim_time))
+	debris.time_warp = sim.time_warp if is_instance_valid(sim) else 1.0
+	debris.is_debris = true
+	debris.input_enabled = false
+	debris.infinite_weightless_fuel = false
+	debris.thrust_key_down = false
+	debris.guidance_enabled = false
+	debris.autopilot_enabled = false
+	debris.throttle = 0.0
+	debris.landed = false
+	debris.crashed = false
+	fleet_sims.append(debris)
+	_refresh_vehicle_selector()
 
 func _start_flight() -> void:
 	for child in get_children():
