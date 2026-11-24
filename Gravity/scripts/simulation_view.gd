@@ -278,7 +278,7 @@ func _process(delta: float) -> void:
 		var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(current_body.get("name", "Earth")))
 		var near_atmosphere: bool = float(current_body.distance) < float(current_body.soi) and altitude < atmosphere_height
 		var effective_warp: float = minf(time_warp, 100.0) if near_atmosphere else time_warp
-		simulation_time_backlog += effective_warp * delta
+		simulation_time_backlog = effective_warp * delta
 		var iterations := 0
 		var physics_budget_start_usec: int = Time.get_ticks_usec()
 		while simulation_time_backlog > 0.000001 and iterations < MAX_PHYSICS_STEPS_PER_FRAME and Time.get_ticks_usec() - physics_budget_start_usec < MAX_PHYSICS_BUDGET_USEC:
@@ -288,6 +288,7 @@ func _process(delta: float) -> void:
 			_physics_step(step_delta)
 			simulation_time_backlog = maxf(0.0, simulation_time_backlog - step_delta)
 			iterations += 1
+		simulation_time_backlog = 0.0
 	else:
 		simulation_time_backlog = 0.0
 	if show_predicted_trajectory:
@@ -1608,6 +1609,12 @@ func _draw() -> void:
 		draw_line(rocket_screen + Vector2(18.0, 13.0) * object_scale, rocket_screen + Vector2(18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
 	for fleet_entry in fleet_visuals:
 		var fleet_position: Vector2 = fleet_entry.get("position", rocket_position)
+		var fleet_orbit: PackedVector2Array = fleet_entry.get("orbit_points", PackedVector2Array())
+		if fleet_orbit.size() > 1:
+			var orbit_screen := PackedVector2Array()
+			for orbit_point in fleet_orbit:
+				orbit_screen.append(rocket_screen + (orbit_point - rocket_position) * altitude_visual_scale)
+			draw_polyline(orbit_screen, Color(0.2, 0.75, 1.0, 0.62), 1.8)
 		var fleet_screen := rocket_screen + (fleet_position - rocket_position) * altitude_visual_scale
 		if fleet_screen.x < -40.0 or fleet_screen.x > size.x + 40.0 or fleet_screen.y < -40.0 or fleet_screen.y > size.y + 40.0:
 			continue
