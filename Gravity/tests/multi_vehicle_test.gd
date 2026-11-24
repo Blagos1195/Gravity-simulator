@@ -47,6 +47,7 @@ func _initialize() -> void:
 	assert(first.vehicle_name == "Vehicle 1")
 	assert(second.vehicle_name == "Vehicle 2")
 	main._switch_vehicle(1)
+	assert(main.sim == second)
 	assert(main._rename_vehicle("Vehicle 2", "Lunar Relay"))
 	assert(not main._rename_vehicle("Lunar Relay", "Vehicle 1"))
 	assert(main.fleet_sims[1].vehicle_name == "Lunar Relay")

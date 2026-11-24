@@ -2079,6 +2079,7 @@ func _save_game(automatic: bool) -> void:
 			if status_label:
 				status_label.text = "AUTOSAVE HISTORY COULD NOT BE WRITTEN"
 
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
 	var path := "%s/slot_%02d.json" % [SAVE_DIR, save_slot]
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file:
