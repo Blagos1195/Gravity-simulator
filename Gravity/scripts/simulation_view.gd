@@ -1327,7 +1327,7 @@ func _input(event: InputEvent) -> void:
 	if event.keycode == KEY_T or event.physical_keycode == KEY_T:
 		if str(payload_visual.get("visual_type", "")) == "satellite" and float(payload_visual.get("telescope_range_au", 0.0)) > 0.0:
 			telescope_active = not telescope_active
-			status_message = "TELESCOPE ACTIVE  •  AIM WITH , AND ." if telescope_active else "TELESCOPE STANDBY"
+			status_message = "TELESCOPE ACTIVE  •  PROGRADE SCANNING" if telescope_active else "TELESCOPE STANDBY"
 	if ignite_pressed:
 		if autopilot_enabled:
 			autopilot_enabled = false
@@ -1384,10 +1384,6 @@ func _unhandled_input(event: InputEvent) -> void:
 					show_solar_system = not show_solar_system
 				KEY_G:
 					show_grid = not show_grid
-				KEY_COMMA:
-					telescope_direction_angle = wrapf(telescope_direction_angle - deg_to_rad(5.0), -PI, PI)
-				KEY_PERIOD:
-					telescope_direction_angle = wrapf(telescope_direction_angle + deg_to_rad(5.0), -PI, PI)
 				KEY_V:
 					show_vectors = not show_vectors
 				KEY_Q:
@@ -1399,7 +1395,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if show_solar_system:
 				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
 			else:
-				camera_zoom = minf(0.1, camera_zoom * 1.2)
+				camera_zoom = minf(1.0, camera_zoom * 1.2)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			if show_solar_system:
 				solar_map_zoom = maxf(0.25, solar_map_zoom / 1.2)
