@@ -99,3 +99,8 @@ The catalog uses SI units for physical values unless a field name or the built-i
 ## Practical notes
 
 Back up your mod before changing it. Keep IDs stable once a saved vehicle or preset refers to them. Saved vehicle designs store stage data as well as part IDs, so a saved craft can continue to work even if its original catalog part is later renamed. Mods change data, not game scripts: adding new physics models or entirely new behaviours still requires a code mod or a project change.
+
+
+## Passive orbital simulation
+
+Inactive spacecraft in stable, bound orbits are analytically propagated with Keplerian orbital elements instead of being stepped through the full n-body flight simulation. The game promotes a spacecraft back to full simulation when it becomes the active vehicle, is forced into full simulation, or an active spacecraft approaches within 20,000 km. Unsafe, atmospheric, unbound, manoeuvring, landed and docked vehicles remain in full simulation. Passive orbit state is stored in the save file and is revalidated when simulation resumes.
