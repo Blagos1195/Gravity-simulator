@@ -33,26 +33,6 @@ class AssemblyCanvas extends Control:
 	var zoom := 1.0
 	var _component_rects: Array[Dictionary] = []
 
-	func load_design(source_design: Dictionary) -> void:
-	design = source_design.duplicate(true)
-	var stages: Array = design.get("stages", [])
-	for index in range(stages.size()):
-		stages[index] = RocketAssembly.ensure_stage_components(stages[index])
-	design["stages"] = stages
-	selected_stage_index = clampi(selected_stage_index, 0, maxi(0, stages.size() - 1))
-	selected_component_index = -1
-	if is_instance_valid(_vehicle_name):
-		_vehicle_name.text = str(design.get("name", "Custom Vehicle"))
-	if is_instance_valid(_payload_mass_input):
-		_payload_mass_input.set_value_no_signal(float(design.get("payload_mass", 500.0)))
-	if is_instance_valid(_payload_selector):
-		for index in range(_payload_selector.item_count):
-			var option: Dictionary = _payload_selector.get_item_metadata(index)
-			if str(option.get("id", "")) == str(design.get("payload_type", "")):
-				_payload_selector.select(index)
-				break
-	_changed()
-
 func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		custom_minimum_size = Vector2(420.0, 500.0)
@@ -237,6 +217,27 @@ func configure(source_design: Dictionary, stage_index: int = 0) -> void:
 	for index in range(stages.size()):
 		stages[index] = RocketAssembly.ensure_stage_components(stages[index])
 	design["stages"] = stages
+
+func load_design(source_design: Dictionary) -> void:
+	design = source_design.duplicate(true)
+	var stages: Array = design.get("stages", [])
+	for index in range(stages.size()):
+		stages[index] = RocketAssembly.ensure_stage_components(stages[index])
+	design["stages"] = stages
+	selected_stage_index = clampi(selected_stage_index, 0, maxi(0, stages.size() - 1))
+	selected_component_index = -1
+	if is_instance_valid(_vehicle_name):
+		_vehicle_name.text = str(design.get("name", "Custom Vehicle"))
+	if is_instance_valid(_payload_mass_input):
+		_payload_mass_input.set_value_no_signal(float(design.get("payload_mass", 500.0)))
+	if is_instance_valid(_payload_selector):
+		for index in range(_payload_selector.item_count):
+			var option: Dictionary = _payload_selector.get_item_metadata(index)
+			if str(option.get("id", "")) == str(design.get("payload_type", "")):
+				_payload_selector.select(index)
+				break
+	_changed()
+
 
 func _ready() -> void:
 	name = "RocketBuilder"
