@@ -62,11 +62,12 @@ static func visited_names(state: Dictionary) -> Dictionary:
 			result[str(body_name)] = true
 	return result
 
-static func scan_telescope(state: Dictionary, telescope_position: Vector2, range_m: float, body_states: Array) -> Array[String]:
+static func scan_telescope(state: Dictionary, telescope_position: Vector2, range_m: float, body_states: Array, pointing_angle: float = 0.0, field_of_view: float = deg_to_rad(30.0)) -> Array[String]:
 	var discovered: Array[String] = []
-	if range_m <= 0.0:
+	if range_m <= 0.0 or field_of_view <= 0.0:
 		return discovered
 	var range_squared := range_m * range_m
+	var half_field_of_view := minf(PI, field_of_view * 0.5)
 	for body_variant in body_states:
 		if not body_variant is Dictionary:
 			continue
@@ -74,8 +75,10 @@ static func scan_telescope(state: Dictionary, telescope_position: Vector2, range
 		var body_name := str(body.get("name", ""))
 		if body_name.is_empty() or body_name == "Sun" or is_spotted(state, body_name):
 			continue
-		var position: Vector2 = body.get("position", Vector2.ZERO)
-		if telescope_position.distance_squared_to(position) <= range_squared:
-			if mark_spotted(state, body_name):
-				discovered.append(body_name)
+		var offset: Vector2 = Vector2(body.get("position", Vector2.ZERO)) - telescope_position
+		if offset.length_squared() > range_squared or offset.length_squared() < 1.0:
+			continue
+		var angular_offset := absf(wrapf(offset.angle() - pointing_angle, -PI, PI))
+		if angular_offset <= half_field_of_view and mark_spotted(state, body_name):
+			discovered.append(body_name)
 	return discovered
