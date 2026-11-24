@@ -1690,6 +1690,10 @@ func _show_fleet_custom_builder() -> void:
 			payload_mass.set_value_no_signal(float(design["payload_mass"]))
 		)
 	layout.add_child(payload_selector)
+	var payload_edit_button := Button.new()
+	payload_edit_button.text = "EDIT PAYLOAD APPEARANCE"
+	payload_edit_button.pressed.connect(_show_payload_editor)
+	layout.add_child(payload_edit_button)
 	var stage_heading := Label.new()
 	stage_heading.text = "STAGES  •  EDIT PARTS, ENGINES, TANKS AND BOOSTERS"
 	layout.add_child(stage_heading)
@@ -1769,6 +1773,10 @@ func _populate_fleet_builder_stages(stage_list: VBoxContainer, design: Dictionar
 				_populate_fleet_builder_stages(stage_list, design, window)
 		)
 		controls.add_child(part_selector)
+		var edit_stage_button := Button.new()
+		edit_stage_button.text = "EDIT"
+		edit_stage_button.pressed.connect(func(): _show_stage_editor(stage_index))
+		controls.add_child(edit_stage_button)
 		var engine_selector := OptionButton.new()
 		for count in engine_options:
 			engine_selector.add_item("%d engines" % int(count))
