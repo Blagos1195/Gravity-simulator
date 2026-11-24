@@ -6,6 +6,7 @@ const RocketVisual = preload("res://scripts/rocket_visual.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
+const OrbitalPropagator = preload("res://scripts/orbital_propagator.gd")
 const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
 const DOCKING_CAPTURE_DISTANCE := 100.0
@@ -146,6 +147,7 @@ func _process(delta: float) -> void:
 func _advance_fleet(delta: float) -> void:
 	if fleet_sims.is_empty() or not is_instance_valid(sim):
 		return
+	_update_passive_orbit_states()
 	for vehicle in fleet_sims:
 		vehicle.time_warp = sim.time_warp
 		vehicle.paused = sim.paused
@@ -165,6 +167,8 @@ func _advance_fleet(delta: float) -> void:
 	else:
 		var effective_warp: float = sim.time_warp
 		for vehicle in fleet_sims:
+			if vehicle.passive_orbit_active:
+				continue
 			var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position)
 			var altitude: float = maxf(0.0, float(body.distance) - float(body.radius))
 			var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(body.get("name", "Earth")))
@@ -177,13 +181,16 @@ func _advance_fleet(delta: float) -> void:
 		while fleet_time_backlog > 0.000001 and iterations < SimulationView.MAX_PHYSICS_STEPS_PER_FRAME and Time.get_ticks_usec() - physics_budget_start_usec < SimulationView.MAX_PHYSICS_BUDGET_USEC:
 			var step_delta := fleet_time_backlog
 			for vehicle in fleet_sims:
-				if not _is_docked_child(vehicle.vehicle_name):
+				if not _is_docked_child(vehicle.vehicle_name) and not vehicle.passive_orbit_active:
 					step_delta = minf(step_delta, vehicle._adaptive_step_size())
 			if step_delta <= 0.000001:
 				break
 			for vehicle in fleet_sims:
-				if not _is_docked_child(vehicle.vehicle_name):
+				if not _is_docked_child(vehicle.vehicle_name) and not vehicle.passive_orbit_active:
 					vehicle._physics_step(step_delta)
+			for vehicle in fleet_sims:
+				if vehicle.passive_orbit_active:
+					_advance_passive_vehicle(vehicle, sim.sim_time)
 			_sync_docked_vehicles()
 			fleet_time_backlog = maxf(0.0, fleet_time_backlog - step_delta)
 			iterations += 1
@@ -191,6 +198,74 @@ func _advance_fleet(delta: float) -> void:
 		vehicle.simulation_time_backlog = fleet_time_backlog
 	if is_instance_valid(sim):
 		sim.queue_redraw()
+
+func _update_passive_orbit_states() -> void:
+	for vehicle in fleet_sims:
+		if vehicle == sim or _is_docked_child(vehicle.vehicle_name) or vehicle.passive_orbit_forced or vehicle.landed or vehicle.crashed or vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled:
+			vehicle.passive_orbit_active = false
+			vehicle.passive_orbit_data.clear()
+			continue
+		if vehicle.passive_orbit_active:
+			if _passive_orbit_near_active_vehicle(vehicle):
+				vehicle.passive_orbit_active = false
+				vehicle.passive_orbit_data.clear()
+			continue
+		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+		if body.is_empty() or float(body.get("distance", INF)) > float(body.get("soi", 0.0)):
+			continue
+		var relative_position: Vector2 = body.relative_position
+		var relative_velocity: Vector2 = vehicle.velocity - Vector2(body.get("velocity", Vector2.ZERO))
+		var mu := FlightComputer.G * float(body.get("mass", 0.0))
+		var orbit := FlightComputer.orbital_state(relative_position, relative_velocity, mu)
+		if not bool(orbit.get("bound", false)):
+			continue
+		var body_radius := float(body.get("radius", 0.0))
+		var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(str(body.get("name", "")), body_radius)
+		var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(body.get("soi", 0.0)))
+		if float(orbit.get("periapsis", 0.0)) <= body_radius + minimum_altitude or float(orbit.get("apoapsis", INF)) >= body_radius + maximum_altitude:
+			continue
+		var elements := OrbitalPropagator.elements_from_state(relative_position, relative_velocity, mu, vehicle.sim_time)
+		if elements.is_empty():
+			continue
+		vehicle.passive_orbit_data = {"host_body_name": str(body.get("name", "")), "elements": elements}
+		vehicle.passive_orbit_active = true
+
+func _passive_orbit_near_active_vehicle(vehicle: SimulationView) -> bool:
+	return vehicle.rocket_position.distance_to(sim.rocket_position) <= 20000000.0
+
+func _advance_passive_vehicle(vehicle: SimulationView, target_time: float) -> void:
+	var host_name := str(vehicle.passive_orbit_data.get("host_body_name", ""))
+	var elements: Dictionary = vehicle.passive_orbit_data.get("elements", {})
+	if host_name.is_empty() or elements.is_empty():
+		vehicle.passive_orbit_active = false
+		vehicle.passive_orbit_data.clear()
+		return
+	vehicle.sim_time = target_time
+	var host := vehicle._surface_body_state(host_name)
+	var local_state := OrbitalPropagator.propagate(elements, target_time)
+	if host.is_empty() or local_state.is_empty():
+		vehicle.passive_orbit_active = false
+		vehicle.passive_orbit_data.clear()
+		return
+	var host_components: PackedFloat64Array = vehicle._body_position_components(host)
+	var local_position: Vector2 = local_state.position
+	vehicle._set_rocket_position_components(host_components[0] + local_position.x, host_components[1] + local_position.y)
+	vehicle.velocity = Vector2(host.get("velocity", Vector2.ZERO)) + Vector2(local_state.velocity)
+	vehicle.rotation_angle = local_position.angle() + PI * 0.5
+	vehicle.trail_timer = 0.0
+
+func _set_selected_vehicle_full_simulation() -> void:
+	if not is_instance_valid(sim):
+		return
+	sim.passive_orbit_forced = not sim.passive_orbit_forced
+	if sim.passive_orbit_forced:
+		sim.passive_orbit_active = false
+		sim.passive_orbit_data.clear()
+		if status_label:
+			status_label.text = "FULL SIMULATION FORCED  •  %s" % sim.vehicle_name.to_upper()
+	else:
+		if status_label:
+			status_label.text = "AUTOMATIC ORBIT SIMULATION ENABLED  •  %s" % sim.vehicle_name.to_upper()
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if mode != "flight" or not event is InputEventKey or not event.pressed or event.echo:
@@ -1576,6 +1651,7 @@ func _build_flight_hud() -> void:
 	vehicle_selector.item_selected.connect(_switch_vehicle)
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
+	_add_button(right, "TOGGLE FULL SIMULATION", _set_selected_vehicle_full_simulation)
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
 	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
