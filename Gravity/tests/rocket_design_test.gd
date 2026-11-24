@@ -39,7 +39,7 @@ func _initialize() -> void:
 	heavier["payload_mass"] = 5000.0
 	assert(RocketDesign.total_delta_v(heavier) < RocketDesign.total_delta_v(design))
 	var invalid_engine_count := design.duplicate(true)
-	invalid_engine_count["stages"][1]["engine_count"] = 0
+	invalid_engine_count["stages"][1]["engine_count"] = 1.5
 	assert(not RocketDesign.validation_errors(invalid_engine_count).is_empty())
 	var low_thrust_upper_stage := design.duplicate(true)
 	low_thrust_upper_stage["stages"][1]["vacuum_thrust"] = 100000.0
@@ -143,7 +143,10 @@ func _initialize() -> void:
 				"thrust": 200000.0,
 				"vacuum_thrust": 250000.0,
 				"flow": 63.3,
-				"engine_count": 1
+				"engine_count": 1,
+				"visual_length_factor": 1.4,
+				"visual_diameter_factor": 1.2,
+				"visual_color_rgb": [0.2, 0.4, 0.6]
 			}],
 			"presets_add": {
 				"TEST_MOD_PRESET": {
@@ -165,6 +168,8 @@ func _initialize() -> void:
 	assert(merged_catalog.planets[-1].satellites[0].name == "Test Moon")
 	var merged_rocket: Dictionary = merged_catalog.rocket
 	assert(merged_rocket.stage_parts.size() == ContentCatalog.get_catalog().rocket.stage_parts.size() + 1)
+	assert(is_equal_approx(float(merged_rocket.stage_parts[-1].visual_length_factor), 1.4))
+	assert(merged_rocket.stage_parts[-1].visual_color_rgb == [0.2, 0.4, 0.6])
 	assert(merged_rocket.presets.has("TEST_MOD_PRESET"))
 	var original_catalog: Dictionary = ContentCatalog._catalog
 	ContentCatalog._catalog = merged_catalog
