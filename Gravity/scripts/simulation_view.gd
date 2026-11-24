@@ -107,12 +107,13 @@ var throttle_cutoff_key_down := false
 var landed := true
 var crashed := false
 var landed_body_name := "Earth"
-var landed_surface_normal := Vector2.DOWN
+var landed_surface_normal := Vector2.UP
 var discovered_body_names: Dictionary = {"Earth": true, "Moon": true}
 var visited_body_names: Dictionary = {"Earth": true}
 var passive_orbit_active := false
 var passive_orbit_forced := false
 var passive_orbit_data: Dictionary = {}
+var fleet_visuals: Array[Dictionary] = []
 
 func _set_rocket_position_components(position_x: float, position_y: float) -> void:
 	rocket_position_precise = PackedFloat64Array([position_x, position_y])
@@ -1508,6 +1509,14 @@ func _draw() -> void:
 		draw_line(rocket_screen + Vector2(-30.0, 13.0) * object_scale, rocket_screen + Vector2(30.0, 13.0) * object_scale, Color(0.72, 0.78, 0.86), 3.0 * object_scale)
 		draw_line(rocket_screen + Vector2(-18.0, 13.0) * object_scale, rocket_screen + Vector2(-18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
 		draw_line(rocket_screen + Vector2(18.0, 13.0) * object_scale, rocket_screen + Vector2(18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
+	for fleet_entry in fleet_visuals:
+		var fleet_position: Vector2 = fleet_entry.get("position", rocket_position)
+		var fleet_screen := rocket_screen + (fleet_position - rocket_position) * altitude_visual_scale
+		if fleet_screen.x < -40.0 or fleet_screen.x > size.x + 40.0 or fleet_screen.y < -40.0 or fleet_screen.y > size.y + 40.0:
+			continue
+		var fleet_design: Dictionary = fleet_entry.get("design", {})
+		var fleet_stage := int(fleet_entry.get("stage_index", 0))
+		RocketVisual.draw_vehicle(self, fleet_design, fleet_screen, float(fleet_entry.get("rotation", 0.0)), object_scale * 0.72, fleet_stage, 0.0, false)
 	_draw_rocket(rocket_screen, object_scale)
 	_draw_docked_visuals(rocket_screen, object_scale)
 	if show_vectors:
@@ -1780,6 +1789,13 @@ func _draw_solar_system(center: Vector2) -> void:
 	draw_line(rocket_screen + Vector2(0.0, -6.0), rocket_screen + Vector2(0.0, 6.0), Color(0.3, 1.0, 0.65), 2.0)
 	draw_circle(rocket_screen, 3.0, Color(0.3, 1.0, 0.65))
 	_draw_solar_label("ROCKET", rocket_screen, 10, Color(0.4, 1.0, 0.72), occupied)
+	for fleet_entry in fleet_visuals:
+		var fleet_position: Vector2 = fleet_entry.get("position", rocket_position)
+		var fleet_heliocentric := earth_heliocentric + fleet_position
+		var fleet_marker := center + Vector2(fleet_heliocentric.x, -fleet_heliocentric.y) * map_scale
+		draw_circle(fleet_marker, 2.4, Color(0.35, 0.78, 1.0))
+		if solar_map_zoom >= 2.0:
+			_draw_solar_label(str(fleet_entry.get("name", "SPACECRAFT")).to_upper(), fleet_marker, 8, Color(0.55, 0.82, 1.0), occupied)
 	var footer_text: String = "SIM TIME  %.2f DAYS     MAP SCALE  %.2f×     WHEEL TO ZOOM" % [sim_time / 86400.0, solar_map_zoom]
 	var footer_size: Vector2 = ThemeDB.fallback_font.get_string_size(footer_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11)
 	var footer_rect := Rect2(Vector2(18.0, size.y - 34.0), Vector2(footer_size.x + 14.0, 23.0))

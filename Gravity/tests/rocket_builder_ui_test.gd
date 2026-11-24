@@ -79,7 +79,18 @@ func _initialize() -> void:
 	assert(is_equal_approx(float(main.rocket_design["stages"][0]["visual_color_rgb"][0]), 0.12))
 	main.rocket_design["stages"].remove_at(1)
 	main._show_vehicle_editor()
+	var blank_design := RocketDesign.create_blank()
+	assert(str(blank_design.get("name", "")) == "Custom Vehicle")
+	assert(RocketDesign.validation_errors(blank_design).is_empty())
 	main._start_flight()
+	assert(main.sim.landed_surface_normal == Vector2.UP)
+	var second_design := RocketDesign.create_blank()
+	main._launch_vehicle_design(second_design)
+	assert(main.fleet_sims.size() == 2)
+	assert(main.sim == main.fleet_sims[1])
+	assert(main.sim.mouse_filter == Control.MOUSE_FILTER_IGNORE)
+	main._advance_fleet(0.016)
+	assert(main.sim.fleet_visuals.size() == 1)
 	main._show_new_vehicle_dialog()
 	var vehicle_dialog: Window
 	for child in main.get_children():

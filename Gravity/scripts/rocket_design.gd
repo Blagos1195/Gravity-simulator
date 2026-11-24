@@ -69,6 +69,11 @@ static func preset_description(preset_id: String) -> String:
 static func create_default() -> Dictionary:
 	return _design_from_catalog(_rocket_catalog().get("default_design", {}))
 
+static func create_blank() -> Dictionary:
+	var design := create_default()
+	design["name"] = "Custom Vehicle"
+	return design
+
 static func stage_part_options() -> Array:
 	var options: Array = []
 	for part in _rocket_catalog().get("stage_parts", []):
