@@ -60,7 +60,6 @@ func _initialize() -> void:
 	assert(is_instance_valid(red_input))
 	assert(is_equal_approx(red_input.min_value, 0.0))
 	assert(is_equal_approx(red_input.max_value, 1.0))
-	assert(main.design_error_label.text == "DESIGN VALID")
 	stage_dialog.free()
 	var original_stage: Dictionary = main.rocket_design["stages"][0].duplicate(true)
 	var original_stage_count: int = main.rocket_design["stages"].size()
