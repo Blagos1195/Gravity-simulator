@@ -220,8 +220,10 @@ func configure(source_design: Dictionary, stage_index: int = 0) -> void:
 
 func _ready() -> void:
 	title = "VEHICLE ASSEMBLY BUILDING"
-	size = Vector2i(1320, 820)
-	min_size = Vector2i(980, 640)
+	var screen_size := DisplayServer.screen_get_size()
+	var available := Vector2i(maxi(760, screen_size.x - 80), maxi(560, screen_size.y - 100))
+	size = Vector2i(mini(1320, available.x), mini(820, available.y))
+	min_size = Vector2i(mini(760, size.x), mini(560, size.y))
 	transient = true
 	close_requested.connect(_finish)
 	_build_interface()
@@ -229,8 +231,6 @@ func _ready() -> void:
 
 func _build_interface() -> void:
 	title = "VEHICLE ASSEMBLY BUILDING"
-	size = Vector2i(1320, 820)
-	min_size = Vector2i(980, 640)
 	transient = true
 	exclusive = true
 	var root := VBoxContainer.new()
