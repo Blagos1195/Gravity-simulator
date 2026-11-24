@@ -208,6 +208,7 @@ func _update_discovery_state() -> void:
 	var ephemeris := PlanetarySystem.gravity_body_states(sim.sim_time)
 	var heliocentric_bodies: Array = ephemeris.get("heliocentric_bodies", [])
 	var earth_position: Vector2 = ephemeris.get("earth_heliocentric_position", Vector2.ZERO)
+	var newly_discovered: Array[String] = []
 	for vehicle in fleet_sims:
 		if vehicle.landed or vehicle.crashed:
 			continue
@@ -225,16 +226,23 @@ func _update_discovery_state() -> void:
 		var stable_orbit := float(orbit.get("periapsis", 0.0)) > body_radius + minimum_altitude and float(orbit.get("apoapsis", INF)) < body_radius + maximum_altitude
 		if not stable_orbit:
 			continue
-		SpaceDiscovery.mark_visited(discovery_state, str(body.get("name", "")))
+		var body_name := str(body.get("name", ""))
+		if SpaceDiscovery.mark_visited(discovery_state, body_name):
+			newly_discovered.append(body_name)
 		var telescope_range_au := float(vehicle.payload_visual.get("telescope_range_au", 0.0))
 		if str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
 			var telescope_position: Vector2 = earth_position + vehicle.rocket_position
-			SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies)
+			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies)
+			for discovered_name in telescope_discoveries:
+				if not newly_discovered.has(discovered_name):
+					newly_discovered.append(discovered_name)
 	var spotted := SpaceDiscovery.spotted_names(discovery_state)
 	var visited := SpaceDiscovery.visited_names(discovery_state)
 	for vehicle in fleet_sims:
 		vehicle.discovered_body_names = spotted.duplicate()
 		vehicle.visited_body_names = visited.duplicate()
+	if not newly_discovered.is_empty() and is_instance_valid(status_label):
+		status_label.text = "NEW DISCOVERY  •  " + ", ".join(newly_discovered).to_upper()
 
 func _update_passive_orbit_states() -> void:
 	for vehicle in fleet_sims:
