@@ -299,7 +299,7 @@ func _advance_fleet(delta: float) -> void:
 					var angular_momentum := orbit_relative_position.cross(orbit_relative_velocity)
 					var eccentricity_vector := Vector2(orbit_relative_velocity.y * angular_momentum, -orbit_relative_velocity.x * angular_momentum) / orbit_mu - orbit_relative_position.normalized()
 					var direction := eccentricity_vector.angle() if eccentricity > 0.0001 else orbit_relative_position.angle()
-					var host_position := vehicle.rocket_position - orbit_relative_position
+					var host_position: Vector2 = vehicle.rocket_position - orbit_relative_position
 					for point_index in range(97):
 						var theta := TAU * float(point_index) / 96.0
 						var orbit_radius := semi_major * (1.0 - eccentricity * eccentricity) / (1.0 + eccentricity * cos(theta))
@@ -773,12 +773,12 @@ func _fast_forward_simulation(seconds: float) -> bool:
 		for second_index in range(first_index + 1, fleet_sims.size()):
 			if fleet_sims[first_index].rocket_position.distance_to(fleet_sims[second_index].rocket_position) < 20000000.0:
 				return false
-	var start_time := sim.sim_time
-	var target_time := start_time + seconds
+	var start_time: float = float(sim.sim_time)
+	var target_time: float = start_time + seconds
 	var scan_samples := mini(25000, maxi(1, ceili(seconds / 7200.0)))
 	var scan_step := seconds / float(scan_samples)
 	for sample_index in range(1, scan_samples + 1):
-		var sample_time := start_time + scan_step * float(sample_index)
+		var sample_time: float = start_time + scan_step * float(sample_index)
 		sim.sim_time = sample_time
 		for vehicle in fleet_sims:
 			if not vehicle.telescope_active or vehicle.crashed or vehicle.landed or not orbit_data.has(vehicle):
@@ -959,19 +959,35 @@ func _show_payload_editor() -> void:
 	var visual_type := str(visual.get("visual_type", rocket_design.get("payload_type", "probe")))
 	if not ["probe", "crew", "satellite", "cargo"].has(visual_type):
 		visual_type = "probe"
-	var dialog := ConfirmationDialog.new()
-	dialog.title = "EDIT PAYLOAD APPEARANCE"
-	dialog.dialog_text = "Change the payload silhouette independently of its physical mass."
-	dialog.min_size = Vector2i(500, 390)
+	var window := Window.new()
+	window.title = "EDIT PAYLOAD APPEARANCE"
+	window.size = Vector2i(560, 440)
+	window.min_size = Vector2i(480, 390)
+	window.transient = true
+	window.exclusive = true
+	window.close_requested.connect(window.queue_free)
+	add_child(window)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_bottom", 14)
+	window.add_child(margin)
 	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 8)
-	dialog.add_child(content)
+	content.add_theme_constant_override("separation", 10)
+	margin.add_child(content)
+	var intro := Label.new()
+	intro.text = "Change the payload silhouette independently of its physical mass."
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(intro)
 	var type_row := HBoxContainer.new()
 	var type_label := Label.new()
 	type_label.text = "Payload shape"
-	type_label.custom_minimum_size.x = 220
+	type_label.custom_minimum_size.x = 150
 	type_row.add_child(type_label)
 	var type_selector := OptionButton.new()
+	type_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for option in ["probe", "crew", "satellite", "cargo"]:
 		type_selector.add_item(option.capitalize())
 		type_selector.set_item_metadata(type_selector.item_count - 1, option)
@@ -994,7 +1010,7 @@ func _show_payload_editor() -> void:
 		var row := HBoxContainer.new()
 		var label := Label.new()
 		label.text = str(field.label)
-		label.custom_minimum_size.x = 220
+		label.custom_minimum_size.x = 150
 		row.add_child(label)
 		var input := SpinBox.new()
 		input.min_value = float(field.minimum)
@@ -1006,25 +1022,27 @@ func _show_payload_editor() -> void:
 		row.add_child(input)
 		content.add_child(row)
 		inputs[str(field.key)] = input
-	dialog.get_ok_button().text = "APPLY"
-	dialog.get_cancel_button().text = "CANCEL"
-	dialog.confirmed.connect(func():
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(spacer)
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_END
+	content.add_child(buttons)
+	var cancel_button := Button.new()
+	cancel_button.text = "CANCEL"
+	cancel_button.pressed.connect(window.queue_free)
+	buttons.add_child(cancel_button)
+	var apply_button := Button.new()
+	apply_button.text = "APPLY"
+	apply_button.pressed.connect(func():
 		var values: Dictionary = {"visual_type": str(type_selector.get_item_metadata(type_selector.selected))}
 		for key in inputs:
 			values[key] = inputs[key].value
 		_apply_payload_editor_values(values)
-		dialog.queue_free()
+		window.queue_free()
 	)
-	dialog.canceled.connect(func():
-		dialog.queue_free()
-	)
-	dialog.close_requested.connect(func():
-		dialog.queue_free()
-	)
-	add_child(dialog)
-	if is_inside_tree():
-		dialog.popup_centered()
-
+	buttons.add_child(apply_button)
+	window.popup_centered()
 
 func _apply_payload_editor_values(values: Dictionary) -> void:
 	var visual: Dictionary = rocket_design.get("payload_visual", {}).duplicate(true)
