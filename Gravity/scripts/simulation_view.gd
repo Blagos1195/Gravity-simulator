@@ -107,6 +107,8 @@ var landed := true
 var crashed := false
 var landed_body_name := "Earth"
 var landed_surface_normal := Vector2.DOWN
+var discovered_body_names: Dictionary = {"Earth": true, "Moon": true}
+var visited_body_names: Dictionary = {"Earth": true}
 var passive_orbit_active := false
 var passive_orbit_forced := false
 var passive_orbit_data: Dictionary = {}
@@ -1687,6 +1689,8 @@ func _draw_solar_system(center: Vector2) -> void:
 	_draw_solar_label("SUN", sun_screen, 11, sun_color.lightened(0.15), occupied)
 	var positions: Dictionary = {}
 	for planet in PlanetarySystem.PLANETS:
+		if not discovered_body_names.has(str(planet.get("name", ""))):
+			continue
 		var orbit_radius: float = float(planet.a) * PlanetarySystem.ASTRONOMICAL_UNIT
 		draw_arc(center, orbit_radius * map_scale, 0.0, TAU, 180, Color(0.28, 0.43, 0.58, 0.34), 1.0)
 	for belt in solar_belt_particles:
@@ -1713,6 +1717,8 @@ func _draw_solar_system(center: Vector2) -> void:
 		positions[body_name] = Vector2(body.get("position", Vector2.ZERO))
 	for planet in PlanetarySystem.PLANETS:
 		var planet_name: String = str(planet.name)
+		if not discovered_body_names.has(planet_name):
+			continue
 		var planet_position: Vector2 = Vector2(positions.get(planet_name, Vector2.ZERO))
 		var planet_screen: Vector2 = center + Vector2(planet_position.x, -planet_position.y) * map_scale
 		var planet_radius: float = clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
@@ -1723,12 +1729,16 @@ func _draw_solar_system(center: Vector2) -> void:
 		_draw_solar_label(planet_name.to_upper(), planet_screen, 10, Color(0.82, 0.88, 0.96), occupied)
 	for planet in PlanetarySystem.PLANETS:
 		var planet_name: String = str(planet.name)
+		if not discovered_body_names.has(planet_name):
+			continue
 		var host_position: Vector2 = positions.get(planet_name, Vector2.ZERO)
 		var host_screen := center + Vector2(host_position.x, -host_position.y) * map_scale
 		var host_radius := clampf(pow(float(planet.radius) / EARTH_RADIUS, 0.45) * 3.0, 2.0, 8.0)
 		for satellite_variant in planet.get("satellites", []):
 			var satellite: Dictionary = satellite_variant
 			var satellite_name := "%s %s" % [planet_name, str(satellite.get("name", "Moon"))]
+			if not discovered_body_names.has(satellite_name):
+				continue
 			var satellite_position: Vector2 = positions.get(satellite_name, host_position)
 			var relative_direction := Vector2(satellite_position.x - host_position.x, -(satellite_position.y - host_position.y)).normalized()
 			var orbit_ratio := maxf(1.0, float(satellite.get("semi_major_axis_m", 0.0)) / float(planet.radius))
