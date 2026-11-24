@@ -1184,7 +1184,7 @@ func _dock_vehicle(target_name: String) -> bool:
 		return false
 	if sim.landed or sim.crashed or target.landed or target.crashed:
 		return false
-	if _is_vehicle_docked(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
+	if _is_docked_child(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
 		return false
 	var separation: float = target.rocket_position.distance_to(sim.rocket_position)
 	var relative_speed: float = (target.velocity - sim.velocity).length()
