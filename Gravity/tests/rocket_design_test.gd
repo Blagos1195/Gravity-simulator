@@ -39,15 +39,13 @@ func _initialize() -> void:
 	heavier["payload_mass"] = 5000.0
 	assert(RocketDesign.total_delta_v(heavier) < RocketDesign.total_delta_v(design))
 	var invalid_engine_count := design.duplicate(true)
-	invalid_engine_count["stages"][1]["engine_count"] = 9
+	invalid_engine_count["stages"][1]["engine_count"] = 0
 	assert(not RocketDesign.validation_errors(invalid_engine_count).is_empty())
-	var weak_upper_stage := design.duplicate(true)
-	weak_upper_stage["stages"][1]["vacuum_thrust"] = 100000.0
-	weak_upper_stage["stages"][1]["thrust"] = 80000.0
-	weak_upper_stage["stages"][1]["flow"] = 25.3
-	var weak_stage_errors := RocketDesign.validation_errors(weak_upper_stage)
-	assert(not weak_stage_errors.is_empty())
-	assert(str(weak_stage_errors).contains("ignition TWR"))
+	var low_thrust_upper_stage := design.duplicate(true)
+	low_thrust_upper_stage["stages"][1]["vacuum_thrust"] = 100000.0
+	low_thrust_upper_stage["stages"][1]["thrust"] = 80000.0
+	low_thrust_upper_stage["stages"][1]["flow"] = 25.3
+	assert(RocketDesign.validation_errors(low_thrust_upper_stage).is_empty())
 	var incomplete := design.duplicate(true)
 	incomplete["stages"].pop_back()
 	assert(not RocketDesign.validation_errors(incomplete).is_empty())
