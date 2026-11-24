@@ -24,6 +24,7 @@ func _initialize() -> void:
 	assert(second.input_enabled)
 	assert(first.vehicle_name == "Vehicle 1")
 	assert(second.vehicle_name == "Vehicle 2")
+	main._switch_vehicle(0)
 	first.rocket_position = Vector2(1.0e9, 0.0)
 	second.landed = false
 	second.rocket_position = Vector2(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
