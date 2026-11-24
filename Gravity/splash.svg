@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <defs>
+    <radialGradient id="space">
+      <stop offset="0" stop-color="#142c49"/>
+      <stop offset="1" stop-color="#050b17"/>
+    </radialGradient>
+    <linearGradient id="planet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#73d3f4"/>
+      <stop offset="1" stop-color="#174b91"/>
+    </linearGradient>
+    <linearGradient id="hull" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#29465d"/>
+      <stop offset=".3" stop-color="#9bb7c7"/>
+      <stop offset=".58" stop-color="#d2e0e7"/>
+      <stop offset="1" stop-color="#587b91"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff4a8"/>
+      <stop offset=".45" stop-color="#ffb33d"/>
+      <stop offset="1" stop-color="#f05a28"/>
+    </linearGradient>
+  </defs>
+  <rect width="1440" height="900" fill="url(#space)"/>
+  <g fill="#e7f2ff" opacity=".85">
+    <circle cx="165" cy="151" r="3"/><circle cx="348" cy="277" r="2"/><circle cx="1170" cy="142" r="3"/>
+    <circle cx="1280" cy="390" r="2"/><circle cx="226" cy="665" r="2"/><circle cx="1112" cy="714" r="3"/>
+    <circle cx="780" cy="120" r="2"/><circle cx="934" cy="788" r="2"/><circle cx="560" cy="744" r="3"/>
+  </g>
+  <circle cx="720" cy="397" r="176" fill="url(#planet)"/>
+  <path d="M565 383c42-47 87-41 121-17 35 25 76 17 151-35-14 95-69 165-145 190-68-24-113-69-127-138z" fill="#80c9aa"/>
+  <ellipse cx="720" cy="397" rx="370" ry="143" transform="rotate(-28 720 397)" fill="none" stroke="#75bce9" stroke-width="13" opacity=".8"/>
+  <g transform="translate(835 315) rotate(24) scale(1.55)">
+    <path d="M0-94c17 17 22 39 19 67L14-10H-14L-19-27c-3-28 2-50 19-67z" fill="url(#hull)" stroke="#10283e" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M0-94c9 13 12 28 12 45H-12c0-17 3-32 12-45z" fill="#e5edf2" stroke="#526d80" stroke-width="2"/>
+    <path d="M-14-31H14M-15-7H15" stroke="#e99a35" stroke-width="7"/>
+    <path d="M-14-2H14L12 40H-12z" fill="url(#hull)" stroke="#10283e" stroke-width="3"/>
+    <path d="M-12 11H12" stroke="#e99a35" stroke-width="6"/>
+    <path d="M-12 39H12L10 57H-10z" fill="#526b7e" stroke="#10283e" stroke-width="3"/>
+    <path d="M-9 57H-2L-3 76H-8zM2 57H9L8 76H3z" fill="#34485a"/>
+    <path d="M-8 76L-5 104 0 85 5 104 8 76z" fill="url(#flame)"/>
+    <path d="M-14 5L-27 26-12 22M14 5L27 26 12 22" fill="#7f9aaa" stroke="#10283e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M-23 24L-21 53-13 53-12 22M23 24L21 53 13 53 12 22" fill="url(#hull)" stroke="#10283e" stroke-width="2"/>
+    <path d="M-20 53L-17 72-13 53M20 53L17 72 13 53" fill="url(#flame)"/>
+  </g>
+  <text x="720" y="690" fill="#f2f7ff" font-family="Arial, sans-serif" font-size="78" font-weight="700" letter-spacing="20" text-anchor="middle">GRAVITY</text>
+  <text x="720" y="748" fill="#9db8d9" font-family="Arial, sans-serif" font-size="23" letter-spacing="7" text-anchor="middle">2D SPACEFLIGHT SIMULATOR</text>
+</svg>
