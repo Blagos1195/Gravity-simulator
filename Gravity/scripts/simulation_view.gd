@@ -318,21 +318,17 @@ func _physics_step(dt: float) -> void:
 			velocity = landed_surface_state.velocity + Vector2(-landed_surface_normal.y, landed_surface_normal.x) * float(landed_surface_state.radius) * float(landed_surface_state.rotation_rate)
 			throttle = 0.0
 			return
-	if crashed:
-		sim_time = end_time
-		throttle = 0.0
-		return
 	var initial_rocket_position_components: PackedFloat64Array = rocket_position_precise.duplicate()
 	var local_body := _nearest_body_state(rocket_position)
 	var altitude := maxf(0.0, float(local_body.get("distance", EARTH_RADIUS)) - float(local_body.get("radius", EARTH_RADIUS)))
-	if guidance_enabled:
+	if not crashed and guidance_enabled:
 		_update_guidance(dt)
-	if autopilot_enabled and autopilot_phase in ["COAST", "COAST_TO_TARGET", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "ROUTE_COAST", "COMPLETE", "FAILED"]:
+	if not crashed and autopilot_enabled and autopilot_phase in ["COAST", "COAST_TO_TARGET", "WAIT_WINDOW", "ALIGN_DEPARTURE", "TRANSFER_COAST", "ARRIVAL_APPROACH", "ARRIVAL_PENDING", "ROUTE_COAST", "COMPLETE", "FAILED"]:
 		thrust_key_down = false
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	var propellant_available := infinite_weightless_fuel or fuel > 0.0
-	throttle = autopilot_throttle if autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if thrust_key_down and propellant_available else 0.0)
+	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0)
+	throttle = autopilot_throttle if not crashed and autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if not crashed and thrust_key_down and propellant_available else 0.0)
 	var fuel_used := minf(infinite_fuel_stage_remaining, total_flow * throttle * dt) if infinite_weightless_fuel and total_flow > 0.0 else (minf(fuel, total_flow * throttle * dt) if total_flow > 0.0 else 0.0)
 	var effective_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else -1.0
 	var mass_before := maxf(1.0, _current_vehicle_mass(effective_fuel))
@@ -414,10 +410,11 @@ func _physics_step(dt: float) -> void:
 			stage_fuel_remaining[stage_index] = fuel
 	_update_flight_environment(final_atmosphere)
 	_update_heating(dt, final_atmosphere)
-	if infinite_weightless_fuel and infinite_fuel_stage_remaining <= 0.0001 and stage_index < rocket_stages.size() - 1:
-		_separate_stage()
-	elif not infinite_weightless_fuel and fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
-		_separate_stage()
+	if not crashed:
+		if infinite_weightless_fuel and infinite_fuel_stage_remaining <= 0.0001 and stage_index < rocket_stages.size() - 1:
+			_separate_stage()
+		elif not infinite_weightless_fuel and fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
+			_separate_stage()
 	_handle_body_contact()
 	if simulate_belt_collisions and not crashed and not landed:
 		var collision: Dictionary = _small_body_collision(

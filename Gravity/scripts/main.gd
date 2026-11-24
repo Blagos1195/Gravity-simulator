@@ -248,11 +248,11 @@ func _advance_fleet(delta: float) -> void:
 func _resolve_spacecraft_collisions(positions_before: Dictionary) -> void:
 	for first_index in range(fleet_sims.size()):
 		var first: SimulationView = fleet_sims[first_index]
-		if first.crashed or first.landed or not positions_before.has(first):
+		if first.landed or not positions_before.has(first):
 			continue
 		for second_index in range(first_index + 1, fleet_sims.size()):
 			var second: SimulationView = fleet_sims[second_index]
-			if second.crashed or second.landed or not positions_before.has(second):
+			if second.landed or not positions_before.has(second) or (first.crashed and second.crashed):
 				continue
 			if _are_docked(first.vehicle_name, second.vehicle_name):
 				continue
@@ -511,7 +511,7 @@ func _update_discovery_state() -> void:
 
 func _update_passive_orbit_states() -> void:
 	for vehicle in fleet_sims:
-		if vehicle == sim or _is_docked_child(vehicle.vehicle_name) or vehicle.passive_orbit_forced or vehicle.landed or vehicle.crashed or vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled:
+		if vehicle == sim or _is_docked_child(vehicle.vehicle_name) or vehicle.passive_orbit_forced or vehicle.landed or vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled:
 			vehicle.passive_orbit_active = false
 			vehicle.passive_orbit_data.clear()
 			continue

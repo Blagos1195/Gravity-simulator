@@ -141,6 +141,31 @@ func _initialize() -> void:
 	assert(collision_target.crashed, "Second spacecraft did not crash after a swept collision")
 	assert(not first.input_enabled and not collision_target.input_enabled, "A crashed spacecraft still accepted flight controls")
 	assert(not first.collision_effects.is_empty(), "A spacecraft collision did not create an explosion effect")
+	var wreck_start := first.rocket_position
+	var wreck_velocity := first.velocity
+	first._physics_step(1.0)
+	assert(first.rocket_position.distance_to(wreck_start) > 0.1, "A crashed wreck stopped moving instead of continuing under physics")
+	assert(first.velocity.distance_to(wreck_velocity) > 0.000001, "A crashed wreck stopped responding to gravity")
+	assert(first.crashed and not first.input_enabled and is_zero_approx(first.throttle), "Wreck physics restored control or engine thrust")
+	first._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
+	first.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
+	main._switch_vehicle(1)
+	main._update_passive_orbit_states()
+	assert(first.passive_orbit_active, "A stable wreck was excluded from normal passive orbit simulation")
+	var passive_wreck_start := first.rocket_position
+	main._advance_passive_vehicle(first, first.sim_time + 60.0)
+	assert(first.rocket_position.distance_to(passive_wreck_start) > 100.0, "A passively simulated wreck did not continue around its orbit")
+	var live_vehicle: SimulationView = main.fleet_sims[2]
+	live_vehicle.landed = false
+	live_vehicle.crashed = false
+	live_vehicle._set_rocket_position_components(first.rocket_position.x + 5.0, first.rocket_position.y)
+	first._set_rocket_position_components(1000000000.0, 0.0)
+	live_vehicle._set_rocket_position_components(1000000005.0, 0.0)
+	first.velocity = Vector2(100.0, 0.0)
+	live_vehicle.velocity = Vector2(-100.0, 0.0)
+	var positions_before := {first: first.rocket_position, live_vehicle: live_vehicle.rocket_position}
+	main._resolve_spacecraft_collisions(positions_before)
+	assert(first.crashed and live_vehicle.crashed, "A live spacecraft passed through an existing wreck")
 	assert(bool(first.get_save_data().crashed) and bool(collision_target.get_save_data().crashed), "Crash state was not included in save data")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Multi-vehicle simulation test passed.")
