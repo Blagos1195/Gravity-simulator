@@ -94,6 +94,33 @@ func _initialize() -> void:
 	for i in range(12):
 		main._add_new_vehicle()
 	assert(main.fleet_sims.size() == 14)
+	var parent_position := first.rocket_position_precise.duplicate()
+	var parent_velocity := first.velocity
+	var separated_fuel := first.fuel
+	first._separate_stage()
+	main._advance_fleet(0.0)
+	assert(main.fleet_sims.size() == 15, "Separated stage was not added to the spacecraft fleet")
+	var debris: SimulationView
+	for vehicle in main.fleet_sims:
+		if vehicle.is_debris:
+			debris = vehicle
+			break
+	assert(debris != null, "Separated stage was not marked as debris")
+	assert(debris.rocket_position.distance_to(Vector2(parent_position[0], parent_position[1])) < 1.0)
+	assert(is_equal_approx(debris.fuel, separated_fuel))
+	assert(debris.rocket_stages.size() == 1)
+	assert(debris.velocity.distance_to(parent_velocity) > 0.1)
+	assert(not debris.input_enabled)
+	main._save_game(false)
+	save_file = FileAccess.open(save_path, FileAccess.READ)
+	saved_data = JSON.parse_string(save_file.get_as_text())
+	save_file.close()
+	var saved_debris_found := false
+	for saved_vehicle in saved_data.get("vehicles", []):
+		if bool(saved_vehicle.get("state", {}).get("is_debris", false)):
+			saved_debris_found = true
+			break
+	assert(saved_debris_found, "Discarded stage was not persisted in the campaign save")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Multi-vehicle simulation test passed.")
 	main.queue_free()
