@@ -67,6 +67,9 @@ func _initialize() -> void:
 	assert(is_equal_approx(red_input.max_value, 1.0))
 	assert(main.design_error_label.text == "DESIGN VALID")
 	stage_dialog.free()
+	var stage_booster_button := _find_button(main, "BOOST 0")
+	assert(is_instance_valid(stage_booster_button))
+	assert(stage_booster_button.tooltip_text.contains("booster"))
 	var original_stage: Dictionary = main.rocket_design["stages"][0].duplicate(true)
 	var original_stage_count: int = main.rocket_design["stages"].size()
 	main._duplicate_stage(0)
@@ -109,3 +112,14 @@ func _find_tooltip_spinbox(node: Node, tooltip: String) -> SpinBox:
 		if found != null:
 			return found
 	return null
+
+
+func _find_button(node: Node, button_text: String) -> Button:
+	if node is Button and node.text == button_text:
+		return node
+	for child in node.get_children():
+		var found := _find_button(child, button_text)
+		if found != null:
+			return found
+	return null
+

@@ -129,31 +129,39 @@ func set_rocket_design(design: Dictionary) -> void:
 	stage_index = 0
 	stage_fuel_remaining.clear()
 	for stage in rocket_stages:
-		stage_fuel_remaining.append(float(stage.get("fuel_capacity", 0.0)))
+		stage_fuel_remaining.append(RocketDesign.stage_total_fuel_capacity(stage))
 	fuel = stage_fuel_remaining[0]
 	infinite_fuel_stage_remaining = fuel
 
 func _active_stage_data() -> Dictionary:
-	return rocket_stages[clampi(stage_index, 0, rocket_stages.size() - 1)]
+	var stage: Dictionary = rocket_stages[clampi(stage_index, 0, rocket_stages.size() - 1)].duplicate(true)
+	stage["dry_mass"] = RocketDesign.stage_total_dry_mass(stage)
+	stage["fuel_capacity"] = RocketDesign.stage_total_fuel_capacity(stage)
+	stage["thrust"] = RocketDesign.stage_total_thrust(stage)
+	stage["vacuum_thrust"] = RocketDesign.stage_total_thrust(stage, true)
+	stage["flow"] = RocketDesign.stage_total_flow(stage)
+	stage["engine_count"] = 1
+	stage.erase("boosters")
+	return stage
 
 func _remaining_stack_mass() -> float:
 	var mass := payload_mass
 	for i in range(stage_index + 1, rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[i]
-		mass += float(stage.get("dry_mass", 0.0))
-		mass += stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else float(stage.get("fuel_capacity", 0.0))
+		mass += RocketDesign.stage_total_dry_mass(stage)
+		mass += stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(stage)
 	return mass
 
 func total_propellant_remaining() -> float:
 	var total := 0.0
 	for i in range(stage_index, rocket_stages.size()):
-		total += fuel if i == stage_index else (stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else float(rocket_stages[i].get("fuel_capacity", 0.0)))
+		total += fuel if i == stage_index else (stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(rocket_stages[i]))
 	return total
 
 func total_propellant_capacity() -> float:
 	var total := 0.0
 	for i in range(stage_index, rocket_stages.size()):
-		total += float(rocket_stages[i].get("fuel_capacity", 0.0))
+		total += RocketDesign.stage_total_fuel_capacity(rocket_stages[i])
 	return total
 
 func remove_propellant(amount: float) -> float:
@@ -176,7 +184,7 @@ func add_propellant(amount: float) -> float:
 	var remaining := maxf(0.0, amount)
 	var requested := remaining
 	for i in range(stage_index, rocket_stages.size()):
-		var capacity := float(rocket_stages[i].get("fuel_capacity", 0.0))
+		var capacity := RocketDesign.stage_total_fuel_capacity(rocket_stages[i])
 		var current := fuel if i == stage_index else stage_fuel_remaining[i]
 		var added := minf(maxf(0.0, capacity - current), remaining)
 		if i == stage_index:
@@ -1796,18 +1804,18 @@ func _calculate_predicted_trajectory() -> void:
 		var burn := 0.0
 		if predicted_stage < rocket_stages.size():
 			active = rocket_stages[predicted_stage]
-			mass += float(active.get("dry_mass", 0.0))
+			mass += RocketDesign.stage_total_dry_mass(active)
 			mass += predicted_fuel
 			for j in range(predicted_stage + 1, rocket_stages.size()):
 				var upper: Dictionary = rocket_stages[j]
-				mass += float(upper.get("dry_mass", 0.0))
-				mass += predicted_stage_fuel_remaining[j] if j < predicted_stage_fuel_remaining.size() else float(upper.get("fuel_capacity", 0.0))
-			total_flow = float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
+				mass += RocketDesign.stage_total_dry_mass(upper)
+				mass += predicted_stage_fuel_remaining[j] if j < predicted_stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(upper)
+			total_flow = RocketDesign.stage_total_flow(active)
 			if not infinite_weightless_fuel:
 				burn = minf(predicted_fuel, total_flow * throttle * dt)
 			var atmosphere := _atmosphere_at(position, predicted_velocity, step_time, position_components)
 			var pressure_ratio := float(atmosphere.density) * float(atmosphere.gas_constant) * float(atmosphere.temperature) / 101325.0
-			thrust_force = lerpf(float(active.get("vacuum_thrust", 0.0)), float(active.get("thrust", 0.0)), clampf(pressure_ratio, 0.0, 1.0)) * float(active.get("engine_count", 1)) * throttle
+			thrust_force = lerpf(RocketDesign.stage_total_thrust(active, true), RocketDesign.stage_total_thrust(active, false), clampf(pressure_ratio, 0.0, 1.0)) * throttle
 		var mass_after := mass if infinite_weightless_fuel else maxf(1.0, mass - burn)
 		var mass_mid := (mass + mass_after) * 0.5
 		var thrust_delta_v := 0.0
@@ -1969,11 +1977,10 @@ func _remaining_ideal_delta_v(current_mass: float) -> float:
 	var mass := current_mass
 	for i in range(stage_index, rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[i]
-		var propellant := fuel if i == stage_index else float(stage.get("fuel_capacity", 0.0))
-		var dry := float(stage.get("dry_mass", 0.0))
-		var engines := float(stage.get("engine_count", 1))
-		var thrust := float(stage.get("vacuum_thrust", 0.0)) * engines
-		var flow := float(stage.get("flow", 0.0)) * engines
+		var propellant := fuel if i == stage_index else RocketDesign.stage_total_fuel_capacity(stage)
+		var dry := RocketDesign.stage_total_dry_mass(stage)
+		var thrust := RocketDesign.stage_total_thrust(stage, true)
+		var flow := RocketDesign.stage_total_flow(stage)
 		var final_mass := mass - propellant
 		if propellant > 0.0 and flow > 0.0 and thrust > 0.0 and final_mass > dry:
 			total += thrust / flow * log(mass / final_mass)
@@ -2182,7 +2189,7 @@ func load_save_data(data: Dictionary) -> bool:
 		push_error("Save stage index is outside the vehicle.")
 		return false
 	var saved_fuel: float = float(data.get("fuel", 0.0))
-	var active_fuel_capacity: float = float(saved_stages[stage_index].get("fuel_capacity", 0.0))
+	var active_fuel_capacity: float = RocketDesign.stage_total_fuel_capacity(saved_stages[stage_index])
 	if saved_fuel < 0.0 or saved_fuel > active_fuel_capacity:
 		push_error("Save fuel amount is outside the active stage capacity.")
 		return false
@@ -2194,7 +2201,7 @@ func load_save_data(data: Dictionary) -> bool:
 			return false
 		for i in range(saved_stages.size()):
 			var stage_fuel_value: Variant = saved_stage_fuel[i]
-			var stage_capacity := float(saved_stages[i].get("fuel_capacity", 0.0))
+			var stage_capacity := RocketDesign.stage_total_fuel_capacity(saved_stages[i])
 			if not (stage_fuel_value is float or stage_fuel_value is int) or not is_finite(float(stage_fuel_value)) or float(stage_fuel_value) < 0.0 or float(stage_fuel_value) > stage_capacity:
 				push_error("Save contains an invalid stage fuel amount.")
 				return false
@@ -2209,7 +2216,7 @@ func load_save_data(data: Dictionary) -> bool:
 			elif i == stage_index:
 				validated_stage_fuel.append(saved_fuel)
 			else:
-				validated_stage_fuel.append(float(saved_stages[i].get("fuel_capacity", 0.0)))
+				validated_stage_fuel.append(RocketDesign.stage_total_fuel_capacity(saved_stages[i]))
 	set_rocket_design(saved_design)
 	vehicle_name = str(data.get("vehicle_name", vehicle_name))
 	passive_orbit_active = bool(data.get("passive_orbit_active", false))

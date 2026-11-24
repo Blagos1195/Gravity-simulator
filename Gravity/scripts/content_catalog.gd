@@ -332,8 +332,9 @@ static func _catalog_error(catalog: Dictionary) -> String:
 	var payload_options: Variant = builder_options.get("payloads")
 	var engine_counts: Variant = builder_options.get("engine_counts")
 	var tank_scales: Variant = builder_options.get("tank_scales")
-	if not payload_options is Array or payload_options.is_empty() or not engine_counts is Array or engine_counts.is_empty() or not tank_scales is Array or tank_scales.is_empty():
-		return "Rocket builder payloads, engine_counts and tank_scales must be non-empty arrays."
+	var booster_options: Variant = builder_options.get("booster_options")
+	if not payload_options is Array or payload_options.is_empty() or not engine_counts is Array or engine_counts.is_empty() or not tank_scales is Array or tank_scales.is_empty() or not booster_options is Array or booster_options.is_empty():
+		return "Rocket builder payloads, engine_counts, tank_scales and booster_options must be non-empty arrays."
 	var payload_mass_limits: Variant = builder_options.get("payload_mass_limits")
 	if payload_mass_limits != null:
 		if not payload_mass_limits is Dictionary:
@@ -376,6 +377,27 @@ static func _catalog_error(catalog: Dictionary) -> String:
 			if not payload_visual_color_error.is_empty():
 				return payload_visual_color_error
 		payload_ids[payload_id] = true
+	var booster_ids := {}
+	for booster_variant in booster_options:
+		if not booster_variant is Dictionary:
+			return "Every rocket booster option must be an object."
+		var booster: Dictionary = booster_variant
+		var booster_id := str(booster.get("id", ""))
+		if booster_id.is_empty() or booster_ids.has(booster_id) or str(booster.get("label", "")).is_empty():
+			return "Rocket booster option ids and labels must be non-empty and unique."
+		var booster_error := _numeric_fields_error(booster, ["dry_mass", "fuel_capacity", "thrust", "vacuum_thrust", "flow", "pair_count"], "rocket booster %s" % booster_id)
+		if not booster_error.is_empty():
+			return booster_error
+		if float(booster.dry_mass) <= 0.0 or float(booster.fuel_capacity) <= 0.0 or float(booster.thrust) <= 0.0 or float(booster.vacuum_thrust) < float(booster.thrust) or float(booster.flow) <= 0.0 or int(booster.pair_count) != 2 or float(booster.pair_count) != float(int(booster.pair_count)):
+			return "Rocket booster %s has invalid physical values." % booster_id
+		for visual_key in ["visual_width_factor", "visual_length_factor"]:
+			if booster.has(visual_key) and (not (booster[visual_key] is int or booster[visual_key] is float) or float(booster[visual_key]) <= 0.0):
+				return "Rocket booster %s has an invalid %s." % [booster_id, visual_key]
+		if booster.has("visual_color_rgb"):
+			var booster_color_error := _color_field_error(booster, "visual_color_rgb", "rocket booster %s" % booster_id)
+			if not booster_color_error.is_empty():
+				return booster_color_error
+		booster_ids[booster_id] = true
 	var engine_count_ids := {}
 	for engine_count in engine_counts:
 		if not (engine_count is int or engine_count is float) or int(engine_count) < 1 or float(engine_count) != float(int(engine_count)) or engine_count_ids.has(int(engine_count)):

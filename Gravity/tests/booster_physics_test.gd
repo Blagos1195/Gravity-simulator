@@ -1,0 +1,33 @@
+extends SceneTree
+
+const SimulationView = preload("res://scripts/simulation_view.gd")
+const RocketDesign = preload("res://scripts/rocket_design.gd")
+
+func _initialize() -> void:
+	var design := RocketDesign.create_default()
+	var original_mass := RocketDesign.total_initial_mass(design)
+	assert(RocketDesign.add_booster_pair(design, 0, "solid_booster_pair"))
+	var first_stage: Dictionary = design.stages[0]
+	var expected_dry_mass := RocketDesign.stage_total_dry_mass(first_stage)
+	var expected_fuel := RocketDesign.stage_total_fuel_capacity(first_stage)
+	var expected_thrust := RocketDesign.stage_total_thrust(first_stage)
+	var expected_flow := RocketDesign.stage_total_flow(first_stage)
+	assert(RocketDesign.total_initial_mass(design) > original_mass)
+	var sim := SimulationView.new()
+	sim.set_rocket_design(design)
+	assert(is_equal_approx(sim.stage_fuel_remaining[0], expected_fuel))
+	var active_stage := sim._active_stage_data()
+	assert(is_equal_approx(float(active_stage.dry_mass), expected_dry_mass))
+	assert(is_equal_approx(float(active_stage.fuel_capacity), expected_fuel))
+	assert(is_equal_approx(float(active_stage.thrust), expected_thrust))
+	assert(is_equal_approx(float(active_stage.flow), expected_flow))
+	assert(int(active_stage.engine_count) == 1)
+	assert(not active_stage.has("boosters"))
+	assert(is_equal_approx(sim._current_vehicle_mass(), RocketDesign.total_initial_mass(design)))
+	sim._separate_stage()
+	assert(is_equal_approx(sim.discarded_stage_mass, expected_dry_mass))
+	assert(is_equal_approx(sim.discarded_propellant_mass, expected_fuel))
+	assert(sim.stage_index == 1)
+	print("Booster physics tests passed.")
+	sim.free()
+	quit()
