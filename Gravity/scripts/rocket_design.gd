@@ -136,6 +136,7 @@ static func _design_from_catalog(definition: Dictionary) -> Dictionary:
 	var design := {
 		"name": str(definition.get("name", "Custom Vehicle")),
 		"payload_mass": float(definition.get("payload_mass", 500.0)),
+		"payload_components": definition.get("payload_components", []).duplicate(true),
 		"stages": []
 	}
 	var selected_payload_id := str(definition.get("payload_id", ""))
