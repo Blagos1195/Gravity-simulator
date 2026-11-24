@@ -232,19 +232,30 @@ func _build_interface() -> void:
 	title = "VEHICLE ASSEMBLY BUILDING"
 	transient = true
 	exclusive = true
+	var compact_layout := size.x < 1000.0 or size.y < 600.0
+	var root_parent: Control = self
+	if compact_layout:
+		var outer_scroll := ScrollContainer.new()
+		outer_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		outer_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		add_child(outer_scroll)
+		root_parent = outer_scroll
 	var root := VBoxContainer.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_theme_constant_override("separation", 8)
 	root.add_theme_constant_override("margin_left", 12)
 	root.add_theme_constant_override("margin_right", 12)
 	root.add_theme_constant_override("margin_top", 10)
 	root.add_theme_constant_override("margin_bottom", 10)
-	add_child(root)
+	if compact_layout:
+		root.custom_minimum_size.y = maxf(620.0, size.y)
+		root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	else:
+		root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root_parent.add_child(root)
 	var header := VBoxContainer.new()
 	root.add_child(header)
 	var header_primary := VBoxContainer.new()
 	header.add_child(header_primary)
-	var compact_layout := size.x < 1000.0
 	var identity_row: BoxContainer = VBoxContainer.new() if compact_layout else HBoxContainer.new()
 	header_primary.add_child(identity_row)
 	var payload_row: BoxContainer = VBoxContainer.new() if compact_layout else HBoxContainer.new()
