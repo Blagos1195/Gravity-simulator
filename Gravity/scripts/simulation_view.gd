@@ -1408,7 +1408,8 @@ func _launch_pad_surface_normal() -> Vector2:
 	return launch_pad_normal.rotated(EARTH_ROTATION_RATE * (sim_time - launch_pad_reference_time)).normalized()
 
 func _smooth_circle_segments(radius: float) -> int:
-	return clampi(ceili(TAU * sqrt(maxf(1.0, radius) * 0.75)), 96, 4096)
+	var visible_radius := minf(maxf(1.0, radius), maxf(size.x, size.y) * 2.0)
+	return clampi(ceili(TAU * sqrt(visible_radius * 0.75)), 96, 512)
 
 func _draw_smooth_disc(center: Vector2, radius: float, color: Color) -> void:
 	if radius <= 0.0:
@@ -1436,6 +1437,10 @@ func _draw_atmosphere(center: Vector2, planet_radius: float, atmosphere_height: 
 	var physical_thickness := atmosphere_height * camera_zoom * _visual_scale()
 	var visible_thickness := clampf(physical_thickness, 3.0, 34.0)
 	var rings := 18
+	if planet_radius > maxf(size.x, size.y) * 2.0:
+		rings = 6
+	elif planet_radius > maxf(size.x, size.y):
+		rings = 10
 	for ring in range(rings, 0, -1):
 		var fraction := float(ring) / float(rings)
 		var ring_radius := planet_radius + visible_thickness * fraction
