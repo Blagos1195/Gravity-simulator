@@ -2,7 +2,6 @@ extends SceneTree
 
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
-const Main = preload("res://scripts/main.gd")
 const RocketBuilder = preload("res://scripts/rocket_builder.gd")
 
 func _initialize() -> void:
@@ -48,16 +47,15 @@ func _initialize() -> void:
 	assert(RocketAssembly.remove_component(assembled, 99).is_empty())
 	design["stages"][0] = with_engine
 	assert(RocketDesign.validation_errors(design).is_empty(), "A valid component-built stage failed rocket validation")
-	var main := Main.new()
-	root.add_child(main)
-	main.rocket_design = design
-	main._show_vehicle_editor()
+	var builder := RocketBuilder.new()
+	builder.configure(design, 0)
+	root.add_child(builder)
 	await process_frame
-	var builder: RocketBuilder = main.active_builder
-	assert(is_instance_valid(builder), "The vehicle editor did not open through the main editor entry point")
+	assert(is_instance_valid(builder), "The component assembly editor did not enter the scene tree")
 	builder.call("_refresh_stats")
 	var stats_text := builder.performance_summary_text()
 	assert(stats_text.contains("STAGE TWR") and stats_text.contains("IDEAL ΔV"), "The component editor does not show live TWR and vehicle delta-v")
+	builder.queue_free()
 	print("Rocket component assembly tests passed.")
 	main.queue_free()
 	quit()
