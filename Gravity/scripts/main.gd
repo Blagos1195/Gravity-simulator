@@ -270,6 +270,8 @@ func _resolve_spacecraft_collisions(positions_before: Dictionary) -> void:
 			second._set_rocket_position_components(second_contact.x, second_contact.y)
 			first.crashed = true
 			second.crashed = true
+			first.input_enabled = false
+			second.input_enabled = false
 			first.passive_orbit_active = false
 			second.passive_orbit_active = false
 			first.passive_orbit_data.clear()
@@ -1998,7 +2000,7 @@ func _switch_vehicle(index: int) -> void:
 	sim = fleet_sims[index]
 	sim.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
 	sim.visited_body_names = SpaceDiscovery.visited_names(discovery_state)
-	sim.input_enabled = not _is_docked_child(sim.vehicle_name)
+	sim.input_enabled = not _is_docked_child(sim.vehicle_name) and not sim.crashed
 	sim.visible = true
 	sim.time_warp = fleet_sims[0].time_warp
 	if sim.show_predicted_trajectory:
