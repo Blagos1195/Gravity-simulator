@@ -215,6 +215,7 @@ func _advance_fleet(delta: float) -> void:
 			if vehicle == sim or _is_docked_child(vehicle.vehicle_name):
 				continue
 			sim.fleet_visuals.append({
+				"name": vehicle.vehicle_name,
 				"position": vehicle.rocket_position,
 				"rotation": vehicle.rotation_angle,
 				"stage_index": vehicle.stage_index,
