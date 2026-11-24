@@ -129,3 +129,8 @@ Add booster modules to `rocket.builder_options.booster_options`. Each module nee
 ## Strap-on booster modules
 
 Add modules under `rocket.builder_options.booster_options`. Each needs a unique `id` and `label`, per-booster `dry_mass`, `fuel_capacity`, `thrust`, `vacuum_thrust`, and `flow`, plus `pair_count: 2`. Optional `visual_width_factor`, `visual_length_factor`, and `visual_color_rgb` configure the rendered booster pair. Stages can carry any number of booster-pair modules. Booster mass, fuel, thrust and flow are included in vehicle performance and flight physics; attached boosters separate with their stage.
+
+
+## Payload component modules
+
+Add modules under `rocket.builder_options.payload_components`. Each needs a unique `id`, `label`, supported `component_type` (`fairing`, `solar_panels`, `antenna`, `docking_port`, or `instrument`), and positive `dry_mass`. Optional `visual_width_factor`, `visual_height_factor`, and `visual_color_rgb` control its appearance. Solar panels can specify `power_output_kw`, instruments can specify `science_value`, and fairings require `drag_reduction` between zero and one. Component definitions are stored with each craft so saved vehicles retain their module data if a mod is later removed. Fairings reduce aerodynamic drag until jettisoned above the local atmosphere; their mass is removed at that point.
