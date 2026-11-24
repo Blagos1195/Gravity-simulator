@@ -134,6 +134,7 @@ func _validate_surface_contact() -> void:
 
 func _validate_launch_pad_anchor() -> void:
 	var simulation: Variant = SimulationView.new()
+	simulation.set_rocket_design(RocketDesign.create_default())
 	assert(is_equal_approx(simulation.rocket_position.length(), PlanetarySystem.EARTH_RADIUS + 0.5))
 	simulation.sim_time = 1200.0
 	var expected := Vector2.UP.rotated(PlanetarySystem.EARTH_ROTATION_RATE * 1200.0)
