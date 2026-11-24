@@ -107,12 +107,13 @@ var throttle_cutoff_key_down := false
 var landed := true
 var crashed := false
 var landed_body_name := "Earth"
-var landed_surface_normal := Vector2.DOWN
+var landed_surface_normal := Vector2.UP
 var discovered_body_names: Dictionary = {"Earth": true, "Moon": true}
 var visited_body_names: Dictionary = {"Earth": true}
 var passive_orbit_active := false
 var passive_orbit_forced := false
 var passive_orbit_data: Dictionary = {}
+var fleet_visuals: Array[Dictionary] = []
 
 func _set_rocket_position_components(position_x: float, position_y: float) -> void:
 	rocket_position_precise = PackedFloat64Array([position_x, position_y])
@@ -1508,6 +1509,14 @@ func _draw() -> void:
 		draw_line(rocket_screen + Vector2(-30.0, 13.0) * object_scale, rocket_screen + Vector2(30.0, 13.0) * object_scale, Color(0.72, 0.78, 0.86), 3.0 * object_scale)
 		draw_line(rocket_screen + Vector2(-18.0, 13.0) * object_scale, rocket_screen + Vector2(-18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
 		draw_line(rocket_screen + Vector2(18.0, 13.0) * object_scale, rocket_screen + Vector2(18.0, 25.0) * object_scale, Color(0.72, 0.78, 0.86), 2.0 * object_scale)
+	for fleet_entry in fleet_visuals:
+		var fleet_position: Vector2 = fleet_entry.get("position", rocket_position)
+		var fleet_screen := rocket_screen + (fleet_position - rocket_position) * altitude_visual_scale
+		if fleet_screen.x < -40.0 or fleet_screen.x > size.x + 40.0 or fleet_screen.y < -40.0 or fleet_screen.y > size.y + 40.0:
+			continue
+		var fleet_design: Dictionary = fleet_entry.get("design", {})
+		var fleet_stage := int(fleet_entry.get("stage_index", 0))
+		RocketVisual.draw_vehicle(self, fleet_design, fleet_screen, float(fleet_entry.get("rotation", 0.0)), object_scale * 0.72, fleet_stage, 0.0, false)
 	_draw_rocket(rocket_screen, object_scale)
 	_draw_docked_visuals(rocket_screen, object_scale)
 	if show_vectors:
