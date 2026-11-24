@@ -54,13 +54,13 @@ func _initialize() -> void:
 	main._show_vehicle_component_editor(0)
 	var editor_found := false
 	for child in main.get_children():
-		if child is Window and str(child.title).contains("VEHICLE ASSEMBLY BUILDING"):
+		if child is Control and child.name == "RocketBuilder":
 			editor_found = true
 			break
 	assert(editor_found, "The component assembly editor did not open")
 	var performance_summary_found := false
 	for child in main.get_children():
-		if child is Window and str(child.title).contains("VEHICLE ASSEMBLY BUILDING"):
+		if child is Control and child.name == "RocketBuilder":
 			for label in child.find_children("*", "Label", true, false):
 				if str(label.text).contains("STAGE TWR") and str(label.text).contains("IDEAL ΔV"):
 					performance_summary_found = true
