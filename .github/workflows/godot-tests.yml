@@ -70,6 +70,9 @@ jobs:
           if echo "$changed_files" | grep -Eq 'main.gd|rocket_design|content_catalog'; then
             run_check career_economy_test
           fi
+          if echo "$changed_files" | grep -Eq 'mission_system|content_catalog|main.gd'; then
+            run_check mission_system_test
+          fi
           if echo "$changed_files" | grep -Eq 'flight_computer|route_planner'; then
             run_check flight_computer_test
             run_check leo_autopilot_mission_test
@@ -93,6 +96,7 @@ jobs:
           run_check orbital_propagator_test
           run_check space_discovery_test
           run_check career_economy_test
+          run_check mission_system_test
           run_check rocket_design_test
           run_check rocket_builder_ui_test
           run_check multi_vehicle_test
