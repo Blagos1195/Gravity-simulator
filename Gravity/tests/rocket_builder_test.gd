@@ -13,6 +13,9 @@ func _initialize() -> void:
 	assert(builder.title == "VEHICLE ASSEMBLY BUILDING")
 	assert(builder._parts_list.get_child_count() >= 14)
 	assert(builder._stage_list.get_child_count() == design.stages.size())
+	builder._payload_mass_input.value = 900.0
+	assert(is_equal_approx(float(builder.design.payload_mass), 900.0))
+	assert(str(builder.design.payload_type) == "custom")
 	builder._add_component("medium_tank", "stack", true, 1, -1)
 	var stage: Dictionary = builder.design.stages[0]
 	assert(stage.components.size() == 3)
@@ -48,6 +51,12 @@ func _initialize() -> void:
 	var moved_stage: Dictionary = builder.design.stages[1].duplicate(true)
 	builder._move_stage(-1)
 	assert(builder.design.stages[0] == moved_stage)
+	builder._on_component_selected(2)
+	var side_options := builder._inspector.find_children("*", "OptionButton", true, false)
+	assert(side_options.size() == 1 and side_options[0].item_count == 2)
+	var part_count: int = builder.design.stages[0].components.size()
+	builder._duplicate_selected_component()
+	assert(builder.design.stages[0].components.size() == part_count + 1)
 	var emitted_designs: Array[Dictionary] = []
 	builder.design_changed.connect(func(updated: Dictionary): emitted_designs.append(updated))
 	builder._emit_design()
