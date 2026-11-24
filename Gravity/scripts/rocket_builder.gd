@@ -209,6 +209,7 @@ func _build_interface() -> void:
 	size = Vector2i(1320, 820)
 	min_size = Vector2i(980, 640)
 	transient = true
+	exclusive = true
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_theme_constant_override("separation", 8)
