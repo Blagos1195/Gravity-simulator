@@ -119,6 +119,8 @@ var telescope_direction_angle := 0.0
 var telescope_field_of_view := PI / 6.0
 var visited_body_names: Dictionary = {"Earth": true}
 var passive_orbit_active := false
+var separation_grace_parent := ""
+var separation_grace_until := 0.0
 var passive_orbit_forced := false
 var passive_orbit_data: Dictionary = {}
 var fleet_visuals: Array[Dictionary] = []
@@ -699,6 +701,7 @@ func _separate_stage() -> void:
 	var total_separated_mass := maxf(0.001, separated_mass + upper_stack_mass)
 	var separation_direction := Vector2.UP.rotated(rotation_angle)
 	var relative_separation_speed := 2.0
+	separation_grace_until = sim_time + 12.0
 	var debris_velocity := velocity - separation_direction * relative_separation_speed * upper_stack_mass / total_separated_mass
 	var upper_stack_velocity := velocity + separation_direction * relative_separation_speed * separated_mass / total_separated_mass
 	stage_separated.emit({
@@ -709,6 +712,7 @@ func _separate_stage() -> void:
 		"rotation_angle": rotation_angle,
 		"sim_time": sim_time,
 		"launch_time": launch_time,
+		"parent_vehicle_name": vehicle_name,
 		"separation_speed": relative_separation_speed
 	})
 	discarded_stage_mass += separated_dry_mass
