@@ -38,6 +38,8 @@ func _initialize() -> void:
 	assert(str(stage.components[0].id) == "medium_tank")
 	assert(int(stage.components[3].mount_index) == 2)
 	builder._remove_selected_component()
+	stage = builder.design.stages[0]
+	assert(int(stage.components[2].mount_index) == 1)
 	assert(RocketDesign.validation_errors(builder.design).is_empty())
 	builder._duplicate_selected_stage()
 	assert(builder.design.stages.size() == 2)
