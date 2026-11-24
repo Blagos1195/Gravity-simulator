@@ -231,7 +231,7 @@ static func total_initial_mass(design: Dictionary) -> float:
 	var stages: Array = design.get("stages", [])
 	var mass := float(design.get("payload_mass", 0.0))
 	for stage in stages:
-		mass += float(stage.get("dry_mass", 0.0)) + float(stage.get("fuel_capacity", 0.0))
+		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage)
 	return mass
 
 static func stage_ignition_mass(design: Dictionary, stage_index: int) -> float:
@@ -243,8 +243,8 @@ static func stage_ignition_mass(design: Dictionary, stage_index: int) -> float:
 	return mass
 
 static func stage_specific_impulse(stage: Dictionary, vacuum: bool) -> float:
-	var thrust := float(stage.get("vacuum_thrust" if vacuum else "thrust", 0.0))
-	var flow := float(stage.get("flow", 0.0))
+	var thrust := stage_total_thrust(stage, vacuum)
+	var flow := stage_total_flow(stage)
 	if flow <= 0.0:
 		return 0.0
 	return thrust / (flow * G0)
@@ -255,13 +255,13 @@ static func total_delta_v(design: Dictionary) -> float:
 	var mass := total_initial_mass(design)
 	for i in range(stages.size()):
 		var stage: Dictionary = stages[i]
-		var fuel := float(stage.get("fuel_capacity", 0.0))
-		var flow := float(stage.get("flow", 0.0))
-		var thrust := float(stage.get("vacuum_thrust", 0.0))
+		var fuel := stage_total_fuel_capacity(stage)
+		var flow := stage_total_flow(stage)
+		var thrust := stage_total_thrust(stage, true)
 		var final_mass := mass - fuel
 		if fuel > 0.0 and flow > 0.0 and thrust > 0.0 and final_mass > 0.0:
 			delta_v += thrust / flow * log(mass / final_mass)
-		mass = final_mass - float(stage.get("dry_mass", 0.0))
+		mass = final_mass - stage_total_dry_mass(stage)
 	return delta_v
 
 static func validation_errors(design: Dictionary) -> PackedStringArray:
@@ -317,8 +317,8 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		errors.append("Total vehicle mass must be positive.")
 	for i in range(stages.size()):
 		var stage: Dictionary = stages[i]
-		var dry := float(stage.get("dry_mass", 0.0))
-		var fuel := float(stage.get("fuel_capacity", 0.0))
+		var dry := stage_total_dry_mass(stage)
+		var fuel := stage_total_fuel_capacity(stage)
 		var sea_thrust := float(stage.get("thrust", 0.0))
 		var vacuum_thrust := float(stage.get("vacuum_thrust", 0.0))
 		var flow := float(stage.get("flow", 0.0))
@@ -354,8 +354,8 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		if sea_isp <= 0.0 or vacuum_isp <= 0.0:
 			errors.append("Stage %d must have positive engine efficiency." % (i + 1))
 		var ignition_mass := stage_ignition_mass(design, i)
-		var ignition_thrust := sea_thrust if i == 0 else vacuum_thrust
-		var thrust_to_weight := ignition_thrust * engines / maxf(1.0, ignition_mass * G0)
+		var ignition_thrust := stage_total_thrust(stage, i != 0)
+		var thrust_to_weight := ignition_thrust / maxf(1.0, ignition_mass * G0)
 		if i == 0 and thrust_to_weight < 1.0:
 			errors.append("First-stage pad TWR must be at least 1.00 to lift off from Earth.")
 	if total_mass > 0.0 and stages.size() >= MIN_STAGES:
