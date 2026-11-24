@@ -57,5 +57,4 @@ func _initialize() -> void:
 	assert(stats_text.contains("STAGE TWR") and stats_text.contains("IDEAL ΔV"), "The component editor does not show live TWR and vehicle delta-v")
 	builder.queue_free()
 	print("Rocket component assembly tests passed.")
-	main.queue_free()
 	quit()
