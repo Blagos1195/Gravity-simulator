@@ -158,7 +158,6 @@ class AssemblyCanvas extends Control:
 			_:
 				polygon = PackedVector2Array([rect.position, rect.position + Vector2(rect.size.x, 0.0), rect.end, rect.position + Vector2(0.0, rect.size.y)])
 		draw_colored_polygon(polygon, color)
-		draw_rect(rect, Color(0.12, 0.18, 0.25), true)
 		draw_rect(rect, Color(0.65, 0.84, 1.0) if selected else Color(0.12, 0.18, 0.25), false, 2.0 if selected else 1.0)
 		draw_string(ThemeDB.fallback_font, rect.position + Vector2(4.0, minf(16.0, rect.size.y - 2.0)), str(component.get("label", component.get("id", "PART"))), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 8.0, 10, Color(0.04, 0.06, 0.09))
 
@@ -500,7 +499,7 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 
 func _on_component_moved(from_index: int, to_index: int) -> void:
 	var components: Array = _current_stage().get("components", []).duplicate(true)
-	if from_index < 0 or from_index >= components.size() or to_index < 0 or to_index >= components.size():
+	if from_index < 0 or from_index >= components.size() or to_index < 0 or to_index > components.size():
 		return
 	_push_undo()
 	var item: Variant = components.pop_at(from_index)
