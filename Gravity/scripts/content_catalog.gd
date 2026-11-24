@@ -317,6 +317,13 @@ static func _catalog_error(catalog: Dictionary) -> String:
 			return part_error
 		if not part.has("name") or float(part.dry_mass) <= 0.0 or float(part.fuel_capacity) <= 0.0 or float(part.thrust) <= 0.0 or float(part.vacuum_thrust) <= 0.0 or float(part.flow) <= 0.0 or int(part.engine_count) <= 0 or float(part.engine_count) != float(int(part.engine_count)):
 			return "Rocket stage part %s has invalid name or engine values." % part_id
+		for visual_key in ["visual_length_factor", "visual_diameter_factor"]:
+			if part.has(visual_key) and (not (part[visual_key] is int or part[visual_key] is float) or float(part[visual_key]) <= 0.0):
+				return "Rocket stage part %s has an invalid %s." % [part_id, visual_key]
+		if part.has("visual_color_rgb"):
+			var visual_color_error := _color_field_error(part, "visual_color_rgb", "rocket stage part %s" % part_id)
+			if not visual_color_error.is_empty():
+				return visual_color_error
 	var builder_options: Variant = rocket.get("builder_options")
 	if not builder_options is Dictionary:
 		return "The rocket builder_options section is missing or invalid."
