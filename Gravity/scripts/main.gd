@@ -1210,12 +1210,19 @@ func _show_new_game_setup() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
+	var screen_size := DisplayServer.screen_get_size()
+	var setup_width := minf(560.0, maxf(280.0, screen_size.x - 48.0))
+	var setup_height := minf(720.0, maxf(240.0, screen_size.y - 48.0))
 	var setup_scroll := ScrollContainer.new()
-	setup_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	setup_scroll.custom_minimum_size = Vector2(setup_width, setup_height)
+	setup_scroll.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	setup_scroll.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	setup_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	setup_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	center.add_child(setup_scroll)
 	var root := VBoxContainer.new()
-	root.custom_minimum_size = Vector2(minf(560.0, DisplayServer.screen_get_size().x - 48.0), 0)
+	root.custom_minimum_size = Vector2(setup_width, 0)
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 12)
 	setup_scroll.add_child(root)
 	var heading := Label.new()
@@ -1374,12 +1381,19 @@ func _show_settings() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
+	var screen_size := DisplayServer.screen_get_size()
+	var settings_width := minf(520.0, maxf(280.0, screen_size.x - 48.0))
+	var settings_height := minf(720.0, maxf(240.0, screen_size.y - 48.0))
 	var settings_scroll := ScrollContainer.new()
-	settings_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	settings_scroll.custom_minimum_size = Vector2(settings_width, settings_height)
+	settings_scroll.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	settings_scroll.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	settings_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	center.add_child(settings_scroll)
 	settings_root = VBoxContainer.new()
-	settings_root.custom_minimum_size = Vector2(minf(520.0, DisplayServer.screen_get_size().x - 48.0), 0)
+	settings_root.custom_minimum_size = Vector2(settings_width, 0)
+	settings_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_root.add_theme_constant_override("separation", 14)
 	settings_scroll.add_child(settings_root)
 	var heading := Label.new()
