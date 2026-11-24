@@ -419,6 +419,29 @@ static func _catalog_error(catalog: Dictionary) -> String:
 		for part_id_variant in design.get("stages", []):
 			if not part_ids.has(str(part_id_variant)):
 				return "Rocket design %s references unknown stage part %s." % [str(design.get("name", "unnamed")), str(part_id_variant)]
+	var missions: Variant = catalog.get("missions", [])
+	if not missions is Array:
+		return "The missions section must be an array."
+	var mission_ids := {}
+	var mission_conditions := ["orbit_body", "visit_body", "discover_body", "discover_count", "operational_satellites"]
+	for mission_variant in missions:
+		if not mission_variant is Dictionary:
+			return "Every mission entry must be an object."
+		var mission: Dictionary = mission_variant
+		var mission_id := str(mission.get("id", ""))
+		var condition := str(mission.get("condition", ""))
+		if mission_id.is_empty() or mission_ids.has(mission_id) or str(mission.get("title", "")).is_empty() or str(mission.get("description", "")).is_empty():
+			return "Mission ids, titles and descriptions must be non-empty and unique."
+		if not mission_conditions.has(condition):
+			return "Mission %s has an unsupported condition." % mission_id
+		var mission_reward_error := _numeric_fields_error(mission, ["reward"], "mission %s" % mission_id)
+		if not mission_reward_error.is_empty() or not is_finite(float(mission.reward)) or float(mission.reward) < 0.0:
+			return "Mission %s has an invalid reward." % mission_id
+		if condition in ["orbit_body", "visit_body", "discover_body"] and str(mission.get("body", "")).is_empty():
+			return "Mission %s needs a body name." % mission_id
+		if condition in ["discover_count", "operational_satellites"] and (not mission.get("count") is int or int(mission.count) < 1):
+			return "Mission %s needs a positive whole-number count." % mission_id
+		mission_ids[mission_id] = true
 	return ""
 
 static func _numeric_fields_error(data: Dictionary, fields: Array, context: String) -> String:
