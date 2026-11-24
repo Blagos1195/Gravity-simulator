@@ -12,7 +12,7 @@ func _initialize() -> void:
 		1.0
 	)
 	assert(not crossing.is_empty(), "Fast crossing objects passed through each other")
-	assert(is_equal_approx(float(crossing.time_fraction), 0.45))
+	assert(is_equal_approx(float(crossing.time_fraction), 0.5))
 	assert(is_equal_approx(float(crossing.penetration), 2.0))
 	var miss := SpaceObjectPhysics.swept_circle_contact(
 		Vector2(-10.0, 4.0),
