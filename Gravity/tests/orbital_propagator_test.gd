@@ -18,6 +18,7 @@ func _validate_circular_orbit() -> void:
 	var initial := OrbitalPropagator.propagate(elements, 120.0)
 	var after_period := OrbitalPropagator.propagate(elements, 120.0 + period)
 	assert(Vector2(initial.position).distance_to(Vector2(radius, 0.0)) < 0.01)
+	print("CIRCULAR ", elements, " initial=", initial, " after=", after_period)
 	assert(Vector2(after_period.position).distance_to(Vector2(radius, 0.0)) < 0.1)
 	assert(Vector2(after_period.velocity).distance_to(Vector2(0.0, speed)) < 0.0001)
 
@@ -31,6 +32,7 @@ func _validate_eccentric_orbit() -> void:
 	var propagated := OrbitalPropagator.propagate(elements, 3600.0)
 	assert(not propagated.is_empty())
 	var recovered := OrbitalPropagator.elements_from_state(propagated.position, propagated.velocity, mu, 3600.0)
+	print("ECCENTRIC ", elements, " propagated=", propagated, " recovered=", recovered)
 	assert(not recovered.is_empty())
 	assert(absf(float(recovered.semi_major_axis) - float(elements.semi_major_axis)) < 0.1)
 	assert(absf(float(recovered.eccentricity) - float(elements.eccentricity)) < 0.00000001)
