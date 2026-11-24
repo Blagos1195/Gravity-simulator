@@ -8,6 +8,9 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
 const OrbitalPropagator = preload("res://scripts/orbital_propagator.gd")
 const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
+const STARTING_FUNDS := 150000000.0
+const LAUNCH_BASE_COST := 1000000.0
+const LAUNCH_COST_PER_KG := 75.0
 const SAVE_DIR := "user://saves"
 const AUTOSAVE_INTERVAL := 60.0
 const DOCKING_CAPTURE_DISTANCE := 100.0
@@ -25,6 +28,11 @@ var fleet_sims: Array = []
 var active_vehicle_index := 0
 var fleet_time_backlog := 0.0
 var discovery_state: Dictionary = SpaceDiscovery.new_campaign_state()
+var funds := STARTING_FUNDS
+var economy_last_sim_time := 0.0
+var total_revenue_earned := 0.0
+var total_operating_costs := 0.0
+var funds_label: Label
 var vehicle_selector: OptionButton
 var docking_links: Array[Dictionary] = []
 var autosave_elapsed := 0.0
@@ -200,7 +208,59 @@ func _advance_fleet(delta: float) -> void:
 		vehicle.simulation_time_backlog = fleet_time_backlog
 	if is_instance_valid(sim):
 		_update_discovery_state()
+		_update_economy()
 		sim.queue_redraw()
+
+func _launch_cost_for_design(design: Dictionary) -> float:
+	return LAUNCH_BASE_COST + RocketDesign.total_initial_mass(design) * LAUNCH_COST_PER_KG
+
+func _vehicle_in_stable_orbit(vehicle: SimulationView) -> bool:
+	if vehicle.landed or vehicle.crashed:
+		return false
+	var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
+	if body.is_empty() or float(body.get("distance", INF)) > float(body.get("soi", 0.0)):
+		return false
+	var relative_position: Vector2 = body.relative_position
+	var relative_velocity: Vector2 = vehicle.velocity - Vector2(body.get("velocity", Vector2.ZERO))
+	var orbit := FlightComputer.orbital_state(relative_position, relative_velocity, FlightComputer.G * float(body.get("mass", 0.0)))
+	if not bool(orbit.get("bound", false)):
+		return false
+	var body_radius := float(body.get("radius", 0.0))
+	var minimum_altitude := FlightComputer.minimum_safe_orbit_altitude(str(body.get("name", "")), body_radius)
+	var maximum_altitude := FlightComputer.maximum_stable_orbit_altitude(body_radius, float(body.get("soi", 0.0)))
+	return float(orbit.get("periapsis", 0.0)) > body_radius + minimum_altitude and float(orbit.get("apoapsis", INF)) < body_radius + maximum_altitude
+
+func _update_economy() -> void:
+	if not is_instance_valid(sim):
+		return
+	var elapsed_seconds := maxf(0.0, sim.sim_time - economy_last_sim_time)
+	economy_last_sim_time = sim.sim_time
+	if not career_enabled or elapsed_seconds <= 0.0:
+		_refresh_economy_display()
+		return
+	var elapsed_days := elapsed_seconds / 86400.0
+	for vehicle in fleet_sims:
+		var profile: Dictionary = vehicle.payload_visual
+		var role := str(profile.get("satellite_role", ""))
+		var lifetime_days := float(profile.get("operational_lifetime_days", 0.0))
+		if role.is_empty() or lifetime_days <= 0.0 or not _vehicle_in_stable_orbit(vehicle):
+			continue
+		var age_days := maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0)
+		if age_days >= lifetime_days:
+			continue
+		var revenue := maxf(0.0, float(profile.get("revenue_per_day", 0.0)))
+		var operating_cost := maxf(0.0, float(profile.get("operating_cost_per_day", 0.0)))
+		funds += (revenue - operating_cost) * elapsed_days
+		total_revenue_earned += revenue * elapsed_days
+		total_operating_costs += operating_cost * elapsed_days
+	_refresh_economy_display()
+
+func _refresh_economy_display() -> void:
+	if not is_instance_valid(funds_label):
+		return
+	funds_label.visible = career_enabled
+	if career_enabled:
+		funds_label.text = "FUNDS  •  %.1f M CREDITS" % (funds / 1000000.0)
 
 func _update_discovery_state() -> void:
 	if fleet_sims.is_empty() or not is_instance_valid(sim):
@@ -235,7 +295,9 @@ func _update_discovery_state() -> void:
 		if stable_orbit and SpaceDiscovery.mark_visited(discovery_state, body_name) and not newly_discovered.has(body_name):
 			newly_discovered.append(body_name)
 		var telescope_range_au := float(vehicle.payload_visual.get("telescope_range_au", 0.0))
-		if stable_orbit and str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
+		var lifetime_days := float(vehicle.payload_visual.get("operational_lifetime_days", 0.0))
+		var operational := lifetime_days <= 0.0 or maxf(0.0, (sim.sim_time - vehicle.launch_time) / 86400.0) < lifetime_days
+		if stable_orbit and operational and str(vehicle.payload_visual.get("visual_type", "")) == "satellite" and telescope_range_au > 0.0:
 			var telescope_position: Vector2 = earth_position + vehicle.rocket_position
 			var telescope_discoveries := SpaceDiscovery.scan_telescope(discovery_state, telescope_position, telescope_range_au * PlanetarySystem.ASTRONOMICAL_UNIT, heliocentric_bodies)
 			for discovered_name in telescope_discoveries:
@@ -1006,6 +1068,10 @@ func _launch_designed_vehicle() -> void:
 
 func _begin_new_game() -> void:
 	discovery_state = SpaceDiscovery.new_campaign_state()
+	funds = STARTING_FUNDS
+	economy_last_sim_time = 0.0
+	total_revenue_earned = 0.0
+	total_operating_costs = 0.0
 	rocket_design = RocketDesign.create_default()
 	infinite_weightless_fuel = false
 	_show_new_game_setup()
@@ -1273,10 +1339,18 @@ func _launch_vehicle_design(design: Dictionary) -> void:
 		if status_label:
 			status_label.text = "VEHICLE DESIGN IS INVALID"
 		return
+	var launch_cost := _launch_cost_for_design(design)
+	if career_enabled and funds < launch_cost:
+		if status_label:
+			status_label.text = "INSUFFICIENT FUNDS  •  NEED %.1f M CREDITS" % (launch_cost / 1000000.0)
+		return
 	var new_name := "Vehicle %d" % (fleet_sims.size() + 1)
 	var vehicle := _create_vehicle(design, new_name)
 	vehicle.sim_time = sim.sim_time
+	vehicle.launch_time = sim.sim_time
 	vehicle.time_warp = sim.time_warp
+	if career_enabled:
+		funds -= launch_cost
 	fleet_sims.append(vehicle)
 	_refresh_vehicle_selector()
 	_switch_vehicle(fleet_sims.size() - 1)
@@ -1676,6 +1750,10 @@ func _build_flight_hud() -> void:
 	status_label = Label.new()
 	status_label.text = "READY  •  EARTH SYSTEM"
 	info.add_child(status_label)
+	funds_label = Label.new()
+	funds_label.visible = career_enabled
+	info.add_child(funds_label)
+	_refresh_economy_display()
 
 	var right := VBoxContainer.new()
 	right.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -2362,6 +2440,9 @@ func _save_game(automatic: bool) -> void:
 	data["career_enabled"] = career_enabled
 	data["slot"] = save_slot
 	data["discovery_state"] = discovery_state.duplicate(true)
+	data["funds"] = funds
+	data["total_revenue_earned"] = total_revenue_earned
+	data["total_operating_costs"] = total_operating_costs
 
 	if automatic:
 		var history_directory := "%s/history/slot_%02d" % [SAVE_DIR, save_slot]
@@ -2476,6 +2557,10 @@ func _load_game_from_path(path: String) -> void:
 		fleet_sims = [sim]
 		active_vehicle_index = 0
 		_switch_vehicle(0)
+	funds = float(parsed.get("funds", STARTING_FUNDS))
+	total_revenue_earned = maxf(0.0, float(parsed.get("total_revenue_earned", 0.0)))
+	total_operating_costs = maxf(0.0, float(parsed.get("total_operating_costs", 0.0)))
+	economy_last_sim_time = sim.sim_time
 	discovery_state = SpaceDiscovery.sanitize_state(parsed.get("discovery_state", SpaceDiscovery.new_campaign_state()))
 	for vehicle in fleet_sims:
 		vehicle.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
