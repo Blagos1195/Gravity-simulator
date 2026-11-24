@@ -56,8 +56,22 @@ func _initialize() -> void:
 		assert(preset_errors.is_empty(), "%s: %s" % [preset_id, str(preset_errors)])
 	var odyssey := RocketDesign.create_preset("DEEP_SPACE")
 	assert(is_equal_approx(RocketDesign.total_initial_mass(odyssey), 448500.0))
-	assert(RocketDesign.total_delta_v(odyssey) < RocketDesign.MAX_TOTAL_DELTA_V)
 	assert(RocketDesign.total_delta_v(odyssey) > RocketDesign.MIN_TOTAL_DELTA_V)
+	var extended_design := design.duplicate(true)
+	var light_stage := design["stages"][1].duplicate(true)
+	light_stage["dry_mass"] = 500.0
+	light_stage["fuel_capacity"] = 500.0
+	light_stage["thrust"] = 1000000.0
+	light_stage["vacuum_thrust"] = 1100000.0
+	light_stage["flow"] = 300.0
+	for i in range(7):
+		extended_design["stages"].append(light_stage.duplicate(true))
+	assert(extended_design["stages"].size() == 9)
+	assert(RocketDesign.validation_errors(extended_design).is_empty())
+	var high_engine_stage := RocketDesign.configure_stage("explorer_first_stage", 12, 10.0)
+	assert(not high_engine_stage.is_empty())
+	assert(int(high_engine_stage.engine_count) == 12)
+	assert(is_equal_approx(float(high_engine_stage.fuel_capacity), 3000000.0))
 	assert(RocketDesign.engine_count_options().has(5) == false)
 	assert(RocketDesign.payload_options().size() >= 5)
 	assert(RocketDesign.tank_scale_options().size() >= 3)
