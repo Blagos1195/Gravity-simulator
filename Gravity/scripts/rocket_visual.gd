@@ -81,6 +81,13 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 		var visual_color: Variant = stage.get("visual_color_rgb", [])
 		if visual_color is Array and visual_color.size() == 3:
 			body_color = Color(float(visual_color[0]), float(visual_color[1]), float(visual_color[2]))
+		var components: Array = stage.get("components", [])
+		if not components.is_empty():
+			if show_stage_labels:
+				canvas.draw_string(ThemeDB.fallback_font, _point(origin, Vector2(half + 4.0, y + height * 0.65), rotation, scale), "S%d" % (active_stage_index + i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.8, 0.92))
+			_draw_component_stack(canvas, origin, rotation, scale, components, stage.get("boosters", []), y, height, width, i == 0 and engine_enabled, throttle)
+			y += height + 4.0
+			continue
 		_polygon(canvas, origin, [Vector2(-half, y), Vector2(half, y), Vector2(half * 0.92, y + height), Vector2(-half * 0.92, y + height)], rotation, scale, body_color)
 		_polygon(canvas, origin, [Vector2(-half * 0.62, y + 2.0), Vector2(half * 0.62, y + 2.0), Vector2(half * 0.62, y + height * 0.62), Vector2(-half * 0.62, y + height * 0.62)], rotation, scale, Color(0.58, 0.73, 0.81, 0.8))
 		_line(canvas, origin, Vector2(-half, y + height * 0.78), Vector2(half, y + height * 0.78), rotation, scale, Color(0.9, 0.68, 0.3), 1.5)
@@ -161,3 +168,74 @@ static func draw_wreck(canvas: CanvasItem, origin: Vector2, rotation: float, sca
 	_line(canvas, origin, Vector2(-3.0, 16.0), Vector2(-13.0, 25.0), rotation, size, Color(0.38, 0.42, 0.48), 1.4)
 	_line(canvas, origin, Vector2(4.0, -12.0), Vector2(13.0, -18.0), rotation, size, Color(0.38, 0.42, 0.48), 1.4)
 	canvas.draw_circle(_point(origin, Vector2(0.0, -8.0), rotation, size), maxf(1.0, 2.0 * size), Color(1.0, 0.42, 0.12, 0.9))
+
+static func _component_order(kind: String) -> int:
+	match kind:
+		"structure":
+			return 0
+		"tank":
+			return 1
+		"decoupler":
+			return 2
+		"engine":
+			return 3
+		_:
+			return 4
+
+static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation: float, scale: float, components: Array, boosters: Array, y: float, stage_height: float, stage_width: float, engine_enabled: bool, throttle: float) -> void:
+	var ordered: Array = components.duplicate(true)
+	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return _component_order(str(a.get("kind", ""))) < _component_order(str(b.get("kind", "")))
+	)
+	var total_length := 0.0
+	var widest_radius := 0.1
+	for component in ordered:
+		total_length += maxf(0.1, float(component.get("length_m", 1.0)))
+		widest_radius = maxf(widest_radius, float(component.get("collision_radius_m", 1.0)))
+	var current_y := y
+	for component in ordered:
+		var segment_height := stage_height * maxf(0.1, float(component.get("length_m", 1.0))) / maxf(0.1, total_length)
+		var radius := maxf(0.1, float(component.get("collision_radius_m", widest_radius)))
+		var half_width := stage_width * 0.5 * clampf(radius / widest_radius, 0.48, 1.0)
+		var kind := str(component.get("kind", "structure"))
+		var component_color := Color(0.43, 0.63, 0.75)
+		var color_data: Variant = component.get("color_rgb", [])
+		if color_data is Array and color_data.size() == 3:
+			component_color = Color(float(color_data[0]), float(color_data[1]), float(color_data[2]))
+		match kind:
+			"tank":
+				_polygon(canvas, origin, [Vector2(-half_width * 0.9, current_y), Vector2(half_width * 0.9, current_y), Vector2(half_width, current_y + segment_height), Vector2(-half_width, current_y + segment_height)], rotation, scale, component_color)
+				_line(canvas, origin, Vector2(-half_width * 0.86, current_y + segment_height * 0.28), Vector2(half_width * 0.86, current_y + segment_height * 0.28), rotation, scale, Color(0.8, 0.86, 0.91), 0.8)
+				_line(canvas, origin, Vector2(-half_width * 0.9, current_y + segment_height * 0.78), Vector2(half_width * 0.9, current_y + segment_height * 0.78), rotation, scale, Color(0.2, 0.34, 0.46), 0.8)
+			"engine":
+				_polygon(canvas, origin, [Vector2(-half_width * 0.62, current_y), Vector2(half_width * 0.62, current_y), Vector2(half_width, current_y + segment_height), Vector2(-half_width, current_y + segment_height)], rotation, scale, component_color)
+				_polygon(canvas, origin, [Vector2(-half_width * 0.72, current_y + segment_height * 0.72), Vector2(half_width * 0.72, current_y + segment_height * 0.72), Vector2(half_width * 0.88, current_y + segment_height), Vector2(-half_width * 0.88, current_y + segment_height)], rotation, scale, Color(0.34, 0.39, 0.46))
+				if engine_enabled and throttle > 0.0:
+					var flame_length := 7.0 + 8.0 * clampf(throttle, 0.0, 1.0)
+					_polygon(canvas, origin, [Vector2(-half_width * 0.32, current_y + segment_height), Vector2(0.0, current_y + segment_height + flame_length), Vector2(half_width * 0.32, current_y + segment_height)], rotation, scale, Color(1.0, 0.48, 0.12, 0.92))
+			"decoupler":
+				_polygon(canvas, origin, [Vector2(-half_width, current_y), Vector2(half_width, current_y), Vector2(half_width, current_y + segment_height), Vector2(-half_width, current_y + segment_height)], rotation, scale, component_color)
+				_line(canvas, origin, Vector2(-half_width, current_y + segment_height * 0.5), Vector2(half_width, current_y + segment_height * 0.5), rotation, scale, Color(0.9, 0.76, 0.42), 1.0)
+			_:
+				_polygon(canvas, origin, [Vector2(0.0, current_y), Vector2(half_width, current_y + segment_height * 0.5), Vector2(half_width * 0.72, current_y + segment_height), Vector2(-half_width * 0.72, current_y + segment_height), Vector2(-half_width, current_y + segment_height * 0.5)], rotation, scale, component_color)
+		current_y += segment_height
+	for booster_index in range(boosters.size()):
+		var booster_entry: Dictionary = boosters[booster_index]
+		var booster := RocketDesign.booster_definition_for_entry(booster_entry)
+		if booster.is_empty():
+			continue
+		var booster_width := clampf(stage_width * float(booster.get("visual_width_factor", 0.5)), 4.0, 20.0)
+		var booster_height := clampf(stage_height * float(booster.get("visual_length_factor", 0.9)), 8.0, 64.0)
+		var booster_half := booster_width * 0.5
+		var booster_offset := stage_width * 0.5 + booster_width * 0.7 + 2.0 + float(booster_index) * (booster_width + 2.0)
+		var booster_y := y + (stage_height - booster_height) * 0.5
+		var booster_color := Color(0.72, 0.74, 0.78)
+		var booster_color_data: Variant = booster.get("visual_color_rgb", [])
+		if booster_color_data is Array and booster_color_data.size() == 3:
+			booster_color = Color(float(booster_color_data[0]), float(booster_color_data[1]), float(booster_color_data[2]))
+		for side in [-1.0, 1.0]:
+			var booster_x: float = float(side) * booster_offset
+			_polygon(canvas, origin, [Vector2(booster_x - booster_half, booster_y), Vector2(booster_x + booster_half, booster_y), Vector2(booster_x + booster_half * 0.88, booster_y + booster_height), Vector2(booster_x - booster_half * 0.88, booster_y + booster_height)], rotation, scale, booster_color)
+			if engine_enabled and throttle > 0.0:
+				var flame_length := 7.0 + 8.0 * clampf(throttle, 0.0, 1.0)
+				_polygon(canvas, origin, [Vector2(booster_x - booster_half * 0.38, booster_y + booster_height), Vector2(booster_x, booster_y + booster_height + flame_length), Vector2(booster_x + booster_half * 0.38, booster_y + booster_height)], rotation, scale, Color(1.0, 0.48, 0.12, 0.92))
