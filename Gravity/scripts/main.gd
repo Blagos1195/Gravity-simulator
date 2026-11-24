@@ -775,7 +775,8 @@ func _show_payload_editor() -> void:
 		dialog.queue_free()
 	)
 	add_child(dialog)
-	dialog.popup_centered()
+	if is_inside_tree():
+		dialog.popup_centered()
 
 
 func _apply_payload_editor_values(values: Dictionary) -> void:
