@@ -252,10 +252,12 @@ func _build_interface() -> void:
 	var payload_row := HBoxContainer.new()
 	header_primary.add_child(payload_row)
 	var title_label := Label.new()
-	title_label.text = "VEHICLE ASSEMBLY BUILDING"
+	title_label.text = "VEHICLE BUILDER"
 	title_label.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
 	title_label.add_theme_font_size_override("font_size", 20)
-	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	title_label.custom_minimum_size.x = 190.0
 	identity_row.add_child(title_label)
 	var name_input := LineEdit.new()
 	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
