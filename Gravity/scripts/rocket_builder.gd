@@ -219,6 +219,7 @@ func configure(source_design: Dictionary, stage_index: int = 0) -> void:
 	design["stages"] = stages
 
 func _ready() -> void:
+	name = "RocketBuilder"
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_interface()
 	_refresh()
