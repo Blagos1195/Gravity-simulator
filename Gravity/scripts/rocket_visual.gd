@@ -102,7 +102,7 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 			if booster_color_data is Array and booster_color_data.size() == 3:
 				booster_color = Color(float(booster_color_data[0]), float(booster_color_data[1]), float(booster_color_data[2]))
 			for side in [-1.0, 1.0]:
-				var booster_x := side * booster_offset
+				var booster_x: float = float(side) * booster_offset
 				_polygon(canvas, origin, [Vector2(booster_x - booster_half, booster_y), Vector2(booster_x + booster_half, booster_y), Vector2(booster_x + booster_half * 0.88, booster_y + booster_height), Vector2(booster_x - booster_half * 0.88, booster_y + booster_height)], rotation, scale, booster_color)
 				_line(canvas, origin, Vector2(booster_x - booster_half, booster_y + booster_height * 0.76), Vector2(booster_x + booster_half, booster_y + booster_height * 0.76), rotation, scale, Color(0.18, 0.32, 0.43), 1.0)
 				_polygon(canvas, origin, [Vector2(booster_x - booster_half * 0.55, booster_y + booster_height), Vector2(booster_x + booster_half * 0.55, booster_y + booster_height), Vector2(booster_x + booster_half * 0.38, booster_y + booster_height + 3.0), Vector2(booster_x - booster_half * 0.38, booster_y + booster_height + 3.0)], rotation, scale, Color(0.56, 0.61, 0.68))
