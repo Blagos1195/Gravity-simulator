@@ -162,12 +162,31 @@ func _add_rebind_button(parent: Node, action: String) -> void:
 	parent.add_child(button)
 
 func _process(delta: float) -> void:
+	_fit_windows_to_screen()
 	if mode == "flight":
 		_advance_fleet(delta)
 		autosave_elapsed += delta
 		if autosave_enabled and autosave_elapsed >= AUTOSAVE_INTERVAL:
 			autosave_elapsed = 0.0
 			_save_game(true)
+
+func _fit_windows_to_screen() -> void:
+	var screen_size := DisplayServer.screen_get_size()
+	var available := Vector2i(maxi(320, screen_size.x - 32), maxi(240, screen_size.y - 64))
+	for child in get_tree().root.get_children():
+		if not child is Window or child == get_tree().root:
+			continue
+		var window := child as Window
+		var target_size := Vector2i(mini(window.size.x, available.x), mini(window.size.y, available.y))
+		if target_size != window.size:
+			window.size = target_size
+		window.min_size = Vector2i(mini(window.min_size.x, available.x), mini(window.min_size.y, available.y))
+		var target_position := Vector2i(
+			clampi(window.position.x, 0, maxi(0, screen_size.x - window.size.x)),
+			clampi(window.position.y, 0, maxi(0, screen_size.y - window.size.y))
+		)
+		if target_position != window.position:
+			window.position = target_position
 
 func _advance_fleet(delta: float) -> void:
 	if fleet_sims.is_empty() or not is_instance_valid(sim):
@@ -630,10 +649,14 @@ func _build_menu() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
+	var menu_scroll := ScrollContainer.new()
+	menu_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	center.add_child(menu_scroll)
 	menu_root = VBoxContainer.new()
-	menu_root.custom_minimum_size = Vector2(480, 0)
+	menu_root.custom_minimum_size = Vector2(minf(480.0, DisplayServer.screen_get_size().x - 48.0), 0)
 	menu_root.add_theme_constant_override("separation", 18)
-	center.add_child(menu_root)
+	menu_scroll.add_child(menu_root)
 
 	var title := Label.new()
 	title.text = "G R A V I T Y"
