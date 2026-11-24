@@ -39,17 +39,28 @@ func _initialize() -> void:
 	heavier["payload_mass"] = 5000.0
 	assert(RocketDesign.total_delta_v(heavier) < RocketDesign.total_delta_v(design))
 	var invalid_engine_count := design.duplicate(true)
-	invalid_engine_count["stages"][1]["engine_count"] = 9
+	invalid_engine_count["stages"][1]["engine_count"] = 0
 	assert(not RocketDesign.validation_errors(invalid_engine_count).is_empty())
-	var weak_upper_stage := design.duplicate(true)
-	weak_upper_stage["stages"][1]["vacuum_thrust"] = 100000.0
-	weak_upper_stage["stages"][1]["thrust"] = 80000.0
-	weak_upper_stage["stages"][1]["flow"] = 25.3
-	var weak_stage_errors := RocketDesign.validation_errors(weak_upper_stage)
-	assert(not weak_stage_errors.is_empty())
-	assert(str(weak_stage_errors).contains("ignition TWR"))
+	var low_thrust_upper_stage := design.duplicate(true)
+	low_thrust_upper_stage["stages"][1]["vacuum_thrust"] = 100000.0
+	low_thrust_upper_stage["stages"][1]["thrust"] = 80000.0
+	low_thrust_upper_stage["stages"][1]["flow"] = 25.3
+	assert(RocketDesign.validation_errors(low_thrust_upper_stage).is_empty())
+	var single_stage_design := {
+		"name": "Single Stage",
+		"payload_mass": 500.0,
+		"stages": [{
+			"dry_mass": 5000.0,
+			"fuel_capacity": 100000.0,
+			"thrust": 3000000.0,
+			"vacuum_thrust": 3500000.0,
+			"flow": 1000.0,
+			"engine_count": 1
+		}]
+	}
+	assert(RocketDesign.validation_errors(single_stage_design).is_empty())
 	var incomplete := design.duplicate(true)
-	incomplete["stages"].pop_back()
+	incomplete["stages"].clear()
 	assert(not RocketDesign.validation_errors(incomplete).is_empty())
 	for preset in RocketDesign.preset_options():
 		var preset_id := str(preset.get("id", ""))
@@ -58,8 +69,22 @@ func _initialize() -> void:
 		assert(preset_errors.is_empty(), "%s: %s" % [preset_id, str(preset_errors)])
 	var odyssey := RocketDesign.create_preset("DEEP_SPACE")
 	assert(is_equal_approx(RocketDesign.total_initial_mass(odyssey), 448500.0))
-	assert(RocketDesign.total_delta_v(odyssey) < RocketDesign.MAX_TOTAL_DELTA_V)
 	assert(RocketDesign.total_delta_v(odyssey) > RocketDesign.MIN_TOTAL_DELTA_V)
+	var extended_design := design.duplicate(true)
+	var light_stage: Dictionary = design["stages"][1].duplicate(true)
+	light_stage["dry_mass"] = 500.0
+	light_stage["fuel_capacity"] = 500.0
+	light_stage["thrust"] = 1000000.0
+	light_stage["vacuum_thrust"] = 1100000.0
+	light_stage["flow"] = 300.0
+	for i in range(7):
+		extended_design["stages"].append(light_stage.duplicate(true))
+	assert(extended_design["stages"].size() == 9)
+	assert(RocketDesign.validation_errors(extended_design).is_empty())
+	var high_engine_stage := RocketDesign.configure_stage("explorer_first_stage", 12, 10.0)
+	assert(not high_engine_stage.is_empty())
+	assert(int(high_engine_stage.engine_count) == 12)
+	assert(is_equal_approx(float(high_engine_stage.fuel_capacity), 3000000.0))
 	assert(RocketDesign.engine_count_options().has(5) == false)
 	assert(RocketDesign.payload_options().size() >= 5)
 	assert(RocketDesign.tank_scale_options().size() >= 3)
@@ -130,7 +155,7 @@ func _initialize() -> void:
 			"builder_options": {
 				"engine_counts_add": [5],
 				"payloads_add": [{"id": "test_payload", "label": "Test payload · 2 t", "mass": 2000.0}],
-				"tank_scales_add": [{"label": "Test tank", "scale": 1.5}]
+				"tank_scales_add": [{"label": "Test tank", "scale": 2.5}]
 			}
 		}
 	}
@@ -151,7 +176,7 @@ func _initialize() -> void:
 	assert(has_test_payload)
 	var has_test_tank_scale := false
 	for tank_option in RocketDesign.tank_scale_options():
-		if is_equal_approx(float(tank_option.scale), 1.5):
+		if is_equal_approx(float(tank_option.scale), 2.5):
 			has_test_tank_scale = true
 	assert(has_test_tank_scale)
 	var modded_stage := RocketDesign.configure_stage("explorer_first_stage", 5, 1.5)

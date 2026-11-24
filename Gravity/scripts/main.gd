@@ -398,9 +398,9 @@ func _show_vehicle_editor() -> void:
 	payload_row.add_child(payload_selector)
 	var payload_limits := RocketDesign.payload_mass_limits()
 	var payload_mass_input := SpinBox.new()
-	payload_mass_input.min_value = float(payload_limits.get("minimum", 10.0))
-	payload_mass_input.max_value = float(payload_limits.get("maximum", 100000.0))
-	payload_mass_input.step = float(payload_limits.get("step", 10.0))
+	payload_mass_input.min_value = float(payload_limits.get("minimum", 0.001))
+	payload_mass_input.max_value = float(payload_limits.get("maximum", 1.0e300))
+	payload_mass_input.step = float(payload_limits.get("step", 1.0))
 	payload_mass_input.value = current_payload_mass
 	payload_mass_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	payload_mass_input.tooltip_text = "Set the payload mass directly in kilograms."
@@ -541,8 +541,6 @@ func _show_vehicle_editor() -> void:
 		new_stage_selector.add_item(str(part_option.label))
 		new_stage_selector.set_item_metadata(new_stage_selector.item_count - 1, str(part_option.id))
 	_add_button(component_row, "ADD STAGE", func():
-		if rocket_design["stages"].size() >= RocketDesign.MAX_STAGES:
-			return
 		var new_stage := RocketDesign.configure_stage(str(new_stage_selector.get_item_metadata(new_stage_selector.selected)), 1, 1.0)
 		if not new_stage.is_empty():
 			rocket_design["stages"].append(new_stage)

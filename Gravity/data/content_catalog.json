@@ -327,13 +327,17 @@
         {"id": "cargo", "label": "Cargo module · 8 t", "mass": 8000},
         {"id": "heavy_cargo", "label": "Heavy cargo · 12 t", "mass": 12000}
       ],
-      "engine_counts": [1, 2, 3, 4, 6, 8],
+      "engine_counts": [1, 2, 3, 4, 6, 8, 12, 16, 20, 24, 32],
       "tank_scales": [
         {"label": "Compact tank", "scale": 0.75},
         {"label": "Standard tank", "scale": 1.0},
-        {"label": "Extended tank", "scale": 1.25}
-      ],
-      "payload_mass_limits": {"minimum": 10, "maximum": 100000, "step": 10}
+        {"label": "Extended tank", "scale": 1.25},
+        {"label": "Large tank", "scale": 1.5},
+        {"label": "Heavy tank", "scale": 2.0},
+        {"label": "Oversized tank", "scale": 3.0},
+        {"label": "Very large tank", "scale": 5.0},
+        {"label": "Extreme tank", "scale": 10.0}
+      ]
     }
   }
 }

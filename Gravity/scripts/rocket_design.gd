@@ -4,11 +4,8 @@ class_name RocketDesign
 const ContentCatalog = preload("res://scripts/content_catalog.gd")
 
 const G0 := 9.80665
-const MIN_STAGES := 2
-const MAX_STAGES := 8
-const MAX_TOTAL_MASS := 5000000.0
+const MIN_STAGES := 1
 const MIN_TOTAL_DELTA_V := 8500.0
-const MAX_TOTAL_DELTA_V := 16500.0
 
 static func _rocket_catalog() -> Dictionary:
 	var catalog: Dictionary = ContentCatalog.get_catalog()
@@ -19,7 +16,11 @@ static func payload_options() -> Array:
 	return options.duplicate(true)
 
 static func payload_mass_limits() -> Dictionary:
-	var limits: Dictionary = _rocket_catalog().get("builder_options", {}).get("payload_mass_limits", {})
+	var limits: Dictionary = _rocket_catalog().get("builder_options", {}).get("payload_mass_limits", {
+		"minimum": 0.001,
+		"maximum": 1.0e300,
+		"step": 1.0
+	})
 	return limits.duplicate(true)
 
 static func engine_count_options() -> Array:
@@ -175,15 +176,15 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 	var payload_limits := payload_mass_limits()
 	var minimum_payload := float(payload_limits.get("minimum", 10.0))
 	var maximum_payload := float(payload_limits.get("maximum", 100000.0))
-	if stages.size() < MIN_STAGES or stages.size() > MAX_STAGES:
-		errors.append("A vehicle must have between 2 and 8 stages.")
-	if payload < minimum_payload or payload > maximum_payload:
-		errors.append("Payload must be between %.0f kg and %.0f kg." % [minimum_payload, maximum_payload])
+	if stages.size() < MIN_STAGES:
+		errors.append("A vehicle must have at least one stage.")
+	if payload <= 0.0:
+		errors.append("Payload mass must be positive.")
+	elif _rocket_catalog().get("builder_options", {}).has("payload_mass_limits") and (payload < minimum_payload or payload > maximum_payload):
+		errors.append("Payload must be between %.3f kg and %.0f kg." % [minimum_payload, maximum_payload])
 	if stages.is_empty():
 		return errors
 	var total_mass := total_initial_mass(design)
-	if total_mass > MAX_TOTAL_MASS:
-		errors.append("Total launch mass cannot exceed 5,000 tonnes.")
 	if total_mass <= 0.0:
 		errors.append("Total vehicle mass must be positive.")
 	for i in range(stages.size()):
@@ -194,48 +195,26 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		var vacuum_thrust := float(stage.get("vacuum_thrust", 0.0))
 		var flow := float(stage.get("flow", 0.0))
 		var engines := int(stage.get("engine_count", 0))
-		if dry < 500.0 or dry > 200000.0:
-			errors.append("Stage %d dry mass must be 500–200,000 kg." % (i + 1))
-		if fuel < 500.0 or fuel > 1000000.0:
-			errors.append("Stage %d propellant must be 500–1,000,000 kg." % (i + 1))
-		if sea_thrust < 100000.0 or sea_thrust > 20000000.0:
-			errors.append("Stage %d sea-level thrust per engine must be 0.1–20 MN." % (i + 1))
-		if vacuum_thrust < 100000.0 or vacuum_thrust > 22000000.0:
-			errors.append("Stage %d vacuum thrust per engine must be 0.1–22 MN." % (i + 1))
-		if flow < 20.0 or flow > 8000.0:
-			errors.append("Stage %d fuel flow per engine must be 20–8,000 kg/s." % (i + 1))
-		if engines < 1 or engines > 8:
-			errors.append("Stage %d must have between 1 and 8 engines." % (i + 1))
 		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0:
+			errors.append("Stage %d mass, propellant, thrust and flow values must all be positive." % (i + 1))
+		if engines < 1:
+			errors.append("Stage %d must have at least one engine." % (i + 1))
+		if dry <= 0.0 or fuel <= 0.0 or flow <= 0.0 or sea_thrust <= 0.0 or vacuum_thrust <= 0.0 or engines < 1:
 			continue
-		var dry_fraction := dry / (dry + fuel)
-		if dry_fraction < 0.05 or dry_fraction > 0.35:
-			errors.append("Stage %d has an unrealistic dry-mass-to-propellant ratio." % (i + 1))
 		if vacuum_thrust < sea_thrust:
 			errors.append("Stage %d vacuum thrust cannot be lower than sea-level thrust." % (i + 1))
 		var sea_isp := stage_specific_impulse(stage, false)
 		var vacuum_isp := stage_specific_impulse(stage, true)
-		if sea_isp < 220.0 or sea_isp > 380.0:
-			errors.append("Stage %d sea-level engine efficiency must be 220–380 seconds Isp." % (i + 1))
-		if vacuum_isp < 250.0 or vacuum_isp > 465.0:
-			errors.append("Stage %d vacuum engine efficiency must be 250–465 seconds Isp." % (i + 1))
-		if vacuum_isp < sea_isp or vacuum_isp - sea_isp > 120.0:
-			errors.append("Stage %d has an unrealistic sea-level/vacuum efficiency difference." % (i + 1))
+		if sea_isp <= 0.0 or vacuum_isp <= 0.0:
+			errors.append("Stage %d must have positive engine efficiency." % (i + 1))
 		var ignition_mass := stage_ignition_mass(design, i)
 		var ignition_thrust := sea_thrust if i == 0 else vacuum_thrust
 		var thrust_to_weight := ignition_thrust * engines / maxf(1.0, ignition_mass * G0)
-		var burnout_mass := ignition_mass - fuel
-		var burnout_twr := ignition_thrust * engines / maxf(1.0, burnout_mass * G0)
-		if i == 0 and (thrust_to_weight < 1.1 or thrust_to_weight > 2.5):
-			errors.append("First-stage pad TWR must be between 1.10 and 2.50.")
-		elif i > 0 and (thrust_to_weight < 0.65 or thrust_to_weight > 3.5):
-			errors.append("Stage %d ignition TWR must be between 0.65 and 3.50 to sustain a practical ascent or orbital burn." % (i + 1))
-		if burnout_twr > 8.0:
-			errors.append("Stage %d burnout acceleration is too high; reduce thrust or increase dry mass." % (i + 1))
+		if i == 0 and thrust_to_weight < 1.0:
+			errors.append("First-stage pad TWR must be at least 1.00 to lift off from Earth.")
 	if total_mass > 0.0 and stages.size() >= MIN_STAGES:
 		var delta_v := total_delta_v(design)
 		if delta_v < MIN_TOTAL_DELTA_V:
 			errors.append("Vehicle ideal delta-v is too low for a credible Earth launch (minimum 8.5 km/s).")
-		if delta_v > MAX_TOTAL_DELTA_V:
-			errors.append("Vehicle ideal delta-v exceeds the 16.5 km/s design limit.")
+		
 	return errors
