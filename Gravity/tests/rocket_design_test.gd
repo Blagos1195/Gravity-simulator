@@ -201,6 +201,10 @@ func _initialize() -> void:
 			}
 		}
 	}
+	var invalid_payload_overlay: Dictionary = mod_overlay.duplicate(true)
+	invalid_payload_overlay["rocket"]["builder_options"]["payloads_add"][0]["visual_type"] = "spaceship"
+	var invalid_payload_catalog := ContentCatalog._merge_overlay(ContentCatalog.get_catalog(), invalid_payload_overlay)
+	assert(not ContentCatalog._catalog_error(invalid_payload_catalog).is_empty())
 	var merged_catalog := ContentCatalog._merge_overlay(ContentCatalog.get_catalog(), mod_overlay)
 	assert(ContentCatalog._catalog_error(merged_catalog).is_empty())
 	assert(merged_catalog.planets.size() == ContentCatalog.get_catalog().planets.size() + 1)
