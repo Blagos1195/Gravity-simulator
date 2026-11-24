@@ -26,23 +26,22 @@ func _generate() -> void:
 		push_error("Could not save splash.png: %s" % error_string(splash_error))
 		quit(1)
 		return
-	var icon_error := _generate_windows_icon()
+	var icon_image := image.get_region(Rect2i(840, 0, 1080, 1080))
+	icon_image.resize(256, 256, Image.INTERPOLATE_LANCZOS)
+	var icon_png_error := icon_image.save_png(ProjectSettings.globalize_path("res://icon.png"))
+	if icon_png_error != OK:
+		push_error("Could not save icon.png: %s" % error_string(icon_png_error))
+		quit(1)
+		return
+	var icon_error := _generate_windows_icon(icon_image)
 	if icon_error != OK:
 		push_error("Could not generate icon.ico: %s" % error_string(icon_error))
 		quit(1)
 		return
-	print("Generated splash.png and icon.ico")
+	print("Generated splash.png, icon.png and icon.ico")
 	quit()
 
-func _generate_windows_icon() -> Error:
-	var svg := FileAccess.get_file_as_string("res://icon.svg")
-	if svg.is_empty():
-		return ERR_FILE_NOT_FOUND
-	var icon_image: Image = Image.new()
-	var svg_error: Error = icon_image.load_svg_from_string(svg, 1.0)
-	if svg_error != OK or icon_image.is_empty():
-		return ERR_FILE_CANT_READ if svg_error == OK else svg_error
-	icon_image.resize(256, 256, Image.INTERPOLATE_LANCZOS)
+func _generate_windows_icon(icon_image: Image) -> Error:
 	var png: PackedByteArray = icon_image.save_png_to_buffer()
 	if png.is_empty():
 		return ERR_CANT_CREATE
