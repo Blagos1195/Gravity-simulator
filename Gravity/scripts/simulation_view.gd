@@ -112,6 +112,9 @@ var crashed := false
 var landed_body_name := "Earth"
 var landed_surface_normal := Vector2.UP
 var discovered_body_names: Dictionary = {"Earth": true, "Moon": true}
+var telescope_active := false
+var telescope_direction_angle := 0.0
+var telescope_field_of_view := deg_to_rad(30.0)
 var visited_body_names: Dictionary = {"Earth": true}
 var passive_orbit_active := false
 var passive_orbit_forced := false
@@ -1321,6 +1324,10 @@ func _input(event: InputEvent) -> void:
 		return
 	var ignite_pressed: bool = event.is_action_pressed("engine_toggle") or event.keycode == KEY_W or event.physical_keycode == KEY_W
 	var cutoff_pressed: bool = event.is_action_pressed("throttle_cutoff") or event.keycode == KEY_S or event.physical_keycode == KEY_S
+	if event.keycode == KEY_T or event.physical_keycode == KEY_T:
+		if str(payload_visual.get("visual_type", "")) == "satellite" and float(payload_visual.get("telescope_range_au", 0.0)) > 0.0:
+			telescope_active = not telescope_active
+			status_message = "TELESCOPE ACTIVE  •  AIM WITH , AND ." if telescope_active else "TELESCOPE STANDBY"
 	if ignite_pressed:
 		if autopilot_enabled:
 			autopilot_enabled = false
@@ -1377,6 +1384,10 @@ func _unhandled_input(event: InputEvent) -> void:
 					show_solar_system = not show_solar_system
 				KEY_G:
 					show_grid = not show_grid
+				KEY_COMMA:
+					telescope_direction_angle = wrapf(telescope_direction_angle - deg_to_rad(5.0), -PI, PI)
+				KEY_PERIOD:
+					telescope_direction_angle = wrapf(telescope_direction_angle + deg_to_rad(5.0), -PI, PI)
 				KEY_V:
 					show_vectors = not show_vectors
 				KEY_Q:
