@@ -50,6 +50,14 @@ func _initialize() -> void:
 			editor_found = true
 			break
 	assert(editor_found, "The component assembly editor did not open")
+	var performance_summary_found := false
+	for child in main.get_children():
+		if child is Window and str(child.title).contains("COMPONENT ASSEMBLY"):
+			for label in child.find_children("*", "Label", true, false):
+				if str(label.text).contains("TWR") and str(label.text).contains("vehicle Δv"):
+					performance_summary_found = true
+					break
+	assert(performance_summary_found, "The component editor does not show live TWR and vehicle delta-v")
 	print("Rocket component assembly tests passed.")
 	main.queue_free()
 	quit()
