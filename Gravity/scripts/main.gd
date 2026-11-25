@@ -2490,20 +2490,28 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 		return 0.0
 	var donor := _find_vehicle_by_name(from_name)
 	var recipient := _find_vehicle_by_name(to_name)
-	if donor == null or recipient == null or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel:
+	if donor == null or recipient == null:
 		return 0.0
-	var available_space := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
-	var amount := minf(donor.total_propellant_remaining(), available_space)
-	if amount <= 0.0:
-		return 0.0
-	var removed := donor.remove_propellant(amount)
-	var added := recipient.add_propellant(removed)
-	if added < removed:
-		donor.add_propellant(removed - added)
-	amount = added
-	_update_docked_masses()
-	_sync_docked_vehicles()
-	return amount
+	var transferred := 0.0
+	if not donor.infinite_weightless_fuel and not recipient.infinite_weightless_fuel:
+		var available_space := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
+		var amount := minf(donor.total_propellant_remaining(), available_space)
+		if amount > 0.0:
+			var removed := donor.remove_propellant(amount)
+			var added := recipient.add_propellant(removed)
+			if added < removed:
+				donor.add_propellant(removed - added)
+			transferred += added
+	var rcs_space := maxf(0.0, recipient._remaining_rcs_propellant_capacity() - recipient.rcs_propellant_remaining)
+	var rcs_amount := minf(donor.rcs_propellant_remaining, rcs_space)
+	if rcs_amount > 0.0:
+		donor.rcs_propellant_remaining -= rcs_amount
+		recipient.rcs_propellant_remaining += rcs_amount
+		transferred += rcs_amount
+	if transferred > 0.0:
+		_update_docked_masses()
+		_sync_docked_vehicles()
+	return transferred
 
 func _build_flight_hud() -> void:
 	mode = "flight"
