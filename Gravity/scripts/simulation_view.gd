@@ -532,6 +532,7 @@ func remove_propellant(amount: float) -> float:
 	return requested - remaining
 
 func add_propellant(amount: float) -> float:
+	_reconcile_legacy_fuel_inventory()
 	var remaining := maxf(0.0, amount)
 	var requested := remaining
 	for index in range(stage_index, rocket_stages.size()):
@@ -628,7 +629,7 @@ func _engine_force_profile(center_of_mass: Vector2, pressure_ratio: float, thrus
 	var electric_draw := 0.0
 	for engine in engines:
 		var fuel_type := str(engine.get("fuel_type", "liquid_propellant"))
-		if fuel_type != "liquid_propellant" and resource_amount(fuel_type) <= 0.0000001:
+		if not (fuel_type == "liquid_propellant" and infinite_weightless_fuel) and resource_amount(fuel_type) <= 0.0000001:
 			continue
 		var engine_power := maxf(0.0, float(engine.get("electric_draw_w", 0.0)))
 		if engine_power > 0.0 and resource_amount("electricity") <= 0.0:
@@ -1357,7 +1358,8 @@ func _separate_stage() -> void:
 	resource_tanks = remaining_resource_tanks
 	velocity = upper_stack_velocity
 	stage_index += 1
-	fuel = stage_fuel_remaining[stage_index]
+	_sync_legacy_fuel_from_tanks()
+	fuel = stage_fuel_remaining[stage_index] + maxf(0.0, fuel - separated_fuel)
 	infinite_fuel_stage_remaining = fuel
 	thrust_key_down = false
 

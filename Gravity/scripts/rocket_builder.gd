@@ -434,7 +434,7 @@ func _build_interface() -> void:
 	)
 	parts_column.add_child(_search_input)
 	_part_filter = OptionButton.new()
-	for category in ["all", "tank", "engine", "decoupler", "structure", "rcs", "docking_port", "radial"]:
+	for category in ["all", "tank", "engine", "decoupler", "structure", "rcs", "docking_port", "power", "radial"]:
 		_part_filter.add_item(category.capitalize())
 		_part_filter.set_item_metadata(_part_filter.item_count - 1, category)
 	_part_filter.item_selected.connect(func(index: int):

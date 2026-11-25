@@ -2576,6 +2576,14 @@ func _undock_vehicle(target_name: String) -> bool:
 		return true
 	return false
 
+func _resource_inventory_owner(vehicle: SimulationView) -> SimulationView:
+	if vehicle == null:
+		return null
+	for link in docking_links:
+		if str(link.get("child_name", "")) == vehicle.vehicle_name:
+			return _find_vehicle_by_name(str(link.get("parent_name", "")))
+	return vehicle
+
 func _transfer_between_tanks(source_vehicle_name: String, source_part_id: String, destination_vehicle_name: String, destination_part_id: String, resource: String, amount: float) -> float:
 	var source_vehicle := _find_vehicle_by_name(source_vehicle_name)
 	var destination_vehicle := _find_vehicle_by_name(destination_vehicle_name)
@@ -2584,20 +2592,21 @@ func _transfer_between_tanks(source_vehicle_name: String, source_part_id: String
 	var connected := source_vehicle == destination_vehicle or _are_docked(source_vehicle_name, destination_vehicle_name)
 	if not connected:
 		return 0.0
-	for source_index in range(source_vehicle.resource_tanks.size()):
-		if str(source_vehicle.resource_tanks[source_index].get("part_uid", "")) != source_part_id:
+	var inventory_owner := _resource_inventory_owner(source_vehicle)
+	if inventory_owner == null or inventory_owner != _resource_inventory_owner(destination_vehicle):
+		return 0.0
+	for source_index in range(inventory_owner.resource_tanks.size()):
+		if str(inventory_owner.resource_tanks[source_index].get("part_uid", "")) != source_part_id:
 			continue
-		for destination_index in range(destination_vehicle.resource_tanks.size()):
-			if str(destination_vehicle.resource_tanks[destination_index].get("part_uid", "")) != destination_part_id:
+		for destination_index in range(inventory_owner.resource_tanks.size()):
+			if str(inventory_owner.resource_tanks[destination_index].get("part_uid", "")) != destination_part_id:
 				continue
-			var source: Dictionary = source_vehicle.resource_tanks[source_index].duplicate(true)
-			var destination: Dictionary = destination_vehicle.resource_tanks[destination_index].duplicate(true)
+			var source: Dictionary = inventory_owner.resource_tanks[source_index].duplicate(true)
+			var destination: Dictionary = inventory_owner.resource_tanks[destination_index].duplicate(true)
 			var transferred := ResourceNetwork.transfer_between_tanks(source, destination, resource, amount, true)
-			source_vehicle.resource_tanks[source_index] = source
-			destination_vehicle.resource_tanks[destination_index] = destination
-			source_vehicle._sync_legacy_fuel_from_tanks()
-			if destination_vehicle != source_vehicle:
-				destination_vehicle._sync_legacy_fuel_from_tanks()
+			inventory_owner.resource_tanks[source_index] = source
+			inventory_owner.resource_tanks[destination_index] = destination
+			inventory_owner._sync_legacy_fuel_from_tanks()
 			if transferred > 0.0:
 				_update_docked_masses()
 				_sync_docked_vehicles()
@@ -2665,7 +2674,12 @@ func _show_tank_transfer_panel() -> void:
 		var vehicle := _find_vehicle_by_name(vehicle_picker.get_item_text(vehicle_picker.selected))
 		if vehicle == null:
 			return
-		for tank in vehicle.resource_tanks:
+		var inventory_owner := _resource_inventory_owner(vehicle)
+		if inventory_owner == null:
+			return
+		for tank in inventory_owner.resource_tanks:
+			if str(tank.get("module_id", vehicle.vehicle_name)) != vehicle.vehicle_name:
+				continue
 			var capacities: Dictionary = tank.get("resource_capacities", {})
 			var resources: Dictionary = tank.get("resources", {})
 			var resource_names: PackedStringArray = []
@@ -2684,12 +2698,16 @@ func _show_tank_transfer_panel() -> void:
 		var destination_vehicle_value := _find_vehicle_by_name(destination_vehicle.get_item_text(destination_vehicle.selected))
 		if source_vehicle_value == null or destination_vehicle_value == null:
 			return
+		var source_owner := _resource_inventory_owner(source_vehicle_value)
+		var destination_owner := _resource_inventory_owner(destination_vehicle_value)
+		if source_owner == null or destination_owner != source_owner:
+			return
 		var source_state: Dictionary = {}
 		var destination_state: Dictionary = {}
-		for tank in source_vehicle_value.resource_tanks:
+		for tank in source_owner.resource_tanks:
 			if str(tank.get("part_uid", "")) == str(source_tank.get_item_metadata(source_tank.selected)):
 				source_state = tank
-		for tank in destination_vehicle_value.resource_tanks:
+		for tank in source_owner.resource_tanks:
 			if str(tank.get("part_uid", "")) == str(destination_tank.get_item_metadata(destination_tank.selected)):
 				destination_state = tank
 		var source_caps: Dictionary = source_state.get("resource_capacities", {})
