@@ -373,7 +373,7 @@ func _build_interface() -> void:
 	)
 	header_actions.add_child(new_vehicle)
 	var mirror := CheckButton.new()
-	mirror.text = "MIRROR NEW RADIAL PARTS"
+	mirror.text = "MIRROR NEW SIDE PARTS"
 	mirror.button_pressed = true
 	mirror.toggled.connect(func(enabled: bool):
 		mirror_enabled = enabled
@@ -437,7 +437,7 @@ func _build_interface() -> void:
 	center_column.add_theme_constant_override("separation", 6)
 	center_panel.add_child(center_column)
 	var canvas_heading := Label.new()
-	canvas_heading.text = "ASSEMBLY VIEW  •  SNAP PARTS TO STACK NODES OR SIDE MOUNTS"
+	canvas_heading.text = "ASSEMBLY VIEW  •  STACK PARTS CENTRALLY OR MOUNT THEM BESIDE THE STACK"
 	canvas_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	canvas_heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	canvas_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
