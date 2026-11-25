@@ -2295,6 +2295,20 @@ func _rename_vehicle(vehicle_name: String, requested_name: String) -> bool:
 			return false
 	var previous_name := vehicle.vehicle_name
 	vehicle.vehicle_name = clean_name
+	for owner in fleet_sims:
+		for tank_index in range(owner.resource_tanks.size()):
+			var tank: Dictionary = owner.resource_tanks[tank_index]
+			if str(tank.get("module_id", "")) == previous_name:
+				tank["module_id"] = clean_name
+				owner.resource_tanks[tank_index] = tank
+		for stage_index_value in range(owner.staging_plan.size()):
+			var stage: Dictionary = owner.staging_plan[stage_index_value]
+			var actions: Array = stage.get("actions", []).duplicate(true)
+			for action_index in range(actions.size()):
+				if str(actions[action_index].get("module_id", "")) == previous_name:
+					actions[action_index]["module_id"] = clean_name
+			stage["actions"] = actions
+			owner.staging_plan[stage_index_value] = stage
 	if docking_assists.has(previous_name):
 		docking_assists[clean_name] = docking_assists[previous_name]
 		docking_assists.erase(previous_name)
