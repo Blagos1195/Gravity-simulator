@@ -1632,11 +1632,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event.pressed or event.echo:
 		return
 	if event.is_action_pressed("rotate_left"):
-		if not has_rcs_installed():
+		if not has_rcs():
 			rotation_angle = wrapf(rotation_angle - 0.12, -PI, PI)
 			angular_velocity = 0.0
 	elif event.is_action_pressed("rotate_right"):
-		if not has_rcs_installed():
+		if not has_rcs():
 			rotation_angle = wrapf(rotation_angle + 0.12, -PI, PI)
 			angular_velocity = 0.0
 	elif event.is_action_pressed("pause_game"):
