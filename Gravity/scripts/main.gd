@@ -2600,6 +2600,7 @@ func _dock_vehicle(target_name: String) -> bool:
 	target.resource_tanks.clear()
 	target.resource_inventory_external = true
 	target.fuel = 0.0
+	target.rcs_propellant_remaining = 0.0
 	docking_links.append({
 		"parent_name": sim.vehicle_name,
 		"child_name": target.vehicle_name,
