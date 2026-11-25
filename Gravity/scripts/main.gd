@@ -2803,14 +2803,14 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 		_sync_docked_vehicles()
 	else:
 		if not donor.infinite_weightless_fuel and not recipient.infinite_weightless_fuel:
-		var available_space := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
-		var amount := minf(donor.total_propellant_remaining(), available_space)
-		if amount > 0.0:
-			var removed := donor.remove_propellant(amount)
-			var added := recipient.add_propellant(removed)
-			if added < removed:
-				donor.add_propellant(removed - added)
-			transferred += added
+			var available_space := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
+			var amount := minf(donor.total_propellant_remaining(), available_space)
+			if amount > 0.0:
+				var removed := donor.remove_propellant(amount)
+				var added := recipient.add_propellant(removed)
+				if added < removed:
+					donor.add_propellant(removed - added)
+				transferred += added
 	var rcs_space := maxf(0.0, recipient._remaining_rcs_propellant_capacity() - recipient.rcs_propellant_remaining)
 	var rcs_amount := minf(donor.rcs_propellant_remaining, rcs_space)
 	if rcs_amount > 0.0:
