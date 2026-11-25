@@ -186,15 +186,19 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 	var total_length := 0.0
 	var widest_radius := 0.1
 	var side_radius := 0.0
+	var side_mount_radii: Dictionary = {}
 	for component in ordered:
 		var attachment := str(component.get("attachment", "stack"))
 		if attachment == "radial":
 			continue
 		if attachment == "side":
-			side_radius = maxf(side_radius, float(component.get("collision_radius_m", 1.0)))
+			var mount_index := int(component.get("mount_index", -1))
+			side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 1.0))
 			continue
 		total_length += maxf(0.1, float(component.get("length_m", 1.0)))
 		widest_radius = maxf(widest_radius, float(component.get("collision_radius_m", 1.0)))
+	for mount_radius in side_mount_radii.values():
+		side_radius = maxf(side_radius, float(mount_radius))
 	var current_y := y
 	var mount_positions: Dictionary = {}
 	for component_index in range(ordered.size()):
