@@ -120,7 +120,7 @@ class AssemblyCanvas extends Control:
 					continue
 				if attachment == "side":
 					var mount_index := int(component.get("mount_index", -1))
-					side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 1.0)) * 0.9
+					side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 1.0)) * 1.75
 					continue
 				total_length += maxf(0.5, float(component.get("length_m", 1.0)))
 				core_radius = maxf(core_radius, float(component.get("collision_radius_m", 1.0)))
@@ -177,7 +177,7 @@ class AssemblyCanvas extends Control:
 			var y := float(axial_centers.get(mount_index, start_y + (current_y - start_y) * 0.5)) - height * 0.5
 			var mount_radius := float(side_mount_offsets.get(mount_index, core_radius))
 			var offset := (mount_radius + component_radius * 0.9) * width_scale
-			side_mount_offsets[mount_index] = mount_radius + component_radius * 1.8
+			side_mount_offsets[mount_index] = offset / width_scale + component_radius * 0.85
 			var side := int(component.get("side", 1))
 			var sides: Array = [-1, 1] if bool(component.get("mirror", true)) else [side]
 			for direction in sides:
@@ -185,7 +185,7 @@ class AssemblyCanvas extends Control:
 				_draw_part(rect, component, editable and index == selected_index, 1.0 if editable else 0.34)
 				if editable:
 					_component_rects.append({"index": index, "rect": rect, "attachment": "side"})
-				draw_line(Vector2(center_x + float(direction) * core_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
+				draw_line(Vector2(center_x + float(direction) * mount_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
 			if str(component.get("attachment", "stack")) != "radial":
