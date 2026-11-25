@@ -34,8 +34,9 @@ func _initialize() -> void:
 	main._apply_docking_assists(1.0)
 	assert(parent.velocity.x < 12.0 and parent.velocity.x > 0.0, "Rendezvous assist did not brake relative closing speed")
 	parent.velocity = Vector2.ZERO
+	var expected_assist_delta_v := minf(0.15, 18000.0 / parent._current_vehicle_mass())
 	main._apply_docking_assists(1.0)
-	assert(is_equal_approx(parent.velocity.x, 0.15), "Rendezvous assist did not accelerate towards its target within its thrust limit")
+	assert(is_equal_approx(parent.velocity.x, expected_assist_delta_v), "Rendezvous assist did not use the available RCS thrust")
 	main.docking_assists.clear()
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
