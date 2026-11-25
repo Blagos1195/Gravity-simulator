@@ -39,6 +39,36 @@ func _initialize() -> void:
 	assert(is_equal_approx(RocketDesign.stage_total_thrust(side_engine), original_thrust + 5600000.0))
 	assert(is_equal_approx(RocketDesign.stage_total_thrust(side_engine, true), original_vacuum_thrust + 6200000.0))
 	assert(is_equal_approx(RocketDesign.stage_total_flow(side_engine), original_flow + 1800.0))
+	var one_sided_engine := RocketAssembly.add_component(assembled, "heavy_engine", "side", false, 1, 0)
+	var one_sided_engine_elements := RocketAssembly.stage_engine_elements(one_sided_engine, 1.0)
+	var one_sided_torque := 0.0
+	for engine in one_sided_engine_elements:
+		one_sided_torque += Vector2(engine.position).cross(Vector2.UP * float(engine.thrust))
+	assert(absf(one_sided_torque) > 1.0, "A one-sided engine should produce torque")
+	var mirrored_engine := RocketAssembly.add_component(assembled, "heavy_engine", "side", true, 1, 0)
+	var mirrored_engine_elements := RocketAssembly.stage_engine_elements(mirrored_engine, 1.0)
+	var mirrored_torque := 0.0
+	for engine in mirrored_engine_elements:
+		mirrored_torque += Vector2(engine.position).cross(Vector2.UP * float(engine.thrust))
+	assert(absf(mirrored_torque) < 0.001, "Mirrored engines should cancel their axial thrust torque")
+	var one_sided_tank := RocketAssembly.add_component(assembled, "medium_tank", "side", false, 1, 0)
+	var full_mass_elements := RocketAssembly.stage_mass_elements(one_sided_tank, RocketDesign.stage_total_fuel_capacity(one_sided_tank))
+	var empty_mass_elements := RocketAssembly.stage_mass_elements(one_sided_tank, 0.0)
+	var full_mass := 0.0
+	var full_weighted_x := 0.0
+	var empty_mass := 0.0
+	var empty_weighted_x := 0.0
+	for element in full_mass_elements:
+		var element_mass := float(element.mass)
+		full_mass += element_mass
+		full_weighted_x += element_mass * Vector2(element.position).x
+	for element in empty_mass_elements:
+		var element_mass := float(element.mass)
+		empty_mass += element_mass
+		empty_weighted_x += element_mass * Vector2(element.position).x
+	var full_com_x := full_weighted_x / full_mass
+	var empty_com_x := empty_weighted_x / empty_mass
+	assert(full_com_x > empty_com_x and empty_com_x > 0.0, "Fuel mass should shift the centre of mass towards a one-sided tank")
 	var with_engine := RocketAssembly.add_component(with_tank, "vacuum_engine")
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(with_engine), original_dry_mass + 6900.0))
 	assert(is_equal_approx(RocketDesign.stage_total_thrust(with_engine, true), original_vacuum_thrust + 310000.0))
