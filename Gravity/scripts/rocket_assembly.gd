@@ -165,6 +165,162 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 		configured["visual_color_rgb"] = tank_color.duplicate(true)
 	return configured
 
+static func stage_geometry(stage: Dictionary) -> Dictionary:
+	var configured := ensure_stage_components(stage)
+	var components: Array = configured.get("components", [])
+	var stage_length := 0.0
+	var core_radius := 0.5
+	for component_variant in components:
+		if not component_variant is Dictionary:
+			continue
+		var component: Dictionary = component_variant
+		var radius := maxf(0.1, float(component.get("collision_radius_m", 0.5)))
+		if str(component.get("attachment", "stack")) == "stack":
+			stage_length += maxf(0.1, float(component.get("length_m", 1.0)))
+			core_radius = maxf(core_radius, radius)
+	if stage_length <= 0.0:
+		stage_length = maxf(1.0, float(configured.get("physical_length_m", 1.0)))
+	var mount_positions: Dictionary = {}
+	var cursor := stage_length * 0.5
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		if str(component.get("attachment", "stack")) != "stack":
+			continue
+		var component_length := maxf(0.1, float(component.get("length_m", 1.0)))
+		mount_positions[index] = cursor - component_length * 0.5
+		cursor -= component_length
+	var component_positions: Dictionary = {}
+	var side_mount_offsets: Dictionary = {}
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		var attachment := str(component.get("attachment", "stack"))
+		var positions: Array[Vector2] = []
+		if attachment == "stack":
+			positions.append(Vector2(0.0, float(mount_positions.get(index, 0.0))))
+		elif attachment in ["side", "radial"]:
+			var mount_index := int(component.get("mount_index", -1))
+			var component_radius := maxf(0.1, float(component.get("collision_radius_m", 1.0)))
+			var offset := float(side_mount_offsets.get(mount_index, core_radius)) + component_radius * 0.9
+			side_mount_offsets[mount_index] = offset + component_radius * 0.85
+			var y := float(mount_positions.get(mount_index, 0.0))
+			var sides: Array = [-1.0, 1.0] if bool(component.get("mirror", true)) else [float(component.get("side", 1))]
+			for direction in sides:
+				positions.append(Vector2(float(direction) * offset, y))
+		component_positions[index] = positions
+	var booster_positions: Dictionary = {}
+	var booster_lanes: Dictionary = {}
+	var boosters: Array = configured.get("boosters", [])
+	for index in range(boosters.size()):
+		var booster_entry: Variant = boosters[index]
+		if not booster_entry is Dictionary or booster_entry.has("source_component_id"):
+			continue
+		var definition := RocketDesign.booster_definition_for_entry(booster_entry)
+		if definition.is_empty():
+			continue
+		var mount_index := int(booster_entry.get("mount_index", -1))
+		var radius := maxf(0.1, float(definition.get("collision_radius_m", 0.8)))
+		var offset := float(booster_lanes.get(mount_index, core_radius)) + radius * 1.75
+		booster_lanes[mount_index] = offset + radius * 1.7
+		var y := float(mount_positions.get(mount_index, 0.0))
+		var pair_count := maxi(1, int(definition.get("pair_count", 2)))
+		var sides: Array = [-1.0, 1.0] if pair_count == 2 else [float(booster_entry.get("side", 1))]
+		var positions: Array[Vector2] = []
+		for direction in sides:
+			positions.append(Vector2(float(direction) * offset, y))
+		booster_positions[index] = positions
+	return {
+		"stage": configured,
+		"length": stage_length,
+		"component_positions": component_positions,
+		"booster_positions": booster_positions
+	}
+
+static func stage_mass_elements(stage: Dictionary, fuel_remaining: float, stage_center_y: float = 0.0) -> Array[Dictionary]:
+	var geometry := stage_geometry(stage)
+	var configured: Dictionary = geometry.stage
+	var fuel_capacity := RocketDesign.stage_total_fuel_capacity(configured)
+	var fuel_fraction := clampf(fuel_remaining / fuel_capacity, 0.0, 1.0) if fuel_capacity > 0.0 else 0.0
+	var elements: Array[Dictionary] = []
+	var components: Array = configured.get("components", [])
+	var component_positions: Dictionary = geometry.component_positions
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		var positions: Array = component_positions.get(index, [])
+		var mass := maxf(0.0, float(component.get("dry_mass", 0.0))) + maxf(0.0, float(component.get("fuel_capacity", 0.0))) * fuel_fraction
+		var length := maxf(0.1, float(component.get("length_m", 1.0)))
+		var radius := maxf(0.1, float(component.get("collision_radius_m", 0.5)))
+		for position_variant in positions:
+			var position: Vector2 = position_variant
+			elements.append({
+				"mass": mass,
+				"position": position + Vector2(0.0, stage_center_y),
+				"intrinsic_inertia": mass * (length * length / 12.0 + radius * radius / 4.0)
+			})
+	var boosters: Array = configured.get("boosters", [])
+	var booster_positions: Dictionary = geometry.booster_positions
+	for index in range(boosters.size()):
+		var booster_entry: Variant = boosters[index]
+		if not booster_entry is Dictionary or booster_entry.has("source_component_id"):
+			continue
+		var definition := RocketDesign.booster_definition_for_entry(booster_entry)
+		if definition.is_empty():
+			continue
+		var positions: Array = booster_positions.get(index, [])
+		var mass := maxf(0.0, float(definition.get("dry_mass", 0.0))) + maxf(0.0, float(definition.get("fuel_capacity", 0.0))) * fuel_fraction
+		var length := maxf(0.1, float(definition.get("length_m", 12.0)))
+		var radius := maxf(0.1, float(definition.get("collision_radius_m", 0.8)))
+		for position_variant in positions:
+			var position: Vector2 = position_variant
+			elements.append({
+				"mass": mass,
+				"position": position + Vector2(0.0, stage_center_y),
+				"intrinsic_inertia": mass * (length * length / 12.0 + radius * radius / 4.0)
+			})
+	return elements
+
+static func stage_engine_elements(stage: Dictionary, pressure_ratio: float, stage_center_y: float = 0.0) -> Array[Dictionary]:
+	var geometry := stage_geometry(stage)
+	var configured: Dictionary = geometry.stage
+	var elements: Array[Dictionary] = []
+	var components: Array = configured.get("components", [])
+	var component_positions: Dictionary = geometry.component_positions
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		var kind := str(component.get("kind", ""))
+		if kind not in ["engine", "radial"]:
+			continue
+		var positions: Array = component_positions.get(index, [])
+		var thrust := lerpf(float(component.get("vacuum_thrust", 0.0)), float(component.get("thrust", 0.0)), clampf(pressure_ratio, 0.0, 1.0))
+		if thrust <= 0.0:
+			continue
+		for position_variant in positions:
+			var position: Vector2 = position_variant
+			elements.append({
+				"position": position + Vector2(0.0, stage_center_y),
+				"thrust": thrust,
+				"gimballed": kind == "engine"
+			})
+	var boosters: Array = configured.get("boosters", [])
+	var booster_positions: Dictionary = geometry.booster_positions
+	for index in range(boosters.size()):
+		var booster_entry: Variant = boosters[index]
+		if not booster_entry is Dictionary or booster_entry.has("source_component_id"):
+			continue
+		var definition := RocketDesign.booster_definition_for_entry(booster_entry)
+		if definition.is_empty():
+			continue
+		var thrust := lerpf(float(definition.get("vacuum_thrust", 0.0)), float(definition.get("thrust", 0.0)), clampf(pressure_ratio, 0.0, 1.0))
+		if thrust <= 0.0:
+			continue
+		for position_variant in booster_positions.get(index, []):
+			var position: Vector2 = position_variant
+			elements.append({
+				"position": position + Vector2(0.0, stage_center_y),
+				"thrust": thrust,
+				"gimballed": false
+			})
+	return elements
+
 static func component_summary(stage: Dictionary) -> Dictionary:
 	var components: Array = stage.get("components", [])
 	var counts := {"tank": 0, "engine": 0, "decoupler": 0, "structure": 0}
