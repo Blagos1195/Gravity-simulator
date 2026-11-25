@@ -83,6 +83,15 @@ func _initialize() -> void:
 	var balanced_mass := simulation._vehicle_mass_properties()
 	var balanced_profile := simulation._engine_force_profile(balanced_mass.center_of_mass, 1.0, 1.0)
 	assert(absf(float(balanced_profile.torque)) < 0.001, "The flight model should preserve torque balance for mirrored engines")
+	simulation.docked_mass = 5000.0
+	simulation.docked_visuals = [{
+		"mass": 5000.0,
+		"offset": Vector2(20.0, 0.0),
+		"center_of_mass": Vector2.ZERO,
+		"moment_of_inertia": 100000.0
+	}]
+	var docked_mass_properties := simulation._vehicle_mass_properties()
+	assert(Vector2(docked_mass_properties.center_of_mass).x > 0.0, "An offset docked spacecraft should shift the vehicle centre of mass")
 	simulation.free()
 	var with_engine := RocketAssembly.add_component(with_tank, "vacuum_engine")
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(with_engine), original_dry_mass + 6900.0))
