@@ -245,7 +245,7 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 			if mount_positions.has(mount_index):
 				component_y = float(mount_positions[mount_index]) - stage_height * float(component.get("length_m", 1.0)) / maxf(0.1, total_length) * 0.5
 			var component_height := maxf(6.0, stage_height * float(component.get("length_m", 1.0)) / maxf(0.1, total_length))
-				var component_radius := maxf(0.1, float(component.get("collision_radius_m", side_radius)))
+			var component_radius := maxf(0.1, float(component.get("collision_radius_m", side_radius)))
 			var component_half_width := maxf(2.0, side_half_width_base * component_radius / side_radius)
 			var mount_offset := float(side_mount_offsets.get(mount_index, core_half_width))
 			var offset := mount_offset + component_half_width * 0.9
