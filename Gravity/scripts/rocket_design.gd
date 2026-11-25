@@ -268,7 +268,7 @@ static func total_initial_mass(design: Dictionary) -> float:
 	var stages: Array = design.get("stages", [])
 	var mass := float(design.get("payload_mass", 0.0))
 	for stage in stages:
-		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage)
+		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage) + RocketAssembly.stage_rcs_propellant_capacity(stage) + RocketAssembly.stage_rcs_propellant_capacity(stage)
 	return mass
 
 static func stage_ignition_mass(design: Dictionary, stage_index: int) -> float:
