@@ -10,7 +10,7 @@ static func _catalog() -> Dictionary:
 static func component_options() -> Array:
 	var options: Array = []
 	for category in ["tanks", "engines", "decouplers", "structures", "rcs", "docking_ports"]:
-		var component_kind := {"rcs": "rcs", "docking_ports": "docking_port"}.get(category, category.trim_suffix("s"))
+		var component_kind: String = str({"rcs": "rcs", "docking_ports": "docking_port"}.get(category, category.trim_suffix("s")))
 		for definition in _catalog().get(category, []):
 			var option: Dictionary = definition.duplicate(true)
 			option["kind"] = component_kind
