@@ -261,11 +261,25 @@ func _vehicle_mass_properties(active_fuel_amount: float = -1.0) -> Dictionary:
 		"position": payload_position,
 		"intrinsic_inertia": payload_mass * (payload_length * payload_length / 12.0 + payload_radius * payload_radius / 4.0)
 	})
-	if docked_mass > 0.0:
+	var represented_docked_mass := 0.0
+	for docked_visual in docked_visuals:
+		var attached_mass := maxf(0.0, float(docked_visual.get("mass", 0.0)))
+		if attached_mass <= 0.0:
+			continue
+		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		var attached_center: Vector2 = Vector2(docked_visual.get("center_of_mass", Vector2.ZERO))
 		elements.append({
-			"mass": docked_mass,
+			"mass": attached_mass,
+			"position": attached_offset + attached_center,
+			"intrinsic_inertia": maxf(0.0, float(docked_visual.get("moment_of_inertia", attached_mass * 25.0)))
+		})
+		represented_docked_mass += attached_mass
+	var unrepresented_docked_mass := maxf(0.0, docked_mass - represented_docked_mass)
+	if unrepresented_docked_mass > 0.0:
+		elements.append({
+			"mass": unrepresented_docked_mass,
 			"position": Vector2.ZERO,
-			"intrinsic_inertia": docked_mass * 25.0
+			"intrinsic_inertia": unrepresented_docked_mass * 25.0
 		})
 	var total_mass := 0.0
 	var weighted_position := Vector2.ZERO
