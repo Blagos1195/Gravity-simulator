@@ -1194,8 +1194,8 @@ func _update_guidance(dt: float) -> void:
 						autopilot_phase = "COAST_TO_TARGET"
 					else:
 						var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-	rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-		angular_velocity = 0.0
+						rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
+						angular_velocity = 0.0
 			angular_velocity = 0.0
 						thrust_key_down = propellant_available and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
 					if not propellant_available and stage_index >= rocket_stages.size() - 1:
@@ -1296,8 +1296,8 @@ func _update_guidance(dt: float) -> void:
 			"MANEUVER_BURN":
 				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0f M/S" % autopilot_burn_remaining
 				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-	rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
-			angular_velocity = 0.0
+				rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				angular_velocity = 0.0
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING MANOEUVRE")
@@ -1325,8 +1325,8 @@ func _update_guidance(dt: float) -> void:
 			"ROUTE_BURN":
 				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0f M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
 				var route_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-	rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
-			angular_velocity = 0.0
+				rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				angular_velocity = 0.0
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ROUTE BURN")
@@ -1334,8 +1334,8 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
 				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 				var injection_rotation := injection_direction.angle() - Vector2.UP.angle()
-	rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
-			angular_velocity = 0.0
+				rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				angular_velocity = 0.0
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING DEPARTURE BURN")
@@ -1371,8 +1371,8 @@ func _update_guidance(dt: float) -> void:
 			"ARRIVAL_CAPTURE_BURN":
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
 				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-	rotation_angle = lerp_angle(rotation_angle, capture_rotation, clampf(dt * 1.5, 0.0, 1.0))
-			angular_velocity = 0.0
+				rotation_angle = lerp_angle(rotation_angle, capture_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				angular_velocity = 0.0
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ARRIVAL CAPTURE")
@@ -1430,7 +1430,7 @@ func _update_guidance(dt: float) -> void:
 			var landing_direction_vector := landing_direction_up * landing_direction_radial_acceleration + landing_direction_tangent * landing_direction_tangential_acceleration
 			autopilot_direction = landing_direction_vector.normalized() if landing_direction_vector.length_squared() > 0.001 else landing_direction_up
 		var autopilot_target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
-rotation_angle = lerp_angle(rotation_angle, autopilot_target_rotation, clampf(dt * 1.2, 0.0, 1.0))
+		rotation_angle = lerp_angle(rotation_angle, autopilot_target_rotation, clampf(dt * 1.2, 0.0, 1.0))
 		angular_velocity = 0.0
 		return
 	elif guidance_velocity.length() > 1500.0:
@@ -1438,6 +1438,7 @@ rotation_angle = lerp_angle(rotation_angle, autopilot_target_rotation, clampf(dt
 	var manual_target_direction := radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
 	var manual_target_rotation := manual_target_direction.angle() - Vector2.UP.angle()
 	rotation_angle = lerp_angle(rotation_angle, manual_target_rotation, clampf(dt * 0.08, 0.0, 1.0))
+	angular_velocity = 0.0
 
 func _input(event: InputEvent) -> void:
 	if not input_enabled or not event is InputEventKey or not event.pressed or event.echo:
