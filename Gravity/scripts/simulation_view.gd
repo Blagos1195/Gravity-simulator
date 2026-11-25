@@ -1045,6 +1045,7 @@ func _handle_body_contact() -> void:
 			status_message = "LOST IN %s  •  ATMOSPHERIC LIMIT REACHED" % str(body.name).to_upper()
 		elif relative_speed <= 35.0:
 			landed = true
+			angular_velocity = 0.0
 			crashed = false
 			landed_body_name = str(body.name)
 			landed_surface_normal = normal
@@ -1196,7 +1197,6 @@ func _update_guidance(dt: float) -> void:
 						var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 						rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
 						angular_velocity = 0.0
-			angular_velocity = 0.0
 						thrust_key_down = propellant_available and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
 					if not propellant_available and stage_index >= rocket_stages.size() - 1:
 						_fail_autopilot("OUT OF PROPELLANT DURING CIRCULARISATION")
