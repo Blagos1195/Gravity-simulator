@@ -134,7 +134,7 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 			maximum_radius = maxf(maximum_radius, float(component.get("collision_radius_m", 0.1)))
 		elif attachment == "side":
 			var mount_index := int(component.get("mount_index", -1))
-			side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 0.1)) * 0.9
+			side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 0.1)) * 1.75
 		if str(component.get("kind", "")) == "tank":
 			tank_color = component.get("color_rgb", tank_color)
 	var widest_side_mount := 0.0
