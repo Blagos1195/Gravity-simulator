@@ -575,7 +575,7 @@ func _build_interface() -> void:
 	footer.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(footer)
 	var note := Label.new()
-	note.text = "Stack parts centrally or mount them to either side. RCS uses the arrow keys for translation and A/D for rotation. Docking needs RCS and a port on both craft. Put ports on both sides of a stage boundary to detach a controllable module in orbit."
+	note.text = "Stack parts centrally or mount them to either side. RCS uses the arrow keys for translation and A/D for rotation. Docking needs RCS and a port on both craft. Put ports and RCS on both sides of a stage boundary to detach a controllable module in orbit."
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	footer.add_child(note)
