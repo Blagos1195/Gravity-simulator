@@ -98,6 +98,7 @@ func _initialize() -> void:
 	child.fuel = 0.0
 	child.stage_fuel_remaining[0] = 0.0
 	child.stage_fuel_remaining[1] = 10000.0
+	main._sync_external_module_fuel(child, parent)
 	main._update_docked_masses()
 	var combined_mass_before := parent._current_vehicle_mass()
 	var transferred := main._transfer_fuel(child.vehicle_name, parent.vehicle_name)
