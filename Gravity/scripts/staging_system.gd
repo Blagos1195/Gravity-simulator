@@ -42,7 +42,7 @@ static func create_plan(modules: Array) -> Array:
 					continue
 				var assigned_stage := clampi(int(component.get("staging_stage", physical_stage_index)), 0, maxi(0, stages.size() - 1))
 				var part_id := str(component.get("part_uid", component.get("id", "")))
-				stages[assigned_stage].actions.append({"id":"%s:%s:%s" % [module_id, part_id, action_name], "module_id":module_id, "part_id":part_id, "action":action_name, "completed":false, "reversible":action_name != "separate"})
+				stages[assigned_stage].actions.append({"id":"%s:%s:%s" % [module_id, part_id, action_name], "module_id":module_id, "physical_stage_index":physical_stage_index, "part_id":part_id, "action":action_name, "completed":false, "reversible":action_name != "separate"})
 	return stages
 
 static func merge_plans(first_plan: Array, second_plan: Array) -> Array:

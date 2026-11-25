@@ -207,6 +207,24 @@ func _current_staging_part_states() -> Dictionary:
 			}
 	return states
 
+func _prune_staging_plan_to_attached_parts() -> void:
+	var attached_parts: Dictionary = {}
+	for stage_index_value in range(stage_index, rocket_stages.size()):
+		for component in rocket_stages[stage_index_value].get("components", []):
+			if component is Dictionary:
+				attached_parts[str(component.get("part_uid", ""))] = true
+	for plan_index in range(staging_plan.size()):
+		var stage: Dictionary = staging_plan[plan_index]
+		var actions: Array = []
+		for action in stage.get("actions", []):
+			if action is Dictionary and attached_parts.has(str(action.get("part_id", ""))):
+				actions.append(action)
+		stage["actions"] = actions
+		staging_plan[plan_index] = stage
+	while not staging_plan.is_empty() and (staging_plan.back().get("actions", []) as Array).is_empty():
+		staging_plan.pop_back()
+	action_stage_index = clampi(action_stage_index, 0, maxi(0, staging_plan.size() - 1))
+
 func _apply_staging_part_states() -> void:
 	for stage_index_value in range(rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[stage_index_value]
@@ -267,7 +285,8 @@ func activate_current_action_stage() -> bool:
 			"deactivate_engine":
 				should_cutoff = true
 			"separate":
-				should_separate = true
+				if int(action.get("physical_stage_index", -1)) == stage_index:
+					should_separate = true
 	_apply_staging_part_states()
 	if should_cutoff:
 		thrust_key_down = false
@@ -275,6 +294,7 @@ func activate_current_action_stage() -> bool:
 		thrust_key_down = true
 	if should_separate and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
+		_prune_staging_plan_to_attached_parts()
 	if action_stage_index + 1 < staging_plan.size():
 		action_stage_index += 1
 	return true
