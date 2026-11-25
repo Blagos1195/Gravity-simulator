@@ -228,6 +228,11 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 			"decoupler":
 				_polygon(canvas, origin, [Vector2(-half_width, current_y), Vector2(half_width, current_y), Vector2(half_width, current_y + segment_height), Vector2(-half_width, current_y + segment_height)], rotation, scale, component_color)
 				_line(canvas, origin, Vector2(-half_width, current_y + segment_height * 0.5), Vector2(half_width, current_y + segment_height * 0.5), rotation, scale, Color(0.9, 0.76, 0.42), 1.0)
+			"docking_port":
+				_polygon(canvas, origin, [Vector2(-half_width, current_y + segment_height * 0.2), Vector2(half_width, current_y + segment_height * 0.2), Vector2(half_width, current_y + segment_height * 0.8), Vector2(-half_width, current_y + segment_height * 0.8)], rotation, scale, component_color)
+				_line(canvas, origin, Vector2(-half_width * 0.85, current_y + segment_height * 0.5), Vector2(half_width * 0.85, current_y + segment_height * 0.5), rotation, scale, Color(0.12, 0.18, 0.24), 1.4)
+			"rcs":
+				_polygon(canvas, origin, [Vector2(-half_width * 0.8, current_y + segment_height * 0.2), Vector2(half_width * 0.8, current_y + segment_height * 0.2), Vector2(half_width, current_y + segment_height * 0.5), Vector2(half_width * 0.8, current_y + segment_height * 0.8), Vector2(-half_width * 0.8, current_y + segment_height * 0.8), Vector2(-half_width, current_y + segment_height * 0.5)], rotation, scale, component_color)
 			_:
 				_polygon(canvas, origin, [Vector2(0.0, current_y), Vector2(half_width, current_y + segment_height * 0.5), Vector2(half_width * 0.72, current_y + segment_height), Vector2(-half_width * 0.72, current_y + segment_height), Vector2(-half_width, current_y + segment_height * 0.5)], rotation, scale, component_color)
 		current_y += segment_height
