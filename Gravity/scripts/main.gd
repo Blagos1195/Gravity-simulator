@@ -1,6 +1,8 @@
 extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const StagingSystem = preload("res://scripts/staging_system.gd")
+const ResourceNetwork = preload("res://scripts/resource_network.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const RocketBuilder = preload("res://scripts/rocket_builder.gd")
@@ -2155,6 +2157,8 @@ func _switch_vehicle(index: int) -> void:
 	sim = fleet_sims[index]
 	if not sim.staging_changed.is_connected(_refresh_stage_manager):
 		sim.staging_changed.connect(_refresh_stage_manager)
+	if not sim.staging_stage_requested.is_connected(_execute_fleet_staging_stage):
+		sim.staging_stage_requested.connect(_execute_fleet_staging_stage)
 	sim.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
 	sim.visited_body_names = SpaceDiscovery.visited_names(discovery_state)
 	sim.input_enabled = not _is_docked_child(sim.vehicle_name) and not sim.crashed
@@ -2199,6 +2203,28 @@ func _refresh_vehicle_selector() -> void:
 		var vehicle: SimulationView = fleet_sims[index]
 		vehicle_selector.add_item("%02d  •  %s" % [index + 1, vehicle.vehicle_name])
 	vehicle_selector.select(active_vehicle_index)
+
+func _execute_fleet_staging_stage() -> void:
+	if not is_instance_valid(sim) or sim.action_stage_index < 0 or sim.action_stage_index >= sim.staging_plan.size():
+		return
+	var stage_index_value := sim.action_stage_index
+	var stage: Dictionary = sim.staging_plan[stage_index_value]
+	var actions_by_module: Dictionary = {}
+	for action in stage.get("actions", []):
+		if not action is Dictionary or bool(action.get("completed", false)):
+			continue
+		var module_id := str(action.get("module_id", sim.vehicle_name))
+		if not actions_by_module.has(module_id):
+			actions_by_module[module_id] = []
+		(actions_by_module[module_id] as Array).append(action.duplicate(true))
+	for module_id in actions_by_module:
+		var module := _find_vehicle_by_name(str(module_id))
+		if module != null:
+			module.execute_staging_actions(actions_by_module[module_id])
+	sim.staging_plan = StagingSystem.mark_stage_completed(sim.staging_plan, stage_index_value)
+	if stage_index_value + 1 < sim.staging_plan.size():
+		sim.action_stage_index += 1
+	sim.staging_changed.emit()
 
 func _refresh_stage_manager() -> void:
 	if not is_instance_valid(stage_manager_picker) or not is_instance_valid(stage_manager_status) or not is_instance_valid(sim):
@@ -2491,12 +2517,16 @@ func _dock_vehicle(target_name: String) -> bool:
 	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED or not ports_aligned:
 		return false
 	var local_offset: Vector2 = (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
+	var child_staging_plan := target.staging_plan.duplicate(true)
 	docking_links.append({
 		"parent_name": sim.vehicle_name,
 		"child_name": target.vehicle_name,
 		"offset_x": local_offset.x,
-		"offset_y": local_offset.y
+		"offset_y": local_offset.y,
+		"child_staging_plan": child_staging_plan
 	})
+	sim.staging_plan = StagingSystem.merge_plans(sim.staging_plan, child_staging_plan)
+	target.staging_plan = []
 	docking_assists.erase(sim.vehicle_name)
 	docking_assists.erase(target.vehicle_name)
 	for assist_vehicle in docking_assists.keys():
@@ -2515,8 +2545,14 @@ func _undock_vehicle(target_name: String) -> bool:
 		var link: Dictionary = docking_links[index]
 		if not ((str(link.parent_name) == sim.vehicle_name and str(link.child_name) == target_name) or (str(link.parent_name) == target_name and str(link.child_name) == sim.vehicle_name)):
 			continue
+		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
 		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
 		docking_links.remove_at(index)
+		if parent != null and child != null:
+			child.staging_plan = StagingSystem.filter_module_plan(parent.staging_plan, child.vehicle_name)
+			parent.staging_plan = StagingSystem.remove_module_plan(parent.staging_plan, child.vehicle_name)
+			child.action_stage_index = clampi(child.action_stage_index, 0, maxi(0, child.staging_plan.size() - 1))
+			parent.staging_changed.emit()
 		if child != null:
 			child.input_enabled = child == sim
 			child.docked_mass = 0.0
@@ -2548,7 +2584,23 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 		donor.rcs_propellant_remaining -= rcs_amount
 		recipient.rcs_propellant_remaining += rcs_amount
 		transferred += rcs_amount
+	for resource in ["xenon", "electricity"]:
+		for source_index in range(donor.resource_tanks.size()):
+			var source: Dictionary = donor.resource_tanks[source_index]
+			if float(source.get("resources", {}).get(resource, 0.0)) <= 0.0:
+				continue
+			for destination_index in range(recipient.resource_tanks.size()):
+				var destination: Dictionary = recipient.resource_tanks[destination_index]
+				if float(destination.get("resource_capacities", {}).get(resource, 0.0)) <= float(destination.get("resources", {}).get(resource, 0.0)):
+					continue
+				var moved := ResourceNetwork.transfer_between_tanks(source, destination, resource, INF, true)
+				donor.resource_tanks[source_index] = source
+				recipient.resource_tanks[destination_index] = destination
+				transferred += moved
+				break
 	if transferred > 0.0:
+		donor._sync_legacy_fuel_from_tanks()
+		recipient._sync_legacy_fuel_from_tanks()
 		_update_docked_masses()
 		_sync_docked_vehicles()
 	return transferred
@@ -2642,7 +2694,7 @@ func _build_flight_hud() -> void:
 	execute_stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	execute_stage_button.pressed.connect(func():
 		if is_instance_valid(sim):
-			sim.activate_current_action_stage()
+			_execute_fleet_staging_stage()
 			_refresh_stage_manager()
 	)
 	stage_manager_actions.add_child(execute_stage_button)

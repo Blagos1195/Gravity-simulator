@@ -2,6 +2,7 @@ extends Control
 
 signal stage_separated(stage_data: Dictionary)
 signal staging_changed
+signal staging_stage_requested
 
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
@@ -378,6 +379,37 @@ func rearm_action_stage() -> void:
 	if action_stage_index >= 0 and action_stage_index < staging_plan.size():
 		staging_plan = StagingSystem.rearm_stage(staging_plan, action_stage_index, staging_part_states)
 	staging_changed.emit()
+
+func execute_staging_actions(actions: Array) -> bool:
+	if actions.is_empty():
+		return false
+	staging_part_states = _current_staging_part_states()
+	var result := StagingSystem.execute_stage([{"actions": actions.duplicate(true)}], 0, staging_part_states)
+	if not bool(result.get("valid", false)):
+		return false
+	staging_part_states = result.part_states
+	_apply_staging_part_states()
+	var should_ignite := false
+	var should_cutoff := false
+	var should_separate := false
+	for action in actions:
+		if not action is Dictionary:
+			continue
+		match str(action.get("action", "")):
+			"activate_engine", "ignite_solid_motor":
+				should_ignite = true
+			"deactivate_engine":
+				should_cutoff = true
+			"separate":
+				if int(action.get("physical_stage_index", -1)) == stage_index:
+					should_separate = true
+	if should_cutoff:
+		thrust_key_down = false
+	if should_ignite:
+		thrust_key_down = true
+	if should_separate:
+		_separate_stage()
+	return true
 
 func activate_current_action_stage() -> bool:
 	if action_stage_index < 0 or action_stage_index >= staging_plan.size():
@@ -1966,7 +1998,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not has_rcs_installed():
 			rcs_rotation_input = 0.0
 	elif event.is_action_pressed("stage_next"):
-		activate_current_action_stage()
+		staging_stage_requested.emit()
 	elif event.is_action_pressed("pause_game"):
 		paused = not paused
 	elif event.is_action_pressed("stage_separation"):
