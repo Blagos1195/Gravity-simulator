@@ -340,9 +340,12 @@ func _remaining_rcs_system() -> Dictionary:
 		system.torque = float(system.torque) + float(stage.get("rcs_torque", 0.0))
 	return system
 
-func has_rcs() -> bool:
+func has_rcs_installed() -> bool:
 	var system := _remaining_rcs_system()
-	return float(system.thrust) > 0.0 and float(system.flow) > 0.0 and rcs_propellant_remaining > 0.001
+	return float(system.thrust) > 0.0 and float(system.flow) > 0.0
+
+func has_rcs() -> bool:
+	return has_rcs_installed() and rcs_propellant_remaining > 0.001
 
 func has_docking_port() -> bool:
 	for index in range(stage_index, rocket_stages.size()):
@@ -922,7 +925,7 @@ func _separate_stage() -> void:
 	var next_stage_has_port := RocketAssembly.stage_docking_ports(rocket_stages[stage_index + 1]).size() > 0
 	var dockable_module := not RocketAssembly.stage_docking_ports(separated_stage).is_empty() and next_stage_has_port
 	var separated_dry_mass := RocketDesign.stage_total_dry_mass(separated_stage)
-	var separated_mass := separated_dry_mass + separated_fuel
+	var separated_mass := separated_dry_mass + separated_fuel + separated_rcs_fuel
 	var vehicle_mass_before := _current_vehicle_mass()
 	var upper_stack_mass := maxf(0.001, vehicle_mass_before - separated_mass)
 	var total_separated_mass := maxf(0.001, separated_mass + upper_stack_mass)
@@ -1598,7 +1601,7 @@ func _notification(what: int) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not input_enabled:
 		return
-	if event is InputEventKey and has_rcs():
+	if event is InputEventKey and has_rcs_installed():
 		if event.is_action_pressed("rotate_left"):
 			rcs_rotation_input = -1.0
 		elif event.is_action_pressed("rotate_right"):
@@ -1608,47 +1611,47 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
 	if event.is_action_pressed("rotate_left"):
-		if not has_rcs():
+		if not has_rcs_installed():
 			rotation_angle = wrapf(rotation_angle - 0.12, -PI, PI)
 			angular_velocity = 0.0
 	elif event.is_action_pressed("rotate_right"):
-		if not has_rcs():
+		if not has_rcs_installed():
 			rotation_angle = wrapf(rotation_angle + 0.12, -PI, PI)
 			angular_velocity = 0.0
-		elif event.is_action_pressed("pause_game"):
-			paused = not paused
-		elif event.is_action_pressed("stage_separation"):
-			_separate_stage()
-		elif event.is_action_pressed("guidance_toggle"):
-			guidance_enabled = not guidance_enabled
-			if not guidance_enabled:
-				autopilot_enabled = false
-				thrust_key_down = false
-		else:
-			match event.keycode:
-				KEY_HOME:
-					camera_zoom = 0.000045
-					solar_map_zoom = 1.0
-				KEY_EQUAL, KEY_KP_ADD:
-					time_warp = minf(1000000.0, time_warp * 2.0)
-				KEY_MINUS, KEY_KP_SUBTRACT:
-					time_warp = maxf(0.25, time_warp / 2.0)
-				KEY_O:
-					show_orbit = not show_orbit
-				KEY_P:
-					show_predicted_trajectory = not show_predicted_trajectory
-					if show_predicted_trajectory:
-						_calculate_predicted_trajectory()
-				KEY_M:
-					show_solar_system = not show_solar_system
-				KEY_G:
-					show_grid = not show_grid
-				KEY_V:
-					show_vectors = not show_vectors
-				KEY_Q:
-					gimbal_angle = clampf(gimbal_angle - deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
-				KEY_E:
-					gimbal_angle = clampf(gimbal_angle + deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
+	elif event.is_action_pressed("pause_game"):
+		paused = not paused
+	elif event.is_action_pressed("stage_separation"):
+		_separate_stage()
+	elif event.is_action_pressed("guidance_toggle"):
+		guidance_enabled = not guidance_enabled
+		if not guidance_enabled:
+			autopilot_enabled = false
+			thrust_key_down = false
+	else:
+		match event.keycode:
+			KEY_HOME:
+				camera_zoom = 0.000045
+				solar_map_zoom = 1.0
+			KEY_EQUAL, KEY_KP_ADD:
+				time_warp = minf(1000000.0, time_warp * 2.0)
+			KEY_MINUS, KEY_KP_SUBTRACT:
+				time_warp = maxf(0.25, time_warp / 2.0)
+			KEY_O:
+				show_orbit = not show_orbit
+			KEY_P:
+				show_predicted_trajectory = not show_predicted_trajectory
+				if show_predicted_trajectory:
+					_calculate_predicted_trajectory()
+			KEY_M:
+				show_solar_system = not show_solar_system
+			KEY_G:
+				show_grid = not show_grid
+			KEY_V:
+				show_vectors = not show_vectors
+			KEY_Q:
+				gimbal_angle = clampf(gimbal_angle - deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
+			KEY_E:
+				gimbal_angle = clampf(gimbal_angle + deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			if show_solar_system:
