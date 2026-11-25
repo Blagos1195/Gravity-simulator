@@ -185,8 +185,13 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 	var ordered: Array = components.duplicate(true)
 	var total_length := 0.0
 	var widest_radius := 0.1
+	var side_radius := 0.0
 	for component in ordered:
-		if str(component.get("attachment", "stack")) == "radial":
+		var attachment := str(component.get("attachment", "stack"))
+		if attachment == "radial":
+			continue
+		if attachment == "side":
+			side_radius = maxf(side_radius, float(component.get("collision_radius_m", 1.0)))
 			continue
 		total_length += maxf(0.1, float(component.get("length_m", 1.0)))
 		widest_radius = maxf(widest_radius, float(component.get("collision_radius_m", 1.0)))
@@ -194,7 +199,7 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 	var mount_positions: Dictionary = {}
 	for component_index in range(ordered.size()):
 		var component: Dictionary = ordered[component_index]
-		if str(component.get("attachment", "stack")) == "radial":
+		if str(component.get("attachment", "stack")) != "stack":
 			continue
 		var segment_height := stage_height * maxf(0.1, float(component.get("length_m", 1.0))) / maxf(0.1, total_length)
 		mount_positions[component_index] = current_y + segment_height * 0.5
@@ -222,6 +227,42 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 			_:
 				_polygon(canvas, origin, [Vector2(0.0, current_y), Vector2(half_width, current_y + segment_height * 0.5), Vector2(half_width * 0.72, current_y + segment_height), Vector2(-half_width * 0.72, current_y + segment_height), Vector2(-half_width, current_y + segment_height * 0.5)], rotation, scale, component_color)
 		current_y += segment_height
+	if side_radius > 0.0:
+		var combined_radius := widest_radius + side_radius * 0.9
+		var core_half_width := stage_width * 0.5 * widest_radius / combined_radius
+		var side_half_width_base := stage_width * 0.5 * (side_radius * 0.9 / combined_radius) / 1.9
+		for component_index in range(ordered.size()):
+			var component: Dictionary = ordered[component_index]
+			if str(component.get("attachment", "stack")) != "side":
+				continue
+			var mount_index := int(component.get("mount_index", -1))
+			var component_y := y + (stage_height - stage_height * float(component.get("length_m", 1.0)) / maxf(0.1, total_length)) * 0.5
+			if mount_positions.has(mount_index):
+				component_y = float(mount_positions[mount_index]) - stage_height * float(component.get("length_m", 1.0)) / maxf(0.1, total_length) * 0.5
+			var component_height := maxf(6.0, stage_height * float(component.get("length_m", 1.0)) / maxf(0.1, total_length))
+			var component_radius := maxf(0.1, float(component.get("collision_radius_m", side_radius)))
+			var component_half_width := maxf(2.0, side_half_width_base * component_radius / side_radius)
+			var offset := core_half_width + component_half_width * 0.9
+			var color := Color(0.43, 0.63, 0.75)
+			var color_data: Variant = component.get("color_rgb", [])
+			if color_data is Array and color_data.size() == 3:
+				color = Color(float(color_data[0]), float(color_data[1]), float(color_data[2]))
+			var kind := str(component.get("kind", "structure"))
+			var sides: Array = [-1.0, 1.0] if bool(component.get("mirror", true)) else [float(component.get("side", 1))]
+			for side in sides:
+				var left := float(side) * offset
+				match kind:
+					"tank":
+						_polygon(canvas, origin, [Vector2(left - component_half_width * 0.9, component_y), Vector2(left + component_half_width * 0.9, component_y), Vector2(left + component_half_width, component_y + component_height), Vector2(left - component_half_width, component_y + component_height)], rotation, scale, color)
+						_line(canvas, origin, Vector2(left - component_half_width * 0.86, component_y + component_height * 0.28), Vector2(left + component_half_width * 0.86, component_y + component_height * 0.28), rotation, scale, Color(0.8, 0.86, 0.91), 0.8)
+						_line(canvas, origin, Vector2(left - component_half_width * 0.9, component_y + component_height * 0.78), Vector2(left + component_half_width * 0.9, component_y + component_height * 0.78), rotation, scale, Color(0.2, 0.34, 0.46), 0.8)
+					"engine":
+						_polygon(canvas, origin, [Vector2(left - component_half_width * 0.62, component_y), Vector2(left + component_half_width * 0.62, component_y), Vector2(left + component_half_width, component_y + component_height), Vector2(left - component_half_width, component_y + component_height)], rotation, scale, color)
+						if engine_enabled and throttle > 0.0:
+							var flame_length := 7.0 + 8.0 * clampf(throttle, 0.0, 1.0)
+						_polygon(canvas, origin, [Vector2(left - component_half_width * 0.32, component_y + component_height), Vector2(left, component_y + component_height + flame_length), Vector2(left + component_half_width * 0.32, component_y + component_height)], rotation, scale, Color(1.0, 0.48, 0.12, 0.92))
+					_:
+						_polygon(canvas, origin, [Vector2(left, component_y), Vector2(left + component_half_width, component_y + component_height * 0.5), Vector2(left + component_half_width * 0.72, component_y + component_height), Vector2(left - component_half_width * 0.72, component_y + component_height), Vector2(left - component_half_width, component_y + component_height * 0.5)], rotation, scale, color)
 	for booster_index in range(boosters.size()):
 		var booster_entry: Dictionary = boosters[booster_index]
 		var booster := RocketDesign.booster_definition_for_entry(booster_entry)
