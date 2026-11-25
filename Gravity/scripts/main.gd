@@ -2439,7 +2439,7 @@ func _dock_vehicle(target_name: String) -> bool:
 		return false
 	if _is_docked_child(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
 		return false
-	if not sim.has_rcs() or not target.has_rcs() or not sim.has_docking_port() or not target.has_docking_port():
+	if not sim.has_rcs_installed() or not target.has_rcs_installed() or not sim.has_docking_port() or not target.has_docking_port():
 		return false
 	var own_port: Dictionary = sim.docking_port_world_state()
 	var target_port: Dictionary = target.docking_port_world_state()
@@ -3198,15 +3198,18 @@ func _show_docking_panel() -> void:
 		var docked := _are_docked(parent_name, target_name)
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
 		var free_flying: bool = not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
-		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs() and target.has_rcs()
+		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs_installed() and target.has_rcs_installed()
+		var rcs_assist_ready: bool = sim.has_rcs() and target.has_rcs()
 		var available_to_dock: bool = not docked and free_flying and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
-		var available_to_assist: bool = not docked and free_flying and hardware_ready and separation <= DOCKING_ASSIST_MAX_RANGE
+		var available_to_assist: bool = not docked and free_flying and hardware_ready and rcs_assist_ready and separation <= DOCKING_ASSIST_MAX_RANGE
 		if docked:
 			status.text = "DOCKED  •  %s\nCombined mass is included in the parent spacecraft's flight dynamics." % target_name
 		elif not sim.has_docking_port() or not target.has_docking_port():
 			status.text = "DOCKING PORTS REQUIRED\nBoth spacecraft need a docking port. Only matching ports can connect."
-		elif not sim.has_rcs() or not target.has_rcs():
-			status.text = "RCS REQUIRED\nBoth spacecraft need working RCS thrusters and remaining RCS propellant."
+		elif not sim.has_rcs_installed() or not target.has_rcs_installed():
+			status.text = "RCS REQUIRED\nBoth spacecraft need RCS thruster hardware."
+		elif not rcs_assist_ready:
+			status.text = "RCS PROPELLANT EMPTY\nDocking can still be completed manually, but rendezvous assist is unavailable."
 		elif available_to_dock:
 			status.text = "DOCKING CONDITIONS MET\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		elif assist_active:
