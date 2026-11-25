@@ -516,7 +516,7 @@ func _physics_step(dt: float) -> void:
 			float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT)),
 			float(Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_UP))
 		).limit_length(1.0)
-	var rcs_command_strength: float = maxf(rcs_translation_input.length(), absf(rcs_rotation_input))
+	var rcs_command_strength: float = minf(2.0, rcs_translation_input.length() + absf(rcs_rotation_input))
 	var rcs_flow_rate: float = float(rcs_system.flow) * rcs_command_strength
 	var rcs_fuel_used: float = minf(rcs_propellant_remaining, rcs_flow_rate * dt) if not crashed else 0.0
 	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0)
