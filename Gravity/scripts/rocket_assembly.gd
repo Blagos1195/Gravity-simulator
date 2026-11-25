@@ -65,12 +65,12 @@ static func ensure_stage_components(stage: Dictionary) -> Dictionary:
 
 static func add_component(stage: Dictionary, component_id: String, attachment: String = "stack", mirrored: bool = true, side: int = 1, mount_index: int = -1) -> Dictionary:
 	var definition := component_definition(component_id)
-	if definition.is_empty() or not ["stack", "radial"].has(attachment):
+	if definition.is_empty() or not ["stack", "side", "radial"].has(attachment):
 		return {}
 	var configured := ensure_stage_components(stage)
 	var components: Array = configured.get("components", []).duplicate(true)
 	definition["attachment"] = attachment
-	if attachment == "radial":
+	if attachment in ["radial", "side"]:
 		definition["mirror"] = mirrored
 		definition["side"] = -1 if side < 0 else 1
 		definition["mount_index"] = mount_index
@@ -107,6 +107,7 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	var flow := 0.0
 	var total_length := 0.0
 	var maximum_radius := 0.1
+	var side_mount_radius := 0.0
 	var tank_color: Variant = configured.get("visual_color_rgb", [0.43, 0.63, 0.75])
 	var radial_boosters: Array = []
 	for component in components:
@@ -121,15 +122,21 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 			radial_definition["source_component_id"] = str(component.get("id", ""))
 			radial_boosters.append({"id": str(component.get("id", "")), "definition": radial_definition, "source_component_id": str(component.get("id", "")), "side": int(component.get("side", 1)), "mount_index": int(component.get("mount_index", -1))})
 			continue
-		dry_mass += maxf(0.0, float(component.get("dry_mass", 0.0)))
-		fuel_capacity += maxf(0.0, float(component.get("fuel_capacity", 0.0)))
-		thrust += maxf(0.0, float(component.get("thrust", 0.0)))
-		vacuum_thrust += maxf(0.0, float(component.get("vacuum_thrust", 0.0)))
-		flow += maxf(0.0, float(component.get("flow", 0.0)))
-		total_length += maxf(0.0, float(component.get("length_m", 0.0)))
-		maximum_radius = maxf(maximum_radius, float(component.get("collision_radius_m", 0.1)))
+		var attachment := str(component.get("attachment", "stack"))
+		var copies := 2.0 if attachment == "side" and bool(component.get("mirror", true)) else 1.0
+		dry_mass += maxf(0.0, float(component.get("dry_mass", 0.0))) * copies
+		fuel_capacity += maxf(0.0, float(component.get("fuel_capacity", 0.0))) * copies
+		thrust += maxf(0.0, float(component.get("thrust", 0.0))) * copies
+		vacuum_thrust += maxf(0.0, float(component.get("vacuum_thrust", 0.0))) * copies
+		flow += maxf(0.0, float(component.get("flow", 0.0))) * copies
+		if attachment == "stack":
+			total_length += maxf(0.0, float(component.get("length_m", 0.0)))
+			maximum_radius = maxf(maximum_radius, float(component.get("collision_radius_m", 0.1)))
+		elif attachment == "side":
+			side_mount_radius = maxf(side_mount_radius, float(component.get("collision_radius_m", 0.1)))
 		if str(component.get("kind", "")) == "tank":
 			tank_color = component.get("color_rgb", tank_color)
+	maximum_radius += side_mount_radius * 0.9
 	var boosters: Array = []
 	for existing in configured.get("boosters", []):
 		if not (existing is Dictionary and existing.has("source_component_id")):
