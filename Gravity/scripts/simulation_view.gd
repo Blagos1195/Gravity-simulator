@@ -761,6 +761,28 @@ func _vehicle_mass_properties(active_fuel_amount: float = -1.0, active_rcs_fuel_
 		"moment_of_inertia": maxf(1.0, moment_of_inertia)
 	}
 
+func _remaining_engine_elements(pressure_ratio: float, active_center_y: float) -> Array[Dictionary]:
+	var engines: Array[Dictionary] = RocketAssembly.stage_engine_elements(rocket_stages[stage_index], pressure_ratio, active_center_y)
+	for docked_visual in docked_visuals:
+		var design: Dictionary = docked_visual.get("design", {})
+		var stages: Array = design.get("stages", [])
+		var attached_stage_index := int(docked_visual.get("stage_index", 0))
+		if attached_stage_index < 0 or attached_stage_index >= stages.size():
+			continue
+		var total_length := 0.0
+		var geometries: Array[Dictionary] = []
+		for index in range(attached_stage_index, stages.size()):
+			var geometry := RocketAssembly.stage_geometry(stages[index])
+			geometries.append(geometry)
+			total_length += float(geometry.get("length", 1.0))
+		var child_active_center := -total_length * 0.5 + float(geometries[0].get("length", 1.0)) * 0.5
+		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		for engine in RocketAssembly.stage_engine_elements(stages[attached_stage_index], pressure_ratio, child_active_center):
+			var attached_engine: Dictionary = engine.duplicate(true)
+			attached_engine["position"] = Vector2(attached_engine.get("position", Vector2.ZERO)) + attached_offset
+			engines.append(attached_engine)
+	return engines
+
 func _engine_force_profile(center_of_mass: Vector2, pressure_ratio: float, thrust_scale: float = 1.0) -> Dictionary:
 	var total_length := 0.0
 	var active_geometry := RocketAssembly.stage_geometry(rocket_stages[stage_index])
@@ -769,7 +791,7 @@ func _engine_force_profile(center_of_mass: Vector2, pressure_ratio: float, thrus
 	var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
 	var force_total := Vector2.ZERO
 	var torque_total := 0.0
-	var engines := RocketAssembly.stage_engine_elements(rocket_stages[stage_index], pressure_ratio, active_center_y)
+	var engines := _remaining_engine_elements(pressure_ratio, active_center_y)
 	var resource_flows: Dictionary = {}
 	var electric_draw := 0.0
 	for engine in engines:
