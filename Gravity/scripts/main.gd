@@ -2894,6 +2894,8 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 	if donor_owner != null and donor_owner == recipient_owner and (donor.resource_inventory_external or recipient.resource_inventory_external):
 		_sync_external_module_fuel(donor, donor_owner)
 		_sync_external_module_fuel(recipient, recipient_owner)
+		if not recipient.resource_inventory_external:
+			recipient._reconcile_legacy_fuel_inventory()
 		var available := 0.0
 		for value in donor.stage_fuel_remaining:
 			available += maxf(0.0, float(value))
