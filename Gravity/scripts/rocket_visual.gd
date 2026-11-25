@@ -231,6 +231,7 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 		var combined_radius := widest_radius + side_radius * 0.9
 		var core_half_width := stage_width * 0.5 * widest_radius / combined_radius
 		var side_half_width_base := stage_width * 0.5 * (side_radius * 0.9 / combined_radius) / 1.9
+		var side_mount_offsets: Dictionary = {}
 		for component_index in range(ordered.size()):
 			var component: Dictionary = ordered[component_index]
 			if str(component.get("attachment", "stack")) != "side":
@@ -240,9 +241,11 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 			if mount_positions.has(mount_index):
 				component_y = float(mount_positions[mount_index]) - stage_height * float(component.get("length_m", 1.0)) / maxf(0.1, total_length) * 0.5
 			var component_height := maxf(6.0, stage_height * float(component.get("length_m", 1.0)) / maxf(0.1, total_length))
-			var component_radius := maxf(0.1, float(component.get("collision_radius_m", side_radius)))
+				var component_radius := maxf(0.1, float(component.get("collision_radius_m", side_radius)))
 			var component_half_width := maxf(2.0, side_half_width_base * component_radius / side_radius)
-			var offset := core_half_width + component_half_width * 0.9
+			var mount_offset := float(side_mount_offsets.get(mount_index, core_half_width))
+			var offset := mount_offset + component_half_width * 0.9
+			side_mount_offsets[mount_index] = mount_offset + component_half_width * 1.8
 			var color := Color(0.43, 0.63, 0.75)
 			var color_data: Variant = component.get("color_rgb", [])
 			if color_data is Array and color_data.size() == 3:
