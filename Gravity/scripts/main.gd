@@ -2162,6 +2162,8 @@ func _switch_vehicle(index: int) -> void:
 		sim.staging_changed.connect(_refresh_stage_manager)
 	if not sim.staging_stage_requested.is_connected(_execute_fleet_staging_stage):
 		sim.staging_stage_requested.connect(_execute_fleet_staging_stage)
+	if not sim.part_selected.is_connected(_show_part_actions):
+		sim.part_selected.connect(_show_part_actions)
 	sim.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
 	sim.visited_body_names = SpaceDiscovery.visited_names(discovery_state)
 	sim.input_enabled = not _is_docked_child(sim.vehicle_name) and not sim.crashed
@@ -2646,6 +2648,87 @@ func _transfer_between_tanks(source_vehicle_name: String, source_part_id: String
 				_sync_docked_vehicles()
 			return transferred
 	return 0.0
+
+func _show_part_actions(part_uid: String) -> void:
+	if not is_instance_valid(sim):
+		return
+	var selected_component: Dictionary = {}
+	for stage in sim.rocket_stages:
+		for component in stage.get("components", []):
+			if str(component.get("part_uid", "")) == part_uid:
+				selected_component = component
+				break
+	if selected_component.is_empty():
+		return
+	var kind := str(selected_component.get("kind", ""))
+	var window := Window.new()
+	window.title = str(selected_component.get("label", selected_component.get("id", "SPACECRAFT PART"))).to_upper()
+	window.size = Vector2i(340, 260)
+	window.min_size = Vector2i(300, 220)
+	window.transient = true
+	window.exclusive = true
+	add_child(window)
+	window.close_requested.connect(window.queue_free)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	layout.add_theme_constant_override("margin_left", 12)
+	layout.add_theme_constant_override("margin_right", 12)
+	layout.add_theme_constant_override("margin_top", 12)
+	layout.add_theme_constant_override("margin_bottom", 12)
+	window.add_child(layout)
+	var detail := Label.new()
+	detail.text = "%s  •  %.0f kg" % [kind.replace("_", " ").to_upper(), float(selected_component.get("dry_mass", 0.0))]
+	layout.add_child(detail)
+	if bool(selected_component.get("deployable", false)):
+		var deploy_button := Button.new()
+		deploy_button.text = "RETRACT" if bool(selected_component.get("deployed", false)) else "DEPLOY"
+		deploy_button.pressed.connect(func():
+			sim.set_component_state(part_uid, "deployed", not bool(selected_component.get("deployed", false)))
+			window.queue_free()
+		)
+		layout.add_child(deploy_button)
+	if kind in ["engine", "radial"]:
+		var engine_button := Button.new()
+		engine_button.text = "REMOVE FROM ACTIVE PARTS" if bool(selected_component.get("engine_enabled", true)) else "ADD TO ACTIVE PARTS"
+		engine_button.pressed.connect(func():
+			sim.set_component_state(part_uid, "engine_enabled", not bool(selected_component.get("engine_enabled", true)))
+			window.queue_free()
+		)
+		layout.add_child(engine_button)
+	elif kind == "rcs":
+		var rcs_button := Button.new()
+		rcs_button.text = "DISABLE RCS" if bool(selected_component.get("rcs_enabled", true)) else "ENABLE RCS"
+		rcs_button.pressed.connect(func():
+			sim.set_component_state(part_uid, "rcs_enabled", not bool(selected_component.get("rcs_enabled", true)))
+			window.queue_free()
+		)
+		layout.add_child(rcs_button)
+	elif kind == "tank":
+		var fuel_button := Button.new()
+		fuel_button.text = "DISABLE FUEL SUPPLY" if bool(selected_component.get("fuel_supply_enabled", true)) else "ENABLE FUEL SUPPLY"
+		fuel_button.pressed.connect(func():
+			sim.set_component_state(part_uid, "fuel_supply_enabled", not bool(selected_component.get("fuel_supply_enabled", true)))
+			window.queue_free()
+		)
+		layout.add_child(fuel_button)
+	if kind in ["decoupler", "docking_port"]:
+		var separate_button := Button.new()
+		separate_button.text = "SEPARATE PART"
+		separate_button.pressed.connect(func():
+			sim.detach_component(part_uid)
+			window.queue_free()
+		)
+		layout.add_child(separate_button)
+	if kind == "docking_port":
+		var attach_button := Button.new()
+		attach_button.text = "DOCK / ATTACH SPACECRAFT"
+		attach_button.pressed.connect(func():
+			window.queue_free()
+			_show_docking_panel()
+		)
+		layout.add_child(attach_button)
+	window.popup_centered()
 
 func _show_tank_transfer_panel() -> void:
 	var window := Window.new()

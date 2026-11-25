@@ -3,6 +3,7 @@ extends Control
 signal stage_separated(stage_data: Dictionary)
 signal staging_changed
 signal staging_stage_requested
+signal part_selected(part_uid: String)
 
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
@@ -398,6 +399,124 @@ func rearm_action_stage() -> void:
 	if action_stage_index >= 0 and action_stage_index < staging_plan.size():
 		staging_plan = StagingSystem.rearm_stage(staging_plan, action_stage_index, staging_part_states)
 	staging_changed.emit()
+
+func set_component_state(part_uid: String, property: String, value: Variant) -> bool:
+	for stage_index_value in range(stage_index, rocket_stages.size()):
+		var stage: Dictionary = rocket_stages[stage_index_value]
+		var components: Array = stage.get("components", []).duplicate(true)
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			if str(component.get("part_uid", "")) != part_uid:
+				continue
+			component[property] = value
+			components[component_index] = component
+			rocket_stages[stage_index_value] = RocketAssembly.compile_stage(stage, components)
+			staging_part_states[part_uid] = _current_staging_part_states().get(part_uid, {})
+			if property == "fuel_supply_enabled":
+				for tank_index in range(resource_tanks.size()):
+					if str(resource_tanks[tank_index].get("part_uid", "")) == part_uid:
+						var tank: Dictionary = resource_tanks[tank_index]
+						tank["fuel_supply_enabled"] = bool(value)
+						resource_tanks[tank_index] = tank
+			_sync_legacy_fuel_from_tanks()
+			staging_changed.emit()
+			return true
+	return false
+
+func _part_at_screen_position(screen_position: Vector2) -> String:
+	if show_solar_system or camera_zoom <= 0.0000000002:
+		return ""
+	var object_scale := RocketVisual.camera_scale(camera_zoom, _visual_scale())
+	if object_scale < 0.025:
+		return ""
+	var local_click := (screen_position - get_viewport_rect().size * 0.5).rotated(-rotation_angle) / object_scale
+	var total_length := 0.0
+	var geometries: Array[Dictionary] = []
+	for index in range(stage_index, rocket_stages.size()):
+		var geometry := RocketAssembly.stage_geometry(rocket_stages[index])
+		geometries.append(geometry)
+		total_length += float(geometry.get("length", 1.0))
+	var cursor := -total_length * 0.5
+	for offset in range(geometries.size()):
+		var geometry: Dictionary = geometries[offset]
+		var stage_center_y := cursor + float(geometry.get("length", 1.0)) * 0.5
+		var stage: Dictionary = geometry.get("stage", {})
+		var components: Array = stage.get("components", [])
+		var positions: Dictionary = geometry.get("component_positions", {})
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			for position in positions.get(component_index, []):
+				var center: Vector2 = Vector2(position) + Vector2(0.0, stage_center_y)
+				var hit_radius := maxf(6.0 / object_scale, maxf(float(component.get("collision_radius_m", 0.5)), float(component.get("length_m", 1.0)) * 0.55))
+				if local_click.distance_to(center) <= hit_radius:
+					return str(component.get("part_uid", ""))
+		cursor += float(geometry.get("length", 1.0))
+	return ""
+
+func detach_component(part_uid: String) -> bool:
+	for physical_stage_index in range(stage_index, rocket_stages.size()):
+		var stage: Dictionary = rocket_stages[physical_stage_index]
+		var components: Array = stage.get("components", []).duplicate(true)
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			if str(component.get("part_uid", "")) != part_uid:
+				continue
+			var geometry := RocketAssembly.stage_geometry(stage)
+			var positions: Array = geometry.get("component_positions", {}).get(component_index, [])
+			var stage_center_y := 0.0
+			for index in range(stage_index, physical_stage_index):
+				stage_center_y += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
+			var total_length := 0.0
+			for index in range(stage_index, rocket_stages.size()):
+				total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
+			stage_center_y += -total_length * 0.5 + float(geometry.get("length", 1.0)) * 0.5
+			var local_offset: Vector2 = (Vector2(positions[0]) + Vector2(0.0, stage_center_y)) if not positions.is_empty() else Vector2.ZERO
+			var world_offset := local_offset.rotated(rotation_angle)
+			var separated_tanks: Array = []
+			var remaining_tanks: Array = []
+			var separated_fuel := 0.0
+			var separated_resource_mass := 0.0
+			for tank in resource_tanks:
+				if str(tank.get("part_uid", "")) == part_uid:
+					separated_tanks.append(tank.duplicate(true))
+					separated_fuel += float(tank.get("resources", {}).get("liquid_propellant", 0.0))
+					separated_resource_mass += float(tank.get("resources", {}).get("xenon", 0.0)) + float(tank.get("resources", {}).get("solid_propellant", 0.0))
+				else:
+					remaining_tanks.append(tank.duplicate(true))
+			var separated_rcs_capacity := maxf(0.0, float(component.get("rcs_propellant_capacity", 0.0)))
+			var total_rcs_capacity := _remaining_rcs_propellant_capacity()
+			var separated_rcs_fuel := rcs_propellant_remaining * separated_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
+			components.remove_at(component_index)
+			rocket_stages[physical_stage_index] = RocketAssembly.compile_stage(stage, components)
+			resource_tanks = remaining_tanks
+			rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - separated_rcs_fuel)
+			_sync_legacy_fuel_from_tanks()
+			var detached_stage := RocketAssembly.compile_stage(stage, [component])
+			var detached_mass := float(component.get("dry_mass", 0.0)) + separated_fuel + separated_resource_mass + separated_rcs_fuel
+			var separation_direction := Vector2.UP.rotated(rotation_angle)
+			var relative_velocity := Vector2(-world_offset.y, world_offset.x) * angular_velocity + separation_direction * 0.5
+			var parent_mass := maxf(1.0, _current_vehicle_mass())
+			var detached_position := rocket_position + world_offset
+			var detached_velocity := velocity + relative_velocity
+			velocity -= relative_velocity * detached_mass / maxf(1.0, parent_mass + detached_mass)
+			var detached_is_module := RocketAssembly.stage_docking_ports(detached_stage).size() > 0 and float(detached_stage.get("rcs_propellant_capacity", 0.0)) > 0.0
+			stage_separated.emit({
+				"stage": detached_stage,
+				"fuel": separated_fuel,
+				"rcs_fuel": separated_rcs_fuel,
+				"resource_tanks": separated_tanks,
+				"dockable_module": detached_is_module,
+				"position_components": PackedFloat64Array([detached_position.x, detached_position.y]),
+				"velocity": detached_velocity,
+				"rotation_angle": rotation_angle,
+				"angular_velocity": angular_velocity,
+				"parent_vehicle_name": vehicle_name,
+				"sim_time": sim_time,
+				"launch_time": launch_time
+			})
+			staging_changed.emit()
+			return true
+	return false
 
 func execute_staging_actions(actions: Array) -> bool:
 	if actions.is_empty():
@@ -2034,6 +2153,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and get_viewport().gui_get_focus_owner() != null:
 		return
 	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			var selected_part := _part_at_screen_position(event.position)
+			if not selected_part.is_empty():
+				part_selected.emit(selected_part)
+			return
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			if show_solar_system:
 				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
