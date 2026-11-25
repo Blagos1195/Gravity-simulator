@@ -2511,8 +2511,27 @@ func _dock_vehicle(target_name: String) -> bool:
 		return false
 	if not sim.has_rcs_installed() or not target.has_rcs_installed() or not sim.has_docking_port() or not target.has_docking_port():
 		return false
-	var own_port: Dictionary = sim.docking_port_world_state()
-	var target_port: Dictionary = target.docking_port_world_state()
+	var own_used_ports: Dictionary = {}
+	var target_used_ports: Dictionary = {}
+	for link in docking_links:
+		if str(link.get("parent_name", "")) == sim.vehicle_name:
+			own_used_ports[str(link.get("port_a", ""))] = true
+		elif str(link.get("child_name", "")) == sim.vehicle_name:
+			own_used_ports[str(link.get("port_b", ""))] = true
+		if str(link.get("parent_name", "")) == target.vehicle_name:
+			target_used_ports[str(link.get("port_a", ""))] = true
+		elif str(link.get("child_name", "")) == target.vehicle_name:
+			target_used_ports[str(link.get("port_b", ""))] = true
+	var own_port: Dictionary = {}
+	var target_port: Dictionary = {}
+	for port in sim.docking_port_world_states():
+		if not own_used_ports.has(str(port.get("part_uid", ""))):
+			own_port = port
+			break
+	for port in target.docking_port_world_states():
+		if not target_used_ports.has(str(port.get("part_uid", ""))):
+			target_port = port
+			break
 	if own_port.is_empty() or target_port.is_empty():
 		return false
 	var separation: float = Vector2(target_port.position).distance_to(Vector2(own_port.position))

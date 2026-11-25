@@ -79,7 +79,10 @@ func _initialize() -> void:
 	assert(main.docking_assists.is_empty(), "Docking did not stop rendezvous assist")
 	assert(not child.input_enabled)
 	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass()))
-	second_child.rocket_position = parent.rocket_position + Vector2(-25.0, 0.0)
+	parent.rocket_stages[0] = RocketAssembly.add_component(parent.rocket_stages[0], "standard_docking_port")
+	var second_parent_port: Dictionary = parent.docking_port_world_states()[1]
+	var second_child_port: Dictionary = second_child.docking_port_world_state()
+	second_child.rocket_position = parent.rocket_position + (Vector2(second_parent_port.position) - Vector2(second_child_port.position))
 	second_child.velocity = Vector2(0.0, 1001.0)
 	assert(main._dock_vehicle(second_child.vehicle_name))
 	assert(main.docking_links.size() == 2)

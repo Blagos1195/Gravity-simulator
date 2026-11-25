@@ -736,7 +736,8 @@ func has_docking_port() -> bool:
 			return true
 	return false
 
-func docking_port_world_state() -> Dictionary:
+func docking_port_world_states() -> Array:
+	var result: Array = []
 	var total_length := 0.0
 	var geometries: Array[Dictionary] = []
 	for index in range(stage_index, rocket_stages.size()):
@@ -744,21 +745,24 @@ func docking_port_world_state() -> Dictionary:
 		geometries.append(geometry)
 		total_length += float(geometry.get("length", 1.0))
 	var cursor := -total_length * 0.5
-	for offset in range(geometries.size()):
-		var geometry: Dictionary = geometries[offset]
+	for geometry in geometries:
 		var stage_center_y := cursor + float(geometry.get("length", 1.0)) * 0.5
 		var stage: Dictionary = geometry.get("stage", {})
-		var ports: Array[Dictionary] = RocketAssembly.stage_docking_ports(stage, stage_center_y)
-		if not ports.is_empty():
-			var port: Dictionary = ports[0]
+		for port in RocketAssembly.stage_docking_ports(stage, stage_center_y):
 			var local_position: Vector2 = port.position
 			var local_normal: Vector2 = port.normal
-			return {
+			result.append({
 				"position": rocket_position + local_position.rotated(rotation_angle),
 				"normal": local_normal.rotated(rotation_angle).normalized(),
 				"part_uid": str(port.get("part_uid", ""))
-			}
+			})
 		cursor += float(geometry.get("length", 1.0))
+	return result
+
+func docking_port_world_state(part_uid: String = "") -> Dictionary:
+	for port in docking_port_world_states():
+		if part_uid.is_empty() or str(port.get("part_uid", "")) == part_uid:
+			return port
 	return {}
 
 func apply_rcs_velocity_correction(velocity_correction: Vector2, delta: float) -> bool:
