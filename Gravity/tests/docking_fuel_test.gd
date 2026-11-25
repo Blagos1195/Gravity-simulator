@@ -98,6 +98,7 @@ func _initialize() -> void:
 	main._update_docked_masses()
 	var combined_mass_before := parent._current_vehicle_mass()
 	var transferred := main._transfer_fuel(child.vehicle_name, parent.vehicle_name)
+	print("TRANSFER DEBUG ", transferred, " donor fuel ", child.fuel, " donor stages ", child.stage_fuel_remaining, " parent fuel ", parent.fuel, " parent stages ", parent.stage_fuel_remaining, " child ext ", child.resource_inventory_external, " parent tanks ", parent.resource_tanks)
 	assert(is_equal_approx(transferred, 10000.0))
 	assert(is_equal_approx(parent.fuel, parent_capacity))
 	assert(is_zero_approx(child.stage_fuel_remaining[1]))
