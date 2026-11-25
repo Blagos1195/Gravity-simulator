@@ -19,7 +19,7 @@ class PartCard extends Button:
 		preview.text = str(component.get("label", component.get("id", "Part")))
 		preview.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
 		set_drag_preview(preview)
-		return {"source": "catalog", "id": str(component.get("id", ""))}
+		return {"source": "catalog", "id": str(component.get("id", "")), "kind": str(component.get("kind", ""))}
 
 class AssemblyCanvas extends Control:
 	signal component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int)
@@ -56,7 +56,8 @@ class AssemblyCanvas extends Control:
 	func _drop_data(at_position: Vector2, data: Variant) -> void:
 		var center_x := size.x * 0.5
 		if str(data.get("source", "")) == "catalog":
-			var attachment := "radial" if absf(at_position.x - center_x) > 78.0 else "stack"
+			var kind := str(data.get("kind", ""))
+			var attachment := "radial" if kind == "radial" else ("side" if absf(at_position.x - center_x) > 78.0 else "stack")
 			var side := -1 if at_position.x < center_x else 1
 			var insert_index := _insert_index(at_position.y)
 			component_dropped.emit(str(data.get("id", "")), attachment, bool(get_meta("mirror_enabled", true)), side, insert_index)
@@ -69,7 +70,7 @@ class AssemblyCanvas extends Control:
 	func _insert_index(y_position: float) -> int:
 		for item in _component_rects:
 			var rect: Rect2 = item.rect
-			if y_position < rect.get_center().y:
+			if str(item.get("attachment", "stack")) == "stack" and y_position < rect.get_center().y:
 				return int(item.index)
 		return (stage.get("components", []) as Array).size()
 
@@ -112,7 +113,11 @@ class AssemblyCanvas extends Control:
 		var max_radius := 0.5
 		for stage_data in stages:
 			for component in stage_data.get("components", []):
-				if str(component.get("attachment", "stack")) == "radial":
+				var attachment := str(component.get("attachment", "stack"))
+				if attachment == "radial":
+					continue
+				if attachment == "side":
+					max_radius = maxf(max_radius, float(component.get("collision_radius_m", 1.0)) * 2.0)
 					continue
 				total_length += maxf(0.5, float(component.get("length_m", 1.0)))
 				max_radius = maxf(max_radius, float(component.get("collision_radius_m", 1.0)))
@@ -137,18 +142,39 @@ class AssemblyCanvas extends Control:
 		var axial_centers: Dictionary = {}
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
-			if str(component.get("attachment", "stack")) == "radial":
+			if str(component.get("attachment", "stack")) != "stack":
 				continue
-			var height := maxf(12.0, float(component.get("length_m", 1.0)) * scale)
+			var height := maxf(12.0, float(component.get("length_m", 1.0)) * scale
 			var half_width := clampf(float(component.get("collision_radius_m", 1.0)) * width_scale, 9.0, size.x * 0.2)
 			var rect := Rect2(Vector2(center_x - half_width, current_y), Vector2(half_width * 2.0, height))
 			_draw_part(rect, component, editable and index == selected_index, 1.0 if editable else 0.34)
 			axial_centers[index] = rect.get_center().y
 			if editable:
-				_component_rects.append({"index": index, "rect": rect})
+				_component_rects.append({"index": index, "rect": rect, "attachment": "stack"})
 				draw_circle(Vector2(center_x, rect.position.y), 4.0, Color(0.35, 0.78, 1.0))
 				draw_circle(Vector2(center_x, rect.end.y), 4.0, Color(0.35, 0.78, 1.0))
 			current_y += height
+		var core_radius := 0.5
+		for component in components:
+			if str(component.get("attachment", "stack")) == "stack":
+				core_radius = maxf(core_radius, float(component.get("collision_radius_m", 0.5)))
+		for index in range(components.size()):
+			var component: Dictionary = components[index]
+			if str(component.get("attachment", "stack")) != "side":
+				continue
+			var height := maxf(16.0, float(component.get("length_m", 6.0)) * scale)
+			var width := maxf(14.0, float(component.get("collision_radius_m", 1.0)) * width_scale * 1.7)
+			var mount_index := int(component.get("mount_index", -1))
+			var y := float(axial_centers.get(mount_index, start_y + (current_y - start_y) * 0.5)) - height * 0.5
+			var offset := (core_radius + float(component.get("collision_radius_m", 1.0)) * 0.9) * width_scale
+			var side := int(component.get("side", 1))
+			var sides: Array = [-1, 1] if bool(component.get("mirror", true)) else [side]
+			for direction in sides:
+				var rect := Rect2(Vector2(center_x + float(direction) * offset - width * 0.5, y), Vector2(width, height))
+				_draw_part(rect, component, editable and index == selected_index, 1.0 if editable else 0.34)
+				if editable:
+					_component_rects.append({"index": index, "rect": rect, "attachment": "side"})
+				draw_line(Vector2(center_x + float(direction) * core_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
 			if str(component.get("attachment", "stack")) != "radial":
@@ -165,7 +191,7 @@ class AssemblyCanvas extends Control:
 				var rect := Rect2(Vector2(center_x + float(direction) * offset - width * 0.5, y), Vector2(width, height))
 				_draw_part(rect, component, editable and index == selected_index, 1.0 if editable else 0.34)
 				if editable:
-					_component_rects.append({"index": index, "rect": rect})
+					_component_rects.append({"index": index, "rect": rect, "attachment": "radial"})
 				draw_line(Vector2(center_x + float(direction) * max_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		return current_y
 
@@ -536,7 +562,7 @@ func _build_interface() -> void:
 	footer.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(footer)
 	var note := Label.new()
-	note.text = "Drag parts onto the stack nodes or side mounts. Drag installed parts to reorder them. Mirroring duplicates radial mounts."
+	note.text = "Drop parts down the centre to stack them, or to either side to mount them alongside the stack. Mirroring duplicates side-mounted parts."
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	footer.add_child(note)
@@ -624,10 +650,10 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 			if str(existing_component.get("kind", "")) == "engine":
 				insert_index = index
 				break
-	if attachment == "radial":
+	if attachment in ["radial", "side"]:
 		var axial_indices: Array[int] = []
 		for index in range(components.size() - 1):
-			if str(components[index].get("attachment", "stack")) != "radial":
+			if str(components[index].get("attachment", "stack")) == "stack":
 				axial_indices.append(index)
 		if not axial_indices.is_empty():
 			var target_index := insert_index if insert_index >= 0 else int(float(components.size()) * 0.5)
@@ -639,7 +665,7 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 	if attachment == "stack" and insert_index >= 0 and insert_index < components.size() - 1:
 		for index in range(components.size() - 1):
 			var existing_component: Dictionary = components[index]
-			if str(existing_component.get("attachment", "stack")) == "radial":
+			if str(existing_component.get("attachment", "stack")) != "stack":
 				var mount_index := int(existing_component.get("mount_index", -1))
 				if mount_index >= insert_index:
 					existing_component["mount_index"] = mount_index + 1
@@ -666,7 +692,7 @@ func _on_component_moved(from_index: int, to_index: int) -> void:
 			item["mount_index"] = item_mount + 1
 	for index in range(components.size()):
 		var component: Dictionary = components[index]
-		if str(component.get("attachment", "stack")) != "radial":
+		if str(component.get("attachment", "stack")) == "stack":
 			continue
 		var mount_index := int(component.get("mount_index", -1))
 		if mount_index == from_index:
@@ -725,8 +751,8 @@ func _refresh_inspector() -> void:
 	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_inspector.add_child(title_label)
 	var mirror_selected := CheckButton.new()
-	mirror_selected.text = "MIRROR THIS RADIAL PART"
-	mirror_selected.disabled = str(component.get("attachment", "stack")) != "radial"
+	mirror_selected.text = "MIRROR THIS PART"
+	mirror_selected.disabled = not ["radial", "side"].has(str(component.get("attachment", "stack")))
 	mirror_selected.button_pressed = bool(component.get("mirror", false))
 	var side_selector: OptionButton
 	mirror_selected.toggled.connect(func(enabled: bool):
@@ -735,7 +761,7 @@ func _refresh_inspector() -> void:
 			side_selector.disabled = enabled
 	)
 	_inspector.add_child(mirror_selected)
-	if str(component.get("attachment", "stack")) == "radial":
+	if str(component.get("attachment", "stack")) in ["radial", "side"]:
 		var side_label := Label.new()
 		side_label.text = "Mount side"
 		_inspector.add_child(side_label)
@@ -816,10 +842,10 @@ func _duplicate_selected_component() -> void:
 	var duplicate: Dictionary = components[selected_component_index].duplicate(true)
 	for index in range(components.size()):
 		var component: Dictionary = components[index]
-		if str(component.get("attachment", "stack")) == "radial" and int(component.get("mount_index", -1)) >= destination:
+		if str(component.get("attachment", "stack")) != "stack" and int(component.get("mount_index", -1)) >= destination:
 			component["mount_index"] = int(component.get("mount_index", -1)) + 1
 			components[index] = component
-	if str(duplicate.get("attachment", "stack")) == "radial" and int(duplicate.get("mount_index", -1)) >= destination:
+	if str(duplicate.get("attachment", "stack")) != "stack" and int(duplicate.get("mount_index", -1)) >= destination:
 		duplicate["mount_index"] = int(duplicate.get("mount_index", -1)) + 1
 	components.insert(destination, duplicate)
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(_current_stage(), components)
@@ -836,7 +862,7 @@ func _remove_selected_component() -> void:
 	var axial_indices: Array[int] = []
 	for index in range(components.size()):
 		var component: Dictionary = components[index]
-		if str(component.get("attachment", "stack")) != "radial":
+		if str(component.get("attachment", "stack")) == "stack":
 			axial_indices.append(index)
 	for index in range(components.size()):
 		var component: Dictionary = components[index]
