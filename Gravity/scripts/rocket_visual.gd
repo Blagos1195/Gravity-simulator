@@ -1,6 +1,8 @@
 extends RefCounted
 class_name RocketVisual
 
+const RocketDesign = preload("res://scripts/rocket_design.gd")
+
 static func camera_scale(camera_zoom: float, visual_scale: float = 1.0) -> float:
 	return clampf(camera_zoom * visual_scale * 10.0, 0.002, 5.0)
 
