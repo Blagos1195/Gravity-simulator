@@ -9,10 +9,11 @@ static func _catalog() -> Dictionary:
 
 static func component_options() -> Array:
 	var options: Array = []
-	for category in ["tanks", "engines", "decouplers", "structures"]:
+	for category in ["tanks", "engines", "decouplers", "structures", "rcs", "docking_ports"]:
+		var component_kind := {"rcs": "rcs", "docking_ports": "docking_port"}.get(category, category.trim_suffix("s"))
 		for definition in _catalog().get(category, []):
 			var option: Dictionary = definition.duplicate(true)
-			option["kind"] = category.trim_suffix("s")
+			option["kind"] = component_kind
 			options.append(option)
 	for definition in RocketDesign.booster_options():
 		var option: Dictionary = definition.duplicate(true)
@@ -105,6 +106,11 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	var thrust := 0.0
 	var vacuum_thrust := 0.0
 	var flow := 0.0
+	var rcs_propellant_capacity := 0.0
+	var rcs_thrust := 0.0
+	var rcs_flow := 0.0
+	var rcs_torque := 0.0
+	var docking_port_count := 0
 	var total_length := 0.0
 	var maximum_radius := 0.1
 	var side_mount_radii: Dictionary = {}
@@ -129,6 +135,12 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 		thrust += maxf(0.0, float(component.get("thrust", 0.0))) * copies
 		vacuum_thrust += maxf(0.0, float(component.get("vacuum_thrust", 0.0))) * copies
 		flow += maxf(0.0, float(component.get("flow", 0.0))) * copies
+		rcs_propellant_capacity += maxf(0.0, float(component.get("rcs_propellant_capacity", 0.0))) * copies
+		rcs_thrust += maxf(0.0, float(component.get("rcs_thrust", 0.0))) * copies
+		rcs_flow += maxf(0.0, float(component.get("rcs_flow", 0.0))) * copies
+		rcs_torque += maxf(0.0, float(component.get("rcs_torque", 0.0))) * copies
+		if str(component.get("kind", "")) == "docking_port":
+			docking_port_count += int(copies)
 		if attachment == "stack":
 			total_length += maxf(0.0, float(component.get("length_m", 0.0)))
 			maximum_radius = maxf(maximum_radius, float(component.get("collision_radius_m", 0.1)))
@@ -154,6 +166,11 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	configured["thrust"] = thrust
 	configured["vacuum_thrust"] = vacuum_thrust
 	configured["flow"] = flow
+	configured["rcs_propellant_capacity"] = rcs_propellant_capacity
+	configured["rcs_thrust"] = rcs_thrust
+	configured["rcs_flow"] = rcs_flow
+	configured["rcs_torque"] = rcs_torque
+	configured["docking_port_count"] = docking_port_count
 	configured["engine_count"] = 1
 	configured["physical_length_m"] = maxf(1.0, total_length)
 	configured["collision_radius_m"] = maximum_radius
@@ -235,7 +252,7 @@ static func stage_geometry(stage: Dictionary) -> Dictionary:
 		"booster_positions": booster_positions
 	}
 
-static func stage_mass_elements(stage: Dictionary, fuel_remaining: float, stage_center_y: float = 0.0) -> Array[Dictionary]:
+static func stage_mass_elements(stage: Dictionary, fuel_remaining: float, stage_center_y: float = 0.0, rcs_fuel_fraction: float = 1.0) -> Array[Dictionary]:
 	var geometry := stage_geometry(stage)
 	var configured: Dictionary = geometry.stage
 	var fuel_capacity := RocketDesign.stage_total_fuel_capacity(configured)
@@ -246,7 +263,7 @@ static func stage_mass_elements(stage: Dictionary, fuel_remaining: float, stage_
 	for index in range(components.size()):
 		var component: Dictionary = components[index]
 		var positions: Array = component_positions.get(index, [])
-		var mass := maxf(0.0, float(component.get("dry_mass", 0.0))) + maxf(0.0, float(component.get("fuel_capacity", 0.0))) * fuel_fraction
+		var mass := maxf(0.0, float(component.get("dry_mass", 0.0))) + maxf(0.0, float(component.get("fuel_capacity", 0.0))) * fuel_fraction + maxf(0.0, float(component.get("rcs_propellant_capacity", 0.0))) * clampf(rcs_fuel_fraction, 0.0, 1.0)
 		var length := maxf(0.1, float(component.get("length_m", 1.0)))
 		var radius := maxf(0.1, float(component.get("collision_radius_m", 0.5)))
 		for position_variant in positions:
@@ -320,6 +337,47 @@ static func stage_engine_elements(stage: Dictionary, pressure_ratio: float, stag
 				"gimballed": false
 			})
 	return elements
+
+static func stage_rcs_propellant_capacity(stage: Dictionary) -> float:
+	return float(ensure_stage_components(stage).get("rcs_propellant_capacity", 0.0))
+
+static func stage_rcs_elements(stage: Dictionary, stage_center_y: float = 0.0) -> Array[Dictionary]:
+	var geometry := stage_geometry(stage)
+	var configured: Dictionary = geometry.stage
+	var components: Array = configured.get("components", [])
+	var positions: Dictionary = geometry.component_positions
+	var elements: Array[Dictionary] = []
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		if str(component.get("kind", "")) != "rcs":
+			continue
+		for position_variant in positions.get(index, []):
+			var position: Vector2 = position_variant
+			elements.append({
+				"position": position + Vector2(0.0, stage_center_y),
+				"thrust": float(component.get("rcs_thrust", 0.0)),
+				"flow": float(component.get("rcs_flow", 0.0)),
+				"torque": float(component.get("rcs_torque", 0.0))
+			})
+	return elements
+
+static func stage_docking_ports(stage: Dictionary, stage_center_y: float = 0.0) -> Array[Dictionary]:
+	var geometry := stage_geometry(stage)
+	var components: Array = geometry.stage.get("components", [])
+	var positions: Dictionary = geometry.component_positions
+	var ports: Array[Dictionary] = []
+	for index in range(components.size()):
+		var component: Dictionary = components[index]
+		if str(component.get("kind", "")) != "docking_port":
+			continue
+		for position_variant in positions.get(index, []):
+			var position: Vector2 = position_variant + Vector2(0.0, stage_center_y)
+			ports.append({
+				"position": position,
+				"normal": Vector2.UP * float(component.get("port_facing", 1)),
+				"component_index": index
+			})
+	return ports
 
 static func component_summary(stage: Dictionary) -> Dictionary:
 	var components: Array = stage.get("components", [])
