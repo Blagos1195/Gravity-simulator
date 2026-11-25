@@ -42,6 +42,18 @@ func _initialize() -> void:
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
 	parent.velocity = Vector2(0.0, 1000.0)
 	child.velocity = Vector2(0.0, 1003.0)
+	var child_stage_with_port: Dictionary = child.rocket_stages[0].duplicate(true)
+	var port_component_index := -1
+	for index in range(child_stage_with_port.components.size()):
+		if str(child_stage_with_port.components[index].get("kind", "")) == "docking_port":
+			port_component_index = index
+	assert(port_component_index >= 0)
+	child.rocket_stages[0] = RocketAssembly.remove_component(child_stage_with_port, port_component_index)
+	assert(not main._dock_vehicle(child.vehicle_name), "A spacecraft without a docking port connected")
+	child.rocket_stages[0] = child_stage_with_port
+	child.rcs_propellant_remaining = 0.0
+	assert(not main._dock_vehicle(child.vehicle_name), "A spacecraft without RCS propellant connected")
+	child.rcs_propellant_remaining = child._remaining_rcs_propellant_capacity()
 	assert(not main._dock_vehicle(child.vehicle_name))
 	child.velocity = Vector2(0.0, 1001.0)
 	assert(main._dock_vehicle(child.vehicle_name))
