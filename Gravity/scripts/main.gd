@@ -2209,6 +2209,49 @@ func _refresh_vehicle_selector() -> void:
 		vehicle_selector.add_item("%02d  •  %s" % [index + 1, vehicle.vehicle_name])
 	vehicle_selector.select(active_vehicle_index)
 
+func _execute_actions_on_module(module: SimulationView, actions: Array) -> void:
+	if module == null:
+		return
+	var inventory_owner := _resource_inventory_owner(module)
+	if inventory_owner == null or inventory_owner == module:
+		module.execute_staging_actions(actions)
+		return
+	module.resource_tanks = ResourceNetwork.tank_states_for_module(inventory_owner.resource_tanks, module.vehicle_name)
+	inventory_owner.resource_tanks = ResourceNetwork.tank_states_without_module(inventory_owner.resource_tanks, module.vehicle_name)
+	module.resource_inventory_external = false
+	module._sync_legacy_fuel_from_tanks()
+	var previous_rcs := float(inventory_owner.docked_rcs_propellant.get(module.vehicle_name, module.rcs_propellant_remaining))
+	module.rcs_propellant_remaining = previous_rcs
+	module.execute_staging_actions(actions)
+	var remaining_rcs := module.rcs_propellant_remaining
+	inventory_owner.rcs_propellant_remaining = maxf(0.0, inventory_owner.rcs_propellant_remaining - previous_rcs + remaining_rcs)
+	inventory_owner.docked_rcs_propellant[module.vehicle_name] = remaining_rcs
+	inventory_owner.resource_tanks = ResourceNetwork.merge_tank_states(inventory_owner.resource_tanks, module.resource_tanks)
+	module.resource_tanks.clear()
+	module.resource_inventory_external = true
+	module.fuel = 0.0
+	module.rcs_propellant_remaining = remaining_rcs
+	module._sync_legacy_fuel_from_external_tanks(inventory_owner.resource_tanks)
+	inventory_owner._sync_legacy_fuel_from_tanks()
+
+func _prune_module_staging_actions(module: SimulationView) -> void:
+	if module == null or not is_instance_valid(sim):
+		return
+	var attached_parts: Dictionary = {}
+	for index in range(module.stage_index, module.rocket_stages.size()):
+		for component in module.rocket_stages[index].get("components", []):
+			attached_parts[str(component.get("part_uid", ""))] = true
+	for stage_index_value in range(sim.staging_plan.size()):
+		var stage: Dictionary = sim.staging_plan[stage_index_value]
+		var actions: Array = []
+		for action in stage.get("actions", []):
+			if not action is Dictionary:
+				continue
+			if str(action.get("module_id", sim.vehicle_name)) != module.vehicle_name or str(action.get("part_id", "")).is_empty() or attached_parts.has(str(action.get("part_id", ""))):
+				actions.append(action)
+		stage["actions"] = actions
+		sim.staging_plan[stage_index_value] = stage
+
 func _execute_fleet_staging_stage() -> void:
 	if not is_instance_valid(sim) or sim.action_stage_index < 0 or sim.action_stage_index >= sim.staging_plan.size():
 		return
@@ -2227,7 +2270,8 @@ func _execute_fleet_staging_stage() -> void:
 		var module := _find_vehicle_by_name(str(module_id))
 		if module == null:
 			continue
-		module.execute_staging_actions(actions_by_module[module_id])
+		_execute_actions_on_module(module, actions_by_module[module_id])
+		_prune_module_staging_actions(module)
 		for action in actions_by_module[module_id]:
 			var action_name := str(action.get("action", ""))
 			if action_name in ["activate_engine", "deactivate_engine"]:
@@ -2832,6 +2876,7 @@ func _detach_vehicle_component(vehicle: SimulationView, part_uid: String) -> voi
 	var inventory_owner := _resource_inventory_owner(vehicle)
 	if inventory_owner == null or inventory_owner == vehicle:
 		vehicle.detach_component(part_uid)
+		vehicle._prune_staging_plan_to_attached_parts()
 		return
 	vehicle.resource_tanks = ResourceNetwork.tank_states_for_module(inventory_owner.resource_tanks, vehicle.vehicle_name)
 	inventory_owner.resource_tanks = ResourceNetwork.tank_states_without_module(inventory_owner.resource_tanks, vehicle.vehicle_name)
@@ -2839,6 +2884,7 @@ func _detach_vehicle_component(vehicle: SimulationView, part_uid: String) -> voi
 	vehicle._sync_legacy_fuel_from_tanks()
 	var previous_rcs := float(inventory_owner.docked_rcs_propellant.get(vehicle.vehicle_name, vehicle.rcs_propellant_remaining))
 	vehicle.detach_component(part_uid)
+	vehicle._prune_staging_plan_to_attached_parts()
 	var remaining_rcs := vehicle.rcs_propellant_remaining
 	inventory_owner.rcs_propellant_remaining = maxf(0.0, inventory_owner.rcs_propellant_remaining - previous_rcs + remaining_rcs)
 	inventory_owner.docked_rcs_propellant[vehicle.vehicle_name] = remaining_rcs
@@ -2847,6 +2893,7 @@ func _detach_vehicle_component(vehicle: SimulationView, part_uid: String) -> voi
 	vehicle.resource_inventory_external = true
 	vehicle.fuel = 0.0
 	vehicle._sync_legacy_fuel_from_external_tanks(inventory_owner.resource_tanks)
+	_prune_module_staging_actions(vehicle)
 	_sync_docked_vehicles()
 	_update_docked_masses()
 
