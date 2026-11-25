@@ -48,6 +48,14 @@ func _initialize() -> void:
 		if str(child_stage_with_port.components[index].get("kind", "")) == "docking_port":
 			port_component_index = index
 	assert(port_component_index >= 0)
+	var rcs_component_index := -1
+	for index in range(child_stage_with_port.components.size()):
+		if str(child_stage_with_port.components[index].get("kind", "")) == "rcs":
+			rcs_component_index = index
+	assert(rcs_component_index >= 0)
+	child.rocket_stages[0] = RocketAssembly.remove_component(child_stage_with_port, rcs_component_index)
+	assert(not main._dock_vehicle(child.vehicle_name), "A spacecraft without RCS hardware connected")
+	child.rocket_stages[0] = child_stage_with_port
 	child.rocket_stages[0] = RocketAssembly.remove_component(child_stage_with_port, port_component_index)
 	assert(not main._dock_vehicle(child.vehicle_name), "A spacecraft without a docking port connected")
 	child.rocket_stages[0] = child_stage_with_port
