@@ -444,9 +444,7 @@ func apply_rcs_velocity_correction(velocity_correction: Vector2, delta: float) -
 	if used <= 0.0:
 		return false
 	var applied_delta_v := maximum_delta_v * used / maxf(0.000001, flow * delta)
-	velocity += force.normalized() * applied_delta_v * Vector2.RIGHT.rotated(rotation_angle).dot(force.normalized().rotated(rotation_angle)) * Vector2.RIGHT.rotated(rotation_angle)
 	var world_impulse_direction := force.normalized().rotated(rotation_angle)
-	velocity -= force.normalized() * applied_delta_v * Vector2.RIGHT.rotated(rotation_angle).dot(force.normalized().rotated(rotation_angle)) * Vector2.RIGHT.rotated(rotation_angle)
 	velocity += world_impulse_direction * applied_delta_v
 	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - used)
 	return true
