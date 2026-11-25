@@ -112,15 +112,22 @@ class AssemblyCanvas extends Control:
 		var total_length := 0.0
 		var max_radius := 0.5
 		for stage_data in stages:
+			var core_radius := 0.5
+			var side_mount_radii: Dictionary = {}
 			for component in stage_data.get("components", []):
 				var attachment := str(component.get("attachment", "stack"))
 				if attachment == "radial":
 					continue
 				if attachment == "side":
-					max_radius = maxf(max_radius, float(component.get("collision_radius_m", 1.0)) * 2.0)
+					var mount_index := int(component.get("mount_index", -1))
+					side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 1.0)) * 0.9
 					continue
 				total_length += maxf(0.5, float(component.get("length_m", 1.0)))
-				max_radius = maxf(max_radius, float(component.get("collision_radius_m", 1.0)))
+				core_radius = maxf(core_radius, float(component.get("collision_radius_m", 1.0)))
+			var widest_side_mount := 0.0
+			for mount_radius in side_mount_radii.values():
+				widest_side_mount = maxf(widest_side_mount, float(mount_radius))
+			max_radius = maxf(max_radius, core_radius + widest_side_mount)
 		var gap := 16.0 * zoom
 		var scale := minf(zoom * 5.0, (size.y - 72.0 - gap * float(maxi(0, stages.size() - 1))) / maxf(1.0, total_length))
 		var total_height := total_length * scale + gap * float(maxi(0, stages.size() - 1))
@@ -144,7 +151,7 @@ class AssemblyCanvas extends Control:
 			var component: Dictionary = components[index]
 			if str(component.get("attachment", "stack")) != "stack":
 				continue
-			var height := maxf(12.0, float(component.get("length_m", 1.0)) * scale
+			var height := maxf(12.0, float(component.get("length_m", 1.0)) * scale)
 			var half_width := clampf(float(component.get("collision_radius_m", 1.0)) * width_scale, 9.0, size.x * 0.2)
 			var rect := Rect2(Vector2(center_x - half_width, current_y), Vector2(half_width * 2.0, height))
 			_draw_part(rect, component, editable and index == selected_index, 1.0 if editable else 0.34)
@@ -158,15 +165,19 @@ class AssemblyCanvas extends Control:
 		for component in components:
 			if str(component.get("attachment", "stack")) == "stack":
 				core_radius = maxf(core_radius, float(component.get("collision_radius_m", 0.5)))
+		var side_mount_offsets: Dictionary = {}
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
 			if str(component.get("attachment", "stack")) != "side":
 				continue
 			var height := maxf(16.0, float(component.get("length_m", 6.0)) * scale)
-			var width := maxf(14.0, float(component.get("collision_radius_m", 1.0)) * width_scale * 1.7)
+			var component_radius := float(component.get("collision_radius_m", 1.0))
+			var width := maxf(14.0, component_radius * width_scale * 1.7)
 			var mount_index := int(component.get("mount_index", -1))
 			var y := float(axial_centers.get(mount_index, start_y + (current_y - start_y) * 0.5)) - height * 0.5
-			var offset := (core_radius + float(component.get("collision_radius_m", 1.0)) * 0.9) * width_scale
+			var mount_radius := float(side_mount_offsets.get(mount_index, core_radius))
+			var offset := (mount_radius + component_radius * 0.9) * width_scale
+			side_mount_offsets[mount_index] = mount_radius + component_radius * 1.8
 			var side := int(component.get("side", 1))
 			var sides: Array = [-1, 1] if bool(component.get("mirror", true)) else [side]
 			for direction in sides:
