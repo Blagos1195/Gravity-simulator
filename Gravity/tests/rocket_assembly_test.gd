@@ -3,6 +3,7 @@ extends SceneTree
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const RocketBuilder = preload("res://scripts/rocket_builder.gd")
+const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
 	var design := RocketDesign.create_default()
@@ -69,6 +70,20 @@ func _initialize() -> void:
 	var full_com_x := full_weighted_x / full_mass
 	var empty_com_x := empty_weighted_x / empty_mass
 	assert(full_com_x > empty_com_x and empty_com_x > 0.0, "Fuel mass should shift the centre of mass towards a one-sided tank")
+	var simulation := SimulationView.new()
+	var asymmetric_design := RocketDesign.create_default()
+	asymmetric_design["stages"][0] = one_sided_engine
+	simulation.set_rocket_design(asymmetric_design)
+	var asymmetric_mass := simulation._vehicle_mass_properties()
+	var asymmetric_profile := simulation._engine_force_profile(asymmetric_mass.center_of_mass, 1.0, 1.0)
+	assert(absf(float(asymmetric_profile.torque)) > 1.0, "The flight model should calculate torque from an asymmetric engine layout")
+	var balanced_design := RocketDesign.create_default()
+	balanced_design["stages"][0] = mirrored_engine
+	simulation.set_rocket_design(balanced_design)
+	var balanced_mass := simulation._vehicle_mass_properties()
+	var balanced_profile := simulation._engine_force_profile(balanced_mass.center_of_mass, 1.0, 1.0)
+	assert(absf(float(balanced_profile.torque)) < 0.001, "The flight model should preserve torque balance for mirrored engines")
+	simulation.free()
 	var with_engine := RocketAssembly.add_component(with_tank, "vacuum_engine")
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(with_engine), original_dry_mass + 6900.0))
 	assert(is_equal_approx(RocketDesign.stage_total_thrust(with_engine, true), original_vacuum_thrust + 310000.0))
