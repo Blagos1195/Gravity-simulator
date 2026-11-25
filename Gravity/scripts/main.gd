@@ -2502,6 +2502,8 @@ func _update_docked_masses() -> void:
 		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
 		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
 		if parent != null and child != null:
+			_sync_external_module_fuel(child, parent)
+			parent._sync_legacy_fuel_from_tanks()
 			parent.docked_mass += child._current_vehicle_mass()
 
 func _sync_docked_vehicles() -> void:
