@@ -107,7 +107,7 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	var flow := 0.0
 	var total_length := 0.0
 	var maximum_radius := 0.1
-	var side_mount_radius := 0.0
+	var side_mount_radii: Dictionary = {}
 	var tank_color: Variant = configured.get("visual_color_rgb", [0.43, 0.63, 0.75])
 	var radial_boosters: Array = []
 	for component in components:
@@ -133,10 +133,12 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 			total_length += maxf(0.0, float(component.get("length_m", 0.0)))
 			maximum_radius = maxf(maximum_radius, float(component.get("collision_radius_m", 0.1)))
 		elif attachment == "side":
-			side_mount_radius = maxf(side_mount_radius, float(component.get("collision_radius_m", 0.1)))
+			var mount_index := int(component.get("mount_index", -1))
+			side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 0.1)) * 0.9
 		if str(component.get("kind", "")) == "tank":
 			tank_color = component.get("color_rgb", tank_color)
-	maximum_radius += side_mount_radius * 0.9
+	for mount_radius in side_mount_radii.values():
+		maximum_radius = maxf(maximum_radius, maximum_radius + float(mount_radius))
 	var boosters: Array = []
 	for existing in configured.get("boosters", []):
 		if not (existing is Dictionary and existing.has("source_component_id")):
