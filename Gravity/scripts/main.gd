@@ -2525,6 +2525,7 @@ func _dock_vehicle(target_name: String) -> bool:
 		tank["module_id"] = target.vehicle_name
 		target.resource_tanks[tank_index] = tank
 	sim.resource_tanks = ResourceNetwork.merge_tank_states(sim.resource_tanks, target.resource_tanks)
+	sim._sync_legacy_fuel_from_tanks()
 	target.resource_tanks.clear()
 	target.fuel = 0.0
 	for stage_index_value in range(target.stage_fuel_remaining.size()):

@@ -497,7 +497,7 @@ func _reconcile_legacy_fuel_inventory() -> void:
 		var capacity_total := 0.0
 		for tank_index in range(resource_tanks.size()):
 			var tank: Dictionary = resource_tanks[tank_index]
-			if int(tank.get("stage_index", -1)) != stage_index_value:
+			if str(tank.get("module_id", vehicle_name)) != vehicle_name or int(tank.get("stage_index", -1)) != stage_index_value:
 				continue
 			var capacity := float(tank.get("resource_capacities", {}).get("liquid_propellant", 0.0))
 			if capacity > 0.0:
@@ -1359,7 +1359,6 @@ func _separate_stage() -> void:
 	velocity = upper_stack_velocity
 	stage_index += 1
 	_sync_legacy_fuel_from_tanks()
-	fuel = stage_fuel_remaining[stage_index] + maxf(0.0, fuel - separated_fuel)
 	infinite_fuel_stage_remaining = fuel
 	thrust_key_down = false
 
