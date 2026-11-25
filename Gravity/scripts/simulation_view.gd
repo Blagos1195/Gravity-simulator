@@ -347,10 +347,14 @@ func has_rcs_installed() -> bool:
 func has_rcs() -> bool:
 	return has_rcs_installed() and rcs_propellant_remaining > 0.001
 
+func stage_has_rcs(stage: Dictionary) -> bool:
+	var configured := RocketAssembly.ensure_stage_components(stage)
+	return float(configured.get("rcs_thrust", 0.0)) > 0.0 and float(configured.get("rcs_flow", 0.0)) > 0.0
+
 func stage_separation_is_dockable_module() -> bool:
 	if stage_index >= rocket_stages.size() - 1:
 		return false
-	return not RocketAssembly.stage_docking_ports(rocket_stages[stage_index]).is_empty() and not RocketAssembly.stage_docking_ports(rocket_stages[stage_index + 1]).is_empty()
+	return not RocketAssembly.stage_docking_ports(rocket_stages[stage_index]).is_empty() and not RocketAssembly.stage_docking_ports(rocket_stages[stage_index + 1]).is_empty() and stage_has_rcs(rocket_stages[stage_index]) and stage_has_rcs(rocket_stages[stage_index + 1])
 
 func has_docking_port() -> bool:
 	for index in range(stage_index, rocket_stages.size()):
