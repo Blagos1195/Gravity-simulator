@@ -2441,8 +2441,8 @@ func _dock_vehicle(target_name: String) -> bool:
 		return false
 	if not sim.has_rcs() or not target.has_rcs() or not sim.has_docking_port() or not target.has_docking_port():
 		return false
-	var own_port := sim.docking_port_world_state()
-	var target_port := target.docking_port_world_state()
+	var own_port: Dictionary = sim.docking_port_world_state()
+	var target_port: Dictionary = target.docking_port_world_state()
 	if own_port.is_empty() or target_port.is_empty():
 		return false
 	var separation: float = Vector2(target_port.position).distance_to(Vector2(own_port.position))
@@ -3190,7 +3190,7 @@ func _show_docking_panel() -> void:
 		var docked := _are_docked(parent_name, target_name)
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
 		var free_flying: bool = not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
-		var hardware_ready := sim.has_docking_port() and target.has_docking_port() and sim.has_rcs() and target.has_rcs()
+		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs() and target.has_rcs()
 		var available_to_dock: bool = not docked and free_flying and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
 		var available_to_assist: bool = not docked and free_flying and hardware_ready and separation <= DOCKING_ASSIST_MAX_RANGE
 		if docked:
