@@ -2,12 +2,17 @@ extends SceneTree
 
 const Main = preload("res://scripts/main.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
 	root.add_child(main)
-	main.rocket_design = RocketDesign.create_default()
+	var docking_design := RocketDesign.create_default()
+	var docking_stage := RocketAssembly.add_component(docking_design.stages[0], "rcs_thruster_block")
+	docking_stage = RocketAssembly.add_component(docking_stage, "standard_docking_port")
+	docking_design["stages"][0] = docking_stage
+	main.rocket_design = docking_design
 	main._start_flight()
 	main._add_new_vehicle()
 	main._add_new_vehicle()
@@ -18,6 +23,8 @@ func _initialize() -> void:
 	parent.landed = false
 	child.landed = false
 	second_child.landed = false
+	child.rotation_angle = PI
+	second_child.rotation_angle = PI
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
 	parent.velocity = Vector2(12.0, 0.0)
@@ -62,6 +69,13 @@ func _initialize() -> void:
 	assert(is_equal_approx(parent.fuel, parent_capacity))
 	assert(is_zero_approx(child.stage_fuel_remaining[1]))
 	assert(is_zero_approx(child.total_propellant_remaining()))
+	var parent_rcs_capacity := parent._remaining_rcs_propellant_capacity()
+	parent.rcs_propellant_remaining = parent_rcs_capacity - 100.0
+	child.rcs_propellant_remaining = child._remaining_rcs_propellant_capacity()
+	var rcs_transferred := main._transfer_fuel(child.vehicle_name, parent.vehicle_name)
+	assert(is_equal_approx(rcs_transferred, 100.0))
+	assert(is_equal_approx(parent.rcs_propellant_remaining, parent_rcs_capacity))
+	assert(is_equal_approx(child.rcs_propellant_remaining, child._remaining_rcs_propellant_capacity() - 100.0))
 	assert(is_equal_approx(parent._current_vehicle_mass(), combined_mass_before))
 	main.save_slot = 8
 	main._save_game(false)
@@ -77,6 +91,7 @@ func _initialize() -> void:
 	assert(not loaded_second_child.input_enabled)
 	assert(is_equal_approx(loaded_parent.docked_mass, loaded_child._current_vehicle_mass() + loaded_second_child._current_vehicle_mass()))
 	assert(is_zero_approx(loaded_child.stage_fuel_remaining[1]))
+	assert(is_equal_approx(loaded_parent.rcs_propellant_remaining, parent_rcs_capacity))
 	assert(is_equal_approx(loaded_parent.stage_fuel_remaining[0], float(loaded_parent._active_stage_data().get("fuel_capacity", 0.0))))
 	assert(main._undock_vehicle(loaded_child.vehicle_name))
 	assert(main._undock_vehicle(loaded_second_child.vehicle_name))
