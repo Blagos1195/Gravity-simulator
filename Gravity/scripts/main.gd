@@ -1814,6 +1814,7 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 	debris.velocity = stage_data.get("velocity", Vector2.ZERO)
 	debris.separation_parent_name = str(stage_data.get("parent_vehicle_name", ""))
 	debris.rotation_angle = float(stage_data.get("rotation_angle", 0.0))
+	debris.angular_velocity = float(stage_data.get("angular_velocity", 0.0))
 	debris.sim_time = float(stage_data.get("sim_time", sim.sim_time if is_instance_valid(sim) else 0.0))
 	debris.launch_time = float(stage_data.get("launch_time", debris.sim_time))
 	debris.time_warp = sim.time_warp if is_instance_valid(sim) else 1.0
@@ -2409,6 +2410,7 @@ func _sync_docked_vehicles() -> void:
 		child.rocket_position = parent.rocket_position + world_offset
 		child.velocity = parent.velocity
 		child.rotation_angle = parent.rotation_angle
+		child.angular_velocity = parent.angular_velocity
 		child.sim_time = parent.sim_time
 		child.landed = parent.landed
 		child.crashed = parent.crashed
