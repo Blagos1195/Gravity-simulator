@@ -2561,6 +2561,151 @@ func _undock_vehicle(target_name: String) -> bool:
 		return true
 	return false
 
+func _transfer_between_tanks(source_vehicle_name: String, source_part_id: String, destination_vehicle_name: String, destination_part_id: String, resource: String, amount: float) -> float:
+	var source_vehicle := _find_vehicle_by_name(source_vehicle_name)
+	var destination_vehicle := _find_vehicle_by_name(destination_vehicle_name)
+	if source_vehicle == null or destination_vehicle == null:
+		return 0.0
+	var connected := source_vehicle == destination_vehicle or _are_docked(source_vehicle_name, destination_vehicle_name)
+	if not connected:
+		return 0.0
+	for source_index in range(source_vehicle.resource_tanks.size()):
+		if str(source_vehicle.resource_tanks[source_index].get("part_uid", "")) != source_part_id:
+			continue
+		for destination_index in range(destination_vehicle.resource_tanks.size()):
+			if str(destination_vehicle.resource_tanks[destination_index].get("part_uid", "")) != destination_part_id:
+				continue
+			var source: Dictionary = source_vehicle.resource_tanks[source_index].duplicate(true)
+			var destination: Dictionary = destination_vehicle.resource_tanks[destination_index].duplicate(true)
+			var transferred := ResourceNetwork.transfer_between_tanks(source, destination, resource, amount, true)
+			source_vehicle.resource_tanks[source_index] = source
+			destination_vehicle.resource_tanks[destination_index] = destination
+			source_vehicle._sync_legacy_fuel_from_tanks()
+			if destination_vehicle != source_vehicle:
+				destination_vehicle._sync_legacy_fuel_from_tanks()
+			if transferred > 0.0:
+				_update_docked_masses()
+				_sync_docked_vehicles()
+			return transferred
+	return 0.0
+
+func _show_tank_transfer_panel() -> void:
+	var window := Window.new()
+	window.title = "INDIVIDUAL TANK TRANSFER"
+	window.size = Vector2i(460, 520)
+	window.min_size = Vector2i(400, 440)
+	window.transient = true
+	window.exclusive = true
+	add_child(window)
+	window.close_requested.connect(window.queue_free)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 10)
+	layout.add_theme_constant_override("margin_left", 14)
+	layout.add_theme_constant_override("margin_right", 14)
+	layout.add_theme_constant_override("margin_top", 14)
+	layout.add_theme_constant_override("margin_bottom", 14)
+	window.add_child(layout)
+	var source_label := Label.new()
+	source_label.text = "SOURCE SPACECRAFT / TANK"
+	layout.add_child(source_label)
+	var source_vehicle := OptionButton.new()
+	layout.add_child(source_vehicle)
+	var source_tank := OptionButton.new()
+	layout.add_child(source_tank)
+	var destination_label := Label.new()
+	destination_label.text = "DESTINATION SPACECRAFT / TANK"
+	layout.add_child(destination_label)
+	var destination_vehicle := OptionButton.new()
+	layout.add_child(destination_vehicle)
+	var destination_tank := OptionButton.new()
+	layout.add_child(destination_tank)
+	var resource_selector := OptionButton.new()
+	layout.add_child(resource_selector)
+	var amount_input := SpinBox.new()
+	amount_input.min_value = 0.001
+	amount_input.max_value = 100000000000.0
+	amount_input.step = 1.0
+	amount_input.value = 100.0
+	amount_input.suffix = " units"
+	layout.add_child(amount_input)
+	var status := Label.new()
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.custom_minimum_size.y = 48
+	layout.add_child(status)
+	var transfer_button := Button.new()
+	transfer_button.text = "TRANSFER BETWEEN TANKS"
+	transfer_button.custom_minimum_size.y = 42
+	layout.add_child(transfer_button)
+	for vehicle in fleet_sims:
+		source_vehicle.add_item(vehicle.vehicle_name)
+		destination_vehicle.add_item(vehicle.vehicle_name)
+		if vehicle == sim:
+			source_vehicle.select(source_vehicle.item_count - 1)
+			destination_vehicle.select(destination_vehicle.item_count - 1)
+	var refresh_tanks := func(vehicle_picker: OptionButton, tank_picker: OptionButton) -> void:
+		tank_picker.clear()
+		if vehicle_picker.item_count == 0:
+			return
+		var vehicle := _find_vehicle_by_name(vehicle_picker.get_item_text(vehicle_picker.selected))
+		if vehicle == null:
+			return
+		for tank in vehicle.resource_tanks:
+			var capacities: Dictionary = tank.get("resource_capacities", {})
+			var resources: Dictionary = tank.get("resources", {})
+			var resource_names: PackedStringArray = []
+			for resource in capacities:
+				if float(capacities[resource]) > 0.0:
+					resource_names.append(str(resource))
+			if resource_names.is_empty():
+				continue
+			tank_picker.add_item("%s  [%s]" % [str(tank.get("part_uid", "Tank")), ", ".join(resource_names)])
+			tank_picker.set_item_metadata(tank_picker.item_count - 1, str(tank.get("part_uid", "")))
+	var refresh_resources := func() -> void:
+		resource_selector.clear()
+		if source_tank.item_count == 0 or destination_tank.item_count == 0:
+			return
+		var source_vehicle_value := _find_vehicle_by_name(source_vehicle.get_item_text(source_vehicle.selected))
+		var destination_vehicle_value := _find_vehicle_by_name(destination_vehicle.get_item_text(destination_vehicle.selected))
+		if source_vehicle_value == null or destination_vehicle_value == null:
+			return
+		var source_state: Dictionary = {}
+		var destination_state: Dictionary = {}
+		for tank in source_vehicle_value.resource_tanks:
+			if str(tank.get("part_uid", "")) == str(source_tank.get_item_metadata(source_tank.selected)):
+				source_state = tank
+		for tank in destination_vehicle_value.resource_tanks:
+			if str(tank.get("part_uid", "")) == str(destination_tank.get_item_metadata(destination_tank.selected)):
+				destination_state = tank
+		var source_caps: Dictionary = source_state.get("resource_capacities", {})
+		var destination_caps: Dictionary = destination_state.get("resource_capacities", {})
+		for resource in source_caps:
+			if destination_caps.has(resource) and str(resource) != "solid_propellant":
+				resource_selector.add_item(str(resource).replace("_", " ").to_upper())
+				resource_selector.set_item_metadata(resource_selector.item_count - 1, str(resource))
+		var connected := source_vehicle_value == destination_vehicle_value or _are_docked(source_vehicle_value.vehicle_name, destination_vehicle_value.vehicle_name)
+		transfer_button.disabled = not connected or resource_selector.item_count == 0
+		status.text = "Tanks must belong to the same spacecraft or docked spacecraft. Solid motor propellant cannot be transferred." if not connected else "Select a shared resource type and amount."
+	var refresh := func() -> void:
+		refresh_tanks.call(source_vehicle, source_tank)
+		refresh_tanks.call(destination_vehicle, destination_tank)
+		refresh_resources.call()
+	source_vehicle.item_selected.connect(func(_index: int): refresh.call())
+	destination_vehicle.item_selected.connect(func(_index: int): refresh.call())
+	source_tank.item_selected.connect(func(_index: int): refresh_resources.call())
+	destination_tank.item_selected.connect(func(_index: int): refresh_resources.call())
+	transfer_button.pressed.connect(func():
+		if source_tank.item_count == 0 or destination_tank.item_count == 0 or resource_selector.item_count == 0:
+			return
+		var source_name := source_vehicle.get_item_text(source_vehicle.selected)
+		var destination_name := destination_vehicle.get_item_text(destination_vehicle.selected)
+		var amount := _transfer_between_tanks(source_name, str(source_tank.get_item_metadata(source_tank.selected)), destination_name, str(destination_tank.get_item_metadata(destination_tank.selected)), str(resource_selector.get_item_metadata(resource_selector.selected)), amount_input.value)
+		status.text = "Transferred %.3f units." % amount if amount > 0.0 else "No transfer possible. Check supply, transfer valves and tank capacity."
+		refresh_resources.call()
+	)
+	refresh.call()
+	window.popup_centered()
+
 func _transfer_fuel(from_name: String, to_name: String) -> float:
 	if not _are_docked(from_name, to_name):
 		return 0.0
@@ -2721,6 +2866,7 @@ func _build_flight_hud() -> void:
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
 	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
+	_add_button(right, "INDIVIDUAL TANK TRANSFER", _show_tank_transfer_panel)
 	telescope_button = Button.new()
 	telescope_button.text = "ACTIVATE TELESCOPE  [T]"
 	telescope_button.disabled = true
