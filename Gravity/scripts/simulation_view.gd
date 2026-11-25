@@ -4,6 +4,7 @@ signal stage_separated(stage_data: Dictionary)
 
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const RocketVisual = preload("res://scripts/rocket_visual.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 static var G := PlanetarySystem.G
@@ -50,6 +51,7 @@ var rocket_position: Vector2:
 		rocket_position_precise = PackedFloat64Array([value.x, value.y])
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
+var angular_velocity := 0.0
 var fuel := 300000.0
 var infinite_fuel_stage_remaining := 300000.0
 var stage_index := 0
@@ -227,6 +229,82 @@ func add_propellant(amount: float) -> float:
 			break
 	return requested - remaining
 
+func _vehicle_mass_properties(active_fuel_amount: float = -1.0) -> Dictionary:
+	var stage_lengths: Array[float] = []
+	var total_length := 0.0
+	for index in range(stage_index, rocket_stages.size()):
+		var geometry := RocketAssembly.stage_geometry(rocket_stages[index])
+		var stage_length := float(geometry.get("length", 1.0))
+		stage_lengths.append(stage_length)
+		total_length += stage_length
+	var elements: Array[Dictionary] = []
+	var cursor := -total_length * 0.5
+	for offset in range(stage_lengths.size()):
+		var index := stage_index + offset
+		var stage: Dictionary = rocket_stages[index]
+		var stage_length := stage_lengths[offset]
+		var stage_center_y := cursor + stage_length * 0.5
+		var stage_fuel := 0.0
+		if offset == 0:
+			stage_fuel = active_fuel_amount if active_fuel_amount >= 0.0 else (infinite_fuel_stage_remaining if infinite_weightless_fuel else fuel)
+		elif index < stage_fuel_remaining.size():
+			stage_fuel = stage_fuel_remaining[index]
+		else:
+			stage_fuel = RocketDesign.stage_total_fuel_capacity(stage)
+		elements.append_array(RocketAssembly.stage_mass_elements(stage, stage_fuel, stage_center_y))
+		cursor += stage_length
+	var payload_length := maxf(1.0, sqrt(maxf(1.0, payload_mass)) * 0.5)
+	var payload_radius := maxf(0.5, sqrt(maxf(1.0, payload_mass)) * 0.12)
+	var payload_position := Vector2(0.0, total_length * 0.5 + payload_length * 0.5)
+	elements.append({
+		"mass": payload_mass,
+		"position": payload_position,
+		"intrinsic_inertia": payload_mass * (payload_length * payload_length / 12.0 + payload_radius * payload_radius / 4.0)
+	})
+	if docked_mass > 0.0:
+		elements.append({
+			"mass": docked_mass,
+			"position": Vector2.ZERO,
+			"intrinsic_inertia": docked_mass * 25.0
+		})
+	var total_mass := 0.0
+	var weighted_position := Vector2.ZERO
+	for element in elements:
+		var mass := maxf(0.0, float(element.get("mass", 0.0)))
+		total_mass += mass
+		weighted_position += Vector2(element.get("position", Vector2.ZERO)) * mass
+	var center_of_mass := weighted_position / total_mass if total_mass > 0.0 else Vector2.ZERO
+	var moment_of_inertia := 0.0
+	for element in elements:
+		var mass := maxf(0.0, float(element.get("mass", 0.0)))
+		var offset: Vector2 = Vector2(element.get("position", Vector2.ZERO)) - center_of_mass
+		moment_of_inertia += float(element.get("intrinsic_inertia", 0.0)) + mass * offset.length_squared()
+	return {
+		"mass": total_mass,
+		"center_of_mass": center_of_mass,
+		"moment_of_inertia": maxf(1.0, moment_of_inertia)
+	}
+
+func _engine_force_profile(center_of_mass: Vector2, pressure_ratio: float, thrust_scale: float = 1.0) -> Dictionary:
+	var total_length := 0.0
+	var active_geometry := RocketAssembly.stage_geometry(rocket_stages[stage_index])
+	for index in range(stage_index, rocket_stages.size()):
+		total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
+	var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
+	var force_total := Vector2.ZERO
+	var torque_total := 0.0
+	var engines := RocketAssembly.stage_engine_elements(rocket_stages[stage_index], pressure_ratio, active_center_y)
+	for engine in engines:
+		var engine_force := Vector2.UP.rotated(gimbal_angle if bool(engine.get("gimballed", false)) else 0.0) * float(engine.get("thrust", 0.0)) * thrust_scale
+		var engine_position: Vector2 = engine.get("position", Vector2.ZERO)
+		force_total += engine_force
+		torque_total += (engine_position - center_of_mass).cross(engine_force)
+	if engines.is_empty():
+		var fallback_force := Vector2.UP.rotated(gimbal_angle) * _engine_thrust(0.0) * thrust_scale
+		force_total = fallback_force
+		torque_total = (Vector2(0.0, active_center_y) - center_of_mass).cross(fallback_force)
+	return {"force": force_total, "torque": torque_total}
+
 func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
 	var active := _active_stage_data()
 	var mass := float(active.get("dry_mass", 0.0)) + _remaining_stack_mass()
@@ -314,6 +392,7 @@ func _physics_step(dt: float) -> void:
 			var surface_state := _surface_body_state(landed_body_name)
 			var normal := landed_surface_normal.normalized()
 			rotation_angle = normal.angle() - Vector2.UP.angle()
+			angular_velocity = 0.0
 			_set_rocket_position_relative_to_body(surface_state, normal * (float(surface_state.radius) + 5.0))
 			velocity = surface_state.velocity + Vector2(-normal.y, normal.x) * float(surface_state.radius) * float(surface_state.rotation_rate)
 			landed = false
@@ -345,7 +424,21 @@ func _physics_step(dt: float) -> void:
 	var initial_atmosphere: Dictionary = {}
 	if realism != "Arcade" or throttle > 0.0:
 		initial_atmosphere = _atmosphere_at(rocket_position, velocity, start_time, rocket_position_precise)
-	var thrust_force: float = _engine_thrust(maxf(0.0, altitude), initial_atmosphere) * throttle if throttle > 0.0 else 0.0
+	var thrust_force_vector_local := Vector2.ZERO
+	var angular_acceleration := 0.0
+	var initial_rotation_angle := rotation_angle
+	var initial_angular_velocity := angular_velocity
+	var thrust_force := 0.0
+	if throttle > 0.0:
+		var pressure_ratio := float(initial_atmosphere.get("density", 0.0)) * float(initial_atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(initial_atmosphere.get("temperature", 250.0)) / 101325.0
+		var midpoint_fuel := maxf(0.0, (effective_fuel if infinite_weightless_fuel else fuel) - fuel_used * 0.5)
+		var mass_properties := _vehicle_mass_properties(midpoint_fuel)
+		var force_profile := _engine_force_profile(Vector2(mass_properties.center_of_mass), pressure_ratio, throttle)
+		thrust_force_vector_local = Vector2(force_profile.force)
+		thrust_force = thrust_force_vector_local.length()
+		angular_acceleration = float(force_profile.torque) / float(mass_properties.moment_of_inertia)
+	angular_velocity = initial_angular_velocity + angular_acceleration * dt
+	rotation_angle = wrapf(initial_rotation_angle + initial_angular_velocity * dt + 0.5 * angular_acceleration * dt * dt, -PI, PI)
 	var thrust_delta_v := 0.0
 	if fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
 		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
@@ -353,8 +446,8 @@ func _physics_step(dt: float) -> void:
 		thrust_delta_v = thrust_force / mass_before * dt
 	if infinite_weightless_fuel:
 		infinite_fuel_stage_remaining = maxf(0.0, infinite_fuel_stage_remaining - fuel_used)
-	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
-	var thrust_impulse := thrust_direction * thrust_delta_v
+	var average_rotation_angle := initial_rotation_angle + initial_angular_velocity * dt * 0.5 + angular_acceleration * dt * dt / 6.0
+	var thrust_impulse := thrust_force_vector_local.rotated(average_rotation_angle).normalized() * thrust_delta_v if thrust_force_vector_local.length_squared() > 0.0 else Vector2.ZERO
 	if manual_burn_tracking_enabled and not autopilot_enabled and thrust_delta_v > 0.0:
 		manual_burn_accumulated_vector += thrust_impulse
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
@@ -561,6 +654,18 @@ func _adaptive_step_size() -> float:
 		var time_until_node: float = maxf(0.0, float(next_node.get("time", sim_time)) - sim_time)
 		if time_until_node > 0.0:
 			step_limit = minf(step_limit, time_until_node)
+	var rotation_throttle := 1.0 if thrust_key_down else (autopilot_throttle if autopilot_enabled and autopilot_phase == "LANDING_DESCENT" else 0.0)
+	if rotation_throttle > 0.0 and not crashed:
+		var rotation_atmosphere := _atmosphere_at(rocket_position, velocity)
+		var rotation_pressure_ratio := float(rotation_atmosphere.get("density", 0.0)) * float(rotation_atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(rotation_atmosphere.get("temperature", 250.0)) / 101325.0
+		var rotation_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else fuel
+		var rotation_mass := _vehicle_mass_properties(rotation_fuel)
+		var rotation_profile := _engine_force_profile(Vector2(rotation_mass.center_of_mass), rotation_pressure_ratio, rotation_throttle)
+		var rotation_acceleration := absf(float(rotation_profile.torque) / float(rotation_mass.moment_of_inertia))
+		if rotation_acceleration > 0.000001:
+			step_limit = minf(step_limit, sqrt(0.08 / rotation_acceleration))
+	if absf(angular_velocity) > 0.000001:
+		step_limit = minf(step_limit, 0.08 / absf(angular_velocity))
 	if autopilot_enabled and autopilot_phase in ["TRANSFER_COAST", "ARRIVAL_APPROACH"]:
 		var destination_state := _autopilot_target_state()
 		var relative_distance := _relative_position_to_body(destination_state).length()
@@ -710,6 +815,7 @@ func _separate_stage() -> void:
 		"position_components": rocket_position_precise.duplicate(),
 		"velocity": debris_velocity,
 		"rotation_angle": rotation_angle,
+		"angular_velocity": angular_velocity,
 		"sim_time": sim_time,
 		"launch_time": launch_time,
 		"parent_vehicle_name": vehicle_name,
@@ -1360,9 +1466,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.is_action_pressed("rotate_left"):
-			rotation_angle -= 0.12
+			rotation_angle = wrapf(rotation_angle - 0.12, -PI, PI)
+			angular_velocity = 0.0
 		elif event.is_action_pressed("rotate_right"):
-			rotation_angle += 0.12
+			rotation_angle = wrapf(rotation_angle + 0.12, -PI, PI)
+			angular_velocity = 0.0
 		elif event.is_action_pressed("pause_game"):
 			paused = not paused
 		elif event.is_action_pressed("stage_separation"):
@@ -2356,7 +2464,7 @@ func load_save_data(data: Dictionary) -> bool:
 	if not is_finite(velocity_x) or not is_finite(velocity_y):
 		push_error("Save contains a non-finite velocity.")
 		return false
-	for key in ["sim_time", "rotation_angle", "fuel", "gimbal_angle", "autopilot_burn_remaining", "heat_shield_temperature", "peak_heat_flux_mw", "max_dynamic_pressure_pa"]:
+	for key in ["sim_time", "rotation_angle", "angular_velocity", "fuel", "gimbal_angle", "autopilot_burn_remaining", "heat_shield_temperature", "peak_heat_flux_mw", "max_dynamic_pressure_pa"]:
 		var value: Variant = data.get(key, 0.0)
 		if not (value is float or value is int) or not is_finite(float(value)):
 			push_error("Save contains an invalid or non-finite %s value." % key)
@@ -2425,6 +2533,7 @@ func load_save_data(data: Dictionary) -> bool:
 	_set_rocket_position_components(float(precise_position[0]), float(precise_position[1]))
 	velocity = Vector2(float(v[0]), float(v[1]))
 	rotation_angle = float(data.get("rotation_angle", 0.0))
+	angular_velocity = float(data.get("angular_velocity", 0.0))
 	fuel = float(data.get("fuel", _active_stage_data().get("fuel_capacity", 0.0)))
 	stage_fuel_remaining = validated_stage_fuel
 	infinite_fuel_stage_remaining = clampf(float(data.get("infinite_fuel_stage_remaining", fuel)), 0.0, float(_active_stage_data().get("fuel_capacity", 0.0)))
