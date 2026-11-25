@@ -232,9 +232,9 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 				_polygon(canvas, origin, [Vector2(0.0, current_y), Vector2(half_width, current_y + segment_height * 0.5), Vector2(half_width * 0.72, current_y + segment_height), Vector2(-half_width * 0.72, current_y + segment_height), Vector2(-half_width, current_y + segment_height * 0.5)], rotation, scale, component_color)
 		current_y += segment_height
 	if side_radius > 0.0:
-		var combined_radius := widest_radius + side_radius * 0.9
+		var combined_radius := widest_radius + side_radius * 1.75
 		var core_half_width := stage_width * 0.5 * widest_radius / combined_radius
-		var side_half_width_base := stage_width * 0.5 * (side_radius * 0.9 / combined_radius) / 1.9
+		var side_half_width_base := stage_width * 0.5 * (side_radius * 1.75 / combined_radius) / 1.9
 		var side_mount_offsets: Dictionary = {}
 		for component_index in range(ordered.size()):
 			var component: Dictionary = ordered[component_index]
@@ -249,7 +249,7 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 			var component_half_width := maxf(2.0, side_half_width_base * component_radius / side_radius)
 			var mount_offset := float(side_mount_offsets.get(mount_index, core_half_width))
 			var offset := mount_offset + component_half_width * 0.9
-			side_mount_offsets[mount_index] = mount_offset + component_half_width * 1.8
+			side_mount_offsets[mount_index] = offset + component_half_width
 			var color := Color(0.43, 0.63, 0.75)
 			var color_data: Variant = component.get("color_rgb", [])
 			if color_data is Array and color_data.size() == 3:
@@ -267,7 +267,7 @@ static func _draw_component_stack(canvas: CanvasItem, origin: Vector2, rotation:
 						_polygon(canvas, origin, [Vector2(left - component_half_width * 0.62, component_y), Vector2(left + component_half_width * 0.62, component_y), Vector2(left + component_half_width, component_y + component_height), Vector2(left - component_half_width, component_y + component_height)], rotation, scale, color)
 						if engine_enabled and throttle > 0.0:
 							var flame_length := 7.0 + 8.0 * clampf(throttle, 0.0, 1.0)
-						_polygon(canvas, origin, [Vector2(left - component_half_width * 0.32, component_y + component_height), Vector2(left, component_y + component_height + flame_length), Vector2(left + component_half_width * 0.32, component_y + component_height)], rotation, scale, Color(1.0, 0.48, 0.12, 0.92))
+							_polygon(canvas, origin, [Vector2(left - component_half_width * 0.32, component_y + component_height), Vector2(left, component_y + component_height + flame_length), Vector2(left + component_half_width * 0.32, component_y + component_height)], rotation, scale, Color(1.0, 0.48, 0.12, 0.92))
 					_:
 						_polygon(canvas, origin, [Vector2(left, component_y), Vector2(left + component_half_width, component_y + component_height * 0.5), Vector2(left + component_half_width * 0.72, component_y + component_height), Vector2(left - component_half_width * 0.72, component_y + component_height), Vector2(left - component_half_width, component_y + component_height * 0.5)], rotation, scale, color)
 	for booster_index in range(boosters.size()):
