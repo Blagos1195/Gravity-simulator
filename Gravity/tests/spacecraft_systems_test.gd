@@ -16,6 +16,11 @@ func _initialize() -> void:
 	assert(groups.size() == 2 and groups[0].size() == 1 and groups[1].size() == 2)
 	var plan_a: Array = [{"id":"stage_0","actions":[{"id":"a:engine","part_id":"engine","action":"activate_engine","completed":true,"reversible":true}]}]
 	var plan_b: Array = [{"id":"stage_0","actions":[{"id":"b:deploy","part_id":"panel","action":"deploy","completed":false,"reversible":true}]}]
+	var plan_modules := [{"name":"tug","staging_stage_count":3,"stages":[{"components":[{"id":"engine","kind":"engine","part_uid":"engine","staging_stage":2},{"id":"tank","kind":"tank","part_uid":"tank","staging_stage":1}]}]}]
+	var generated_plan := StagingSystem.create_plan(plan_modules)
+	assert(generated_plan.size() == 3)
+	assert(generated_plan[1].actions[0].action == "enable_fuel_supply")
+	assert(generated_plan[2].actions[0].action == "activate_engine")
 	var merged := StagingSystem.merge_plans(plan_a, plan_b)
 	assert(merged.size() == 1 and merged[0].actions.size() == 2)
 	var rearmed := StagingSystem.rearm_stage(merged, 0)

@@ -7,6 +7,11 @@ static func create_plan(modules: Array) -> Array:
 	for module_variant in modules:
 		if module_variant is Dictionary:
 			stage_count = maxi(stage_count, (module_variant.get("stages", []) as Array).size())
+			stage_count = maxi(stage_count, int(module_variant.get("staging_stage_count", 0)))
+			for physical_stage in module_variant.get("stages", []):
+				for component_variant in physical_stage.get("components", []):
+					if component_variant is Dictionary:
+						stage_count = maxi(stage_count, int(component_variant.get("staging_stage", 0)) + 1)
 	for stage_index in range(stage_count):
 		stages.append({"id": "stage_%d" % stage_index, "label": "Stage %d" % (stage_index + 1), "actions": []})
 	for module_variant in modules:
@@ -21,13 +26,18 @@ static func create_plan(modules: Array) -> Array:
 					continue
 				var component: Dictionary = component_variant
 				var kind := str(component.get("kind", ""))
-				var action_name := ""
-				if kind in ["engine", "radial"]:
-					action_name = "activate_engine"
-				elif kind in ["decoupler", "docking_port"]:
-					action_name = "separate"
-				elif bool(component.get("deployable", false)):
-					action_name = "deploy"
+				var action_name := str(component.get("staging_action", ""))
+				if action_name.is_empty():
+					if kind in ["engine", "radial"]:
+						action_name = "activate_engine"
+					elif kind in ["decoupler", "docking_port"]:
+						action_name = "separate"
+					elif kind == "tank":
+						action_name = "enable_fuel_supply"
+					elif kind == "rcs":
+						action_name = "activate_rcs"
+					elif bool(component.get("deployable", false)):
+						action_name = "deploy"
 				if action_name.is_empty():
 					continue
 				var assigned_stage := clampi(int(component.get("staging_stage", physical_stage_index)), 0, maxi(0, stages.size() - 1))

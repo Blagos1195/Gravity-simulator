@@ -10,6 +10,7 @@ signal payload_edit_requested
 
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
+const StagingSystem = preload("res://scripts/staging_system.gd")
 
 class PartCard extends Button:
 	var component: Dictionary = {}
@@ -237,6 +238,7 @@ var _redo: Array[Dictionary] = []
 var _canvas: AssemblyCanvas
 var _parts_list: VBoxContainer
 var _stage_list: VBoxContainer
+var _action_stage_list: VBoxContainer
 var _inspector: VBoxContainer
 var _stats: Label
 var _search := ""
@@ -550,6 +552,27 @@ func _build_interface() -> void:
 	stage_down.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage_down.pressed.connect(func(): _move_stage(-1))
 	move_stage_row.add_child(stage_down)
+	var action_header := HBoxContainer.new()
+	right_column.add_child(action_header)
+	var action_heading := Label.new()
+	action_heading.text = "ACTION STAGING"
+	action_heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
+	action_header.add_child(action_heading)
+	var add_action_stage := Button.new()
+	add_action_stage.text = "+"
+	add_action_stage.tooltip_text = "Add an empty action stage"
+	add_action_stage.pressed.connect(func():
+		design["staging_stage_count"] = maxi(int(design.get("staging_stage_count", 0)), _action_stage_list.get_child_count()) + 1
+		_changed()
+	)
+	action_header.add_child(add_action_stage)
+	var action_scroll := ScrollContainer.new()
+	action_scroll.custom_minimum_size.y = 115.0
+	action_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_column.add_child(action_scroll)
+	_action_stage_list = VBoxContainer.new()
+	action_scroll.add_child(_action_stage_list)
 	var separator := HSeparator.new()
 	right_column.add_child(separator)
 	var selected_heading := Label.new()
@@ -611,6 +634,7 @@ func _refresh() -> void:
 	_canvas.queue_redraw()
 	_refresh_parts()
 	_refresh_stages()
+	_refresh_action_stages()
 	_refresh_inspector()
 	_refresh_stats()
 
@@ -619,6 +643,39 @@ func _current_stage() -> Dictionary:
 	if selected_stage_index < 0 or selected_stage_index >= stages.size():
 		return {}
 	return stages[selected_stage_index]
+
+func _refresh_action_stages() -> void:
+	if not is_instance_valid(_action_stage_list):
+		return
+	for child in _action_stage_list.get_children():
+		child.queue_free()
+	var plan := StagingSystem.create_plan([design])
+	var requested_count := maxi(plan.size(), int(design.get("staging_stage_count", 0)))
+	while plan.size() < requested_count:
+		plan.append({"id":"stage_%d" % plan.size(),"label":"Stage %d" % (plan.size() + 1),"actions":[]})
+	for index in range(plan.size()):
+		var stage: Dictionary = plan[index]
+		var actions: Array = stage.get("actions", [])
+		var row := VBoxContainer.new()
+		var heading := Label.new()
+		heading.text = "STAGE %02d  •  %d ACTIONS" % [index + 1, actions.size()]
+		heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
+		row.add_child(heading)
+		for action_variant in actions:
+			if not action_variant is Dictionary:
+				continue
+			var action: Dictionary = action_variant
+			var item := Label.new()
+			item.text = "%s  %s" % [str(action.get("action", "ACTION")).replace("_", " ").to_upper(), str(action.get("part_id", "PART"))]
+			item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			item.add_theme_color_override("font_color", Color(0.68, 0.77, 0.86))
+			row.add_child(item)
+		if actions.is_empty():
+			var empty := Label.new()
+			empty.text = "No actions assigned"
+			empty.add_theme_color_override("font_color", Color(0.45, 0.52, 0.62))
+			row.add_child(empty)
+		_action_stage_list.add_child(row)
 
 func _refresh_parts() -> void:
 	if not is_instance_valid(_parts_list):
@@ -830,6 +887,16 @@ func _refresh_inspector() -> void:
 		fuel_supply.button_pressed = bool(component.get("fuel_supply_enabled", true))
 		fuel_supply.toggled.connect(func(enabled: bool): _update_component_property("fuel_supply_enabled", enabled))
 		_inspector.add_child(fuel_supply)
+	var staging_label := Label.new()
+	staging_label.text = "Stage assignment"
+	_inspector.add_child(staging_label)
+	var staging_assignment := SpinBox.new()
+	staging_assignment.min_value = 1
+	staging_assignment.max_value = 16
+	staging_assignment.step = 1
+	staging_assignment.value = int(component.get("staging_stage", selected_stage_index)) + 1
+	staging_assignment.value_changed.connect(func(value: float): _update_component_property("staging_stage", int(value) - 1))
+	_inspector.add_child(staging_assignment)
 	var fields := [
 		{"key":"dry_mass","label":"Dry mass (kg)","max":100000000.0},
 		{"key":"fuel_capacity","label":"Propellant (kg)","max":1000000000.0},
