@@ -1529,10 +1529,7 @@ func _separate_stage() -> void:
 			separated_resource_tanks.append(tank.duplicate(true))
 			separated_resource_mass += float(tank.get("resources", {}).get("xenon", 0.0)) + float(tank.get("resources", {}).get("solid_propellant", 0.0))
 		else:
-			var remaining_tank: Dictionary = tank.duplicate(true)
-			if str(remaining_tank.get("module_id", vehicle_name)) == vehicle_name and int(remaining_tank.get("stage_index", -1)) > stage_index:
-				remaining_tank["stage_index"] = int(remaining_tank.stage_index) - 1
-			remaining_resource_tanks.append(remaining_tank)
+			remaining_resource_tanks.append(tank.duplicate(true))
 	var dockable_module := stage_separation_is_dockable_module()
 	var separated_dry_mass := RocketDesign.stage_total_dry_mass(separated_stage)
 	var separated_mass := separated_dry_mass + separated_fuel + separated_rcs_fuel + separated_resource_mass
