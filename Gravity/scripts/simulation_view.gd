@@ -956,7 +956,7 @@ func apply_rcs_velocity_correction(velocity_correction: Vector2, delta: float) -
 	var applied_delta_v := maximum_delta_v * used / maxf(0.000001, flow * delta)
 	var world_impulse_direction := force.normalized().rotated(rotation_angle)
 	velocity += world_impulse_direction * applied_delta_v
-	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - used)
+	_consume_rcs_propellant(used)
 	return true
 
 func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
@@ -1138,7 +1138,7 @@ func _physics_step(dt: float) -> void:
 	else:
 		_consume_resource("liquid_propellant", fuel_used)
 		_sync_legacy_fuel_from_tanks()
-	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - rcs_fuel_used)
+	_consume_rcs_propellant(rcs_fuel_used)
 	var average_rotation_angle := initial_rotation_angle + initial_angular_velocity * dt * 0.5 + angular_acceleration * dt * dt / 6.0
 	var engine_impulse := thrust_force_vector_local.normalized() * thrust_delta_v if thrust_force_vector_local.length_squared() > 0.0 else Vector2.ZERO
 	var thrust_impulse := (engine_impulse + rcs_impulse_local).rotated(average_rotation_angle)

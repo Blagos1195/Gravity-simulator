@@ -2301,6 +2301,9 @@ func _rename_vehicle(vehicle_name: String, requested_name: String) -> bool:
 			if str(tank.get("module_id", "")) == previous_name:
 				tank["module_id"] = clean_name
 				owner.resource_tanks[tank_index] = tank
+		if owner.docked_rcs_propellant.has(previous_name):
+			owner.docked_rcs_propellant[clean_name] = owner.docked_rcs_propellant[previous_name]
+			owner.docked_rcs_propellant.erase(previous_name)
 		for stage_index_value in range(owner.staging_plan.size()):
 			var stage: Dictionary = owner.staging_plan[stage_index_value]
 			var actions: Array = stage.get("actions", []).duplicate(true)
@@ -2534,6 +2537,7 @@ func _sync_docked_vehicles() -> void:
 		child.angular_velocity = parent.angular_velocity
 		child.sim_time = parent.sim_time
 		child._sync_legacy_fuel_from_external_tanks(parent.resource_tanks)
+		child.rcs_propellant_remaining = float(parent.docked_rcs_propellant.get(child.vehicle_name, child.rcs_propellant_remaining))
 		child.landed = parent.landed
 		child.crashed = parent.crashed
 		child.landed_body_name = parent.landed_body_name
@@ -2602,6 +2606,9 @@ func _dock_vehicle(target_name: String) -> bool:
 	target.resource_tanks.clear()
 	target.resource_inventory_external = true
 	target.fuel = 0.0
+	sim.docked_rcs_propellant[target.vehicle_name] = target.rcs_propellant_remaining
+	sim.rcs_propellant_remaining += target.rcs_propellant_remaining
+	target.rcs_propellant_remaining = 0.0
 	target.rcs_propellant_remaining = 0.0
 	docking_links.append({
 		"parent_name": sim.vehicle_name,
@@ -2640,6 +2647,10 @@ func _undock_vehicle(target_name: String) -> bool:
 			parent.resource_tanks = ResourceNetwork.tank_states_without_module(parent.resource_tanks, child.vehicle_name)
 			child.resource_inventory_external = false
 			child._sync_legacy_fuel_from_tanks()
+			var child_rcs_fuel := float(parent.docked_rcs_propellant.get(child.vehicle_name, 0.0))
+			child.rcs_propellant_remaining = child_rcs_fuel
+			parent.rcs_propellant_remaining = maxf(0.0, parent.rcs_propellant_remaining - child_rcs_fuel)
+			parent.docked_rcs_propellant.erase(child.vehicle_name)
 			parent._sync_legacy_fuel_from_tanks()
 			child.staging_plan = StagingSystem.filter_module_plan(parent.staging_plan, child.vehicle_name)
 			parent.staging_plan = StagingSystem.remove_module_plan(parent.staging_plan, child.vehicle_name)
@@ -2974,11 +2985,20 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 				if added < removed:
 					donor.add_propellant(removed - added)
 				transferred += added
-	var rcs_space := maxf(0.0, recipient._remaining_rcs_propellant_capacity() - recipient.rcs_propellant_remaining)
-	var rcs_amount := minf(donor.rcs_propellant_remaining, rcs_space)
+	var donor_rcs := float(donor_owner.docked_rcs_propellant.get(donor.vehicle_name, 0.0)) if donor.resource_inventory_external and donor_owner != null else donor.rcs_propellant_remaining
+	var recipient_rcs := float(recipient_owner.docked_rcs_propellant.get(recipient.vehicle_name, 0.0)) if recipient.resource_inventory_external and recipient_owner != null else recipient.rcs_propellant_remaining
+	var rcs_space := maxf(0.0, recipient._remaining_rcs_propellant_capacity() - recipient_rcs)
+	var rcs_amount := minf(donor_rcs, rcs_space)
 	if rcs_amount > 0.0:
-		donor.rcs_propellant_remaining -= rcs_amount
-		recipient.rcs_propellant_remaining += rcs_amount
+		if donor.resource_inventory_external and donor_owner != null:
+			donor_owner.docked_rcs_propellant[donor.vehicle_name] = donor_rcs - rcs_amount
+			donor.rcs_propellant_remaining = donor_rcs - rcs_amount
+		else:
+			donor.rcs_propellant_remaining -= rcs_amount
+		if recipient.resource_inventory_external and recipient_owner != null:
+			recipient_owner.docked_rcs_propellant[recipient.vehicle_name] = recipient_rcs + rcs_amount
+		else:
+			recipient.rcs_propellant_remaining += rcs_amount
 		transferred += rcs_amount
 	for resource in ["xenon", "electricity"]:
 		for source_index in range(donor.resource_tanks.size()):
