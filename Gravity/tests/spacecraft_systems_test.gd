@@ -27,6 +27,8 @@ func _initialize() -> void:
 	assert(not bool(rearmed[0].actions[0].completed))
 	var completed := StagingSystem.mark_stage_completed(rearmed, 0)
 	assert(bool(completed[0].actions[0].completed) and bool(completed[0].actions[1].completed))
+	var skipped_completed := StagingSystem.execute_stage(completed, 0, {})
+	assert(bool(skipped_completed.plan[0].actions[0].completed))
 	var executable_plan: Array = [{"id":"stage_0","actions":[{"id":"engine","part_id":"engine","action":"activate_engine","completed":false,"reversible":true},{"id":"separator","part_id":"separator","action":"separate","completed":false,"reversible":false}]}]
 	var executed := StagingSystem.execute_stage(executable_plan, 0, {"separator":{"attached":true}})
 	assert(bool(executed.part_states.engine.engine_enabled))

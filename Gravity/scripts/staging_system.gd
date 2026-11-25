@@ -88,6 +88,8 @@ static func execute_stage(plan: Array, stage_index: int, part_states: Dictionary
 	var actions: Array = stage.get("actions", []).duplicate(true)
 	for action_index in range(actions.size()):
 		var action: Dictionary = actions[action_index]
+		if bool(action.get("completed", false)):
+			continue
 		var part_id := str(action.get("part_id", ""))
 		var state: Dictionary = updated_states.get(part_id, {}).duplicate(true)
 		var action_name := str(action.get("action", ""))

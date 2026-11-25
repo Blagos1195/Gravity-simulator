@@ -6,6 +6,7 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const RocketVisual = preload("res://scripts/rocket_visual.gd")
+const StagingSystem = preload("res://scripts/staging_system.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 static var G := PlanetarySystem.G
 static var EARTH_MASS := PlanetarySystem.EARTH_MASS
@@ -57,6 +58,9 @@ var rcs_propellant_remaining := 0.0
 var rcs_rotation_input := 0.0
 var infinite_fuel_stage_remaining := 300000.0
 var stage_index := 0
+var staging_plan: Array = []
+var action_stage_index := 0
+var staging_part_states: Dictionary = {}
 var discarded_stage_mass := 0.0
 var discarded_propellant_mass := 0.0
 var throttle := 0.0
@@ -156,17 +160,124 @@ func set_rocket_design(design: Dictionary) -> void:
 	rocket_stages = (design.get("stages", []) as Array).duplicate(true)
 	if rocket_stages.is_empty():
 		rocket_stages = RocketDesign.create_default()["stages"].duplicate(true)
+	for stage_index_value in range(rocket_stages.size()):
+		var stage: Dictionary = RocketAssembly.ensure_stage_components(rocket_stages[stage_index_value])
+		var components: Array = stage.get("components", []).duplicate(true)
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			if str(component.get("part_uid", "")).is_empty():
+				component["part_uid"] = "part_%d_%d_%s" % [stage_index_value, component_index, str(component.get("id", "part"))]
+			components[component_index] = component
+		rocket_stages[stage_index_value] = RocketAssembly.compile_stage(stage, components)
 	payload_mass = float(design.get("payload_mass", 500.0))
 	payload_type = str(design.get("payload_type", "probe"))
 	var visual_data: Variant = design.get("payload_visual", {})
 	payload_visual = visual_data.duplicate(true) if visual_data is Dictionary else {}
 	stage_index = 0
+	action_stage_index = 0
 	stage_fuel_remaining.clear()
 	for stage in rocket_stages:
 		stage_fuel_remaining.append(RocketDesign.stage_total_fuel_capacity(stage))
 	fuel = stage_fuel_remaining[0]
 	rcs_propellant_remaining = _remaining_rcs_propellant_capacity()
 	infinite_fuel_stage_remaining = fuel
+	staging_part_states.clear()
+	staging_plan = StagingSystem.create_plan([{
+		"module_id": vehicle_name,
+		"stages": rocket_stages,
+		"staging_stage_count": int(design.get("staging_stage_count", 0))
+	}])
+
+func _current_staging_part_states() -> Dictionary:
+	var states: Dictionary = {}
+	for stage in rocket_stages:
+		for component in stage.get("components", []):
+			if not component is Dictionary:
+				continue
+			var part_id := str(component.get("part_uid", ""))
+			if part_id.is_empty():
+				continue
+			states[part_id] = {
+				"engine_enabled": bool(component.get("engine_enabled", true)),
+				"fuel_supply_enabled": bool(component.get("fuel_supply_enabled", true)),
+				"rcs_enabled": bool(component.get("rcs_enabled", true)),
+				"deployed": bool(component.get("deployed", false)),
+				"attached": bool(component.get("attached", true)),
+				"can_repeat": bool(component.get("attached", true))
+			}
+	return states
+
+func _apply_staging_part_states() -> void:
+	for stage_index_value in range(rocket_stages.size()):
+		var stage: Dictionary = rocket_stages[stage_index_value]
+		var components: Array = stage.get("components", []).duplicate(true)
+		var changed := false
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			var part_id := str(component.get("part_uid", ""))
+			if not staging_part_states.has(part_id):
+				continue
+			var state: Dictionary = staging_part_states[part_id]
+			for key in ["engine_enabled", "fuel_supply_enabled", "rcs_enabled", "deployed", "attached"]:
+				if state.has(key) and component.get(key, null) != state[key]:
+					component[key] = state[key]
+					changed = true
+			components[component_index] = component
+		if changed:
+			rocket_stages[stage_index_value] = RocketAssembly.compile_stage(stage, components)
+
+func select_action_stage(requested_index: int) -> void:
+	if staging_plan.is_empty():
+		action_stage_index = 0
+		return
+	var selected := clampi(requested_index, 0, staging_plan.size() - 1)
+	if selected < action_stage_index:
+		staging_part_states = _current_staging_part_states()
+		for index in range(selected, staging_plan.size()):
+			staging_plan = StagingSystem.rearm_stage(staging_plan, index, staging_part_states)
+	action_stage_index = selected
+
+func rearm_action_stage() -> void:
+	staging_part_states = _current_staging_part_states()
+	if action_stage_index >= 0 and action_stage_index < staging_plan.size():
+		staging_plan = StagingSystem.rearm_stage(staging_plan, action_stage_index, staging_part_states)
+
+func activate_current_action_stage() -> bool:
+	if action_stage_index < 0 or action_stage_index >= staging_plan.size():
+		return false
+	staging_part_states = _current_staging_part_states()
+	var executed_stage: Dictionary = staging_plan[action_stage_index]
+	var actions: Array = executed_stage.get("actions", [])
+	if actions.is_empty():
+		return false
+	var result := StagingSystem.execute_stage(staging_plan, action_stage_index, staging_part_states)
+	if not bool(result.get("valid", false)):
+		return false
+	staging_plan = result.plan
+	staging_part_states = result.part_states
+	var should_ignite := false
+	var should_cutoff := false
+	var should_separate := false
+	for action in actions:
+		if not action is Dictionary:
+			continue
+		match str(action.get("action", "")):
+			"activate_engine":
+				should_ignite = true
+			"deactivate_engine":
+				should_cutoff = true
+			"separate":
+				should_separate = true
+	_apply_staging_part_states()
+	if should_cutoff:
+		thrust_key_down = false
+	if should_ignite:
+		thrust_key_down = true
+	if should_separate and stage_index < rocket_stages.size() - 1:
+		_separate_stage()
+	if action_stage_index + 1 < staging_plan.size():
+		action_stage_index += 1
+	return true
 
 func _active_stage_data() -> Dictionary:
 	var stage: Dictionary = rocket_stages[clampi(stage_index, 0, rocket_stages.size() - 1)].duplicate(true)
@@ -1688,6 +1799,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("rotate_right"):
 		if not has_rcs_installed():
 			rcs_rotation_input = 0.0
+	elif event.is_action_pressed("stage_next"):
+		activate_current_action_stage()
 	elif event.is_action_pressed("pause_game"):
 		paused = not paused
 	elif event.is_action_pressed("stage_separation"):
@@ -2576,6 +2689,9 @@ func get_save_data() -> Dictionary:
 		"stage_fuel_remaining": remaining_stage_fuel,
 		"infinite_fuel_stage_remaining": infinite_fuel_stage_remaining,
 		"stage_index": 0,
+		"staging_plan": staging_plan.duplicate(true),
+		"action_stage_index": action_stage_index,
+		"staging_part_states": staging_part_states.duplicate(true),
 		"discarded_stage_mass": discarded_stage_mass,
 		"discarded_propellant_mass": discarded_propellant_mass,
 		"gimbal_angle": gimbal_angle,
@@ -2624,7 +2740,7 @@ func get_save_data() -> Dictionary:
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
-		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": remaining_stages},
+		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": remaining_stages, "staging_stage_count": staging_plan.size()},
 		"vehicle_name": vehicle_name,
 		"is_debris": is_debris,
 		"passive_orbit_active": passive_orbit_active,
@@ -2729,6 +2845,12 @@ func load_save_data(data: Dictionary) -> bool:
 			else:
 				validated_stage_fuel.append(RocketDesign.stage_total_fuel_capacity(saved_stages[i]))
 	set_rocket_design(saved_design)
+	var saved_staging_plan: Variant = data.get("staging_plan", null)
+	if saved_staging_plan is Array and not saved_staging_plan.is_empty():
+		staging_plan = saved_staging_plan.duplicate(true)
+	action_stage_index = clampi(int(data.get("action_stage_index", 0)), 0, maxi(0, staging_plan.size() - 1))
+	var saved_part_states: Variant = data.get("staging_part_states", {})
+	staging_part_states = saved_part_states.duplicate(true) if saved_part_states is Dictionary else {}
 	vehicle_name = str(data.get("vehicle_name", vehicle_name))
 	is_debris = bool(data.get("is_debris", false))
 	passive_orbit_active = bool(data.get("passive_orbit_active", false))

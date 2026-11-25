@@ -58,7 +58,8 @@ const CONTROL_BINDINGS := {
 	"throttle_cutoff": ["ENGINE CUTOFF", KEY_S],
 	"rotate_left": ["ROTATE LEFT", KEY_A],
 	"rotate_right": ["ROTATE RIGHT", KEY_D],
-	"pause_game": ["PAUSE", KEY_SPACE],
+	"pause_game": ["PAUSE", KEY_ESCAPE],
+	"stage_next": ["NEXT STAGE", KEY_SPACE],
 	"stage_separation": ["STAGE SEPARATION", KEY_X],
 	"guidance_toggle": ["GUIDANCE", KEY_H]
 }
@@ -76,6 +77,8 @@ var active_builder: Control
 var design_stats_label: Label
 var design_error_label: Label
 var design_preview: Control
+var stage_manager_picker: OptionButton
+var stage_manager_status: Label
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
@@ -91,6 +94,8 @@ func _configure_input_actions() -> void:
 			InputMap.add_action(action)
 		InputMap.action_erase_events(action)
 		var keycode := int(config.get_value("controls", action, CONTROL_BINDINGS[action][1]))
+		if action == "pause_game" and keycode == KEY_SPACE:
+			keycode = KEY_ESCAPE
 		var key_event := InputEventKey.new()
 		key_event.keycode = keycode
 		InputMap.action_add_event(action, key_event)
@@ -2156,6 +2161,7 @@ func _switch_vehicle(index: int) -> void:
 	}
 	_refresh_vehicle_selector()
 	_refresh_telescope_control()
+	_refresh_stage_manager()
 	if status_label:
 		if _is_docked_child(sim.vehicle_name):
 			for link in docking_links:
@@ -2183,6 +2189,30 @@ func _refresh_vehicle_selector() -> void:
 		var vehicle: SimulationView = fleet_sims[index]
 		vehicle_selector.add_item("%02d  •  %s" % [index + 1, vehicle.vehicle_name])
 	vehicle_selector.select(active_vehicle_index)
+
+func _refresh_stage_manager() -> void:
+	if not is_instance_valid(stage_manager_picker) or not is_instance_valid(stage_manager_status) or not is_instance_valid(sim):
+		return
+	stage_manager_picker.clear()
+	for index in range(sim.staging_plan.size()):
+		var stage: Dictionary = sim.staging_plan[index]
+		var actions: Array = stage.get("actions", [])
+		var completed_count := 0
+		for action in actions:
+			if action is Dictionary and bool(action.get("completed", false)):
+				completed_count += 1
+		stage_manager_picker.add_item("STAGE %02d  •  %d/%d" % [index + 1, completed_count, actions.size()])
+	if not sim.staging_plan.is_empty():
+		stage_manager_picker.select(clampi(sim.action_stage_index, 0, sim.staging_plan.size() - 1))
+		var stage: Dictionary = sim.staging_plan[sim.action_stage_index]
+		var action_names: PackedStringArray = []
+		for action in stage.get("actions", []):
+			if action is Dictionary:
+				var state := "DONE" if bool(action.get("completed", false)) else "READY"
+				action_names.append("%s  %s" % [state, str(action.get("action", "ACTION")).replace("_", " ").to_upper()])
+		stage_manager_status.text = "\n".join(action_names) if not action_names.is_empty() else "No actions assigned to this stage."
+	else:
+		stage_manager_status.text = "No staging actions configured."
 
 func _find_vehicle_by_name(vehicle_name: String) -> SimulationView:
 	for vehicle in fleet_sims:
@@ -2580,6 +2610,51 @@ func _build_flight_hud() -> void:
 	vehicle_selector.item_selected.connect(_switch_vehicle)
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
+	var stage_manager_heading := Label.new()
+	stage_manager_heading.text = "STAGE MANAGER"
+	stage_manager_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1))
+	right.add_child(stage_manager_heading)
+	stage_manager_picker = OptionButton.new()
+	stage_manager_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stage_manager_picker.item_selected.connect(func(index: int):
+		if is_instance_valid(sim):
+			sim.select_action_stage(index)
+			_refresh_stage_manager()
+	)
+	right.add_child(stage_manager_picker)
+	stage_manager_status = Label.new()
+	stage_manager_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	right.add_child(stage_manager_status)
+	var stage_manager_actions := HBoxContainer.new()
+	right.add_child(stage_manager_actions)
+	var execute_stage_button := Button.new()
+	execute_stage_button.text = "EXECUTE"
+	execute_stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	execute_stage_button.pressed.connect(func():
+		if is_instance_valid(sim):
+			sim.activate_current_action_stage()
+			_refresh_stage_manager()
+	)
+	stage_manager_actions.add_child(execute_stage_button)
+	var skip_stage_button := Button.new()
+	skip_stage_button.text = "SKIP"
+	skip_stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skip_stage_button.pressed.connect(func():
+		if is_instance_valid(sim):
+			sim.select_action_stage(sim.action_stage_index + 1)
+			_refresh_stage_manager()
+	)
+	stage_manager_actions.add_child(skip_stage_button)
+	var rearm_stage_button := Button.new()
+	rearm_stage_button.text = "RE-ARM"
+	rearm_stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rearm_stage_button.pressed.connect(func():
+		if is_instance_valid(sim):
+			sim.rearm_action_stage()
+			_refresh_stage_manager()
+	)
+	stage_manager_actions.add_child(rearm_stage_button)
+	_refresh_stage_manager()
 	_add_button(right, "TOGGLE FULL SIMULATION", _set_selected_vehicle_full_simulation)
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
 	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
@@ -2620,7 +2695,7 @@ func _build_flight_hud() -> void:
 	bottom.offset_top = -58
 	bottom.offset_bottom = -8
 	bottom.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE / MODULE     ARROWS RCS TRANSLATION     A / D RCS ROTATION     Q / E GIMBAL\nH GUIDANCE     T TELESCOPE ON/OFF     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     J FAST FORWARD     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
+	bottom.text = "W ENGINE ON/OFF     S CUTOFF     SPACE NEXT STAGE     X SEPARATE MODULE     ARROWS RCS TRANSLATION     A / D RCS ROTATION\nESC PAUSE     Q / E GIMBAL     H GUIDANCE     T TELESCOPE     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     +/- WARP     J FAST FORWARD     F5 SAVE     F9 LOAD"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
