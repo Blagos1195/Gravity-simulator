@@ -3187,8 +3187,8 @@ func _show_docking_panel() -> void:
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			return
-		var own_port := sim.docking_port_world_state()
-		var target_port := target.docking_port_world_state()
+		var own_port: Dictionary = sim.docking_port_world_state()
+		var target_port: Dictionary = target.docking_port_world_state()
 		var separation := INF
 		var ports_aligned := false
 		if not own_port.is_empty() and not target_port.is_empty():
