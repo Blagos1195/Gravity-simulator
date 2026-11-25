@@ -1,6 +1,7 @@
 extends Control
 
 signal stage_separated(stage_data: Dictionary)
+signal staging_changed
 
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
@@ -187,6 +188,7 @@ func set_rocket_design(design: Dictionary) -> void:
 		"stages": rocket_stages,
 		"staging_stage_count": int(design.get("staging_stage_count", 0))
 	}])
+	staging_changed.emit()
 
 func _current_staging_part_states() -> Dictionary:
 	var states: Dictionary = {}
@@ -254,11 +256,13 @@ func select_action_stage(requested_index: int) -> void:
 		for index in range(selected, staging_plan.size()):
 			staging_plan = StagingSystem.rearm_stage(staging_plan, index, staging_part_states)
 	action_stage_index = selected
+	staging_changed.emit()
 
 func rearm_action_stage() -> void:
 	staging_part_states = _current_staging_part_states()
 	if action_stage_index >= 0 and action_stage_index < staging_plan.size():
 		staging_plan = StagingSystem.rearm_stage(staging_plan, action_stage_index, staging_part_states)
+	staging_changed.emit()
 
 func activate_current_action_stage() -> bool:
 	if action_stage_index < 0 or action_stage_index >= staging_plan.size():
@@ -297,6 +301,7 @@ func activate_current_action_stage() -> bool:
 		_prune_staging_plan_to_attached_parts()
 	if action_stage_index + 1 < staging_plan.size():
 		action_stage_index += 1
+	staging_changed.emit()
 	return true
 
 func _active_stage_data() -> Dictionary:

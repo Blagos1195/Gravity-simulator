@@ -2145,6 +2145,8 @@ func _switch_vehicle(index: int) -> void:
 		sim.visible = false
 	active_vehicle_index = index
 	sim = fleet_sims[index]
+	if not sim.staging_changed.is_connected(_refresh_stage_manager):
+		sim.staging_changed.connect(_refresh_stage_manager)
 	sim.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
 	sim.visited_body_names = SpaceDiscovery.visited_names(discovery_state)
 	sim.input_enabled = not _is_docked_child(sim.vehicle_name) and not sim.crashed
