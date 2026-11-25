@@ -100,7 +100,7 @@ func _initialize() -> void:
 	module_design["stages"][1] = upper_stage_without_port
 	simulation.set_rocket_design(module_design)
 	assert(not simulation.stage_separation_is_dockable_module(), "A module should not detach as dockable without ports on both sides")
-	var upper_stage_without_rcs := RocketAssembly.remove_component(module_design.stages[1], 2)
+	var upper_stage_without_rcs := RocketAssembly.remove_component(port_stage.duplicate(true), 2)
 	module_design["stages"][1] = upper_stage_without_rcs
 	simulation.set_rocket_design(module_design)
 	assert(not simulation.stage_separation_is_dockable_module(), "A detached module without RCS should not be dockable")
