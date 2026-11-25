@@ -11,13 +11,16 @@ static func component_capacities(component: Dictionary) -> Dictionary:
 			var amount := maxf(0.0, float(declared[resource]))
 			if amount > 0.0:
 				capacities[str(resource)] = amount
-	var fuel_type := str(component.get("fuel_type", ""))
+	var fuel_type := str(component.get("fuel_type", "liquid_propellant" if str(component.get("kind", "")) == "tank" else ""))
 	var fuel_capacity := maxf(0.0, float(component.get("fuel_capacity", 0.0)))
 	if not fuel_type.is_empty() and fuel_capacity > 0.0:
 		capacities[fuel_type] = maxf(float(capacities.get(fuel_type, 0.0)), fuel_capacity)
 	var solid_capacity := maxf(0.0, float(component.get("solid_propellant_capacity", 0.0)))
 	if solid_capacity > 0.0:
 		capacities["solid_propellant"] = solid_capacity
+	var rcs_capacity := maxf(0.0, float(component.get("rcs_propellant_capacity", 0.0)))
+	if rcs_capacity > 0.0:
+		capacities["rcs_propellant"] = rcs_capacity
 	var electric_capacity := maxf(0.0, float(component.get("electric_capacity", 0.0)))
 	if electric_capacity > 0.0:
 		capacities["electricity"] = electric_capacity
@@ -33,6 +36,25 @@ static func manifest(components: Array) -> Dictionary:
 		for resource in capacities:
 			result[resource] = float(result.get(resource, 0.0)) + float(capacities[resource])
 	return result
+
+static func create_tank_states(components: Array) -> Array[Dictionary]:
+	var states: Array[Dictionary] = []
+	for index in range(components.size()):
+		if not components[index] is Dictionary:
+			continue
+		var component: Dictionary = components[index]
+		var capacities := component_capacities(component)
+		if capacities.is_empty():
+			continue
+		var part_id := str(component.get("part_uid", component.get("id", "part_%d" % index)))
+		states.append({
+			"part_uid": part_id,
+			"resources": capacities.duplicate(true),
+			"resource_capacities": capacities.duplicate(true),
+			"fuel_supply_enabled": bool(component.get("fuel_supply_enabled", true)),
+			"transfer_enabled": bool(component.get("transfer_enabled", true))
+		})
+	return states
 
 static func transfer_between_tanks(source: Dictionary, destination: Dictionary, resource: String, requested_amount: float, connected: bool = true) -> float:
 	if not connected or resource in NON_TRANSFERABLE_RESOURCES or requested_amount <= 0.0:

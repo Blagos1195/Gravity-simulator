@@ -3,6 +3,7 @@ class_name RocketAssembly
 
 const ContentCatalog = preload("res://scripts/content_catalog.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const ResourceNetwork = preload("res://scripts/resource_network.gd")
 
 static func _catalog() -> Dictionary:
 	return ContentCatalog.get_catalog().get("rocket", {}).get("components", {})
@@ -117,6 +118,7 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	var rcs_flow := 0.0
 	var rcs_torque := 0.0
 	var docking_port_count := 0
+	var resource_capacities: Dictionary = {}
 	var total_length := 0.0
 	var maximum_radius := 0.1
 	var side_mount_radii: Dictionary = {}
@@ -145,6 +147,9 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 		rcs_thrust += maxf(0.0, float(component.get("rcs_thrust", 0.0))) * copies
 		rcs_flow += maxf(0.0, float(component.get("rcs_flow", 0.0))) * copies
 		rcs_torque += maxf(0.0, float(component.get("rcs_torque", 0.0))) * copies
+		var component_resources := ResourceNetwork.component_capacities(component)
+		for resource in component_resources:
+			resource_capacities[resource] = float(resource_capacities.get(resource, 0.0)) + float(component_resources[resource]) * copies
 		if str(component.get("kind", "")) == "docking_port":
 			docking_port_count += int(copies)
 		if attachment == "stack":
@@ -177,6 +182,8 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	configured["rcs_flow"] = rcs_flow
 	configured["rcs_torque"] = rcs_torque
 	configured["docking_port_count"] = docking_port_count
+	configured["resource_capacities"] = resource_capacities
+	configured["tank_states"] = ResourceNetwork.create_tank_states(components)
 	configured["engine_count"] = 1
 	configured["physical_length_m"] = maxf(1.0, total_length)
 	configured["collision_radius_m"] = maximum_radius

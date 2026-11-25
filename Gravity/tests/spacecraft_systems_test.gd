@@ -28,6 +28,10 @@ func _initialize() -> void:
 	var completed := StagingSystem.mark_stage_completed(rearmed, 0)
 	assert(bool(completed[0].actions[0].completed) and bool(completed[0].actions[1].completed))
 	var stage := RocketAssembly.ensure_stage_components({"dry_mass":10.0,"fuel_capacity":0.0,"thrust":100.0,"vacuum_thrust":100.0,"flow":1.0})
+	assert(float(stage.resource_capacities.get("liquid_propellant", 0.0)) == 0.0)
+	var resource_stage := RocketAssembly.add_component(stage, "medium_tank")
+	assert(float(resource_stage.resource_capacities.get("liquid_propellant", 0.0)) > 0.0)
+	assert(not resource_stage.tank_states.is_empty())
 	var engine_index := -1
 	for index in range(stage.components.size()):
 		if str(stage.components[index].kind) == "engine":
