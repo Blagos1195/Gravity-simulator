@@ -67,11 +67,11 @@ func _initialize() -> void:
 	assert(main.docking_links.size() == 2)
 	assert(not second_child.input_enabled)
 	var expected_docked_mass := child._current_vehicle_mass() + second_child._current_vehicle_mass()
-	print("DOCKED MASS CHECK %.9f / %.9f / %.9f" % [parent.docked_mass, expected_docked_mass, parent.docked_mass - expected_docked_mass])
 	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
 	assert(main._are_docked("Orbital Tug", child.vehicle_name))
 	var parent_capacity := float(parent._active_stage_data().get("fuel_capacity", 0.0))
+	parent.rcs_propellant_remaining = parent._remaining_rcs_propellant_capacity()
 	parent.fuel = parent_capacity - 10000.0
 	parent.stage_fuel_remaining[0] = parent.fuel
 	child.fuel = 0.0
