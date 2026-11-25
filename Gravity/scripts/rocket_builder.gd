@@ -793,20 +793,20 @@ func _refresh_inspector() -> void:
 		mount_label.text = "Attachment node  •  %s" % ("automatic centre" if int(component.get("mount_index", -1)) < 0 else "stack segment %d" % (int(component.get("mount_index", -1)) + 1))
 		mount_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_inspector.add_child(mount_label)
-		if str(component.get("kind", "")) == "docking_port":
-		var facing_label := Label.new()
-		facing_label.text = "Port direction"
-		_inspector.add_child(facing_label)
-		var facing_selector := OptionButton.new()
-		facing_selector.add_item("Forward")
-		facing_selector.set_item_metadata(0, 1)
-		facing_selector.add_item("Aft")
-		facing_selector.set_item_metadata(1, -1)
-		facing_selector.select(0 if int(component.get("port_facing", 1)) >= 0 else 1)
-		facing_selector.item_selected.connect(func(index: int):
-			_update_component_property("port_facing", int(facing_selector.get_item_metadata(index)))
-		)
-		_inspector.add_child(facing_selector)
+			if str(component.get("kind", "")) == "docking_port":
+	var facing_label := Label.new()
+	facing_label.text = "Port direction"
+	_inspector.add_child(facing_label)
+	var facing_selector := OptionButton.new()
+	facing_selector.add_item("Forward")
+	facing_selector.set_item_metadata(0, 1)
+	facing_selector.add_item("Aft")
+	facing_selector.set_item_metadata(1, -1)
+	facing_selector.select(0 if int(component.get("port_facing", 1)) >= 0 else 1)
+	facing_selector.item_selected.connect(func(index: int):
+	_update_component_property("port_facing", int(facing_selector.get_item_metadata(index)))
+	)
+	_inspector.add_child(facing_selector)
 var fields := [
 		{"key":"dry_mass","label":"Dry mass (kg)","max":100000000.0},
 		{"key":"fuel_capacity","label":"Propellant (kg)","max":1000000000.0},
