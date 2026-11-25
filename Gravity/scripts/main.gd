@@ -2207,7 +2207,7 @@ func _refresh_vehicle_selector() -> void:
 func _execute_fleet_staging_stage() -> void:
 	if not is_instance_valid(sim) or sim.action_stage_index < 0 or sim.action_stage_index >= sim.staging_plan.size():
 		return
-	var stage_index_value := sim.action_stage_index
+	var stage_index_value: int = int(sim.action_stage_index)
 	var stage: Dictionary = sim.staging_plan[stage_index_value]
 	var actions_by_module: Dictionary = {}
 	for action in stage.get("actions", []):

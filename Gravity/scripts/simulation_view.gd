@@ -482,7 +482,36 @@ func total_propellant_capacity() -> float:
 		total += RocketDesign.stage_total_fuel_capacity(rocket_stages[i])
 	return total
 
+func _reconcile_legacy_fuel_inventory() -> void:
+	for stage_index_value in range(stage_fuel_remaining.size()):
+		var stage_tanks: Array[int] = []
+		var capacity_total := 0.0
+		for tank_index in range(resource_tanks.size()):
+			var tank: Dictionary = resource_tanks[tank_index]
+			if int(tank.get("stage_index", -1)) != stage_index_value:
+				continue
+			var capacity := float(tank.get("resource_capacities", {}).get("liquid_propellant", 0.0))
+			if capacity > 0.0:
+				stage_tanks.append(tank_index)
+				capacity_total += capacity
+		if capacity_total <= 0.0:
+			continue
+		var desired := clampf(float(stage_fuel_remaining[stage_index_value]), 0.0, capacity_total)
+		var inventory_total := 0.0
+		for tank_index in stage_tanks:
+			inventory_total += float(resource_tanks[tank_index].get("resources", {}).get("liquid_propellant", 0.0))
+		if absf(inventory_total - desired) <= 0.001:
+			continue
+		for tank_index in stage_tanks:
+			var tank: Dictionary = resource_tanks[tank_index]
+			var resources: Dictionary = tank.get("resources", {}).duplicate(true)
+			var capacity := float(tank.get("resource_capacities", {}).get("liquid_propellant", 0.0))
+			resources["liquid_propellant"] = desired * capacity / capacity_total
+			tank["resources"] = resources
+			resource_tanks[tank_index] = tank
+
 func remove_propellant(amount: float) -> float:
+	_reconcile_legacy_fuel_inventory()
 	var remaining := maxf(0.0, amount)
 	var requested := remaining
 	for index in range(stage_index, rocket_stages.size()):
