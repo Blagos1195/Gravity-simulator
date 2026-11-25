@@ -2792,8 +2792,13 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 	if donor_owner != null and donor_owner == recipient_owner and (donor.resource_inventory_external or recipient.resource_inventory_external):
 		_sync_external_module_fuel(donor, donor_owner)
 		_sync_external_module_fuel(recipient, recipient_owner)
-		var available := donor.total_propellant_remaining()
-		var room := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
+		var available := 0.0
+		for value in donor.stage_fuel_remaining:
+			available += maxf(0.0, float(value))
+		var recipient_remaining := 0.0
+		for value in recipient.stage_fuel_remaining:
+			recipient_remaining += maxf(0.0, float(value))
+		var room := maxf(0.0, recipient.total_propellant_capacity() - recipient_remaining)
 		var remaining := minf(available, room)
 		for source_index in range(donor_owner.resource_tanks.size()):
 			var source: Dictionary = donor_owner.resource_tanks[source_index]

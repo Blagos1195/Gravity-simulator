@@ -300,7 +300,7 @@ func _sync_legacy_fuel_from_tanks() -> void:
 		if str(tank.get("module_id", vehicle_name)) != vehicle_name and bool(tank.get("fuel_supply_enabled", true)):
 			external_fuel += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
 	if stage_index < stage_fuel_remaining.size():
-		fuel = stage_fuel_remaining[stage_index] + external_fuel
+		fuel = stage_fuel_remaining[stage_index]
 
 func _has_ignited_solid_motor() -> bool:
 	for index in range(stage_index, rocket_stages.size()):
@@ -494,6 +494,9 @@ func total_propellant_remaining() -> float:
 	var total := 0.0
 	for i in range(stage_index, rocket_stages.size()):
 		total += fuel if i == stage_index else (stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(rocket_stages[i]))
+	for tank in resource_tanks:
+		if str(tank.get("module_id", vehicle_name)) != vehicle_name:
+			total += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
 	return total
 
 func total_propellant_capacity() -> float:
@@ -788,7 +791,11 @@ func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
 	var active := _active_stage_data()
 	var mass := float(active.get("dry_mass", 0.0)) + _remaining_stack_mass()
 	mass += fuel if fuel_amount < 0.0 else fuel_amount
-	mass += docked_mass + rcs_propellant_remaining + resource_amount("xenon", false) + resource_amount("solid_propellant", false)
+	var attached_liquid_mass := 0.0
+	for tank in resource_tanks:
+		if str(tank.get("module_id", vehicle_name)) != vehicle_name:
+			attached_liquid_mass += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
+	mass += docked_mass + rcs_propellant_remaining + attached_liquid_mass + resource_amount("xenon", false) + resource_amount("solid_propellant", false)
 	return mass
 
 func _ready() -> void:
