@@ -79,6 +79,52 @@ static func rearm_stage(plan: Array, stage_index: int, part_states: Dictionary =
 		result.append(stage)
 	return result
 
+static func execute_stage(plan: Array, stage_index: int, part_states: Dictionary) -> Dictionary:
+	if stage_index < 0 or stage_index >= plan.size() or not plan[stage_index] is Dictionary:
+		return {"valid":false,"plan":plan.duplicate(true),"part_states":part_states.duplicate(true)}
+	var updated_plan := plan.duplicate(true)
+	var updated_states := part_states.duplicate(true)
+	var stage: Dictionary = updated_plan[stage_index]
+	var actions: Array = stage.get("actions", []).duplicate(true)
+	for action_index in range(actions.size()):
+		var action: Dictionary = actions[action_index]
+		var part_id := str(action.get("part_id", ""))
+		var state: Dictionary = updated_states.get(part_id, {}).duplicate(true)
+		var action_name := str(action.get("action", ""))
+		match action_name:
+			"activate_engine":
+				state["engine_enabled"] = true
+			"deactivate_engine":
+				state["engine_enabled"] = false
+			"enable_fuel_supply":
+				state["fuel_supply_enabled"] = true
+			"disable_fuel_supply":
+				state["fuel_supply_enabled"] = false
+			"activate_rcs":
+				state["rcs_enabled"] = true
+			"deactivate_rcs":
+				state["rcs_enabled"] = false
+			"deploy":
+				state["deployed"] = true
+			"retract":
+				state["deployed"] = false
+			"separate":
+				if not bool(state.get("attached", true)):
+					continue
+				state["attached"] = false
+			"attach":
+				if not bool(state.get("can_attach", false)):
+					continue
+				state["attached"] = true
+			_:
+				state["active"] = action_name == "activate"
+		updated_states[part_id] = state
+		action["completed"] = true
+		actions[action_index] = action
+	stage["actions"] = actions
+	updated_plan[stage_index] = stage
+	return {"valid":true,"plan":updated_plan,"part_states":updated_states}
+
 static func mark_stage_completed(plan: Array, stage_index: int) -> Array:
 	var result: Array = []
 	for index in range(plan.size()):

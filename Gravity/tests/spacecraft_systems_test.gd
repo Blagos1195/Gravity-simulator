@@ -27,6 +27,13 @@ func _initialize() -> void:
 	assert(not bool(rearmed[0].actions[0].completed))
 	var completed := StagingSystem.mark_stage_completed(rearmed, 0)
 	assert(bool(completed[0].actions[0].completed) and bool(completed[0].actions[1].completed))
+	var executable_plan: Array = [{"id":"stage_0","actions":[{"id":"engine","part_id":"engine","action":"activate_engine","completed":false,"reversible":true},{"id":"separator","part_id":"separator","action":"separate","completed":false,"reversible":false}]}]
+	var executed := StagingSystem.execute_stage(executable_plan, 0, {"separator":{"attached":true}})
+	assert(bool(executed.part_states.engine.engine_enabled))
+	assert(not bool(executed.part_states.separator.attached))
+	var executed_again := StagingSystem.rearm_stage(executed.plan, 0, {"separator":{"can_repeat":false}})
+	assert(not bool(executed_again[0].actions[0].completed))
+	assert(bool(executed_again[0].actions[1].completed))
 	var stage := RocketAssembly.ensure_stage_components({"dry_mass":10.0,"fuel_capacity":0.0,"thrust":100.0,"vacuum_thrust":100.0,"flow":1.0})
 	assert(float(stage.resource_capacities.get("liquid_propellant", 0.0)) == 0.0)
 	var resource_stage := RocketAssembly.add_component(stage, "medium_tank")
