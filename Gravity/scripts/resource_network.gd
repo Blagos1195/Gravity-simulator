@@ -59,7 +59,7 @@ static func create_tank_states(components: Array) -> Array[Dictionary]:
 static func transfer_between_tanks(source: Dictionary, destination: Dictionary, resource: String, requested_amount: float, connected: bool = true) -> float:
 	if not connected or resource in NON_TRANSFERABLE_RESOURCES or requested_amount <= 0.0:
 		return 0.0
-	if not bool(source.get("fuel_supply_enabled", true)) or not bool(source.get("transfer_enabled", true)):
+	if not bool(source.get("transfer_enabled", true)) or not bool(destination.get("transfer_enabled", true)):
 		return 0.0
 	var source_resources: Dictionary = source.get("resources", {})
 	var destination_resources: Dictionary = destination.get("resources", {})
@@ -75,6 +75,60 @@ static func transfer_between_tanks(source: Dictionary, destination: Dictionary, 
 	source["resources"] = source_resources
 	destination["resources"] = destination_resources
 	return amount
+
+static func resource_total(tanks: Array, resource: String, supply_only: bool = false) -> float:
+	var total := 0.0
+	for tank_variant in tanks:
+		if not tank_variant is Dictionary:
+			continue
+		var tank: Dictionary = tank_variant
+		if supply_only and not bool(tank.get("fuel_supply_enabled", true)):
+			continue
+		total += maxf(0.0, float(tank.get("resources", {}).get(resource, 0.0)))
+	return total
+
+static func consume_resource(tanks: Array, resource: String, requested_amount: float) -> Dictionary:
+	var remaining := maxf(0.0, requested_amount)
+	var consumed := 0.0
+	var updated: Array = tanks.duplicate(true)
+	for index in range(updated.size()):
+		var tank: Dictionary = updated[index]
+		if not bool(tank.get("fuel_supply_enabled", true)):
+			continue
+		var resources: Dictionary = tank.get("resources", {}).duplicate(true)
+		var available := maxf(0.0, float(resources.get(resource, 0.0)))
+		var amount := minf(available, remaining)
+		if amount <= 0.0:
+			continue
+		resources[resource] = available - amount
+		tank["resources"] = resources
+		updated[index] = tank
+		consumed += amount
+		remaining -= amount
+		if remaining <= 0.0000001:
+			break
+	return {"tanks": updated, "consumed": consumed, "remaining": remaining}
+
+static func merge_tank_states(first: Array, second: Array) -> Array:
+	var result: Array = first.duplicate(true)
+	var known: Dictionary = {}
+	for tank in result:
+		if tank is Dictionary:
+			known[str(tank.get("part_uid", ""))] = true
+	for tank in second:
+		if tank is Dictionary and not known.has(str(tank.get("part_uid", ""))):
+			result.append(tank.duplicate(true))
+	return result
+
+static func split_tank_states(tanks: Array, part_ids: Array) -> Array:
+	var selected: Dictionary = {}
+	for part_id in part_ids:
+		selected[str(part_id)] = true
+	var result: Array = []
+	for tank in tanks:
+		if tank is Dictionary and selected.has(str(tank.get("part_uid", ""))):
+			result.append(tank.duplicate(true))
+	return result
 
 static func split_connected_modules(module_ids: Array, connections: Array, disabled_connection_id: String = "") -> Array:
 	var adjacency: Dictionary = {}

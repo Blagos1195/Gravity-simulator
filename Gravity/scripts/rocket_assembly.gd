@@ -10,8 +10,8 @@ static func _catalog() -> Dictionary:
 
 static func component_options() -> Array:
 	var options: Array = []
-	for category in ["tanks", "engines", "decouplers", "structures", "rcs", "docking_ports"]:
-		var component_kind: String = str({"rcs": "rcs", "docking_ports": "docking_port"}.get(category, category.trim_suffix("s")))
+	for category in ["tanks", "engines", "decouplers", "structures", "rcs", "docking_ports", "power"]:
+		var component_kind: String = str({"rcs": "rcs", "docking_ports": "docking_port", "power": "power"}.get(category, category.trim_suffix("s")))
 		for definition in _catalog().get(category, []):
 			var option: Dictionary = definition.duplicate(true)
 			option["kind"] = component_kind
@@ -142,9 +142,14 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 		fuel_capacity += maxf(0.0, float(component.get("fuel_capacity", 0.0))) * copies
 		var component_kind := str(component.get("kind", ""))
 		if component_kind in ["engine", "radial"] and bool(component.get("engine_enabled", true)):
+			if str(component.get("fuel_type", "liquid_propellant")) == "liquid_propellant":
+				flow += maxf(0.0, float(component.get("flow", 0.0))) * copies
 			thrust += maxf(0.0, float(component.get("thrust", 0.0))) * copies
 			vacuum_thrust += maxf(0.0, float(component.get("vacuum_thrust", 0.0))) * copies
-			flow += maxf(0.0, float(component.get("flow", 0.0))) * copies
+			if bool(component.get("solid_motor", false)):
+				configured["has_solid_motor"] = true
+		configured["electric_draw_w"] = float(configured.get("electric_draw_w", 0.0)) + maxf(0.0, float(component.get("electric_draw_w", 0.0))) * copies
+		configured["electric_generation_w"] = float(configured.get("electric_generation_w", 0.0)) + maxf(0.0, float(component.get("power_generation_w", 0.0))) * copies
 		rcs_propellant_capacity += maxf(0.0, float(component.get("rcs_propellant_capacity", 0.0))) * copies
 		if component_kind == "rcs" and bool(component.get("rcs_enabled", true)):
 			rcs_thrust += maxf(0.0, float(component.get("rcs_thrust", 0.0))) * copies
@@ -327,13 +332,20 @@ static func stage_engine_elements(stage: Dictionary, pressure_ratio: float, stag
 		if thrust <= 0.0 or not bool(component.get("engine_enabled", true)):
 			continue
 		var direction := Vector2.UP.rotated(deg_to_rad(float(component.get("rotation_deg", 0.0))))
+		var fuel_type := str(component.get("fuel_type", "liquid_propellant"))
+		if bool(component.get("solid_motor", false)) and not bool(component.get("ignited", false)):
+			continue
 		for position_variant in positions:
 			var position: Vector2 = position_variant
 			elements.append({
 				"position": position + Vector2(0.0, stage_center_y),
 				"direction": direction,
 				"thrust": thrust,
-				"gimballed": kind == "engine",
+				"flow": maxf(0.0, float(component.get("flow", 0.0))),
+				"fuel_type": fuel_type,
+				"electric_draw_w": maxf(0.0, float(component.get("electric_draw_w", 0.0))),
+				"solid_motor": bool(component.get("solid_motor", false)),
+				"gimballed": kind == "engine" and not bool(component.get("solid_motor", false)),
 				"part_uid": str(component.get("part_uid", component.get("id", "")))
 			})
 	var boosters: Array = configured.get("boosters", [])

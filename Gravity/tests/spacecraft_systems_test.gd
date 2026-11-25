@@ -13,6 +13,24 @@ func _initialize() -> void:
 	assert(is_equal_approx(float(source.resources.xenon), 30.0))
 	assert(is_equal_approx(float(destination.resources.xenon), 60.0))
 	assert(is_zero_approx(ResourceNetwork.transfer_between_tanks(source, destination, "xenon", 10.0, false)))
+	var resource_tanks: Array = [
+		{"part_uid":"tank_a","resources":{"xenon":20.0},"resource_capacities":{"xenon":30.0}},
+		{"part_uid":"tank_b","resources":{"xenon":50.0},"resource_capacities":{"xenon":60.0},"fuel_supply_enabled":false}
+	]
+	assert(is_equal_approx(ResourceNetwork.resource_total(resource_tanks, "xenon", true), 20.0))
+	var consumed := ResourceNetwork.consume_resource(resource_tanks, "xenon", 12.0)
+	assert(is_equal_approx(float(consumed.consumed), 12.0))
+	assert(is_equal_approx(float(consumed.tanks[0].resources.xenon), 8.0))
+	assert(is_equal_approx(float(consumed.tanks[1].resources.xenon), 50.0))
+	var split_tanks := ResourceNetwork.split_tank_states(resource_tanks, ["tank_b"])
+	assert(split_tanks.size() == 1 and str(split_tanks[0].part_uid) == "tank_b")
+	var catalog_assembly := RocketAssembly.component_options()
+	var ion_found := false
+	var solid_found := false
+	for option in catalog_assembly:
+		ion_found = ion_found or str(option.get("id", "")) == "ion_engine"
+		solid_found = solid_found or str(option.get("id", "")) == "solid_fuel_motor"
+	assert(ion_found and solid_found)
 	assert(is_zero_approx(ResourceNetwork.transfer_between_tanks(source, destination, "solid_propellant", 10.0)))
 	var groups := ResourceNetwork.split_connected_modules(["tug", "station", "satellite"], [{"id":"dock_a","a":"tug","b":"station"},{"id":"dock_b","a":"station","b":"satellite"}], "dock_a")
 	assert(groups.size() == 2 and groups[0].size() == 1 and groups[1].size() == 2)

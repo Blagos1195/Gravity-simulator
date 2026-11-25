@@ -29,7 +29,10 @@ static func create_plan(modules: Array) -> Array:
 				var action_name := str(component.get("staging_action", ""))
 				if action_name.is_empty():
 					if kind in ["engine", "radial"]:
-						action_name = "activate_engine"
+						if bool(component.get("solid_motor", false)):
+							action_name = "ignite_solid_motor"
+						else:
+							action_name = "activate_engine"
 					elif kind in ["decoupler", "docking_port"]:
 						action_name = "separate"
 					elif kind == "tank":
@@ -96,6 +99,9 @@ static func execute_stage(plan: Array, stage_index: int, part_states: Dictionary
 		match action_name:
 			"activate_engine":
 				state["engine_enabled"] = true
+			"ignite_solid_motor":
+				state["engine_enabled"] = true
+				state["ignited"] = true
 			"deactivate_engine":
 				state["engine_enabled"] = false
 			"enable_fuel_supply":
