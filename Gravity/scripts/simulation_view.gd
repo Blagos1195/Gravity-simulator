@@ -236,7 +236,7 @@ func _vehicle_mass_properties(active_fuel_amount: float = -1.0, active_rcs_fuel_
 	var stage_lengths: Array[float] = []
 	var total_length := 0.0
 	for index in range(stage_index, rocket_stages.size()):
-		var geometry := RocketAssembly.stage_geometry(rocket_stages[index])
+		var geometry: Dictionary = RocketAssembly.stage_geometry(rocket_stages[index])
 		var stage_length := float(geometry.get("length", 1.0))
 		stage_lengths.append(stage_length)
 		total_length += stage_length
@@ -332,9 +332,9 @@ func _remaining_rcs_propellant_capacity() -> float:
 	return capacity
 
 func _remaining_rcs_system() -> Dictionary:
-	var system := {"thrust": 0.0, "flow": 0.0, "torque": 0.0}
+	var system: Dictionary = {"thrust": 0.0, "flow": 0.0, "torque": 0.0}
 	for index in range(stage_index, rocket_stages.size()):
-		var stage := RocketAssembly.ensure_stage_components(rocket_stages[index])
+		var stage: Dictionary = RocketAssembly.ensure_stage_components(rocket_stages[index])
 		system.thrust = float(system.thrust) + float(stage.get("rcs_thrust", 0.0))
 		system.flow = float(system.flow) + float(stage.get("rcs_flow", 0.0))
 		system.torque = float(system.torque) + float(stage.get("rcs_torque", 0.0))
@@ -370,7 +370,7 @@ func docking_port_world_state() -> Dictionary:
 		var geometry: Dictionary = geometries[offset]
 		var stage_center_y := cursor + float(geometry.get("length", 1.0)) * 0.5
 		var stage: Dictionary = geometry.get("stage", {})
-		var ports := RocketAssembly.stage_docking_ports(stage, stage_center_y)
+		var ports: Array[Dictionary] = RocketAssembly.stage_docking_ports(stage, stage_center_y)
 		if not ports.is_empty():
 			var port: Dictionary = ports[0]
 			var local_position: Vector2 = port.position
@@ -510,22 +510,22 @@ func _physics_step(dt: float) -> void:
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 	var rcs_system := _remaining_rcs_system()
-	var rcs_translation_input := Vector2.ZERO
+	var rcs_translation_input: Vector2 = Vector2.ZERO
 	if has_rcs() and input_enabled:
 		rcs_translation_input = Vector2(
 			float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT)),
 			float(Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_UP))
 		).limit_length(1.0)
-	var rcs_command_strength := maxf(rcs_translation_input.length(), absf(rcs_rotation_input))
-	var rcs_flow_rate := float(rcs_system.flow) * rcs_command_strength
-	var rcs_fuel_used := minf(rcs_propellant_remaining, rcs_flow_rate * dt) if not crashed else 0.0
+	var rcs_command_strength: float = maxf(rcs_translation_input.length(), absf(rcs_rotation_input))
+	var rcs_flow_rate: float = float(rcs_system.flow) * rcs_command_strength
+	var rcs_fuel_used: float = minf(rcs_propellant_remaining, rcs_flow_rate * dt) if not crashed else 0.0
 	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0)
 	throttle = autopilot_throttle if not crashed and autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if not crashed and thrust_key_down and propellant_available else 0.0)
 	var fuel_used := minf(infinite_fuel_stage_remaining, total_flow * throttle * dt) if infinite_weightless_fuel and total_flow > 0.0 else (minf(fuel, total_flow * throttle * dt) if total_flow > 0.0 else 0.0)
 	var effective_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else -1.0
 	var mass_before := maxf(1.0, _current_vehicle_mass(effective_fuel))
 	var mass_after := maxf(1.0, mass_before - fuel_used - rcs_fuel_used)
-	var engine_mass_after := maxf(1.0, mass_before - fuel_used)
+	var engine_mass_after: float = maxf(1.0, mass_before - fuel_used)
 	var mass_mid := (mass_before + mass_after) * 0.5
 	var initial_atmosphere: Dictionary = {}
 	if realism != "Arcade" or throttle > 0.0:
@@ -544,14 +544,14 @@ func _physics_step(dt: float) -> void:
 		thrust_force_vector_local = Vector2(force_profile.force)
 		thrust_force = thrust_force_vector_local.length()
 		angular_acceleration = float(force_profile.torque) / float(mass_properties.moment_of_inertia)
-	var rcs_impulse_local := Vector2.ZERO
+	var rcs_impulse_local: Vector2 = Vector2.ZERO
 	if rcs_command_strength > 0.0 and rcs_fuel_used > 0.0:
 		if rcs_translation_input.length_squared() > 0.0:
-			var rcs_power_scale := rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt)
-			var rcs_force := rcs_translation_input * float(rcs_system.thrust) * rcs_power_scale
+			var rcs_power_scale: float = rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt)
+			var rcs_force: Vector2 = rcs_translation_input * float(rcs_system.thrust) * rcs_power_scale
 			rcs_impulse_local = rcs_force.normalized() * rcs_force.length() / mass_mid * dt
-		var rcs_torque := rcs_rotation_input * float(rcs_system.torque) * (rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt))
-		var current_inertia := _vehicle_mass_properties(-1.0, maxf(0.0, rcs_propellant_remaining - rcs_fuel_used * 0.5)).moment_of_inertia
+		var rcs_torque: float = rcs_rotation_input * float(rcs_system.torque) * (rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt))
+		var current_inertia: float = float(_vehicle_mass_properties(-1.0, maxf(0.0, rcs_propellant_remaining - rcs_fuel_used * 0.5)).get("moment_of_inertia", 1.0))
 		angular_acceleration += rcs_torque / float(current_inertia)
 	angular_velocity = initial_angular_velocity + angular_acceleration * dt
 	rotation_angle = wrapf(initial_rotation_angle + initial_angular_velocity * dt + 0.5 * angular_acceleration * dt * dt, -PI, PI)
@@ -2643,7 +2643,7 @@ func load_save_data(data: Dictionary) -> bool:
 	var rcs_capacity := 0.0
 	for saved_stage in saved_stages:
 		rcs_capacity += RocketDesign.stage_rcs_propellant_capacity(saved_stage)
-	var saved_rcs_propellant := float(data.get("rcs_propellant_remaining", rcs_capacity))
+	var saved_rcs_propellant: float = float(data.get("rcs_propellant_remaining", rcs_capacity))
 	if saved_rcs_propellant < 0.0 or saved_rcs_propellant > rcs_capacity:
 		push_error("Save RCS propellant is outside the vehicle capacity.")
 		return false
