@@ -460,6 +460,31 @@ func _part_at_screen_position(screen_position: Vector2) -> String:
 				if local_click.distance_to(center) <= hit_radius:
 					return str(component.get("part_uid", ""))
 		cursor += float(geometry.get("length", 1.0))
+	for docked_visual in docked_visuals:
+		var design: Dictionary = docked_visual.get("design", {})
+		var stages: Array = design.get("stages", [])
+		var attached_stage_index := int(docked_visual.get("stage_index", 0))
+		var attached_length := 0.0
+		var attached_geometries: Array[Dictionary] = []
+		for index in range(attached_stage_index, stages.size()):
+			var geometry := RocketAssembly.stage_geometry(stages[index])
+			attached_geometries.append(geometry)
+			attached_length += float(geometry.get("length", 1.0))
+		var attached_cursor := -attached_length * 0.5
+		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		for geometry in attached_geometries:
+			var stage: Dictionary = geometry.get("stage", {})
+			var stage_center_y := attached_cursor + float(geometry.get("length", 1.0)) * 0.5
+			var components: Array = stage.get("components", [])
+			var positions: Dictionary = geometry.get("component_positions", {})
+			for component_index in range(components.size()):
+				var component: Dictionary = components[component_index]
+				for position in positions.get(component_index, []):
+					var center: Vector2 = Vector2(position) + Vector2(0.0, stage_center_y) + attached_offset
+					var hit_radius := maxf(6.0 / object_scale, maxf(float(component.get("collision_radius_m", 0.5)), float(component.get("length_m", 1.0)) * 0.55))
+					if local_click.distance_to(center) <= hit_radius:
+						return str(component.get("part_uid", ""))
+			attached_cursor += float(geometry.get("length", 1.0))
 	return ""
 
 func detach_component(part_uid: String) -> bool:

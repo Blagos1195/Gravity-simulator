@@ -2738,11 +2738,18 @@ func _show_part_actions(part_uid: String) -> void:
 	if not is_instance_valid(sim):
 		return
 	var selected_component: Dictionary = {}
-	for stage in sim.rocket_stages:
-		for component in stage.get("components", []):
-			if str(component.get("part_uid", "")) == part_uid:
-				selected_component = component
+	var part_owner: SimulationView = sim
+	for vehicle in fleet_sims:
+		for stage in vehicle.rocket_stages:
+			for component in stage.get("components", []):
+				if str(component.get("part_uid", "")) == part_uid:
+					selected_component = component
+					part_owner = vehicle
+					break
+			if not selected_component.is_empty():
 				break
+		if not selected_component.is_empty():
+			break
 	if selected_component.is_empty():
 		return
 	var kind := str(selected_component.get("kind", ""))
@@ -2769,7 +2776,7 @@ func _show_part_actions(part_uid: String) -> void:
 		var deploy_button := Button.new()
 		deploy_button.text = "RETRACT" if bool(selected_component.get("deployed", false)) else "DEPLOY"
 		deploy_button.pressed.connect(func():
-			_set_vehicle_component_state(sim, part_uid, "deployed", not bool(selected_component.get("deployed", false)))
+			_set_vehicle_component_state(part_owner, part_uid, "deployed", not bool(selected_component.get("deployed", false)))
 			window.queue_free()
 		)
 		layout.add_child(deploy_button)
@@ -2777,7 +2784,7 @@ func _show_part_actions(part_uid: String) -> void:
 		var engine_button := Button.new()
 		engine_button.text = "REMOVE FROM ACTIVE PARTS" if bool(selected_component.get("engine_enabled", true)) else "ADD TO ACTIVE PARTS"
 		engine_button.pressed.connect(func():
-			_set_vehicle_component_state(sim, part_uid, "engine_enabled", not bool(selected_component.get("engine_enabled", true)))
+			_set_vehicle_component_state(part_owner, part_uid, "engine_enabled", not bool(selected_component.get("engine_enabled", true)))
 			window.queue_free()
 		)
 		layout.add_child(engine_button)
@@ -2785,7 +2792,7 @@ func _show_part_actions(part_uid: String) -> void:
 		var rcs_button := Button.new()
 		rcs_button.text = "DISABLE RCS" if bool(selected_component.get("rcs_enabled", true)) else "ENABLE RCS"
 		rcs_button.pressed.connect(func():
-			_set_vehicle_component_state(sim, part_uid, "rcs_enabled", not bool(selected_component.get("rcs_enabled", true)))
+			_set_vehicle_component_state(part_owner, part_uid, "rcs_enabled", not bool(selected_component.get("rcs_enabled", true)))
 			window.queue_free()
 		)
 		layout.add_child(rcs_button)
@@ -2793,7 +2800,7 @@ func _show_part_actions(part_uid: String) -> void:
 		var fuel_button := Button.new()
 		fuel_button.text = "DISABLE FUEL SUPPLY" if bool(selected_component.get("fuel_supply_enabled", true)) else "ENABLE FUEL SUPPLY"
 		fuel_button.pressed.connect(func():
-			_set_vehicle_component_state(sim, part_uid, "fuel_supply_enabled", not bool(selected_component.get("fuel_supply_enabled", true)))
+			_set_vehicle_component_state(part_owner, part_uid, "fuel_supply_enabled", not bool(selected_component.get("fuel_supply_enabled", true)))
 			window.queue_free()
 		)
 		layout.add_child(fuel_button)
@@ -2801,7 +2808,7 @@ func _show_part_actions(part_uid: String) -> void:
 		var separate_button := Button.new()
 		separate_button.text = "SEPARATE PART"
 		separate_button.pressed.connect(func():
-			sim.detach_component(part_uid)
+			_detach_vehicle_component(part_owner, part_uid)
 			window.queue_free()
 		)
 		layout.add_child(separate_button)
@@ -2814,6 +2821,34 @@ func _show_part_actions(part_uid: String) -> void:
 		)
 		layout.add_child(attach_button)
 	window.popup_centered()
+
+func _detach_vehicle_component(vehicle: SimulationView, part_uid: String) -> void:
+	if vehicle == null:
+		return
+	for link in docking_links.duplicate(true):
+		if (str(link.get("parent_name", "")) == vehicle.vehicle_name and str(link.get("port_a", "")) == part_uid) or (str(link.get("child_name", "")) == vehicle.vehicle_name and str(link.get("port_b", "")) == part_uid):
+			_undock_vehicle(vehicle.vehicle_name)
+			break
+	var inventory_owner := _resource_inventory_owner(vehicle)
+	if inventory_owner == null or inventory_owner == vehicle:
+		vehicle.detach_component(part_uid)
+		return
+	vehicle.resource_tanks = ResourceNetwork.tank_states_for_module(inventory_owner.resource_tanks, vehicle.vehicle_name)
+	inventory_owner.resource_tanks = ResourceNetwork.tank_states_without_module(inventory_owner.resource_tanks, vehicle.vehicle_name)
+	vehicle.resource_inventory_external = false
+	vehicle._sync_legacy_fuel_from_tanks()
+	var previous_rcs := float(inventory_owner.docked_rcs_propellant.get(vehicle.vehicle_name, vehicle.rcs_propellant_remaining))
+	vehicle.detach_component(part_uid)
+	var remaining_rcs := vehicle.rcs_propellant_remaining
+	inventory_owner.rcs_propellant_remaining = maxf(0.0, inventory_owner.rcs_propellant_remaining - previous_rcs + remaining_rcs)
+	inventory_owner.docked_rcs_propellant[vehicle.vehicle_name] = remaining_rcs
+	inventory_owner.resource_tanks = ResourceNetwork.merge_tank_states(inventory_owner.resource_tanks, vehicle.resource_tanks)
+	vehicle.resource_tanks.clear()
+	vehicle.resource_inventory_external = true
+	vehicle.fuel = 0.0
+	vehicle._sync_legacy_fuel_from_external_tanks(inventory_owner.resource_tanks)
+	_sync_docked_vehicles()
+	_update_docked_masses()
 
 func _show_tank_transfer_panel() -> void:
 	var window := Window.new()
