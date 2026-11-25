@@ -28,6 +28,11 @@ jobs:
           include-templates: false
       - name: Import and parse project
         run: |
+          output="$(godot --headless --path Gravity --script res://tests/compile_simulation_view.gd --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
+            exit 1
+          fi
           output="$(godot --headless --path Gravity --editor --quit 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
