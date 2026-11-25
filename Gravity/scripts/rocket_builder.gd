@@ -57,7 +57,7 @@ class AssemblyCanvas extends Control:
 		var center_x := size.x * 0.5
 		if str(data.get("source", "")) == "catalog":
 			var kind := str(data.get("kind", ""))
-			var attachment := "radial" if kind == "radial" else ("side" if absf(at_position.x - center_x) > 78.0 else "stack")
+			var attachment := "radial" if kind == "radial" else ("stack" if kind == "docking_port" else ("side" if absf(at_position.x - center_x) > 78.0 else "stack"))
 			var side := -1 if at_position.x < center_x else 1
 			var insert_index := _insert_index(at_position.y)
 			component_dropped.emit(str(data.get("id", "")), attachment, bool(get_meta("mirror_enabled", true)), side, insert_index)
@@ -216,8 +216,10 @@ class AssemblyCanvas extends Control:
 		match kind:
 			"engine":
 				polygon = PackedVector2Array([rect.position + Vector2(rect.size.x * 0.2, 0.0), rect.position + Vector2(rect.size.x * 0.8, 0.0), rect.position + Vector2(rect.size.x, rect.size.y), rect.position + Vector2(0.0, rect.size.y)])
-			"decoupler":
+			"decoupler", "docking_port":
 				polygon = PackedVector2Array([rect.position, rect.position + Vector2(rect.size.x, 0.0), rect.end, rect.position + Vector2(0.0, rect.size.y)])
+			"rcs":
+				polygon = PackedVector2Array([rect.position + Vector2(rect.size.x * 0.2, rect.size.y * 0.2), rect.position + Vector2(rect.size.x * 0.8, rect.size.y * 0.2), rect.position + Vector2(rect.size.x, rect.size.y * 0.5), rect.position + Vector2(rect.size.x * 0.8, rect.size.y * 0.8), rect.position + Vector2(rect.size.x * 0.2, rect.size.y * 0.8), rect.position, rect.position + Vector2(0.0, rect.size.y * 0.5)])
 			"structure":
 				polygon = PackedVector2Array([rect.position + Vector2(rect.size.x * 0.5, 0.0), rect.position + Vector2(rect.size.x, rect.size.y * 0.5), rect.position + Vector2(rect.size.x * 0.8, rect.size.y), rect.position + Vector2(rect.size.x * 0.2, rect.size.y), rect.position + Vector2(0.0, rect.size.y * 0.5)])
 			_:
@@ -424,7 +426,7 @@ func _build_interface() -> void:
 	)
 	parts_column.add_child(_search_input)
 	_part_filter = OptionButton.new()
-	for category in ["all", "tank", "engine", "decoupler", "structure", "radial"]:
+	for category in ["all", "tank", "engine", "decoupler", "structure", "rcs", "docking_port", "radial"]:
 		_part_filter.add_item(category.capitalize())
 		_part_filter.set_item_metadata(_part_filter.item_count - 1, category)
 	_part_filter.item_selected.connect(func(index: int):
@@ -791,7 +793,21 @@ func _refresh_inspector() -> void:
 		mount_label.text = "Attachment node  •  %s" % ("automatic centre" if int(component.get("mount_index", -1)) < 0 else "stack segment %d" % (int(component.get("mount_index", -1)) + 1))
 		mount_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_inspector.add_child(mount_label)
-	var fields := [
+		if str(component.get("kind", "")) == "docking_port":
+		var facing_label := Label.new()
+		facing_label.text = "Port direction"
+		_inspector.add_child(facing_label)
+		var facing_selector := OptionButton.new()
+		facing_selector.add_item("Forward")
+		facing_selector.set_item_metadata(0, 1)
+		facing_selector.add_item("Aft")
+		facing_selector.set_item_metadata(1, -1)
+		facing_selector.select(0 if int(component.get("port_facing", 1)) >= 0 else 1)
+		facing_selector.item_selected.connect(func(index: int):
+			_update_component_property("port_facing", int(facing_selector.get_item_metadata(index)))
+		)
+		_inspector.add_child(facing_selector)
+var fields := [
 		{"key":"dry_mass","label":"Dry mass (kg)","max":100000000.0},
 		{"key":"fuel_capacity","label":"Propellant (kg)","max":1000000000.0},
 		{"key":"thrust","label":"Sea-level thrust (N)","max":100000000000.0},
