@@ -140,13 +140,16 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 		var copies := 2.0 if attachment == "side" and bool(component.get("mirror", true)) else 1.0
 		dry_mass += maxf(0.0, float(component.get("dry_mass", 0.0))) * copies
 		fuel_capacity += maxf(0.0, float(component.get("fuel_capacity", 0.0))) * copies
-		thrust += maxf(0.0, float(component.get("thrust", 0.0))) * copies
-		vacuum_thrust += maxf(0.0, float(component.get("vacuum_thrust", 0.0))) * copies
-		flow += maxf(0.0, float(component.get("flow", 0.0))) * copies
+		var component_kind := str(component.get("kind", ""))
+		if component_kind in ["engine", "radial"] and bool(component.get("engine_enabled", true)):
+			thrust += maxf(0.0, float(component.get("thrust", 0.0))) * copies
+			vacuum_thrust += maxf(0.0, float(component.get("vacuum_thrust", 0.0))) * copies
+			flow += maxf(0.0, float(component.get("flow", 0.0))) * copies
 		rcs_propellant_capacity += maxf(0.0, float(component.get("rcs_propellant_capacity", 0.0))) * copies
-		rcs_thrust += maxf(0.0, float(component.get("rcs_thrust", 0.0))) * copies
-		rcs_flow += maxf(0.0, float(component.get("rcs_flow", 0.0))) * copies
-		rcs_torque += maxf(0.0, float(component.get("rcs_torque", 0.0))) * copies
+		if component_kind == "rcs" and bool(component.get("rcs_enabled", true)):
+			rcs_thrust += maxf(0.0, float(component.get("rcs_thrust", 0.0))) * copies
+			rcs_flow += maxf(0.0, float(component.get("rcs_flow", 0.0))) * copies
+			rcs_torque += maxf(0.0, float(component.get("rcs_torque", 0.0))) * copies
 		var component_resources := ResourceNetwork.component_capacities(component)
 		for resource in component_resources:
 			resource_capacities[resource] = float(resource_capacities.get(resource, 0.0)) + float(component_resources[resource]) * copies

@@ -50,5 +50,17 @@ func _initialize() -> void:
 	stage = RocketAssembly.compile_stage(stage, stage.components)
 	var engines := RocketAssembly.stage_engine_elements(stage, 0.0)
 	assert(engines.size() == 1 and Vector2(engines[0].direction).dot(Vector2.RIGHT) > 0.99)
+	stage.components[engine_index]["engine_enabled"] = false
+	stage = RocketAssembly.compile_stage(stage, stage.components)
+	assert(RocketAssembly.stage_engine_elements(stage, 0.0).is_empty())
+	assert(is_zero_approx(float(stage.thrust)))
+	var rcs_stage := RocketAssembly.add_component(stage, "rcs_thruster_block")
+	var rcs_components: Array = rcs_stage.components.duplicate(true)
+	for index in range(rcs_components.size()):
+		if str(rcs_components[index].get("kind", "")) == "rcs":
+			rcs_components[index]["rcs_enabled"] = false
+	rcs_stage = RocketAssembly.compile_stage(rcs_stage, rcs_components)
+	assert(is_zero_approx(float(rcs_stage.rcs_thrust)))
+	assert(RocketAssembly.stage_rcs_elements(rcs_stage).is_empty())
 	print("Spacecraft resource, staging and component orientation tests passed.")
 	quit()

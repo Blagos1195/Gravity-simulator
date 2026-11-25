@@ -281,7 +281,7 @@ func activate_current_action_stage() -> bool:
 	var should_cutoff := false
 	var should_separate := false
 	for action in actions:
-		if not action is Dictionary:
+		if not action is Dictionary or bool(action.get("completed", false)):
 			continue
 		match str(action.get("action", "")):
 			"activate_engine":
