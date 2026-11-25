@@ -3179,21 +3179,34 @@ func _show_docking_panel() -> void:
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			return
-		var separation: float = sim.rocket_position.distance_to(target.rocket_position)
+		var own_port := sim.docking_port_world_state()
+		var target_port := target.docking_port_world_state()
+		var separation := INF
+		var ports_aligned := false
+		if not own_port.is_empty() and not target_port.is_empty():
+			separation = Vector2(own_port.position).distance_to(Vector2(target_port.position))
+			ports_aligned = Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
 		var relative_speed: float = (sim.velocity - target.velocity).length()
 		var docked := _are_docked(parent_name, target_name)
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
 		var free_flying: bool = not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
-		var available_to_dock: bool = not docked and free_flying and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
-		var available_to_assist: bool = not docked and free_flying and separation <= DOCKING_ASSIST_MAX_RANGE
+		var hardware_ready := sim.has_docking_port() and target.has_docking_port() and sim.has_rcs() and target.has_rcs()
+		var available_to_dock: bool = not docked and free_flying and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
+		var available_to_assist: bool = not docked and free_flying and hardware_ready and separation <= DOCKING_ASSIST_MAX_RANGE
 		if docked:
 			status.text = "DOCKED  •  %s\nCombined mass is included in the parent spacecraft's flight dynamics." % target_name
+		elif not sim.has_docking_port() or not target.has_docking_port():
+			status.text = "DOCKING PORTS REQUIRED\nBoth spacecraft need a docking port. Only matching ports can connect."
+		elif not sim.has_rcs() or not target.has_rcs():
+			status.text = "RCS REQUIRED\nBoth spacecraft need working RCS thrusters and remaining RCS propellant."
 		elif available_to_dock:
-			status.text = "DOCKING CONDITIONS MET\nRange: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
+			status.text = "DOCKING CONDITIONS MET\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		elif assist_active:
-			status.text = "RENDEZVOUS ASSIST ACTIVE\nRange: %.1f m  •  Relative speed: %.2f m/s\nGuidance is matching velocity and closing at up to %.1f m/s." % [separation, relative_speed, DOCKING_ASSIST_MAX_CLOSING_SPEED]
+			status.text = "RENDEZVOUS ASSIST ACTIVE\nPort range: %.1f m  •  Relative speed: %.2f m/s\nRCS is matching velocity and closing at up to %.1f m/s." % [separation, relative_speed, DOCKING_ASSIST_MAX_CLOSING_SPEED]
+		elif not ports_aligned:
+			status.text = "ALIGN DOCKING PORTS\nTheir port faces must point towards each other.\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		else:
-			status.text = "Range: %.1f m / %.0f m\nRelative speed: %.2f / %.2f m/s\nRendezvous assist works within %.0f km." % [separation, DOCKING_CAPTURE_DISTANCE, relative_speed, DOCKING_CAPTURE_SPEED, DOCKING_ASSIST_MAX_RANGE / 1000.0]
+			status.text = "Port range: %.1f m / %.0f m\nRelative speed: %.2f / %.2f m/s\nRCS rendezvous assist works within %.0f km." % [separation, DOCKING_CAPTURE_DISTANCE, relative_speed, DOCKING_CAPTURE_SPEED, DOCKING_ASSIST_MAX_RANGE / 1000.0]
 		dock_button.disabled = not available_to_dock
 		assist_button.disabled = not available_to_assist and not assist_active
 		assist_button.text = "STOP RENDEZVOUS ASSIST" if assist_active else "START RENDEZVOUS ASSIST"
