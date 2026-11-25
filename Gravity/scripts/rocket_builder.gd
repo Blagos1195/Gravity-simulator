@@ -208,6 +208,10 @@ class AssemblyCanvas extends Control:
 		return current_y
 
 	func _draw_part(rect: Rect2, component: Dictionary, selected: bool, opacity: float = 1.0) -> void:
+		var angle := deg_to_rad(float(component.get("rotation_deg", 0.0)))
+		if not is_zero_approx(angle):
+			var center := rect.get_center()
+			draw_set_transform(center - center.rotated(angle), angle, Vector2.ONE)
 		var color := Color(0.42, 0.62, 0.76)
 		var rgb: Variant = component.get("color_rgb", component.get("visual_color_rgb", []))
 		if rgb is Array and rgb.size() == 3:
@@ -228,6 +232,8 @@ class AssemblyCanvas extends Control:
 		draw_colored_polygon(polygon, Color(color.r, color.g, color.b, opacity))
 		draw_rect(rect, Color(0.65, 0.84, 1.0, opacity) if selected else Color(0.12, 0.18, 0.25, opacity), false, 2.0 if selected else 1.0)
 		draw_string(ThemeDB.fallback_font, rect.position + Vector2(4.0, minf(16.0, rect.size.y - 2.0)), str(component.get("label", component.get("id", "PART"))), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 8.0, 10, Color(0.04, 0.06, 0.09, opacity))
+		if not is_zero_approx(angle):
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 var design: Dictionary = {}
 var selected_stage_index := 0
@@ -897,6 +903,33 @@ func _refresh_inspector() -> void:
 	staging_assignment.value = int(component.get("staging_stage", selected_stage_index)) + 1
 	staging_assignment.value_changed.connect(func(value: float): _update_component_property("staging_stage", int(value) - 1))
 	_inspector.add_child(staging_assignment)
+	var action_label := Label.new()
+	action_label.text = "Staging action"
+	_inspector.add_child(action_label)
+	var action_selector := OptionButton.new()
+	var action_options: Array = []
+	match str(component.get("kind", "")):
+		"engine", "radial":
+			action_options = [{"id":"activate_engine","label":"Activate engine"},{"id":"deactivate_engine","label":"Shut down engine"}]
+		"tank":
+			action_options = [{"id":"enable_fuel_supply","label":"Enable fuel supply"},{"id":"disable_fuel_supply","label":"Disable fuel supply"}]
+		"rcs":
+			action_options = [{"id":"activate_rcs","label":"Activate RCS"},{"id":"deactivate_rcs","label":"Deactivate RCS"}]
+		"decoupler", "docking_port":
+			action_options = [{"id":"separate","label":"Separate connection"},{"id":"attach","label":"Attach connection"}]
+		_:
+			if bool(component.get("deployable", false)):
+				action_options = [{"id":"deploy","label":"Deploy"},{"id":"retract","label":"Retract"}]
+			else:
+				action_options = [{"id":"activate","label":"Activate"},{"id":"deactivate","label":"Deactivate"}]
+	var default_action := str(component.get("staging_action", action_options[0].id if not action_options.is_empty() else "activate"))
+	for option in action_options:
+		action_selector.add_item(str(option.label))
+		action_selector.set_item_metadata(action_selector.item_count - 1, str(option.id))
+		if str(option.id) == default_action:
+			action_selector.select(action_selector.item_count - 1)
+	action_selector.item_selected.connect(func(index: int): _update_component_property("staging_action", str(action_selector.get_item_metadata(index))))
+	_inspector.add_child(action_selector)
 	var fields := [
 		{"key":"dry_mass","label":"Dry mass (kg)","max":100000000.0},
 		{"key":"fuel_capacity","label":"Propellant (kg)","max":1000000000.0},
