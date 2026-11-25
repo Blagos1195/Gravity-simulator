@@ -356,20 +356,38 @@ static func stage_rcs_elements(stage: Dictionary, stage_center_y: float = 0.0) -
 	var components: Array = configured.get("components", [])
 	var positions: Dictionary = geometry.component_positions
 	var elements: Array[Dictionary] = []
+	var jet_layout := [
+		[Vector2(0.0, -1.0), Vector2.RIGHT],
+		[Vector2(0.0, 1.0), Vector2.RIGHT],
+		[Vector2(0.0, -1.0), Vector2.LEFT],
+		[Vector2(0.0, 1.0), Vector2.LEFT],
+		[Vector2(-1.0, 0.0), Vector2.UP],
+		[Vector2(1.0, 0.0), Vector2.UP],
+		[Vector2(-1.0, 0.0), Vector2.DOWN],
+		[Vector2(1.0, 0.0), Vector2.DOWN]
+	]
 	for index in range(components.size()):
 		var component: Dictionary = components[index]
-		if str(component.get("kind", "")) != "rcs":
+		if str(component.get("kind", "")) != "rcs" or not bool(component.get("rcs_enabled", true)):
 			continue
+		var angle := deg_to_rad(float(component.get("rotation_deg", 0.0)))
+		var radius := maxf(0.1, float(component.get("collision_radius_m", 0.65)) * 0.5)
+		var total_thrust := maxf(0.0, float(component.get("rcs_thrust", 0.0)))
+		var total_flow := maxf(0.0, float(component.get("rcs_flow", 0.0)))
 		for position_variant in positions.get(index, []):
-			var position: Vector2 = position_variant
-			elements.append({
-				"position": position + Vector2(0.0, stage_center_y),
-				"thrust": float(component.get("rcs_thrust", 0.0)),
-				"flow": float(component.get("rcs_flow", 0.0)),
-				"torque": float(component.get("rcs_torque", 0.0)),
-				"direction": Vector2.UP.rotated(deg_to_rad(float(component.get("rotation_deg", 0.0)))),
-				"part_uid": str(component.get("part_uid", component.get("id", "")))
-			})
+			var component_position: Vector2 = position_variant
+			for jet_index in range(jet_layout.size()):
+				var spec: Array = jet_layout[jet_index]
+				var offset: Vector2 = Vector2(spec[0]) * radius
+				var direction: Vector2 = Vector2(spec[1]).rotated(angle).normalized()
+				elements.append({
+					"position": component_position + offset.rotated(angle) + Vector2(0.0, stage_center_y),
+					"direction": direction,
+					"thrust": total_thrust / 8.0,
+					"flow": total_flow / 8.0,
+					"part_uid": str(component.get("part_uid", component.get("id", ""))),
+					"jet_index": jet_index
+				})
 	return elements
 
 static func stage_docking_ports(stage: Dictionary, stage_center_y: float = 0.0) -> Array[Dictionary]:

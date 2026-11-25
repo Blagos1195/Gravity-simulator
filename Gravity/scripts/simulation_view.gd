@@ -339,6 +339,44 @@ func _remaining_rcs_system() -> Dictionary:
 		system.torque = float(system.torque) + float(stage.get("rcs_torque", 0.0))
 	return system
 
+func _remaining_rcs_elements() -> Array[Dictionary]:
+	var elements: Array[Dictionary] = []
+	var total_length := 0.0
+	var geometries: Array[Dictionary] = []
+	for index in range(stage_index, rocket_stages.size()):
+		var geometry := RocketAssembly.stage_geometry(rocket_stages[index])
+		geometries.append(geometry)
+		total_length += float(geometry.get("length", 1.0))
+	var cursor := -total_length * 0.5
+	for offset in range(geometries.size()):
+		var geometry: Dictionary = geometries[offset]
+		var stage: Dictionary = geometry.stage
+		var stage_length := float(geometry.get("length", 1.0))
+		elements.append_array(RocketAssembly.stage_rcs_elements(stage, cursor + stage_length * 0.5))
+		cursor += stage_length
+	return elements
+
+func _rcs_force_profile(translation_input: Vector2, rotation_input: float, center_of_mass: Vector2) -> Dictionary:
+	var force_total := Vector2.ZERO
+	var torque_total := 0.0
+	var flow_total := 0.0
+	var selected_jets := 0
+	var translation_direction := translation_input.normalized()
+	for jet in _remaining_rcs_elements():
+		var direction: Vector2 = Vector2(jet.get("direction", Vector2.UP)).normalized()
+		var force := direction * float(jet.get("thrust", 0.0))
+		var position: Vector2 = Vector2(jet.get("position", Vector2.ZERO))
+		var jet_torque := (position - center_of_mass).cross(force)
+		var selected_for_translation := translation_input.length_squared() > 0.000001 and direction.dot(translation_direction) > 0.65
+		var selected_for_rotation := absf(rotation_input) > 0.001 and jet_torque * rotation_input > 0.0
+		if not selected_for_translation and not selected_for_rotation:
+			continue
+		force_total += force
+		torque_total += jet_torque
+		flow_total += float(jet.get("flow", 0.0))
+		selected_jets += 1
+	return {"force": force_total, "torque": torque_total, "flow": flow_total, "jet_count": selected_jets}
+
 func has_rcs_installed() -> bool:
 	var system := _remaining_rcs_system()
 	return float(system.thrust) > 0.0 and float(system.flow) > 0.0
@@ -512,16 +550,16 @@ func _physics_step(dt: float) -> void:
 		thrust_key_down = false
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	var rcs_system := _remaining_rcs_system()
 	var rcs_translation_input: Vector2 = Vector2.ZERO
 	if has_rcs() and input_enabled and get_viewport().gui_get_focus_owner() == null:
 		rcs_translation_input = Vector2(
 			float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT)),
 			float(Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_UP))
 		).limit_length(1.0)
-	var rcs_command_strength: float = minf(2.0, rcs_translation_input.length() + absf(rcs_rotation_input))
-	var rcs_flow_rate: float = float(rcs_system.flow) * rcs_command_strength
-	var rcs_fuel_used: float = minf(rcs_propellant_remaining, rcs_flow_rate * dt) if not crashed else 0.0
+	var initial_rcs_mass_properties := _vehicle_mass_properties()
+	var rcs_profile := _rcs_force_profile(rcs_translation_input, rcs_rotation_input, Vector2(initial_rcs_mass_properties.center_of_mass))
+	var rcs_flow_rate := float(rcs_profile.flow)
+	var rcs_fuel_used := minf(rcs_propellant_remaining, rcs_flow_rate * dt) if not crashed else 0.0
 	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0)
 	throttle = autopilot_throttle if not crashed and autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if not crashed and thrust_key_down and propellant_available else 0.0)
 	var fuel_used := minf(infinite_fuel_stage_remaining, total_flow * throttle * dt) if infinite_weightless_fuel and total_flow > 0.0 else (minf(fuel, total_flow * throttle * dt) if total_flow > 0.0 else 0.0)
@@ -548,14 +586,12 @@ func _physics_step(dt: float) -> void:
 		thrust_force = thrust_force_vector_local.length()
 		angular_acceleration = float(force_profile.torque) / float(mass_properties.moment_of_inertia)
 	var rcs_impulse_local: Vector2 = Vector2.ZERO
-	if rcs_command_strength > 0.0 and rcs_fuel_used > 0.0:
-		if rcs_translation_input.length_squared() > 0.0:
-			var rcs_power_scale: float = rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt)
-			var rcs_force: Vector2 = rcs_translation_input * float(rcs_system.thrust) * rcs_power_scale
-			rcs_impulse_local = rcs_force.normalized() * rcs_force.length() / mass_mid * dt
-		var rcs_torque: float = rcs_rotation_input * float(rcs_system.torque) * (rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt))
+	if rcs_fuel_used > 0.0 and rcs_flow_rate > 0.0:
+		var rcs_power_scale := rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt)
+		var rcs_force: Vector2 = Vector2(rcs_profile.force) * rcs_power_scale
+		rcs_impulse_local = rcs_force / mass_mid * dt
 		var current_inertia: float = float(_vehicle_mass_properties(-1.0, maxf(0.0, rcs_propellant_remaining - rcs_fuel_used * 0.5)).get("moment_of_inertia", 1.0))
-		angular_acceleration += rcs_torque / float(current_inertia)
+		angular_acceleration += float(rcs_profile.torque) * rcs_power_scale / maxf(1.0, current_inertia)
 	angular_velocity = initial_angular_velocity + angular_acceleration * dt
 	rotation_angle = wrapf(initial_rotation_angle + initial_angular_velocity * dt + 0.5 * angular_acceleration * dt * dt, -PI, PI)
 	var thrust_delta_v := 0.0
