@@ -1804,6 +1804,7 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 	var debris_name := ("Module " if dockable_module else "Debris ") + "%04d" % debris_sequence
 	var design := {
 		"name": debris_name,
+		"preserve_part_uids": true,
 		"payload_mass": 0.001,
 		"payload_type": "debris",
 		"stages": [stage.duplicate(true)]
@@ -1820,6 +1821,7 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 		for tank_index in range(debris.resource_tanks.size()):
 			var tank: Dictionary = debris.resource_tanks[tank_index]
 			tank["stage_index"] = 0
+			tank["module_id"] = debris_name
 			debris.resource_tanks[tank_index] = tank
 		debris._sync_legacy_fuel_from_tanks()
 	debris.infinite_fuel_stage_remaining = remaining_fuel
@@ -2518,6 +2520,15 @@ func _dock_vehicle(target_name: String) -> bool:
 		return false
 	var local_offset: Vector2 = (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
 	var child_staging_plan := target.staging_plan.duplicate(true)
+	for tank_index in range(target.resource_tanks.size()):
+		var tank: Dictionary = target.resource_tanks[tank_index]
+		tank["module_id"] = target.vehicle_name
+		target.resource_tanks[tank_index] = tank
+	sim.resource_tanks = ResourceNetwork.merge_tank_states(sim.resource_tanks, target.resource_tanks)
+	target.resource_tanks.clear()
+	target.fuel = 0.0
+	for stage_index_value in range(target.stage_fuel_remaining.size()):
+		target.stage_fuel_remaining[stage_index_value] = 0.0
 	docking_links.append({
 		"parent_name": sim.vehicle_name,
 		"child_name": target.vehicle_name,
@@ -2549,6 +2560,10 @@ func _undock_vehicle(target_name: String) -> bool:
 		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
 		docking_links.remove_at(index)
 		if parent != null and child != null:
+			child.resource_tanks = ResourceNetwork.tank_states_for_module(parent.resource_tanks, child.vehicle_name)
+			parent.resource_tanks = ResourceNetwork.tank_states_without_module(parent.resource_tanks, child.vehicle_name)
+			child._sync_legacy_fuel_from_tanks()
+			parent._sync_legacy_fuel_from_tanks()
 			child.staging_plan = StagingSystem.filter_module_plan(parent.staging_plan, child.vehicle_name)
 			parent.staging_plan = StagingSystem.remove_module_plan(parent.staging_plan, child.vehicle_name)
 			child.action_stage_index = clampi(child.action_stage_index, 0, maxi(0, child.staging_plan.size() - 1))

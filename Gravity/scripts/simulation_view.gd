@@ -169,8 +169,12 @@ func set_rocket_design(design: Dictionary) -> void:
 		var components: Array = stage.get("components", []).duplicate(true)
 		for component_index in range(components.size()):
 			var component: Dictionary = components[component_index]
-			if str(component.get("part_uid", "")).is_empty():
-				component["part_uid"] = "part_%d_%d_%s" % [stage_index_value, component_index, str(component.get("id", "part"))]
+			var part_uid := str(component.get("part_uid", ""))
+			if part_uid.is_empty():
+				part_uid = "part_%d_%d_%s" % [stage_index_value, component_index, str(component.get("id", "part"))]
+			if not bool(design.get("preserve_part_uids", false)) and not part_uid.begins_with(vehicle_name + "::"):
+				part_uid = vehicle_name + "::" + part_uid
+			component["part_uid"] = part_uid
 			components[component_index] = component
 		rocket_stages[stage_index_value] = RocketAssembly.compile_stage(stage, components)
 	payload_mass = float(design.get("payload_mass", 500.0))
@@ -194,6 +198,7 @@ func set_rocket_design(design: Dictionary) -> void:
 			capacities.erase("rcs_propellant")
 			tank_state["resource_capacities"] = capacities
 			tank_state["stage_index"] = physical_stage_index
+			tank_state["module_id"] = vehicle_name
 			if not resources.is_empty():
 				resource_tanks.append(tank_state)
 	rcs_propellant_remaining = _remaining_rcs_propellant_capacity()
@@ -277,11 +282,15 @@ func _sync_legacy_fuel_from_tanks() -> void:
 	for index in range(stage_fuel_remaining.size()):
 		var total := 0.0
 		for tank in resource_tanks:
-			if int(tank.get("stage_index", -1)) == index:
+			if str(tank.get("module_id", vehicle_name)) == vehicle_name and int(tank.get("stage_index", -1)) == index:
 				total += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
 		stage_fuel_remaining[index] = total
+	var external_fuel := 0.0
+	for tank in resource_tanks:
+		if str(tank.get("module_id", vehicle_name)) != vehicle_name and bool(tank.get("fuel_supply_enabled", true)):
+			external_fuel += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
 	if stage_index < stage_fuel_remaining.size():
-		fuel = stage_fuel_remaining[stage_index]
+		fuel = stage_fuel_remaining[stage_index] + external_fuel
 
 func _has_ignited_solid_motor() -> bool:
 	for index in range(stage_index, rocket_stages.size()):
@@ -515,7 +524,7 @@ func remove_propellant(amount: float) -> float:
 	var remaining := maxf(0.0, amount)
 	var requested := remaining
 	for index in range(stage_index, rocket_stages.size()):
-		var taken := _consume_resource("liquid_propellant", remaining, index)
+		var taken := _consume_resource("liquid_propellant", remaining)
 		remaining -= taken
 		if remaining <= 0.000001:
 			break
@@ -526,7 +535,7 @@ func add_propellant(amount: float) -> float:
 	var remaining := maxf(0.0, amount)
 	var requested := remaining
 	for index in range(stage_index, rocket_stages.size()):
-		var added := _fill_resource_tanks("liquid_propellant", remaining, index)
+		var added := _fill_resource_tanks("liquid_propellant", remaining)
 		remaining -= added
 		if remaining <= 0.000001:
 			break
@@ -882,7 +891,8 @@ func _physics_step(dt: float) -> void:
 	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0 or resource_amount("xenon") > 0.0 or resource_amount("solid_propellant") > 0.0)
 	var solid_motor_burning := _has_ignited_solid_motor() and resource_amount("solid_propellant") > 0.0
 	throttle = 1.0 if solid_motor_burning else (autopilot_throttle if not crashed and autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if not crashed and thrust_key_down and propellant_available else 0.0))
-	var fuel_used := minf(infinite_fuel_stage_remaining, total_flow * throttle * dt) if infinite_weightless_fuel and total_flow > 0.0 else (minf(fuel, total_flow * throttle * dt) if total_flow > 0.0 else 0.0)
+	var available_liquid := resource_amount("liquid_propellant")
+	var fuel_used := minf(infinite_fuel_stage_remaining, total_flow * throttle * dt) if infinite_weightless_fuel and total_flow > 0.0 else (minf(available_liquid, total_flow * throttle * dt) if total_flow > 0.0 else 0.0)
 	var effective_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else -1.0
 	var mass_before := maxf(1.0, _current_vehicle_mass(effective_fuel))
 	var mass_after := maxf(1.0, mass_before - fuel_used - rcs_fuel_used)
@@ -931,7 +941,7 @@ func _physics_step(dt: float) -> void:
 	if infinite_weightless_fuel:
 		infinite_fuel_stage_remaining = maxf(0.0, infinite_fuel_stage_remaining - fuel_used)
 	else:
-		_consume_resource("liquid_propellant", fuel_used, stage_index)
+		_consume_resource("liquid_propellant", fuel_used)
 		_sync_legacy_fuel_from_tanks()
 	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - rcs_fuel_used)
 	var average_rotation_angle := initial_rotation_angle + initial_angular_velocity * dt * 0.5 + angular_acceleration * dt * dt / 6.0
@@ -1305,12 +1315,12 @@ func _separate_stage() -> void:
 	var remaining_resource_tanks: Array = []
 	var separated_resource_mass := 0.0
 	for tank in resource_tanks:
-		if int(tank.get("stage_index", -1)) == stage_index:
+		if str(tank.get("module_id", vehicle_name)) == vehicle_name and int(tank.get("stage_index", -1)) == stage_index:
 			separated_resource_tanks.append(tank.duplicate(true))
 			separated_resource_mass += float(tank.get("resources", {}).get("xenon", 0.0)) + float(tank.get("resources", {}).get("solid_propellant", 0.0))
 		else:
 			var remaining_tank: Dictionary = tank.duplicate(true)
-			if int(remaining_tank.get("stage_index", -1)) > stage_index:
+			if str(remaining_tank.get("module_id", vehicle_name)) == vehicle_name and int(remaining_tank.get("stage_index", -1)) > stage_index:
 				remaining_tank["stage_index"] = int(remaining_tank.stage_index) - 1
 			remaining_resource_tanks.append(remaining_tank)
 	var dockable_module := stage_separation_is_dockable_module()
@@ -2904,10 +2914,11 @@ func _saved_resource_tanks() -> Array:
 	var saved: Array = []
 	for tank in resource_tanks:
 		var physical_index := int(tank.get("stage_index", 0))
-		if physical_index < stage_index:
+		if str(tank.get("module_id", vehicle_name)) == vehicle_name and physical_index < stage_index:
 			continue
 		var entry: Dictionary = tank.duplicate(true)
-		entry["stage_index"] = physical_index - stage_index
+		if str(entry.get("module_id", vehicle_name)) == vehicle_name:
+			entry["stage_index"] = physical_index - stage_index
 		saved.append(entry)
 	return saved
 
@@ -2979,7 +2990,7 @@ func get_save_data() -> Dictionary:
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
-		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": remaining_stages, "staging_stage_count": staging_plan.size()},
+		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": remaining_stages, "staging_stage_count": staging_plan.size(), "preserve_part_uids": true},
 		"vehicle_name": vehicle_name,
 		"is_debris": is_debris,
 		"passive_orbit_active": passive_orbit_active,
@@ -3084,6 +3095,7 @@ func load_save_data(data: Dictionary) -> bool:
 			else:
 				validated_stage_fuel.append(RocketDesign.stage_total_fuel_capacity(saved_stages[i]))
 	set_rocket_design(saved_design)
+	saved_design["preserve_part_uids"] = true
 	var saved_resource_tanks: Variant = data.get("resource_tanks", null)
 	if saved_resource_tanks is Array:
 		resource_tanks = saved_resource_tanks.duplicate(true)

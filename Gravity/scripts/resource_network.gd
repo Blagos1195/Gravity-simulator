@@ -120,6 +120,20 @@ static func merge_tank_states(first: Array, second: Array) -> Array:
 			result.append(tank.duplicate(true))
 	return result
 
+static func tank_states_for_module(tanks: Array, module_id: String) -> Array:
+	var result: Array = []
+	for tank in tanks:
+		if tank is Dictionary and str(tank.get("module_id", "")) == module_id:
+			result.append(tank.duplicate(true))
+	return result
+
+static func tank_states_without_module(tanks: Array, module_id: String) -> Array:
+	var result: Array = []
+	for tank in tanks:
+		if tank is Dictionary and str(tank.get("module_id", "")) != module_id:
+			result.append(tank.duplicate(true))
+	return result
+
 static func split_tank_states(tanks: Array, part_ids: Array) -> Array:
 	var selected: Dictionary = {}
 	for part_id in part_ids:
