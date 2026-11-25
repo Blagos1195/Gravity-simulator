@@ -2246,6 +2246,8 @@ func _saved_manual_flight_plan() -> Dictionary:
 	return plan
 
 func get_save_data() -> Dictionary:
+	var remaining_stages: Array = rocket_stages.slice(stage_index)
+	var remaining_stage_fuel: Array[float] = stage_fuel_remaining.slice(stage_index)
 	return {
 		"sim_time": sim_time,
 		"launch_time": launch_time,
@@ -2254,9 +2256,9 @@ func get_save_data() -> Dictionary:
 		"velocity": [velocity.x, velocity.y],
 		"rotation_angle": rotation_angle,
 		"fuel": fuel,
-		"stage_fuel_remaining": stage_fuel_remaining.duplicate(),
+		"stage_fuel_remaining": remaining_stage_fuel,
 		"infinite_fuel_stage_remaining": infinite_fuel_stage_remaining,
-		"stage_index": stage_index,
+		"stage_index": 0,
 		"discarded_stage_mass": discarded_stage_mass,
 		"discarded_propellant_mass": discarded_propellant_mass,
 		"gimbal_angle": gimbal_angle,
@@ -2305,7 +2307,7 @@ func get_save_data() -> Dictionary:
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
-		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": rocket_stages.duplicate(true)},
+		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": remaining_stages},
 		"vehicle_name": vehicle_name,
 		"is_debris": is_debris,
 		"passive_orbit_active": passive_orbit_active,
