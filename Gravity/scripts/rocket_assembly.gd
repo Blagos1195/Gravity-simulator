@@ -381,7 +381,7 @@ static func stage_docking_ports(stage: Dictionary, stage_center_y: float = 0.0) 
 
 static func component_summary(stage: Dictionary) -> Dictionary:
 	var components: Array = stage.get("components", [])
-	var counts := {"tank": 0, "engine": 0, "decoupler": 0, "structure": 0}
+	var counts := {"tank": 0, "engine": 0, "decoupler": 0, "structure": 0, "rcs": 0, "docking_port": 0}
 	for component in components:
 		var kind := str(component.get("kind", ""))
 		if counts.has(kind):
