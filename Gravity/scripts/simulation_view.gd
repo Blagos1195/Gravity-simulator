@@ -65,6 +65,7 @@ var staging_plan: Array = []
 var action_stage_index := 0
 var staging_part_states: Dictionary = {}
 var resource_tanks: Array = []
+var resource_inventory_external := false
 var discarded_stage_mass := 0.0
 var discarded_propellant_mass := 0.0
 var throttle := 0.0
@@ -210,6 +211,15 @@ func set_rocket_design(design: Dictionary) -> void:
 		"staging_stage_count": int(design.get("staging_stage_count", 0))
 	}])
 	staging_changed.emit()
+
+func _sync_legacy_fuel_from_external_tanks(shared_tanks: Array) -> void:
+	for index in range(stage_fuel_remaining.size()):
+		var total := 0.0
+		for tank in shared_tanks:
+			if str(tank.get("module_id", "")) == vehicle_name and int(tank.get("stage_index", -1)) == index:
+				total += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
+		stage_fuel_remaining[index] = total
+	fuel = 0.0
 
 func resource_amount(resource: String, supply_only: bool = true) -> float:
 	return ResourceNetwork.resource_total(resource_tanks, resource, supply_only)
@@ -476,7 +486,8 @@ func _remaining_stack_mass() -> float:
 	for i in range(stage_index + 1, rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[i]
 		mass += RocketDesign.stage_total_dry_mass(stage)
-		mass += stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(stage)
+		if not resource_inventory_external:
+			mass += stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(stage)
 	return mass
 
 func total_propellant_remaining() -> float:
@@ -562,7 +573,9 @@ func _vehicle_mass_properties(active_fuel_amount: float = -1.0, active_rcs_fuel_
 		var stage_length := stage_lengths[offset]
 		var stage_center_y := cursor + stage_length * 0.5
 		var stage_fuel := 0.0
-		if offset == 0:
+		if resource_inventory_external:
+			stage_fuel = 0.0
+		elif offset == 0:
 			stage_fuel = active_fuel_amount if active_fuel_amount >= 0.0 else (infinite_fuel_stage_remaining if infinite_weightless_fuel else fuel)
 		elif index < stage_fuel_remaining.size():
 			stage_fuel = stage_fuel_remaining[index]

@@ -2490,6 +2490,7 @@ func _sync_docked_vehicles() -> void:
 		child.rotation_angle = parent.rotation_angle
 		child.angular_velocity = parent.angular_velocity
 		child.sim_time = parent.sim_time
+		child._sync_legacy_fuel_from_external_tanks(parent.resource_tanks)
 		child.landed = parent.landed
 		child.crashed = parent.crashed
 		child.landed_body_name = parent.landed_body_name
@@ -2527,9 +2528,8 @@ func _dock_vehicle(target_name: String) -> bool:
 	sim.resource_tanks = ResourceNetwork.merge_tank_states(sim.resource_tanks, target.resource_tanks)
 	sim._sync_legacy_fuel_from_tanks()
 	target.resource_tanks.clear()
+	target.resource_inventory_external = true
 	target.fuel = 0.0
-	for stage_index_value in range(target.stage_fuel_remaining.size()):
-		target.stage_fuel_remaining[stage_index_value] = 0.0
 	docking_links.append({
 		"parent_name": sim.vehicle_name,
 		"child_name": target.vehicle_name,
@@ -2563,6 +2563,7 @@ func _undock_vehicle(target_name: String) -> bool:
 		if parent != null and child != null:
 			child.resource_tanks = ResourceNetwork.tank_states_for_module(parent.resource_tanks, child.vehicle_name)
 			parent.resource_tanks = ResourceNetwork.tank_states_without_module(parent.resource_tanks, child.vehicle_name)
+			child.resource_inventory_external = false
 			child._sync_legacy_fuel_from_tanks()
 			parent._sync_legacy_fuel_from_tanks()
 			child.staging_plan = StagingSystem.filter_module_plan(parent.staging_plan, child.vehicle_name)
@@ -2740,6 +2741,31 @@ func _show_tank_transfer_panel() -> void:
 	refresh.call()
 	window.popup_centered()
 
+func _sync_external_module_fuel(module: SimulationView, inventory_owner: SimulationView) -> void:
+	if module == null or inventory_owner == null or not module.resource_inventory_external:
+		return
+	for stage_index_value in range(module.stage_fuel_remaining.size()):
+		var tank_indices: Array[int] = []
+		var capacity_total := 0.0
+		for index in range(inventory_owner.resource_tanks.size()):
+			var tank: Dictionary = inventory_owner.resource_tanks[index]
+			if str(tank.get("module_id", "")) != module.vehicle_name or int(tank.get("stage_index", -1)) != stage_index_value:
+				continue
+			var capacity := float(tank.get("resource_capacities", {}).get("liquid_propellant", 0.0))
+			if capacity > 0.0:
+				tank_indices.append(index)
+				capacity_total += capacity
+		if capacity_total <= 0.0:
+			continue
+		var desired := clampf(float(module.stage_fuel_remaining[stage_index_value]), 0.0, capacity_total)
+		for index in tank_indices:
+			var tank: Dictionary = inventory_owner.resource_tanks[index]
+			var resources: Dictionary = tank.get("resources", {}).duplicate(true)
+			var capacity := float(tank.get("resource_capacities", {}).get("liquid_propellant", 0.0))
+			resources["liquid_propellant"] = desired * capacity / capacity_total
+			tank["resources"] = resources
+			inventory_owner.resource_tanks[index] = tank
+
 func _transfer_fuel(from_name: String, to_name: String) -> float:
 	if not _are_docked(from_name, to_name):
 		return 0.0
@@ -2748,7 +2774,35 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 	if donor == null or recipient == null:
 		return 0.0
 	var transferred := 0.0
-	if not donor.infinite_weightless_fuel and not recipient.infinite_weightless_fuel:
+	var donor_owner := _resource_inventory_owner(donor)
+	var recipient_owner := _resource_inventory_owner(recipient)
+	if donor_owner != null and donor_owner == recipient_owner and (donor.resource_inventory_external or recipient.resource_inventory_external):
+		_sync_external_module_fuel(donor, donor_owner)
+		_sync_external_module_fuel(recipient, recipient_owner)
+		var available := donor.total_propellant_remaining()
+		var room := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
+		var remaining := minf(available, room)
+		for source_index in range(donor_owner.resource_tanks.size()):
+			var source: Dictionary = donor_owner.resource_tanks[source_index]
+			if str(source.get("module_id", "")) != donor.vehicle_name:
+				continue
+			for destination_index in range(donor_owner.resource_tanks.size()):
+				var destination: Dictionary = donor_owner.resource_tanks[destination_index]
+				if str(destination.get("module_id", "")) != recipient.vehicle_name:
+					continue
+				var moved := ResourceNetwork.transfer_between_tanks(source, destination, "liquid_propellant", remaining, true)
+				donor_owner.resource_tanks[source_index] = source
+				donor_owner.resource_tanks[destination_index] = destination
+				transferred += moved
+				remaining -= moved
+				if remaining <= 0.000001:
+					break
+			if remaining <= 0.000001:
+				break
+		donor_owner._sync_legacy_fuel_from_tanks()
+		_sync_docked_vehicles()
+	else:
+		if not donor.infinite_weightless_fuel and not recipient.infinite_weightless_fuel:
 		var available_space := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
 		var amount := minf(donor.total_propellant_remaining(), available_space)
 		if amount > 0.0:
