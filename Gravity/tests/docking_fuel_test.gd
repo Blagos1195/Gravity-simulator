@@ -66,6 +66,7 @@ func _initialize() -> void:
 	assert(main._dock_vehicle(second_child.vehicle_name))
 	assert(main.docking_links.size() == 2)
 	assert(not second_child.input_enabled)
+	print("DOCKED MASS CHECK ", parent.docked_mass, " / ", child._current_vehicle_mass(), " + ", second_child._current_vehicle_mass())
 	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass() + second_child._current_vehicle_mass()))
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
 	assert(main._are_docked("Orbital Tug", child.vehicle_name))
