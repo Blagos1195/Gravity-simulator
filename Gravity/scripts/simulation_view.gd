@@ -1515,6 +1515,9 @@ func _update_heating(dt: float, atmosphere: Dictionary) -> void:
 func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
 		return
+	if stage_index < stage_fuel_remaining.size():
+		stage_fuel_remaining[stage_index] = fuel
+	_reconcile_legacy_fuel_inventory()
 	var separated_stage: Dictionary = rocket_stages[stage_index].duplicate(true)
 	var separated_fuel := fuel
 	var separated_rcs_capacity := RocketDesign.stage_rcs_propellant_capacity(separated_stage)
