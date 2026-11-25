@@ -3,6 +3,8 @@ extends SceneTree
 const ResourceNetwork = preload("res://scripts/resource_network.gd")
 const StagingSystem = preload("res://scripts/staging_system.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
+const RocketDesign = preload("res://scripts/rocket_design.gd")
+const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
 	var source := {"fuel_supply_enabled": true, "resources": {"xenon": 80.0}, "resource_capacities": {"xenon": 100.0}}
@@ -62,5 +64,16 @@ func _initialize() -> void:
 	rcs_stage = RocketAssembly.compile_stage(rcs_stage, rcs_components)
 	assert(is_zero_approx(float(rcs_stage.rcs_thrust)))
 	assert(RocketAssembly.stage_rcs_elements(rcs_stage).is_empty())
+	var sim := SimulationView.new()
+	sim.vehicle_name = "Stage Test"
+	sim.set_rocket_design(RocketDesign.create_default())
+	assert(not sim.staging_plan.is_empty())
+	var stage_save := sim.get_save_data()
+	assert(stage_save.has("staging_plan") and stage_save.has("action_stage_index"))
+	var first_stage_actions: Array = sim.staging_plan[0].get("actions", [])
+	assert(not first_stage_actions.is_empty())
+	assert(sim.activate_current_action_stage())
+	assert(sim.thrust_key_down)
+	sim.free()
 	print("Spacecraft resource, staging and component orientation tests passed.")
 	quit()
