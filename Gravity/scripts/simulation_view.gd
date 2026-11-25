@@ -347,6 +347,11 @@ func has_rcs_installed() -> bool:
 func has_rcs() -> bool:
 	return has_rcs_installed() and rcs_propellant_remaining > 0.001
 
+func stage_separation_is_dockable_module() -> bool:
+	if stage_index >= rocket_stages.size() - 1:
+		return false
+	return not RocketAssembly.stage_docking_ports(rocket_stages[stage_index]).is_empty() and not RocketAssembly.stage_docking_ports(rocket_stages[stage_index + 1]).is_empty()
+
 func has_docking_port() -> bool:
 	for index in range(stage_index, rocket_stages.size()):
 		if not RocketAssembly.stage_docking_ports(rocket_stages[index]).is_empty():
@@ -520,6 +525,7 @@ func _physics_step(dt: float) -> void:
 	var effective_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else -1.0
 	var mass_before := maxf(1.0, _current_vehicle_mass(effective_fuel))
 	var mass_after := maxf(1.0, mass_before - fuel_used - rcs_fuel_used)
+	var engine_mass_after := maxf(1.0, mass_before - fuel_used)
 	var mass_mid := (mass_before + mass_after) * 0.5
 	var initial_atmosphere: Dictionary = {}
 	if realism != "Arcade" or throttle > 0.0:
@@ -541,26 +547,28 @@ func _physics_step(dt: float) -> void:
 	var rcs_impulse_local := Vector2.ZERO
 	if rcs_command_strength > 0.0 and rcs_fuel_used > 0.0:
 		if rcs_translation_input.length_squared() > 0.0:
-			var rcs_force := rcs_translation_input * float(rcs_system.thrust)
+			var rcs_power_scale := rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt)
+			var rcs_force := rcs_translation_input * float(rcs_system.thrust) * rcs_power_scale
 			rcs_impulse_local = rcs_force.normalized() * rcs_force.length() / mass_mid * dt
-		var rcs_torque := rcs_rotation_input * float(rcs_system.torque)
+		var rcs_torque := rcs_rotation_input * float(rcs_system.torque) * (rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt))
 		var current_inertia := _vehicle_mass_properties(-1.0, maxf(0.0, rcs_propellant_remaining - rcs_fuel_used * 0.5)).moment_of_inertia
 		angular_acceleration += rcs_torque / float(current_inertia)
 	angular_velocity = initial_angular_velocity + angular_acceleration * dt
 	rotation_angle = wrapf(initial_rotation_angle + initial_angular_velocity * dt + 0.5 * angular_acceleration * dt * dt, -PI, PI)
 	var thrust_delta_v := 0.0
 	if fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
-		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
+		thrust_delta_v = thrust_force / total_flow * log(mass_before / engine_mass_after)
 	elif infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
 		thrust_delta_v = thrust_force / mass_before * dt
 	if infinite_weightless_fuel:
 		infinite_fuel_stage_remaining = maxf(0.0, infinite_fuel_stage_remaining - fuel_used)
 	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - rcs_fuel_used)
 	var average_rotation_angle := initial_rotation_angle + initial_angular_velocity * dt * 0.5 + angular_acceleration * dt * dt / 6.0
-	var thrust_impulse := (thrust_force_vector_local.normalized() * thrust_delta_v if thrust_force_vector_local.length_squared() > 0.0 else Vector2.ZERO) + rcs_impulse_local
-	thrust_impulse = thrust_impulse.rotated(average_rotation_angle)
+	var engine_impulse := thrust_force_vector_local.normalized() * thrust_delta_v if thrust_force_vector_local.length_squared() > 0.0 else Vector2.ZERO
+	var thrust_impulse := (engine_impulse + rcs_impulse_local).rotated(average_rotation_angle)
+	engine_impulse = engine_impulse.rotated(average_rotation_angle)
 	if manual_burn_tracking_enabled and not autopilot_enabled and thrust_delta_v > 0.0:
-		manual_burn_accumulated_vector += thrust_impulse
+		manual_burn_accumulated_vector += engine_impulse
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
 		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
 		if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
@@ -922,8 +930,7 @@ func _separate_stage() -> void:
 	var separated_rcs_capacity := RocketDesign.stage_rcs_propellant_capacity(separated_stage)
 	var total_rcs_capacity := _remaining_rcs_propellant_capacity()
 	var separated_rcs_fuel := rcs_propellant_remaining * separated_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
-	var next_stage_has_port := RocketAssembly.stage_docking_ports(rocket_stages[stage_index + 1]).size() > 0
-	var dockable_module := not RocketAssembly.stage_docking_ports(separated_stage).is_empty() and next_stage_has_port
+	var dockable_module := stage_separation_is_dockable_module()
 	var separated_dry_mass := RocketDesign.stage_total_dry_mass(separated_stage)
 	var separated_mass := separated_dry_mass + separated_fuel + separated_rcs_fuel
 	var vehicle_mass_before := _current_vehicle_mass()
@@ -2613,7 +2620,7 @@ func load_save_data(data: Dictionary) -> bool:
 	if not is_finite(velocity_x) or not is_finite(velocity_y):
 		push_error("Save contains a non-finite velocity.")
 		return false
-	for key in ["sim_time", "rotation_angle", "angular_velocity", "fuel", "gimbal_angle", "autopilot_burn_remaining", "heat_shield_temperature", "peak_heat_flux_mw", "max_dynamic_pressure_pa"]:
+	for key in ["sim_time", "rotation_angle", "angular_velocity", "fuel", "rcs_propellant_remaining", "gimbal_angle", "autopilot_burn_remaining", "heat_shield_temperature", "peak_heat_flux_mw", "max_dynamic_pressure_pa"]:
 		var value: Variant = data.get(key, 0.0)
 		if not (value is float or value is int) or not is_finite(float(value)):
 			push_error("Save contains an invalid or non-finite %s value." % key)
@@ -2633,6 +2640,13 @@ func load_save_data(data: Dictionary) -> bool:
 		push_error("Save stage index is outside the vehicle.")
 		return false
 	var saved_fuel: float = float(data.get("fuel", 0.0))
+	var rcs_capacity := 0.0
+	for saved_stage in saved_stages:
+		rcs_capacity += RocketDesign.stage_rcs_propellant_capacity(saved_stage)
+	var saved_rcs_propellant := float(data.get("rcs_propellant_remaining", rcs_capacity))
+	if saved_rcs_propellant < 0.0 or saved_rcs_propellant > rcs_capacity:
+		push_error("Save RCS propellant is outside the vehicle capacity.")
+		return false
 	var active_fuel_capacity: float = RocketDesign.stage_total_fuel_capacity(saved_stages[stage_index])
 	if saved_fuel < 0.0 or saved_fuel > active_fuel_capacity:
 		push_error("Save fuel amount is outside the active stage capacity.")
