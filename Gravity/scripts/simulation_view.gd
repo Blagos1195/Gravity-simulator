@@ -2363,6 +2363,7 @@ func get_save_data() -> Dictionary:
 		"position_precise": [rocket_position_precise[0], rocket_position_precise[1]],
 		"velocity": [velocity.x, velocity.y],
 		"rotation_angle": rotation_angle,
+		"angular_velocity": angular_velocity,
 		"fuel": fuel,
 		"stage_fuel_remaining": remaining_stage_fuel,
 		"infinite_fuel_stage_remaining": infinite_fuel_stage_remaining,
