@@ -92,12 +92,25 @@ func _initialize() -> void:
 	rcs_design["stages"][0] = port_stage
 	simulation.set_rocket_design(rcs_design)
 	assert(simulation.has_rcs() and simulation.has_docking_port())
+	var module_design := RocketDesign.create_default()
+	module_design["stages"] = [port_stage.duplicate(true), port_stage.duplicate(true)]
+	simulation.set_rocket_design(module_design)
+	assert(simulation.stage_separation_is_dockable_module(), "Matching ports on adjacent stages should create a detachable module")
+	var upper_stage_without_port := RocketAssembly.remove_component(module_design.stages[1], module_design.stages[1].components.size() - 1)
+	module_design["stages"][1] = upper_stage_without_port
+	simulation.set_rocket_design(module_design)
+	assert(not simulation.stage_separation_is_dockable_module(), "A module should not detach as dockable without ports on both sides")
+	rcs_design["stages"][0] = port_stage
+	simulation.set_rocket_design(rcs_design)
 	var port_state := simulation.docking_port_world_state()
 	assert(not port_state.is_empty())
 	assert(Vector2(port_state.normal).dot(Vector2.UP) > 0.99)
 	var rcs_fuel_before := simulation.rcs_propellant_remaining
 	assert(simulation.apply_rcs_velocity_correction(Vector2(0.1, 0.0), 1.0))
 	assert(simulation.velocity.x > 0.0 and simulation.rcs_propellant_remaining < rcs_fuel_before)
+	var saved_rcs_state := simulation.get_save_data()
+	assert(is_equal_approx(float(saved_rcs_state.get("rcs_propellant_remaining", -1.0)), simulation.rcs_propellant_remaining))
+	assert(simulation.load_save_data(saved_rcs_state), "RCS propellant should survive a save/load cycle")
 	var aft_port_stage := port_stage.duplicate(true)
 	for component in aft_port_stage.components:
 		if str(component.get("kind", "")) == "docking_port":
