@@ -426,18 +426,28 @@ func docking_port_world_state() -> Dictionary:
 func apply_rcs_velocity_correction(velocity_correction: Vector2, delta: float) -> bool:
 	if not has_rcs() or delta <= 0.0:
 		return false
-	var system := _remaining_rcs_system()
-	var mass := maxf(1.0, _current_vehicle_mass())
-	var maximum_delta_v := float(system.thrust) / mass * delta
-	var applied := velocity_correction.limit_length(maximum_delta_v)
-	if applied.length_squared() <= 0.00000001:
+	var mass_properties := _vehicle_mass_properties()
+	var mass := maxf(1.0, float(mass_properties.mass))
+	var local_request := velocity_correction.rotated(-rotation_angle)
+	if local_request.length_squared() <= 0.00000001:
 		return true
-	var requested_flow := float(system.flow) * clampf(applied.length() / maxf(0.000001, maximum_delta_v), 0.0, 1.0)
-	var used := minf(rcs_propellant_remaining, requested_flow * delta)
+	var profile := _rcs_force_profile(local_request, 0.0, Vector2(mass_properties.center_of_mass))
+	var force: Vector2 = Vector2(profile.force)
+	var flow := float(profile.flow)
+	if force.length_squared() <= 0.00000001 or flow <= 0.0 or force.normalized().dot(local_request.normalized()) < 0.8:
+		return false
+	var maximum_delta_v := force.length() / mass * delta
+	var requested_delta_v := minf(local_request.length(), maximum_delta_v)
+	var requested_fraction := clampf(requested_delta_v / maxf(0.000001, maximum_delta_v), 0.0, 1.0)
+	var requested_propellant := flow * delta * requested_fraction
+	var used := minf(rcs_propellant_remaining, requested_propellant)
 	if used <= 0.0:
 		return false
-	var scale := used / maxf(0.000001, requested_flow * delta)
-	velocity += applied * scale
+	var applied_delta_v := maximum_delta_v * used / maxf(0.000001, flow * delta)
+	velocity += force.normalized() * applied_delta_v * Vector2.RIGHT.rotated(rotation_angle).dot(force.normalized().rotated(rotation_angle)) * Vector2.RIGHT.rotated(rotation_angle)
+	var world_impulse_direction := force.normalized().rotated(rotation_angle)
+	velocity -= force.normalized() * applied_delta_v * Vector2.RIGHT.rotated(rotation_angle).dot(force.normalized().rotated(rotation_angle)) * Vector2.RIGHT.rotated(rotation_angle)
+	velocity += world_impulse_direction * applied_delta_v
 	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - used)
 	return true
 

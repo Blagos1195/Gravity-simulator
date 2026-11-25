@@ -383,8 +383,8 @@ static func stage_rcs_elements(stage: Dictionary, stage_center_y: float = 0.0) -
 				elements.append({
 					"position": component_position + offset.rotated(angle) + Vector2(0.0, stage_center_y),
 					"direction": direction,
-					"thrust": total_thrust / 8.0,
-					"flow": total_flow / 8.0,
+					"thrust": total_thrust / 2.0,
+					"flow": total_flow / 2.0,
 					"part_uid": str(component.get("part_uid", component.get("id", ""))),
 					"jet_index": jet_index
 				})
