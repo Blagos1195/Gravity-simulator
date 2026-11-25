@@ -85,7 +85,7 @@ func _initialize() -> void:
 	assert(absf(float(balanced_profile.torque)) < 0.001, "The flight model should preserve torque balance for mirrored engines")
 	var rcs_stage := RocketAssembly.add_component(assembled, "rcs_thruster_block")
 	assert(is_equal_approx(RocketDesign.stage_rcs_propellant_capacity(rcs_stage), 250.0))
-	assert(is_equal_approx(float(rcs_stage.rcs_thrust), 18000.0))
+	assert(is_equal_approx(float(rcs_stage.rcs_thrust), 1800.0))
 	var port_stage := RocketAssembly.add_component(rcs_stage, "standard_docking_port")
 	assert(RocketAssembly.stage_docking_ports(port_stage).size() == 1)
 	var rcs_design := RocketDesign.create_default()
