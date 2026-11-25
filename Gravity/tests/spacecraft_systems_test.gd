@@ -5,6 +5,7 @@ const StagingSystem = preload("res://scripts/staging_system.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const ModuleGraph = preload("res://scripts/module_graph.gd")
 
 func _initialize() -> void:
 	var source := {"fuel_supply_enabled": true, "resources": {"xenon": 80.0}, "resource_capacities": {"xenon": 100.0}}
@@ -34,6 +35,16 @@ func _initialize() -> void:
 	assert(is_zero_approx(ResourceNetwork.transfer_between_tanks(source, destination, "solid_propellant", 10.0)))
 	var groups := ResourceNetwork.split_connected_modules(["tug", "station", "satellite"], [{"id":"dock_a","a":"tug","b":"station"},{"id":"dock_b","a":"station","b":"satellite"}], "dock_a")
 	assert(groups.size() == 2 and groups[0].size() == 1 and groups[1].size() == 2)
+	var graph := ModuleGraph.create(["a", "b", "c"])
+	var connected := ModuleGraph.connect_modules(graph, "a", "b", "port_a", "port_b")
+	assert(bool(connected.valid))
+	graph = connected.graph
+	connected = ModuleGraph.connect_modules(graph, "b", "c", "port_c", "port_d")
+	assert(bool(connected.valid))
+	graph = connected.graph
+	assert(ModuleGraph.connected_to(graph, "a").size() == 3)
+	var disconnected := ModuleGraph.disconnect_connection(graph, "port_c|port_d")
+	assert(bool(disconnected.valid) and disconnected.groups.size() == 2)
 	var plan_a: Array = [{"id":"stage_0","actions":[{"id":"a:engine","part_id":"engine","action":"activate_engine","completed":true,"reversible":true}]}]
 	var plan_b: Array = [{"id":"stage_0","actions":[{"id":"b:deploy","part_id":"panel","action":"deploy","completed":false,"reversible":true}]}]
 	var plan_modules := [{"name":"tug","staging_stage_count":3,"stages":[{"components":[{"id":"engine","kind":"engine","part_uid":"engine","staging_stage":2},{"id":"tank","kind":"tank","part_uid":"tank","staging_stage":1}]}]}]

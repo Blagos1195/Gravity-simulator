@@ -1,6 +1,7 @@
 extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const ModuleGraph = preload("res://scripts/module_graph.gd")
 const StagingSystem = preload("res://scripts/staging_system.gd")
 const ResourceNetwork = preload("res://scripts/resource_network.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
@@ -2520,6 +2521,16 @@ func _dock_vehicle(target_name: String) -> bool:
 	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED or not ports_aligned:
 		return false
 	var local_offset: Vector2 = (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
+	var module_ids: Array = []
+	for vehicle in fleet_sims:
+		module_ids.append(vehicle.vehicle_name)
+	var graph := ModuleGraph.create(module_ids)
+	for existing_link in docking_links:
+		var graph_result := ModuleGraph.connect_modules(graph, str(existing_link.get("parent_name", "")), str(existing_link.get("child_name", "")), str(existing_link.get("port_a", "")), str(existing_link.get("port_b", "")))
+		if bool(graph_result.valid):
+			graph = graph_result.graph
+	if not ModuleGraph.can_connect(graph, sim.vehicle_name, target.vehicle_name, str(own_port.get("part_uid", "")), str(target_port.get("part_uid", ""))):
+		return false
 	var child_staging_plan := target.staging_plan.duplicate(true)
 	for tank_index in range(target.resource_tanks.size()):
 		var tank: Dictionary = target.resource_tanks[tank_index]
@@ -2535,6 +2546,8 @@ func _dock_vehicle(target_name: String) -> bool:
 		"child_name": target.vehicle_name,
 		"offset_x": local_offset.x,
 		"offset_y": local_offset.y,
+		"port_a": str(own_port.get("part_uid", "")),
+		"port_b": str(target_port.get("part_uid", "")),
 		"child_staging_plan": child_staging_plan
 	})
 	sim.staging_plan = StagingSystem.merge_plans(sim.staging_plan, child_staging_plan)

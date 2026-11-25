@@ -426,7 +426,8 @@ static func stage_docking_ports(stage: Dictionary, stage_center_y: float = 0.0) 
 			ports.append({
 				"position": position,
 				"normal": Vector2.UP.rotated(deg_to_rad(float(component.get("rotation_deg", 0.0)))) * float(component.get("port_facing", 1)),
-				"component_index": index
+				"component_index": index,
+				"part_uid": str(component.get("part_uid", component.get("id", "")))
 			})
 	return ports
 

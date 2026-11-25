@@ -752,7 +752,8 @@ func docking_port_world_state() -> Dictionary:
 			var local_normal: Vector2 = port.normal
 			return {
 				"position": rocket_position + local_position.rotated(rotation_angle),
-				"normal": local_normal.rotated(rotation_angle).normalized()
+				"normal": local_normal.rotated(rotation_angle).normalized(),
+				"part_uid": str(port.get("part_uid", ""))
 			}
 		cursor += float(geometry.get("length", 1.0))
 	return {}
