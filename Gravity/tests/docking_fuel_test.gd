@@ -88,6 +88,7 @@ func _initialize() -> void:
 	assert(main.docking_links.size() == 2)
 	assert(not second_child.input_enabled)
 	var expected_docked_mass := child._current_vehicle_mass() + second_child._current_vehicle_mass()
+	print("MASS DEBUG ", parent.docked_mass, " expected ", expected_docked_mass, " child ", child._current_vehicle_mass(), " second ", second_child._current_vehicle_mass(), " parent visual ", parent.docked_visuals)
 	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
 	assert(main._are_docked("Orbital Tug", child.vehicle_name))
