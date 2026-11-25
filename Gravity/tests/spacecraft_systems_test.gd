@@ -103,6 +103,16 @@ func _initialize() -> void:
 	assert(not first_stage_actions.is_empty())
 	assert(sim.activate_current_action_stage())
 	assert(sim.thrust_key_down)
+	var attached_components: Array = rcs_stage.components.duplicate(true)
+	for index in range(attached_components.size()):
+		if str(attached_components[index].get("kind", "")) == "engine":
+			attached_components[index]["engine_enabled"] = true
+		elif str(attached_components[index].get("kind", "")) == "rcs":
+			attached_components[index]["rcs_enabled"] = true
+	rcs_stage = RocketAssembly.compile_stage(rcs_stage, attached_components)
+	sim.docked_visuals = [{"design":{"stages":[rcs_stage]},"stage_index":0,"offset":Vector2(8.0, 0.0)}]
+	assert(not sim._remaining_engine_elements(0.0, 0.0).is_empty())
+	assert(not sim._remaining_rcs_elements().is_empty())
 	sim.free()
 	print("Spacecraft resource, staging and component orientation tests passed.")
 	quit()
