@@ -83,6 +83,31 @@ func _initialize() -> void:
 	var balanced_mass := simulation._vehicle_mass_properties()
 	var balanced_profile := simulation._engine_force_profile(balanced_mass.center_of_mass, 1.0, 1.0)
 	assert(absf(float(balanced_profile.torque)) < 0.001, "The flight model should preserve torque balance for mirrored engines")
+	var rcs_stage := RocketAssembly.add_component(assembled, "rcs_thruster_block")
+	assert(is_equal_approx(RocketDesign.stage_rcs_propellant_capacity(rcs_stage), 250.0))
+	assert(is_equal_approx(float(rcs_stage.rcs_thrust), 18000.0))
+	var port_stage := RocketAssembly.add_component(rcs_stage, "standard_docking_port")
+	assert(RocketAssembly.stage_docking_ports(port_stage).size() == 1)
+	var rcs_design := RocketDesign.create_default()
+	rcs_design["stages"][0] = port_stage
+	simulation.set_rocket_design(rcs_design)
+	assert(simulation.has_rcs() and simulation.has_docking_port())
+	var port_state := simulation.docking_port_world_state()
+	assert(not port_state.is_empty())
+	assert(Vector2(port_state.normal).dot(Vector2.UP) > 0.99)
+	var rcs_fuel_before := simulation.rcs_propellant_remaining
+	assert(simulation.apply_rcs_velocity_correction(Vector2(0.1, 0.0), 1.0))
+	assert(simulation.velocity.x > 0.0 and simulation.rcs_propellant_remaining < rcs_fuel_before)
+	var aft_port_stage := port_stage.duplicate(true)
+	for component in aft_port_stage.components:
+		if str(component.get("kind", "")) == "docking_port":
+			component["port_facing"] = -1
+	var aft_ports := RocketAssembly.stage_docking_ports(aft_port_stage)
+	assert(Vector2(aft_ports[0].normal).dot(Vector2.DOWN) > 0.99)
+	var no_rcs_simulation := SimulationView.new()
+	no_rcs_simulation.set_rocket_design(RocketDesign.create_default())
+	assert(not no_rcs_simulation.has_rcs() and not no_rcs_simulation.apply_rcs_velocity_correction(Vector2.RIGHT, 1.0))
+	no_rcs_simulation.free()
 	simulation.docked_mass = 5000.0
 	simulation.docked_visuals = [{
 		"mass": 5000.0,
@@ -104,7 +129,7 @@ func _initialize() -> void:
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(reordered), RocketDesign.stage_total_dry_mass(with_engine)))
 	assert(RocketAssembly.move_component(with_engine, 0, -1).is_empty())
 	assert(RocketAssembly.move_component(with_engine, with_engine.components.size() - 1, 1).is_empty())
-	assert(RocketAssembly.component_options().size() >= 14)
+	assert(RocketAssembly.component_options().size() >= 16)
 	var mirrored_booster_stage := RocketAssembly.add_component(assembled, "solid_booster_pair", "radial", true, -1)
 	assert(not mirrored_booster_stage.is_empty())
 	assert(is_equal_approx(float(RocketDesign.stage_booster_stats(mirrored_booster_stage).dry_mass), 16000.0))
