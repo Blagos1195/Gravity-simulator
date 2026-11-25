@@ -3059,7 +3059,7 @@ func _build_flight_hud() -> void:
 	stage_manager_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage_manager_picker.item_selected.connect(func(index: int):
 		if is_instance_valid(sim):
-			var previous_index := sim.action_stage_index
+			var previous_index: int = int(sim.action_stage_index)
 			sim.select_action_stage(index)
 			if index < previous_index:
 				_rearm_fleet_action_stage()
