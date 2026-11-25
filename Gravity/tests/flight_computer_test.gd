@@ -261,11 +261,14 @@ func _initialize() -> void:
 	landed_moon_simulation.free()
 	var staged_save_sim: Variant = SimulationView.new()
 	var staged_design: Dictionary = RocketDesign.create_default()
+	var staged_stage: Dictionary = staged_design.stages[0].duplicate(true)
+	staged_design["stages"] = [staged_stage.duplicate(true), staged_stage.duplicate(true)]
 	staged_save_sim.set_rocket_design(staged_design)
 	staged_save_sim.stage_index = 1
+	var remaining_fuel := RocketDesign.stage_total_fuel_capacity(staged_stage) * 0.5
 	staged_save_sim.stage_fuel_remaining[0] = 0.0
-	staged_save_sim.stage_fuel_remaining[1] = 123.0
-	staged_save_sim.fuel = 123.0
+	staged_save_sim.stage_fuel_remaining[1] = remaining_fuel
+	staged_save_sim.fuel = remaining_fuel
 	var staged_save_data: Dictionary = staged_save_sim.get_save_data()
 	var staged_saved_design: Dictionary = staged_save_data.get("rocket_design", {})
 	assert(int(staged_save_data.get("stage_index", -1)) == 0, "Saved vehicle did not rebase its active stage")
@@ -275,7 +278,7 @@ func _initialize() -> void:
 	assert(restored_staged_sim.load_save_data(staged_save_data), "Staged vehicle save could not be restored")
 	assert(restored_staged_sim.stage_index == 0, "Reload restored a discarded stage index")
 	assert(restored_staged_sim.rocket_stages.size() == staged_design.stages.size() - 1, "Reload restored discarded rocket stages")
-	assert(is_equal_approx(restored_staged_sim.fuel, 123.0), "Reload changed active-stage fuel")
+	assert(is_equal_approx(restored_staged_sim.fuel, remaining_fuel), "Reload changed active-stage fuel")
 	staged_save_sim.free()
 	restored_staged_sim.free()
 	var precise_save_data: Dictionary = precision_simulation.get_save_data()
