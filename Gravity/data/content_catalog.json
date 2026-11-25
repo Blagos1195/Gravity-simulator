@@ -1583,6 +1583,39 @@
             0.88
           ]
         }
+      ],
+      "rcs": [
+        {
+          "id": "rcs_thruster_block",
+          "label": "RCS thruster block",
+          "dry_mass": 180,
+          "rcs_propellant_capacity": 250,
+          "rcs_thrust": 18000,
+          "rcs_flow": 0.25,
+          "rcs_torque": 120000,
+          "length_m": 1.8,
+          "collision_radius_m": 0.65,
+          "color_rgb": [
+            0.72,
+            0.76,
+            0.82
+          ]
+        }
+      ],
+      "docking_ports": [
+        {
+          "id": "standard_docking_port",
+          "label": "Standard docking port",
+          "dry_mass": 220,
+          "length_m": 1.4,
+          "collision_radius_m": 0.85,
+          "port_facing": 1,
+          "color_rgb": [
+            0.78,
+            0.72,
+            0.48
+          ]
+        }
       ]
     }
   },
