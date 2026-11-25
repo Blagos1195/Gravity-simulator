@@ -1608,14 +1608,28 @@ func _notification(what: int) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not input_enabled:
 		return
-	if event is InputEventKey and has_rcs_installed():
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			if show_solar_system:
+				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
+			else:
+				camera_zoom = minf(1.0, camera_zoom * 1.2)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			if show_solar_system:
+				solar_map_zoom = maxf(0.25, solar_map_zoom / 1.2)
+			else:
+				camera_zoom = maxf(0.00000000002, camera_zoom / 1.2)
+		return
+	if not event is InputEventKey:
+		return
+	if has_rcs_installed():
 		if event.is_action_pressed("rotate_left"):
 			rcs_rotation_input = -1.0
 		elif event.is_action_pressed("rotate_right"):
 			rcs_rotation_input = 1.0
 		elif event.is_action_released("rotate_left") or event.is_action_released("rotate_right"):
 			rcs_rotation_input = 0.0
-	if not event is InputEventKey or not event.pressed or event.echo:
+	if not event.pressed or event.echo:
 		return
 	if event.is_action_pressed("rotate_left"):
 		if not has_rcs_installed():
@@ -1659,17 +1673,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				gimbal_angle = clampf(gimbal_angle - deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
 			KEY_E:
 				gimbal_angle = clampf(gimbal_angle + deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
-	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			if show_solar_system:
-				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
-			else:
-				camera_zoom = minf(1.0, camera_zoom * 1.2)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			if show_solar_system:
-				solar_map_zoom = maxf(0.25, solar_map_zoom / 1.2)
-			else:
-				camera_zoom = maxf(0.00000000002, camera_zoom / 1.2)
 
 func _launch_pad_surface_normal() -> Vector2:
 	return launch_pad_normal.rotated(EARTH_ROTATION_RATE * (sim_time - launch_pad_reference_time)).normalized()
