@@ -59,6 +59,9 @@ func _initialize() -> void:
 	child.rocket_stages[0] = RocketAssembly.remove_component(child_stage_with_port, port_component_index)
 	assert(not main._dock_vehicle(child.vehicle_name), "A spacecraft without a docking port connected")
 	child.rocket_stages[0] = child_stage_with_port
+	child.rotation_angle = 0.0
+	assert(not main._dock_vehicle(child.vehicle_name), "Misaligned docking ports connected")
+	child.rotation_angle = PI
 	child.rcs_propellant_remaining = 0.0
 	assert(not child.has_rcs() and child.has_rcs_installed())
 	child.velocity = Vector2(0.0, 1001.0)
