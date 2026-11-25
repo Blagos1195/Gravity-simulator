@@ -71,6 +71,12 @@ static func add_component(stage: Dictionary, component_id: String, attachment: S
 	var configured := ensure_stage_components(stage)
 	var components: Array = configured.get("components", []).duplicate(true)
 	definition["attachment"] = attachment
+	definition["rotation_deg"] = float(definition.get("rotation_deg", 0.0))
+	definition["part_uid"] = "part_%d_%d" % [Time.get_ticks_usec(), randi()]
+	if str(definition.get("kind", "")) in ["engine", "radial"]:
+		definition["engine_enabled"] = true
+	if str(definition.get("kind", "")) == "tank":
+		definition["fuel_supply_enabled"] = true
 	if attachment in ["radial", "side"]:
 		definition["mirror"] = mirrored
 		definition["side"] = -1 if side < 0 else 1
@@ -308,14 +314,17 @@ static func stage_engine_elements(stage: Dictionary, pressure_ratio: float, stag
 			continue
 		var positions: Array = component_positions.get(index, [])
 		var thrust := lerpf(float(component.get("vacuum_thrust", 0.0)), float(component.get("thrust", 0.0)), clampf(pressure_ratio, 0.0, 1.0))
-		if thrust <= 0.0:
+		if thrust <= 0.0 or not bool(component.get("engine_enabled", true)):
 			continue
+		var direction := Vector2.UP.rotated(deg_to_rad(float(component.get("rotation_deg", 0.0))))
 		for position_variant in positions:
 			var position: Vector2 = position_variant
 			elements.append({
 				"position": position + Vector2(0.0, stage_center_y),
+				"direction": direction,
 				"thrust": thrust,
-				"gimballed": kind == "engine"
+				"gimballed": kind == "engine",
+				"part_uid": str(component.get("part_uid", component.get("id", "")))
 			})
 	var boosters: Array = configured.get("boosters", [])
 	var booster_positions: Dictionary = geometry.booster_positions
@@ -357,7 +366,9 @@ static func stage_rcs_elements(stage: Dictionary, stage_center_y: float = 0.0) -
 				"position": position + Vector2(0.0, stage_center_y),
 				"thrust": float(component.get("rcs_thrust", 0.0)),
 				"flow": float(component.get("rcs_flow", 0.0)),
-				"torque": float(component.get("rcs_torque", 0.0))
+				"torque": float(component.get("rcs_torque", 0.0)),
+				"direction": Vector2.UP.rotated(deg_to_rad(float(component.get("rotation_deg", 0.0)))),
+				"part_uid": str(component.get("part_uid", component.get("id", "")))
 			})
 	return elements
 
@@ -374,7 +385,7 @@ static func stage_docking_ports(stage: Dictionary, stage_center_y: float = 0.0) 
 			var position: Vector2 = position_variant + Vector2(0.0, stage_center_y)
 			ports.append({
 				"position": position,
-				"normal": Vector2.UP * float(component.get("port_facing", 1)),
+				"normal": Vector2.UP.rotated(deg_to_rad(float(component.get("rotation_deg", 0.0)))) * float(component.get("port_facing", 1)),
 				"component_index": index
 			})
 	return ports

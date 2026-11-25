@@ -315,14 +315,13 @@ func _engine_force_profile(center_of_mass: Vector2, pressure_ratio: float, thrus
 	var torque_total := 0.0
 	var engines := RocketAssembly.stage_engine_elements(rocket_stages[stage_index], pressure_ratio, active_center_y)
 	for engine in engines:
-		var engine_force := Vector2.UP.rotated(gimbal_angle if bool(engine.get("gimballed", false)) else 0.0) * float(engine.get("thrust", 0.0)) * thrust_scale
+		var engine_direction: Vector2 = Vector2(engine.get("direction", Vector2.UP))
+		if bool(engine.get("gimballed", false)):
+			engine_direction = engine_direction.rotated(gimbal_angle)
+		var engine_force := engine_direction.normalized() * float(engine.get("thrust", 0.0)) * thrust_scale
 		var engine_position: Vector2 = engine.get("position", Vector2.ZERO)
 		force_total += engine_force
 		torque_total += (engine_position - center_of_mass).cross(engine_force)
-	if engines.is_empty():
-		var fallback_force := Vector2.UP.rotated(gimbal_angle) * _engine_thrust(0.0) * thrust_scale
-		force_total = fallback_force
-		torque_total = (Vector2(0.0, active_center_y) - center_of_mass).cross(fallback_force)
 	return {"force": force_total, "torque": torque_total}
 
 func _remaining_rcs_propellant_capacity() -> float:
@@ -515,7 +514,7 @@ func _physics_step(dt: float) -> void:
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 	var rcs_system := _remaining_rcs_system()
 	var rcs_translation_input: Vector2 = Vector2.ZERO
-	if has_rcs() and input_enabled:
+	if has_rcs() and input_enabled and get_viewport().gui_get_focus_owner() == null:
 		rcs_translation_input = Vector2(
 			float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT)),
 			float(Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_UP))
@@ -1582,6 +1581,8 @@ func _update_guidance(dt: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not input_enabled or not event is InputEventKey or not event.pressed or event.echo:
 		return
+	if get_viewport().gui_get_focus_owner() != null:
+		return
 	var ignite_pressed: bool = event.is_action_pressed("engine_toggle") or event.keycode == KEY_W or event.physical_keycode == KEY_W
 	var cutoff_pressed: bool = event.is_action_pressed("throttle_cutoff") or event.keycode == KEY_S or event.physical_keycode == KEY_S
 	if event.keycode == KEY_T or event.physical_keycode == KEY_T:
@@ -1612,6 +1613,8 @@ func _notification(what: int) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not input_enabled:
 		return
+	if event is InputEventKey and get_viewport().gui_get_focus_owner() != null:
+		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			if show_solar_system:
@@ -1636,13 +1639,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event.pressed or event.echo:
 		return
 	if event.is_action_pressed("rotate_left"):
-		if not has_rcs():
-			rotation_angle = wrapf(rotation_angle - 0.12, -PI, PI)
-			angular_velocity = 0.0
+		if not has_rcs_installed():
+			rcs_rotation_input = 0.0
 	elif event.is_action_pressed("rotate_right"):
-		if not has_rcs():
-			rotation_angle = wrapf(rotation_angle + 0.12, -PI, PI)
-			angular_velocity = 0.0
+		if not has_rcs_installed():
+			rcs_rotation_input = 0.0
 	elif event.is_action_pressed("pause_game"):
 		paused = not paused
 	elif event.is_action_pressed("stage_separation"):

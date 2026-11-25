@@ -807,6 +807,29 @@ func _refresh_inspector() -> void:
 			_update_component_property("port_facing", int(facing_selector.get_item_metadata(index)))
 		)
 		_inspector.add_child(facing_selector)
+	var rotation_label := Label.new()
+	rotation_label.text = "Part rotation (degrees)"
+	_inspector.add_child(rotation_label)
+	var rotation_input := SpinBox.new()
+	rotation_input.min_value = -180.0
+	rotation_input.max_value = 180.0
+	rotation_input.step = 5.0
+	rotation_input.value = wrapf(float(component.get("rotation_deg", 0.0)), -180.0, 180.0)
+	rotation_input.suffix = "°"
+	rotation_input.value_changed.connect(func(value: float): _update_component_property("rotation_deg", value))
+	_inspector.add_child(rotation_input)
+	if str(component.get("kind", "")) in ["engine", "radial"]:
+		var engine_active := CheckButton.new()
+		engine_active.text = "IN ACTIVE ENGINE SET"
+		engine_active.button_pressed = bool(component.get("engine_enabled", true))
+		engine_active.toggled.connect(func(enabled: bool): _update_component_property("engine_enabled", enabled))
+		_inspector.add_child(engine_active)
+	if str(component.get("kind", "")) == "tank":
+		var fuel_supply := CheckButton.new()
+		fuel_supply.text = "SUPPLY FUEL TO CONNECTED ENGINES"
+		fuel_supply.button_pressed = bool(component.get("fuel_supply_enabled", true))
+		fuel_supply.toggled.connect(func(enabled: bool): _update_component_property("fuel_supply_enabled", enabled))
+		_inspector.add_child(fuel_supply)
 	var fields := [
 		{"key":"dry_mass","label":"Dry mass (kg)","max":100000000.0},
 		{"key":"fuel_capacity","label":"Propellant (kg)","max":1000000000.0},

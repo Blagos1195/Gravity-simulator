@@ -56,9 +56,12 @@ jobs:
           if echo "$changed_files" | grep -Eq 'rocket_design|content_catalog'; then
             run_check rocket_design_test
           fi
-          if echo "$changed_files" | grep -Eq 'rocket_assembly|rocket_builder|main.gd|content_catalog'; then
+          if echo "$changed_files" | grep -Eq 'rocket_assembly|rocket_builder|main.gd|content_catalog|resource_network|staging_system'; then
             run_check rocket_assembly_test
             run_check rocket_builder_test
+          fi
+          if echo "$changed_files" | grep -Eq 'resource_network|staging_system|rocket_assembly|rocket_builder'; then
+            run_check spacecraft_systems_test
           fi
           if echo "$changed_files" | grep -Eq 'main.gd'; then
             run_check rocket_builder_ui_test
@@ -116,6 +119,7 @@ jobs:
           run_check rocket_design_test
           run_check rocket_assembly_test
           run_check rocket_builder_test
+          run_check spacecraft_systems_test
           run_check rocket_builder_ui_test
           run_check booster_physics_test
           run_check rocket_visual_scale_test
