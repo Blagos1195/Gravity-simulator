@@ -2377,6 +2377,7 @@ func _draw_hud() -> void:
 		"INERTIAL SPEED %s" % _format_speed(orbital_speed),
 		"VERTICAL SPEED %s" % _format_speed(local_velocity.dot(local_position.normalized())),
 		"FUEL           %s" % ("INFINITE • MASS RETAINED" if infinite_weightless_fuel else "%d%%" % roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
+		"RCS PROP       %s" % ("NOT FITTED" if _remaining_rcs_propellant_capacity() <= 0.0 else "%d%%" % roundi(100.0 * rcs_propellant_remaining / maxf(1.0, _remaining_rcs_propellant_capacity()))),
 		"THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
 		"THRUST / WEIGHT %.2f" % thrust_to_weight,
 		"IDEAL ΔV EST.  %s" % ("UNLIMITED" if infinite_weightless_fuel else "%.2f km/s" % (remaining_delta_v / 1000.0)),
