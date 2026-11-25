@@ -2400,9 +2400,14 @@ func _sync_docked_vehicles() -> void:
 			continue
 		var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
 		var world_offset := local_offset.rotated(parent.rotation_angle)
+		var child_mass_properties := child._vehicle_mass_properties()
 		parent.docked_visuals.append({
 			"name": child.vehicle_name,
 			"direction": world_offset.normalized(),
+			"offset": local_offset,
+			"mass": float(child_mass_properties.get("mass", child._current_vehicle_mass())),
+			"center_of_mass": child_mass_properties.get("center_of_mass", Vector2.ZERO),
+			"moment_of_inertia": float(child_mass_properties.get("moment_of_inertia", 0.0)),
 			"rotation": parent.rotation_angle,
 			"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "payload_visual": child.payload_visual.duplicate(true), "stages": child.rocket_stages},
 			"stage_index": child.stage_index
