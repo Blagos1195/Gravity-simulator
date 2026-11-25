@@ -52,7 +52,10 @@ func _initialize() -> void:
 	assert(not main._dock_vehicle(child.vehicle_name), "A spacecraft without a docking port connected")
 	child.rocket_stages[0] = child_stage_with_port
 	child.rcs_propellant_remaining = 0.0
-	assert(not main._dock_vehicle(child.vehicle_name), "A spacecraft without RCS propellant connected")
+	assert(not child.has_rcs() and child.has_rcs_installed())
+	child.velocity = Vector2(0.0, 1001.0)
+	assert(main._dock_vehicle(child.vehicle_name), "An RCS-equipped spacecraft could not dock manually with empty propellant")
+	assert(main._undock_vehicle(child.vehicle_name))
 	child.rcs_propellant_remaining = child._remaining_rcs_propellant_capacity()
 	assert(not main._dock_vehicle(child.vehicle_name))
 	child.velocity = Vector2(0.0, 1001.0)
