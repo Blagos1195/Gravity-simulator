@@ -1812,6 +1812,14 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 	var remaining_fuel := maxf(0.0, float(stage_data.get("fuel", 0.0)))
 	debris.fuel = remaining_fuel
 	debris.rcs_propellant_remaining = clampf(float(stage_data.get("rcs_fuel", 0.0)), 0.0, debris._remaining_rcs_propellant_capacity())
+	var module_tanks: Variant = stage_data.get("resource_tanks", [])
+	if module_tanks is Array:
+		debris.resource_tanks = module_tanks.duplicate(true)
+		for tank_index in range(debris.resource_tanks.size()):
+			var tank: Dictionary = debris.resource_tanks[tank_index]
+			tank["stage_index"] = 0
+			debris.resource_tanks[tank_index] = tank
+		debris._sync_legacy_fuel_from_tanks()
 	debris.infinite_fuel_stage_remaining = remaining_fuel
 	debris.stage_fuel_remaining[0] = remaining_fuel
 	var position_components: Variant = stage_data.get("position_components", PackedFloat64Array([0.0, 0.0]))
