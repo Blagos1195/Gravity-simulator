@@ -535,12 +535,11 @@ func _physics_step(dt: float) -> void:
 		thrust_force_vector_local = Vector2(force_profile.force)
 		thrust_force = thrust_force_vector_local.length()
 		angular_acceleration = float(force_profile.torque) / float(mass_properties.moment_of_inertia)
+	var rcs_impulse_local := Vector2.ZERO
 	if rcs_command_strength > 0.0 and rcs_fuel_used > 0.0:
-		var rcs_force := Vector2.ZERO
 		if rcs_translation_input.length_squared() > 0.0:
-			rcs_force = rcs_translation_input * float(rcs_system.thrust)
-			thrust_force_vector_local += rcs_force
-			thrust_force += rcs_force.length()
+			var rcs_force := rcs_translation_input * float(rcs_system.thrust)
+			rcs_impulse_local = rcs_force.normalized() * rcs_force.length() / mass_mid * dt
 		var rcs_torque := rcs_rotation_input * float(rcs_system.torque)
 		var current_inertia := _vehicle_mass_properties(-1.0, maxf(0.0, rcs_propellant_remaining - rcs_fuel_used * 0.5)).moment_of_inertia
 		angular_acceleration += rcs_torque / float(current_inertia)
@@ -555,7 +554,8 @@ func _physics_step(dt: float) -> void:
 		infinite_fuel_stage_remaining = maxf(0.0, infinite_fuel_stage_remaining - fuel_used)
 	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - rcs_fuel_used)
 	var average_rotation_angle := initial_rotation_angle + initial_angular_velocity * dt * 0.5 + angular_acceleration * dt * dt / 6.0
-	var thrust_impulse := thrust_force_vector_local.rotated(average_rotation_angle).normalized() * thrust_delta_v if thrust_force_vector_local.length_squared() > 0.0 else Vector2.ZERO
+	var thrust_impulse := (thrust_force_vector_local.normalized() * thrust_delta_v if thrust_force_vector_local.length_squared() > 0.0 else Vector2.ZERO) + rcs_impulse_local
+	thrust_impulse = thrust_impulse.rotated(average_rotation_angle)
 	if manual_burn_tracking_enabled and not autopilot_enabled and thrust_delta_v > 0.0:
 		manual_burn_accumulated_vector += thrust_impulse
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
@@ -774,6 +774,15 @@ func _adaptive_step_size() -> float:
 			step_limit = minf(step_limit, sqrt(0.08 / rotation_acceleration))
 	if absf(angular_velocity) > 0.000001:
 		step_limit = minf(step_limit, 0.08 / absf(angular_velocity))
+	if has_rcs() and (rcs_rotation_input != 0.0 or Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN)):
+		var rcs_system := _remaining_rcs_system()
+		var rcs_mass := maxf(1.0, _current_vehicle_mass())
+		var rcs_linear_acceleration := float(rcs_system.thrust) / rcs_mass
+		var rcs_angular_acceleration := float(rcs_system.torque) / maxf(1.0, float(_vehicle_mass_properties().moment_of_inertia))
+		if rcs_linear_acceleration > 0.001:
+			step_limit = minf(step_limit, sqrt(0.08 / rcs_linear_acceleration))
+		if rcs_angular_acceleration > 0.000001:
+			step_limit = minf(step_limit, sqrt(0.08 / rcs_angular_acceleration))
 	if autopilot_enabled and autopilot_phase in ["TRANSFER_COAST", "ARRIVAL_APPROACH"]:
 		var destination_state := _autopilot_target_state()
 		var relative_distance := _relative_position_to_body(destination_state).length()
@@ -907,6 +916,11 @@ func _separate_stage() -> void:
 		return
 	var separated_stage: Dictionary = rocket_stages[stage_index].duplicate(true)
 	var separated_fuel := fuel
+	var separated_rcs_capacity := RocketDesign.stage_rcs_propellant_capacity(separated_stage)
+	var total_rcs_capacity := _remaining_rcs_propellant_capacity()
+	var separated_rcs_fuel := rcs_propellant_remaining * separated_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
+	var next_stage_has_port := RocketAssembly.stage_docking_ports(rocket_stages[stage_index + 1]).size() > 0
+	var dockable_module := not RocketAssembly.stage_docking_ports(separated_stage).is_empty() and next_stage_has_port
 	var separated_dry_mass := RocketDesign.stage_total_dry_mass(separated_stage)
 	var separated_mass := separated_dry_mass + separated_fuel
 	var vehicle_mass_before := _current_vehicle_mass()
@@ -920,6 +934,8 @@ func _separate_stage() -> void:
 	stage_separated.emit({
 		"stage": separated_stage,
 		"fuel": separated_fuel,
+		"rcs_fuel": separated_rcs_fuel,
+		"dockable_module": dockable_module,
 		"position_components": rocket_position_precise.duplicate(),
 		"velocity": debris_velocity,
 		"rotation_angle": rotation_angle,
@@ -933,6 +949,7 @@ func _separate_stage() -> void:
 	discarded_propellant_mass += separated_fuel
 	if stage_index < stage_fuel_remaining.size():
 		stage_fuel_remaining[stage_index] = 0.0
+	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - separated_rcs_fuel)
 	velocity = upper_stack_velocity
 	stage_index += 1
 	fuel = stage_fuel_remaining[stage_index]
@@ -2492,7 +2509,6 @@ func get_save_data() -> Dictionary:
 		"rotation_angle": rotation_angle,
 		"angular_velocity": angular_velocity,
 		"fuel": fuel,
-		"rcs_propellant_remaining": rcs_propellant_remaining,
 		"rcs_propellant_remaining": rcs_propellant_remaining,
 		"stage_fuel_remaining": remaining_stage_fuel,
 		"infinite_fuel_stage_remaining": infinite_fuel_stage_remaining,
