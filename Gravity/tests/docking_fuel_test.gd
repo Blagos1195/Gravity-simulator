@@ -67,6 +67,7 @@ func _initialize() -> void:
 	child.velocity = Vector2(0.0, 1001.0)
 	assert(main._dock_vehicle(child.vehicle_name), "An RCS-equipped spacecraft could not dock manually with empty propellant")
 	assert(main._undock_vehicle(child.vehicle_name))
+	child.rotation_angle = PI
 	child.rcs_propellant_remaining = child._remaining_rcs_propellant_capacity()
 	child.velocity = Vector2(0.0, 1003.0)
 	assert(not main._dock_vehicle(child.vehicle_name))
