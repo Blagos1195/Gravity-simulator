@@ -2983,21 +2983,7 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 				if added < removed:
 					donor.add_propellant(removed - added)
 				transferred += added
-	var donor_rcs := float(donor_owner.docked_rcs_propellant.get(donor.vehicle_name, 0.0)) if donor.resource_inventory_external and donor_owner != null else donor.rcs_propellant_remaining
-	var recipient_rcs := float(recipient_owner.docked_rcs_propellant.get(recipient.vehicle_name, 0.0)) if recipient.resource_inventory_external and recipient_owner != null else recipient.rcs_propellant_remaining
-	var rcs_space := maxf(0.0, recipient._remaining_rcs_propellant_capacity() - recipient_rcs)
-	var rcs_amount := minf(donor_rcs, rcs_space)
-	if rcs_amount > 0.0:
-		if donor.resource_inventory_external and donor_owner != null:
-			donor_owner.docked_rcs_propellant[donor.vehicle_name] = donor_rcs - rcs_amount
-			donor.rcs_propellant_remaining = donor_rcs - rcs_amount
-		else:
-			donor.rcs_propellant_remaining -= rcs_amount
-		if recipient.resource_inventory_external and recipient_owner != null:
-			recipient_owner.docked_rcs_propellant[recipient.vehicle_name] = recipient_rcs + rcs_amount
-		else:
-			recipient.rcs_propellant_remaining += rcs_amount
-		transferred += rcs_amount
+	
 	for resource in ["xenon", "electricity"]:
 		for source_index in range(donor.resource_tanks.size()):
 			var source: Dictionary = donor.resource_tanks[source_index]

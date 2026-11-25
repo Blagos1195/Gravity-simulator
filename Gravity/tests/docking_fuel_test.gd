@@ -107,13 +107,11 @@ func _initialize() -> void:
 	assert(is_zero_approx(child.total_propellant_remaining()))
 	assert(is_equal_approx(parent._current_vehicle_mass(), combined_mass_before))
 	var parent_rcs_capacity := parent._remaining_rcs_propellant_capacity()
-	parent.rcs_propellant_remaining = parent_rcs_capacity - 100.0
-	child.rcs_propellant_remaining = child._remaining_rcs_propellant_capacity()
+	assert(is_equal_approx(parent.rcs_propellant_remaining, parent_rcs_capacity))
 	var combined_mass_before_rcs_transfer := parent._current_vehicle_mass()
 	var rcs_transferred := main._transfer_fuel(child.vehicle_name, parent.vehicle_name)
-	assert(is_equal_approx(rcs_transferred, 100.0))
+	assert(is_zero_approx(rcs_transferred))
 	assert(is_equal_approx(parent.rcs_propellant_remaining, parent_rcs_capacity))
-	assert(is_equal_approx(child.rcs_propellant_remaining, child._remaining_rcs_propellant_capacity() - 100.0))
 	assert(is_equal_approx(parent._current_vehicle_mass(), combined_mass_before_rcs_transfer))
 	main.save_slot = 8
 	main._save_game(false)
