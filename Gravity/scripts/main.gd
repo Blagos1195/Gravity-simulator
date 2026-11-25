@@ -2609,7 +2609,6 @@ func _dock_vehicle(target_name: String) -> bool:
 	sim.docked_rcs_propellant[target.vehicle_name] = target.rcs_propellant_remaining
 	sim.rcs_propellant_remaining += target.rcs_propellant_remaining
 	target.rcs_propellant_remaining = 0.0
-	target.rcs_propellant_remaining = 0.0
 	docking_links.append({
 		"parent_name": sim.vehicle_name,
 		"child_name": target.vehicle_name,

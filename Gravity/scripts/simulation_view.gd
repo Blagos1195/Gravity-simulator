@@ -486,8 +486,9 @@ func detach_component(part_uid: String) -> bool:
 				else:
 					remaining_tanks.append(tank.duplicate(true))
 			var separated_rcs_capacity := maxf(0.0, float(component.get("rcs_propellant_capacity", 0.0)))
-			var total_rcs_capacity := _remaining_rcs_propellant_capacity()
-			var separated_rcs_fuel := rcs_propellant_remaining * separated_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
+			var total_rcs_capacity := _own_rcs_propellant_capacity()
+			var own_rcs_remaining := maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
+			var separated_rcs_fuel := own_rcs_remaining * separated_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
 			components.remove_at(component_index)
 			rocket_stages[physical_stage_index] = RocketAssembly.compile_stage(stage, components)
 			resource_tanks = remaining_tanks
@@ -687,8 +688,8 @@ func _vehicle_mass_properties(active_fuel_amount: float = -1.0, active_rcs_fuel_
 		stage_lengths.append(stage_length)
 		total_length += stage_length
 	var elements: Array[Dictionary] = []
-	var total_rcs_capacity := _remaining_rcs_propellant_capacity()
-	var rcs_fuel_amount := active_rcs_fuel_amount if active_rcs_fuel_amount >= 0.0 else rcs_propellant_remaining
+	var total_rcs_capacity := _own_rcs_propellant_capacity()
+	var rcs_fuel_amount := active_rcs_fuel_amount if active_rcs_fuel_amount >= 0.0 else maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
 	var rcs_fuel_fraction := clampf(rcs_fuel_amount / total_rcs_capacity, 0.0, 1.0) if total_rcs_capacity > 0.0 else 0.0
 	var cursor := -total_length * 0.5
 	for offset in range(stage_lengths.size()):
@@ -805,6 +806,12 @@ func _consume_rcs_propellant(amount: float) -> float:
 		remaining -= used
 	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - consumed)
 	return consumed
+
+func _own_rcs_propellant_capacity() -> float:
+	var capacity := 0.0
+	for index in range(stage_index, rocket_stages.size()):
+		capacity += RocketDesign.stage_rcs_propellant_capacity(rocket_stages[index])
+	return capacity
 
 func _remaining_rcs_propellant_capacity() -> float:
 	var capacity := 0.0
@@ -1504,8 +1511,9 @@ func _separate_stage() -> void:
 	var separated_stage: Dictionary = rocket_stages[stage_index].duplicate(true)
 	var separated_fuel := fuel
 	var separated_rcs_capacity := RocketDesign.stage_rcs_propellant_capacity(separated_stage)
-	var total_rcs_capacity := _remaining_rcs_propellant_capacity()
-	var separated_rcs_fuel := rcs_propellant_remaining * separated_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
+	var total_rcs_capacity := _own_rcs_propellant_capacity()
+	var own_rcs_remaining := maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
+	var separated_rcs_fuel := own_rcs_remaining * separated_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
 	var separated_resource_tanks: Array = []
 	var remaining_resource_tanks: Array = []
 	var separated_resource_mass := 0.0
