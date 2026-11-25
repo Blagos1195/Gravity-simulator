@@ -644,7 +644,7 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 		insert_index = components.size() - 1
 		for index in range(components.size() - 1):
 			var existing_component: Dictionary = components[index]
-			if str(existing_component.get("attachment", "stack")) == "radial":
+			if str(existing_component.get("attachment", "stack")) != "stack":
 				insert_index = index
 				break
 			if str(existing_component.get("kind", "")) == "engine":
@@ -684,7 +684,7 @@ func _on_component_moved(from_index: int, to_index: int) -> void:
 	_push_undo()
 	var item: Variant = components.pop_at(from_index)
 	var destination := clampi(to_index, 0, components.size())
-	if item is Dictionary and str(item.get("attachment", "stack")) == "radial":
+	if item is Dictionary and str(item.get("attachment", "stack")) != "stack":
 		var item_mount := int(item.get("mount_index", -1))
 		if from_index < destination and item_mount > from_index and item_mount <= destination:
 			item["mount_index"] = item_mount - 1
@@ -858,22 +858,23 @@ func _remove_selected_component() -> void:
 	if selected_component_index < 0 or selected_component_index >= components.size():
 		return
 	_push_undo()
+	var removed_component: Dictionary = components[selected_component_index]
 	components.remove_at(selected_component_index)
-	var axial_indices: Array[int] = []
-	for index in range(components.size()):
-		var component: Dictionary = components[index]
-		if str(component.get("attachment", "stack")) == "stack":
-			axial_indices.append(index)
-	for index in range(components.size()):
-		var component: Dictionary = components[index]
-		if str(component.get("attachment", "stack")) != "radial":
-			continue
-		var mount_index := int(component.get("mount_index", -1))
-		if mount_index > selected_component_index:
-			component["mount_index"] = mount_index - 1
-		elif mount_index == selected_component_index:
-			component["mount_index"] = axial_indices[mini(axial_indices.size() - 1, selected_component_index)] if not axial_indices.is_empty() else -1
-		components[index] = component
+	if str(removed_component.get("attachment", "stack")) == "stack":
+		var axial_indices: Array[int] = []
+		for index in range(components.size()):
+			if str(components[index].get("attachment", "stack")) == "stack":
+				axial_indices.append(index)
+		for index in range(components.size()):
+			var component: Dictionary = components[index]
+			if str(component.get("attachment", "stack")) == "stack":
+				continue
+			var mount_index := int(component.get("mount_index", -1))
+			if mount_index > selected_component_index:
+				component["mount_index"] = mount_index - 1
+			elif mount_index == selected_component_index:
+				component["mount_index"] = axial_indices[mini(axial_indices.size() - 1, selected_component_index)] if not axial_indices.is_empty() else -1
+			components[index] = component
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(stage, components)
 	selected_component_index = -1
 	_changed()
