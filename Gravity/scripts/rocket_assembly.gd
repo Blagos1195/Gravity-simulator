@@ -137,8 +137,10 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 			side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 0.1)) * 0.9
 		if str(component.get("kind", "")) == "tank":
 			tank_color = component.get("color_rgb", tank_color)
+	var widest_side_mount := 0.0
 	for mount_radius in side_mount_radii.values():
-		maximum_radius = maxf(maximum_radius, maximum_radius + float(mount_radius))
+		widest_side_mount = maxf(widest_side_mount, float(mount_radius))
+	maximum_radius += widest_side_mount
 	var boosters: Array = []
 	for existing in configured.get("boosters", []):
 		if not (existing is Dictionary and existing.has("source_component_id")):
