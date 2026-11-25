@@ -380,7 +380,7 @@ func _apply_docking_assists(delta: float) -> void:
 		var target_name := str(docking_assists.get(vehicle_name, ""))
 		var vehicle := _find_vehicle_by_name(vehicle_name)
 		var target := _find_vehicle_by_name(target_name)
-		if vehicle == null or target == null or vehicle == target or vehicle.landed or vehicle.crashed or target.landed or target.crashed or _is_vehicle_docked(vehicle_name) or _is_vehicle_docked(target_name):
+		if vehicle == null or target == null or vehicle == target or vehicle.landed or vehicle.crashed or target.landed or target.crashed or _is_vehicle_docked(vehicle_name) or _is_vehicle_docked(target_name) or not vehicle.has_rcs() or not target.has_rcs() or not vehicle.has_docking_port() or not target.has_docking_port():
 			docking_assists.erase(vehicle_name)
 			continue
 		if vehicle.passive_orbit_active:
@@ -395,7 +395,8 @@ func _apply_docking_assists(delta: float) -> void:
 		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, separation - DOCKING_CAPTURE_DISTANCE)))
 		var desired_velocity: Vector2 = target.velocity + direction * desired_closing_speed
 		var velocity_correction := (desired_velocity - vehicle.velocity).limit_length(DOCKING_ASSIST_ACCELERATION)
-		vehicle.velocity += velocity_correction * maxf(0.0, delta)
+		if not vehicle.apply_rcs_velocity_correction(velocity_correction, delta):
+			docking_assists.erase(vehicle_name)
 
 func _launch_cost_for_design(design: Dictionary) -> float:
 	return LAUNCH_BASE_COST + RocketDesign.total_initial_mass(design) * LAUNCH_COST_PER_KG
@@ -1792,7 +1793,8 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 	if not stage is Dictionary or stage.is_empty():
 		return
 	debris_sequence += 1
-	var debris_name := "Debris %04d" % debris_sequence
+	var dockable_module := bool(stage_data.get("dockable_module", false))
+	var debris_name := ("Module " if dockable_module else "Debris ") + "%04d" % debris_sequence
 	var design := {
 		"name": debris_name,
 		"payload_mass": 0.001,
@@ -1804,6 +1806,7 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 		return
 	var remaining_fuel := maxf(0.0, float(stage_data.get("fuel", 0.0)))
 	debris.fuel = remaining_fuel
+	debris.rcs_propellant_remaining = clampf(float(stage_data.get("rcs_fuel", 0.0)), 0.0, debris._remaining_rcs_propellant_capacity())
 	debris.infinite_fuel_stage_remaining = remaining_fuel
 	debris.stage_fuel_remaining[0] = remaining_fuel
 	var position_components: Variant = stage_data.get("position_components", PackedFloat64Array([0.0, 0.0]))
@@ -1818,13 +1821,15 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 	debris.sim_time = float(stage_data.get("sim_time", sim.sim_time if is_instance_valid(sim) else 0.0))
 	debris.launch_time = float(stage_data.get("launch_time", debris.sim_time))
 	debris.time_warp = sim.time_warp if is_instance_valid(sim) else 1.0
-	debris.is_debris = true
-	debris.input_enabled = false
+	debris.is_debris = not dockable_module
+	debris.input_enabled = dockable_module
 	debris.infinite_weightless_fuel = false
 	debris.thrust_key_down = false
 	debris.guidance_enabled = false
 	debris.autopilot_enabled = false
 	debris.throttle = 0.0
+	if dockable_module:
+		debris.status_message = "DETACHED MODULE  •  RCS AND DOCKING READY"
 	debris.landed = false
 	debris.crashed = false
 	fleet_sims.append(debris)
@@ -2434,9 +2439,16 @@ func _dock_vehicle(target_name: String) -> bool:
 		return false
 	if _is_docked_child(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
 		return false
-	var separation: float = target.rocket_position.distance_to(sim.rocket_position)
+	if not sim.has_rcs() or not target.has_rcs() or not sim.has_docking_port() or not target.has_docking_port():
+		return false
+	var own_port := sim.docking_port_world_state()
+	var target_port := target.docking_port_world_state()
+	if own_port.is_empty() or target_port.is_empty():
+		return false
+	var separation: float = Vector2(target_port.position).distance_to(Vector2(own_port.position))
 	var relative_speed: float = (target.velocity - sim.velocity).length()
-	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED:
+	var ports_aligned := Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
+	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED or not ports_aligned:
 		return false
 	var local_offset: Vector2 = (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
 	docking_links.append({
