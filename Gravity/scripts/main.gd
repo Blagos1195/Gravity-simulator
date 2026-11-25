@@ -2229,6 +2229,30 @@ func _execute_fleet_staging_stage() -> void:
 	sim.staging_plan = StagingSystem.mark_stage_completed(sim.staging_plan, stage_index_value)
 	if stage_index_value + 1 < sim.staging_plan.size():
 		sim.action_stage_index += 1
+	for module_id in actions_by_module:
+		var module := _find_vehicle_by_name(str(module_id))
+		if module != null:
+			module.action_stage_index = sim.action_stage_index
+	sim.staging_changed.emit()
+
+func _rearm_fleet_action_stage() -> void:
+	if not is_instance_valid(sim) or sim.action_stage_index < 0 or sim.action_stage_index >= sim.staging_plan.size():
+		return
+	var stage: Dictionary = sim.staging_plan[sim.action_stage_index].duplicate(true)
+	var actions: Array = stage.get("actions", []).duplicate(true)
+	for index in range(actions.size()):
+		var action: Dictionary = actions[index]
+		var module_id := str(action.get("module_id", sim.vehicle_name))
+		var module := _find_vehicle_by_name(module_id)
+		if module == null:
+			continue
+		var result := StagingSystem.rearm_stage([{"actions":[action]}], 0, module._current_staging_part_states())
+		actions[index] = result[0].actions[0]
+	stage["actions"] = actions
+	sim.staging_plan[sim.action_stage_index] = stage
+	for module in fleet_sims:
+		if _resource_inventory_owner(module) == sim:
+			module.action_stage_index = sim.action_stage_index
 	sim.staging_changed.emit()
 
 func _refresh_stage_manager() -> void:
@@ -3035,7 +3059,13 @@ func _build_flight_hud() -> void:
 	stage_manager_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage_manager_picker.item_selected.connect(func(index: int):
 		if is_instance_valid(sim):
+			var previous_index := sim.action_stage_index
 			sim.select_action_stage(index)
+			if index < previous_index:
+				_rearm_fleet_action_stage()
+			for module in fleet_sims:
+				if _resource_inventory_owner(module) == sim:
+					module.action_stage_index = index
 			_refresh_stage_manager()
 	)
 	right.add_child(stage_manager_picker)
@@ -3059,6 +3089,9 @@ func _build_flight_hud() -> void:
 	skip_stage_button.pressed.connect(func():
 		if is_instance_valid(sim):
 			sim.select_action_stage(sim.action_stage_index + 1)
+			for module in fleet_sims:
+				if _resource_inventory_owner(module) == sim:
+					module.action_stage_index = sim.action_stage_index
 			_refresh_stage_manager()
 	)
 	stage_manager_actions.add_child(skip_stage_button)
@@ -3067,7 +3100,7 @@ func _build_flight_hud() -> void:
 	rearm_stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rearm_stage_button.pressed.connect(func():
 		if is_instance_valid(sim):
-			sim.rearm_action_stage()
+			_rearm_fleet_action_stage()
 			_refresh_stage_manager()
 	)
 	stage_manager_actions.add_child(rearm_stage_button)
