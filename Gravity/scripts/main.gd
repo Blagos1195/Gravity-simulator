@@ -3977,6 +3977,17 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			transfer_button.disabled = true
 			return
 		var own_port: Dictionary = sim.docking_port_world_state(selected_port_uid)
+		if selected_port_uid.is_empty():
+			var used_own_ports: Dictionary = {}
+			for link in docking_links:
+				if str(link.get("parent_name", "")) == parent_name:
+					used_own_ports[str(link.get("port_a", ""))] = true
+				elif str(link.get("child_name", "")) == parent_name:
+					used_own_ports[str(link.get("port_b", ""))] = true
+			for candidate_port in sim.docking_port_world_states():
+				if not used_own_ports.has(str(candidate_port.get("part_uid", ""))):
+					own_port = candidate_port
+					break
 		var target_port: Dictionary = {}
 		var used_target_ports: Dictionary = {}
 		for link in docking_links:
@@ -3997,7 +4008,9 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 		var connected_assembly: bool = _are_docked(parent_name, target_name)
 		var connector_connected := false
 		for link in docking_links:
-			if ((str(link.get("parent_name", "")) == parent_name and str(link.get("child_name", "")) == target_name) or (str(link.get("parent_name", "")) == target_name and str(link.get("child_name", "")) == parent_name)) and selected_port_uid in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
+			if not ((str(link.get("parent_name", "")) == parent_name and str(link.get("child_name", "")) == target_name) or (str(link.get("parent_name", "")) == target_name and str(link.get("child_name", "")) == parent_name)):
+				continue
+			if selected_port_uid.is_empty() or selected_port_uid in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
 				connector_connected = true
 				break
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
