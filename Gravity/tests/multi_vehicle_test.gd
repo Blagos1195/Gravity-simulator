@@ -6,6 +6,7 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
+const RoutePlanner = preload("res://scripts/route_planner.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -44,6 +45,37 @@ func _initialize() -> void:
 	assert(not first.is_processing(), "Fleet vehicles must not advance both through their own process and the fleet manager")
 	assert(first.vehicle_name == "Vehicle 1")
 	assert(second.vehicle_name == "Vehicle 2")
+	var planner := RoutePlanner.new()
+	planner.simulation = first
+	planner.nodes = [{"time_offset": 120.0}]
+	planner.selected_node_index = 0
+	planner.manual_guidance_report = Label.new()
+	var requested_jump_time := -1.0
+	planner.time_jump_requested.connect(func(target_time: float): requested_jump_time = target_time)
+	planner._jump_to_selected_node()
+	assert(is_equal_approx(requested_jump_time, first.sim_time + 115.0), "Flight Computer did not request a predictive jump to five seconds before its node")
+	planner.free()
+	main._switch_vehicle(0)
+	first._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
+	first.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
+	second._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200100.0))
+	second.velocity = first.velocity
+	main.docking_links = [{
+		"parent_name": first.vehicle_name,
+		"child_name": second.vehicle_name,
+		"port_a": "test-parent-port",
+		"port_b": "test-child-port",
+		"offset_x": 0.0,
+		"offset_y": 100.0,
+		"rotation_offset": 0.0,
+		"structural": true
+	}]
+	main._update_docked_masses()
+	main._sync_docked_vehicles()
+	assert(main._fast_forward_to_time(first.sim_time + 60.0), "A docked assembly could not use predictive time jump")
+	assert(is_equal_approx(first.sim_time, second.sim_time), "Docked module time was not synchronised after a jump")
+	main.docking_links.clear()
+	main._update_docked_masses()
 	main._switch_vehicle(0)
 	first.rocket_position = Vector2(1.0e9, 0.0)
 	second.landed = false
