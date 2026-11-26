@@ -948,6 +948,8 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	if rcs_propellant_remaining <= 0.001:
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
+		if aligned and absf(engine_torque) <= maxf(1.0, inertia * deg_to_rad(0.01)):
+			return true
 		status_message = "AUTOPILOT  •  RCS PROPELLANT REQUIRED"
 		return false
 	var positive_profile := _rcs_force_profile(Vector2.ZERO, 1.0, center_of_mass)
