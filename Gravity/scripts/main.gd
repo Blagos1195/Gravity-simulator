@@ -4326,8 +4326,10 @@ func _load_game_from_path(path: String) -> void:
 	docking_links.clear()
 	var saved_docking_links: Variant = parsed.get("docking_links", [])
 	if saved_docking_links is Array:
-		var linked_children: Dictionary = {}
-		var linked_parents: Dictionary = {}
+		var module_ids: Array = []
+		for vehicle in fleet_sims:
+			module_ids.append(vehicle.vehicle_name)
+		var loaded_graph := ModuleGraph.create(module_ids)
 		for saved_link in saved_docking_links:
 			if not saved_link is Dictionary:
 				continue
@@ -4337,22 +4339,41 @@ func _load_game_from_path(path: String) -> void:
 			var offset_y: Variant = saved_link.get("offset_y", null)
 			if parent_name.is_empty() or child_name.is_empty() or parent_name == child_name:
 				continue
-			if _find_vehicle_by_name(parent_name) == null or _find_vehicle_by_name(child_name) == null:
-				continue
-			if linked_children.has(child_name) or linked_children.has(parent_name) or linked_parents.has(child_name):
+			var parent := _find_vehicle_by_name(parent_name)
+			var child := _find_vehicle_by_name(child_name)
+			if parent == null or child == null:
 				continue
 			if not (offset_x is float or offset_x is int) or not (offset_y is float or offset_y is int):
 				continue
 			if not is_finite(float(offset_x)) or not is_finite(float(offset_y)):
 				continue
+			var port_a := str(saved_link.get("port_a", ""))
+			var port_b := str(saved_link.get("port_b", ""))
+			if port_a.is_empty():
+				for port in parent.docking_port_world_states():
+					if ModuleGraph.connection_for_port(loaded_graph, str(port.get("part_uid", ""))).is_empty():
+						port_a = str(port.get("part_uid", ""))
+						break
+			if port_b.is_empty():
+				for port in child.docking_port_world_states():
+					if ModuleGraph.connection_for_port(loaded_graph, str(port.get("part_uid", ""))).is_empty():
+						port_b = str(port.get("part_uid", ""))
+						break
+			var connection_result := ModuleGraph.connect_modules(loaded_graph, parent_name, child_name, port_a, port_b)
+			if not bool(connection_result.get("valid", false)):
+				continue
+			loaded_graph = connection_result.graph
 			docking_links.append({
 				"parent_name": parent_name,
 				"child_name": child_name,
 				"offset_x": float(offset_x),
-				"offset_y": float(offset_y)
+				"offset_y": float(offset_y),
+				"port_a": port_a,
+				"port_b": port_b,
+				"child_staging_plan": saved_link.get("child_staging_plan", []).duplicate(true),
+				"structural": bool(saved_link.get("structural", true))
 			})
-			linked_children[child_name] = true
-			linked_parents[parent_name] = true
+
 	_update_docked_masses()
 	_sync_docked_vehicles()
 	docking_assists.clear()
