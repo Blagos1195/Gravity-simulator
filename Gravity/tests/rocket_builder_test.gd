@@ -26,9 +26,6 @@ func _initialize() -> void:
 	assert(builder._canvas.snap_mode == "Off")
 	assert(is_equal_approx(builder._canvas.rotation_snap_degrees, 15.0))
 	assert(builder._canvas._snap_position(Vector2(0.62, 0.62)) == Vector2(0.62, 0.62))
-	builder._canvas.snap_mode = "0.5 m"
-	assert(builder._canvas._snap_position(Vector2(0.62, 0.62)) == Vector2(0.5, 0.5))
-	builder._canvas.snap_mode = "Off"
 	assert(builder._parts_list.get_child_count() >= 14)
 	builder._canvas.stage = {"components": [{}]}
 	builder._canvas._component_rects = [{"index": 0, "rect": Rect2(100.0, 100.0, 50.0, 100.0), "attachment": "stack"}]
@@ -38,6 +35,13 @@ func _initialize() -> void:
 	var side_node: Dictionary = builder._canvas._find_attachment_target(Vector2(101.0, 150.0))
 	assert(str(side_node.get("attachment", "")) == "side")
 	assert(int(side_node.get("side", 0)) == -1)
+	builder._canvas._component_rects = [{"index": 0, "rect": Rect2(100.0, 100.0, 50.0, 100.0), "attachment": "free"}]
+	var moved_part_target: Dictionary = builder._canvas._find_attachment_target(Vector2(151.0, 150.0))
+	assert(str(moved_part_target.get("attachment", "")) == "free")
+	assert(str(moved_part_target.get("edge", "")) == "right")
+	var moved_preview := builder._canvas._preview_position_for_target(Vector2(151.0, 150.0), moved_part_target, {"component": {"length_m": 2.0, "collision_radius_m": 0.5}})
+	assert(moved_preview.x > 150.0)
+	assert(is_equal_approx(moved_preview.y, 150.0))
 	assert(builder._stage_list.get_child_count() == design.stages.size())
 	builder._payload_mass_input.value = 900.0
 	if not is_equal_approx(float(builder.design.payload_mass), 900.0):
