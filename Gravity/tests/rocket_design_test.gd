@@ -182,6 +182,7 @@ func _initialize() -> void:
 	assert(Vector2(survey_positions[0]).is_equal_approx(Vector2(4.0, 3.0)))
 	var physical_satellite_profile := RocketAssembly.physical_payload_profile([freeform_stage])
 	assert(str(physical_satellite_profile.get("visual_type", "")) == "satellite")
+	assert(bool(physical_satellite_profile.get("physical_payload_component", false)))
 	assert(is_equal_approx(float(physical_satellite_profile.get("telescope_range_au", 0.0)), 3.5))
 	assert(is_equal_approx(float(physical_satellite_profile.get("revenue_per_day", 0.0)), 30000.0))
 	assert(is_equal_approx(float(freeform_stage.dry_mass), RocketAssembly.ensure_stage_components(design.stages[0]).dry_mass + 350.0))
