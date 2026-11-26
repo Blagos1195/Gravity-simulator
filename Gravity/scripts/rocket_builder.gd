@@ -1178,7 +1178,7 @@ func _refresh_action_stages() -> void:
 			var item_row := VBoxContainer.new()
 			var item := Label.new()
 			item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			item.text = "%s  %s" % [str(action.get("action", "ACTION")).replace("_", " ").to_upper(), part_uid]
+			item.text = "%s  %s" % [str(action.get("action", "ACTION")).replace("_", " ").to_upper(), _staging_part_label(part_uid)]
 			item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			item.add_theme_color_override("font_color", Color(0.68, 0.77, 0.86))
 			item_row.add_child(item)
@@ -1214,6 +1214,13 @@ func _refresh_action_stages() -> void:
 			empty.add_theme_color_override("font_color", Color(0.45, 0.52, 0.62))
 			row.add_child(empty)
 		_action_stage_list.add_child(row)
+
+func _staging_part_label(part_uid: String) -> String:
+	for stage in design.get("stages", []):
+		for component in stage.get("components", []):
+			if str(component.get("part_uid", "")) == part_uid:
+				return str(component.get("display_name", component.get("name", component.get("id", part_uid))))
+	return part_uid
 
 func _set_action_stage_label(stage_index: int, value: String) -> void:
 	var labels: Array = design.get("staging_stage_labels", []).duplicate(true)
