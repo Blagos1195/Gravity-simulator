@@ -928,7 +928,7 @@ func _refresh_inspector() -> void:
 				action_options = [{"id":"deploy","label":"Deploy"},{"id":"retract","label":"Retract"}]
 			else:
 				action_options = [{"id":"activate","label":"Activate"},{"id":"deactivate","label":"Deactivate"}]
-	var default_action := str(component.get("staging_action", action_options[0].id if not action_options.is_empty() else "activate"))
+	var default_action := "undock_module" if str(component.get("kind", "")) == "docking_port" else str(component.get("staging_action", action_options[0].id if not action_options.is_empty() else "activate"))
 	for option in action_options:
 		action_selector.add_item(str(option.label))
 		action_selector.set_item_metadata(action_selector.item_count - 1, str(option.id))
