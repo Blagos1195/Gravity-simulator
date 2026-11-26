@@ -61,6 +61,7 @@ var angular_velocity := 0.0
 var fuel := 300000.0
 var rcs_propellant_remaining := 0.0
 var rcs_rotation_input := 0.0
+var rcs_rotation_scale := 1.0
 var infinite_fuel_stage_remaining := 300000.0
 var stage_index := 0
 var staging_plan: Array = []
@@ -902,6 +903,7 @@ func _rcs_force_profile(translation_input: Vector2, rotation_input: float, cente
 func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expected: bool) -> bool:
 	if dt <= 0.0:
 		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
 		return false
 	var mass_properties := _vehicle_mass_properties()
 	var center_of_mass: Vector2 = Vector2(mass_properties.center_of_mass)
@@ -932,6 +934,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var engine_torque := potential_engine_torque if burn_expected and aligned else 0.0
 	if not has_rcs_installed():
 		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
 		if burn_expected and absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01)):
 			status_message = "AUTOPILOT  •  THRUST TORQUE NEEDS RCS"
 			return false
@@ -940,6 +943,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		return true
 	if rcs_propellant_remaining <= 0.001:
 		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
 		status_message = "AUTOPILOT  •  RCS PROPELLANT REQUIRED"
 		return false
 	var positive_profile := _rcs_force_profile(Vector2.ZERO, 1.0, center_of_mass)
@@ -950,6 +954,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		var counter_authority := positive_authority if engine_torque < 0.0 else negative_authority
 		if absf(engine_torque) > counter_authority * 0.9:
 			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
 			status_message = "AUTOPILOT  •  INSUFFICIENT RCS TORQUE"
 			return false
 	var maximum_angular_acceleration := deg_to_rad(2.0)
@@ -959,10 +964,13 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var requested_torque := inertia * desired_acceleration - engine_torque
 	if absf(requested_torque) <= 1.0:
 		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
 	elif requested_torque > 0.0:
 		rcs_rotation_input = 1.0 if positive_authority > 0.0 else 0.0
+		rcs_rotation_scale = clampf(requested_torque / maxf(1.0, positive_authority), 0.0, 1.0)
 	else:
 		rcs_rotation_input = -1.0 if negative_authority > 0.0 else 0.0
+		rcs_rotation_scale = clampf(absf(requested_torque) / maxf(1.0, negative_authority), 0.0, 1.0)
 	return aligned
 
 func has_rcs_installed() -> bool:
@@ -1164,7 +1172,8 @@ func _physics_step(dt: float) -> void:
 		).limit_length(1.0)
 	var initial_rcs_mass_properties := _vehicle_mass_properties()
 	var rcs_profile := _rcs_force_profile(rcs_translation_input, rcs_rotation_input, Vector2(initial_rcs_mass_properties.center_of_mass))
-	var rcs_flow_rate := float(rcs_profile.flow)
+	var rcs_control_scale := clampf(rcs_rotation_scale, 0.0, 1.0) if absf(rcs_rotation_input) > 0.001 else 1.0
+	var rcs_flow_rate := float(rcs_profile.flow) * rcs_control_scale
 	var rcs_fuel_used := minf(resource_amount("rcs_propellant"), rcs_flow_rate * dt) if not crashed else 0.0
 	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0 or resource_amount("xenon") > 0.0 or resource_amount("solid_propellant") > 0.0)
 	var solid_motor_burning := _has_ignited_solid_motor() and resource_amount("solid_propellant") > 0.0
@@ -1205,10 +1214,10 @@ func _physics_step(dt: float) -> void:
 	var rcs_impulse_local: Vector2 = Vector2.ZERO
 	if rcs_fuel_used > 0.0 and rcs_flow_rate > 0.0:
 		var rcs_power_scale := rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt)
-		var rcs_force: Vector2 = Vector2(rcs_profile.force) * rcs_power_scale
+		var rcs_force: Vector2 = Vector2(rcs_profile.force) * rcs_power_scale * rcs_control_scale
 		rcs_impulse_local = rcs_force / mass_mid * dt
 		var current_inertia: float = float(_vehicle_mass_properties(-1.0, maxf(0.0, rcs_propellant_remaining - rcs_fuel_used * 0.5)).get("moment_of_inertia", 1.0))
-		angular_acceleration += float(rcs_profile.torque) * rcs_power_scale / maxf(1.0, current_inertia)
+		angular_acceleration += float(rcs_profile.torque) * rcs_power_scale * rcs_control_scale / maxf(1.0, current_inertia)
 	angular_velocity = initial_angular_velocity + angular_acceleration * dt
 	rotation_angle = wrapf(initial_rotation_angle + initial_angular_velocity * dt + 0.5 * angular_acceleration * dt * dt, -PI, PI)
 	var thrust_delta_v := 0.0
@@ -2578,6 +2587,7 @@ func _notification(what: int) -> void:
 		thrust_key_down = false
 		throttle_cutoff_key_down = false
 		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not input_enabled:
@@ -2606,10 +2616,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if has_rcs_installed():
 		if event.is_action_pressed("rotate_left"):
 			rcs_rotation_input = -1.0
+			rcs_rotation_scale = 1.0
 		elif event.is_action_pressed("rotate_right"):
 			rcs_rotation_input = 1.0
+			rcs_rotation_scale = 1.0
 		elif event.is_action_released("rotate_left") or event.is_action_released("rotate_right"):
 			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
+			rcs_rotation_scale = 0.0
 	if not event.pressed or event.echo:
 		return
 	if event.is_action_pressed("rotate_left"):
