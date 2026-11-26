@@ -1213,11 +1213,18 @@ func _physics_step(dt: float) -> void:
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
 	var rcs_translation_input: Vector2 = Vector2.ZERO
-	if has_rcs() and input_enabled and get_viewport().gui_get_focus_owner() == null:
+	var flight_controls_blocked := _flight_input_blocked_by_gui()
+	if has_rcs() and input_enabled and not flight_controls_blocked:
 		rcs_translation_input = Vector2(
 			float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT)),
 			float(Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_UP))
 		).limit_length(1.0)
+		if not autopilot_enabled:
+			rcs_rotation_input = float(Input.is_action_pressed("rotate_right")) - float(Input.is_action_pressed("rotate_left"))
+			rcs_rotation_scale = 1.0 if absf(rcs_rotation_input) > 0.001 else 0.0
+	elif not autopilot_enabled:
+		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
 	var initial_rcs_mass_properties := _vehicle_mass_properties()
 	var rcs_profile := _rcs_force_profile(rcs_translation_input, rcs_rotation_input, Vector2(initial_rcs_mass_properties.center_of_mass))
 	var rcs_control_scale := clampf(rcs_rotation_scale, 0.0, 1.0) if absf(rcs_rotation_input) > 0.001 else 1.0
@@ -2610,10 +2617,14 @@ func _update_guidance(dt: float) -> void:
 	rotation_angle = lerp_angle(rotation_angle, manual_target_rotation, clampf(dt * 0.08, 0.0, 1.0))
 	angular_velocity = 0.0
 
+func _flight_input_blocked_by_gui() -> bool:
+	var focus_owner := get_viewport().gui_get_focus_owner()
+	return focus_owner is LineEdit or focus_owner is TextEdit or focus_owner is CodeEdit
+
 func _input(event: InputEvent) -> void:
 	if not input_enabled or not event is InputEventKey or not event.pressed or event.echo:
 		return
-	if get_viewport().gui_get_focus_owner() != null:
+	if _flight_input_blocked_by_gui():
 		return
 	var ignite_pressed: bool = event.is_action_pressed("engine_toggle") or event.keycode == KEY_W or event.physical_keycode == KEY_W
 	var cutoff_pressed: bool = event.is_action_pressed("throttle_cutoff") or event.keycode == KEY_S or event.physical_keycode == KEY_S
@@ -2650,7 +2661,7 @@ func _notification(what: int) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not input_enabled:
 		return
-	if event is InputEventKey and get_viewport().gui_get_focus_owner() != null:
+	if event is InputEventKey and _flight_input_blocked_by_gui():
 		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -2671,25 +2682,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not event is InputEventKey:
 		return
-	if has_rcs_installed():
-		if event.is_action_pressed("rotate_left"):
-			rcs_rotation_input = -1.0
-			rcs_rotation_scale = 1.0
-		elif event.is_action_pressed("rotate_right"):
-			rcs_rotation_input = 1.0
-			rcs_rotation_scale = 1.0
-		elif event.is_action_released("rotate_left") or event.is_action_released("rotate_right"):
-			rcs_rotation_input = 0.0
-			rcs_rotation_scale = 0.0
 	if not event.pressed or event.echo:
 		return
-	if event.is_action_pressed("rotate_left"):
-		if not has_rcs_installed():
-			rcs_rotation_input = 0.0
-	elif event.is_action_pressed("rotate_right"):
-		if not has_rcs_installed():
-			rcs_rotation_input = 0.0
-	elif event.is_action_pressed("stage_next"):
+	if event.is_action_pressed("stage_next"):
 		staging_stage_requested.emit()
 	elif event.is_action_pressed("pause_game"):
 		paused = not paused
