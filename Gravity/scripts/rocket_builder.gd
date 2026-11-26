@@ -192,8 +192,8 @@ class AssemblyCanvas extends Control:
 		return best_target
 
 	func _canvas_to_metres(position: Vector2) -> Vector2:
-		var scale := maxf(1.0, _drawing_scale)
-		var width_scale := maxf(1.0, _drawing_width_scale)
+		var scale := maxf(0.001, _drawing_scale)
+		var width_scale := maxf(0.001, _drawing_width_scale)
 		return Vector2((position.x - size.x * 0.5 - view_offset.x) / width_scale, (_drawing_stage_center_y - position.y) / scale)
 
 	func _snap_position(position: Vector2) -> Vector2:
@@ -261,6 +261,8 @@ class AssemblyCanvas extends Control:
 							selected_index = index
 						component_selected.emit(selected_index)
 						queue_redraw()
+						if event.double_click:
+							_frame_selected()
 						accept_event()
 						return
 			else:
@@ -280,9 +282,6 @@ class AssemblyCanvas extends Control:
 				accept_event()
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				_zoom_at(1.0 / 1.15, event.position)
-				accept_event()
-			elif event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
-				_frame_selected()
 				accept_event()
 
 	func _zoom_at(factor: float, anchor: Vector2) -> void:
@@ -319,7 +318,7 @@ class AssemblyCanvas extends Control:
 			draw_line(Vector2(0.0, py), Vector2(size.x, py), Color(0.12, 0.17, 0.24, 0.5), 1.0)
 		var center_x := size.x * 0.5 + view_offset.x
 		draw_line(Vector2(center_x, 12.0 + view_offset.y), Vector2(center_x, size.y - 12.0 + view_offset.y), Color(0.3, 0.58, 0.8, 0.55), 1.2)
-		draw_string(ThemeDB.fallback_font, Vector2(center_x + 8.0, 26.0), "CENTRELINE", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.3, 0.58, 0.8, 0.75))
+		draw_string(ThemeDB.fallback_font, Vector2(center_x + 8.0, 26.0 + view_offset.y), "CENTRELINE", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.3, 0.58, 0.8, 0.75))
 		var stages: Array = design.get("stages", [])
 		if stages.is_empty():
 			draw_string(ThemeDB.fallback_font, Vector2(20.0, size.y * 0.5), "DRAG PARTS FROM THE CATALOGUE TO BEGIN", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.72, 0.86))
