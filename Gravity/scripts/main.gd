@@ -545,6 +545,7 @@ func _apply_docking_assists(delta: float) -> void:
 		var target := _find_vehicle_by_name(target_name)
 		if vehicle == null or target == null or vehicle == target or vehicle.landed or vehicle.crashed or target.landed or target.crashed or _is_vehicle_docked(vehicle_name) or _is_vehicle_docked(target_name) or not vehicle.has_rcs_installed() or not target.has_rcs_installed() or vehicle.autopilot_enabled or not vehicle.has_docking_port() or not target.has_docking_port():
 			docking_assists.erase(vehicle_name)
+			docking_assist_modes.erase(vehicle_name)
 			continue
 		if vehicle.passive_orbit_active:
 			vehicle.passive_orbit_active = false
@@ -606,10 +607,12 @@ func _apply_docking_assists(delta: float) -> void:
 		if engine_controlled:
 			if not vehicle.apply_docking_engine_control(velocity_correction.normalized(), delta):
 				docking_assists.erase(vehicle_name)
+				docking_assist_modes.erase(vehicle_name)
 		else:
 			vehicle.thrust_key_down = false
 			if not vehicle.has_rcs() or not vehicle.apply_rcs_velocity_correction(velocity_correction, delta):
 				docking_assists.erase(vehicle_name)
+				docking_assist_modes.erase(vehicle_name)
 
 func _launch_cost_for_design(design: Dictionary) -> float:
 	return LAUNCH_BASE_COST + RocketDesign.total_initial_mass(design) * LAUNCH_COST_PER_KG
@@ -4195,7 +4198,8 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 				break
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
 		var assist_approach_only := str(docking_assist_modes.get(parent_name, "automatic")) == "approach_only"
-		assist_mode_selector.select(1 if assist_approach_only else 0)
+		if assist_active:
+			assist_mode_selector.select(1 if assist_approach_only else 0)
 		var assembly_roots_available: bool = connected_assembly or (not _is_docked_child(parent_name) and not _is_docked_child(target_name))
 		var assembly_operational: bool = assembly_roots_available and not sim.landed and not sim.crashed and not target.landed and not target.crashed
 		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs_installed() and target.has_rcs_installed()
@@ -4247,6 +4251,7 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			fuel_status.text = "Connect spacecraft to enable transfer. Transfers fill the receiver's active tank first, then its later stages."
 	var target_changed := func(_index: int) -> void:
 		docking_assists.erase(parent_name)
+		docking_assist_modes.erase(parent_name)
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
 		refresh_fuel_direction.call(target_name)
 		refresh_panel.call()
