@@ -820,7 +820,7 @@ func _refresh_navigation_state() -> void:
 	var autopilot_target_id := int(simulation.get("autopilot_planet_index"))
 	var phase := str(simulation.get("autopilot_phase"))
 	var visited_body_names: Dictionary = simulation.get("visited_body_names")
-	var planned_target_name := FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))
+	var planned_target_name := str(navigation_plan.get("target_name", FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))))
 	var planned_target_visited := visited_body_names.has(planned_target_name)
 	var destination_mission := target_mode == "ORBIT" and (autopilot_enabled or phase in ["COMPLETE", "FAILED", "ARRIVAL_PENDING"])
 	navigation_cancel_button.visible = destination_mission
@@ -887,7 +887,7 @@ func _send_destination_to_autopilot() -> void:
 	if not navigation_plan_valid or not is_instance_valid(simulation) or bool(simulation.get("crashed")):
 		return
 	var visited_body_names: Dictionary = simulation.get("visited_body_names")
-	var gate_target_name := FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))
+	var gate_target_name := str(navigation_plan.get("target_name", FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))))
 	if not visited_body_names.has(gate_target_name):
 		navigation_report.text = "AUTOPILOT LOCKED  •  VISIT %s BEFORE ENABLING AUTOMATIC NAVIGATION. MANUAL FLIGHT-COMPUTER GUIDANCE REMAINS AVAILABLE." % gate_target_name.to_upper()
 		return
