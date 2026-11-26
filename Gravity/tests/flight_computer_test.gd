@@ -509,7 +509,7 @@ func _initialize() -> void:
 	var route_planner_window: Window = RoutePlanner.new()
 	root.add_child(route_planner_window)
 	route_planner_window.configure(planner_sim, RocketDesign.create_default())
-	assert(route_planner_window.navigation_moon_dropdown.get_item_id(1) == -1)
+	assert(route_planner_window.navigation_moon_dropdown.get_item_text(1) == "Moon", "Telescope-spotted Moon should appear in the Flight Computer")
 	assert(not route_planner_window.navigation_moon_dropdown.is_item_disabled(1), "Telescope-spotted Moon should be selectable before visiting")
 	var mars_option := -1
 	for option_index in range(route_planner_window.navigation_planet_dropdown.item_count):
