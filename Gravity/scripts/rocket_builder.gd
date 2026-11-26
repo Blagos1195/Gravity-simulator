@@ -40,6 +40,9 @@ class AssemblyCanvas extends Control:
 	var _rotation_center := Vector2.ZERO
 	var _rotation_start_angle := 0.0
 	var _rotation_start_degrees := 0.0
+	var _drawing_scale := 1.0
+	var _drawing_width_scale := 1.0
+	var _drawing_stage_center_y := 0.0
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
@@ -82,8 +85,9 @@ class AssemblyCanvas extends Control:
 		for component in stage.get("components", []):
 			if str(component.get("attachment", "stack")) == "stack":
 				stack_length += maxf(0.5, float(component.get("length_m", 1.0)))
-		var scale := maxf(1.0, minf(zoom * 5.0, (size.y - 72.0) / maxf(1.0, stack_length)))
-		return Vector2((position.x - size.x * 0.5) / maxf(1.0, 15.0 * zoom), (size.y * 0.5 - position.y) / scale)
+		var scale := maxf(1.0, _drawing_scale)
+		var width_scale := maxf(1.0, _drawing_width_scale)
+		return Vector2((position.x - size.x * 0.5) / width_scale, (_drawing_stage_center_y - position.y) / scale)
 
 	func _snap_position(position: Vector2) -> Vector2:
 		var grid := 0.0
@@ -273,6 +277,9 @@ class AssemblyCanvas extends Control:
 					_register_component_rect(index, rect, "radial")
 				draw_line(Vector2(center_x + float(direction) * max_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		var stage_center_y := (start_y + current_y) * 0.5
+		_drawing_scale = scale
+		_drawing_width_scale = width_scale
+		_drawing_stage_center_y = stage_center_y
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
 			if str(component.get("attachment", "stack")) != "free":
@@ -548,7 +555,7 @@ func _build_interface() -> void:
 	)
 	parts_column.add_child(_search_input)
 	_part_filter = OptionButton.new()
-	for category in ["all", "tank", "engine", "decoupler", "structure", "rcs", "docking_port", "power", "radial"]:
+	for category in ["all", "tank", "engine", "decoupler", "structure", "rcs", "docking_port", "power", "payload", "radial"]:
 		_part_filter.add_item(category.capitalize())
 		_part_filter.set_item_metadata(_part_filter.item_count - 1, category)
 	_part_filter.item_selected.connect(func(index: int):
