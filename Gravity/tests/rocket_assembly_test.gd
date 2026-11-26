@@ -88,9 +88,11 @@ func _initialize() -> void:
 	simulation.rotation_angle = 0.0
 	simulation.angular_velocity = 0.0
 	simulation.gimbal_angle = 0.0
-	var untrimmed_torque := absf(float(simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, 1.0, 1.0).torque))
+	var attitude_atmosphere := simulation._atmosphere_at(simulation.rocket_position, simulation.velocity, simulation.sim_time, simulation.rocket_position_precise)
+	var attitude_pressure_ratio := float(attitude_atmosphere.get("density", 0.0)) * float(attitude_atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(attitude_atmosphere.get("temperature", 250.0)) / 101325.0
+	var untrimmed_torque := absf(float(simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, attitude_pressure_ratio, 1.0).torque))
 	simulation._autopilot_attitude_control(0.0, 10.0, true)
-	var trimmed_profile := simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, 1.0, 1.0)
+	var trimmed_profile := simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, attitude_pressure_ratio, 1.0)
 	assert(absf(simulation.gimbal_angle) > 0.001, "Autopilot should trim engine gimbal to compensate for an offset centre of mass")
 	assert(absf(float(trimmed_profile.torque)) < untrimmed_torque, "Autopilot gimbal trim should reduce thrust-induced torque")
 	assert(Vector2(trimmed_profile.force).rotated(simulation.rotation_angle).normalized().dot(Vector2.UP) > 0.999, "Gimbal torque trim should preserve the planned thrust direction")
