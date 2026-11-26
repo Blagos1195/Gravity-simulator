@@ -826,6 +826,23 @@ func _refresh_inspector() -> void:
 	title_label.text = str(component.get("label", component.get("id", "PART")))
 	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_inspector.add_child(title_label)
+	var group_label := Label.new()
+	group_label.text = "Detachable subassembly group"
+	_inspector.add_child(group_label)
+	var group_input := LineEdit.new()
+	group_input.placeholder_text = "main"
+	group_input.text = RocketAssembly.component_group_id(component)
+	group_input.text_submitted.connect(func(value: String): _update_component_property("subassembly_id", value.strip_edges().to_lower().replace(" ", "_")))
+	group_input.focus_exited.connect(func():
+		var value := group_input.text.strip_edges().to_lower().replace(" ", "_")
+		if value != RocketAssembly.component_group_id(component):
+			_update_component_property("subassembly_id", value)
+	)
+	_inspector.add_child(group_input)
+	var group_note := Label.new()
+	group_note.text = "Parts with the same group stay together. Put opposing docking ports on different groups to create a release action within this stage. The group is released as its own spacecraft."
+	group_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_inspector.add_child(group_note)
 	var mirror_selected := CheckButton.new()
 	mirror_selected.text = "MIRROR THIS PART"
 	mirror_selected.disabled = not ["radial", "side"].has(str(component.get("attachment", "stack")))
