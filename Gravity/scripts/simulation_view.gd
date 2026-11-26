@@ -1616,8 +1616,9 @@ func _release_component_group(port_uid: String) -> bool:
 		else:
 			released_stages.append(split.released)
 			released_old_indices.append(old_index)
-			retained_stages.append(split.retained)
-			retained_old_indices.append(old_index)
+			if split.has("retained"):
+				retained_stages.append(split.retained)
+				retained_old_indices.append(old_index)
 	if released_stages.is_empty() or retained_stages.is_empty() or not retained_old_indices.has(stage_index):
 		return false
 	var group_parts: Dictionary = {}
