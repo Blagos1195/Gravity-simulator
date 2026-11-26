@@ -918,18 +918,21 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	if burn_expected:
 		var atmosphere := _atmosphere_at(rocket_position, velocity, sim_time, rocket_position_precise)
 		pressure_ratio = float(atmosphere.get("density", 0.0)) * float(atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(atmosphere.get("temperature", 250.0)) / 101325.0
-		var best_gimbal := 0.0
-		var lowest_torque := INF
-		for step in range(-16, 17):
-			var candidate_gimbal := deg_to_rad(float(step) * 0.5)
-			gimbal_angle = candidate_gimbal
-			var candidate_profile := _engine_force_profile(center_of_mass, pressure_ratio, expected_throttle)
-			var candidate_torque := absf(float(candidate_profile.get("torque", 0.0)))
-			if candidate_torque < lowest_torque:
-				lowest_torque = candidate_torque
-				best_gimbal = candidate_gimbal
-		gimbal_angle = best_gimbal
-		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, 1.0).get("torque", 0.0))
+		gimbal_angle = 0.0
+		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+		if absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01)):
+			var best_gimbal := 0.0
+			var lowest_torque := absf(potential_engine_torque)
+			for step in range(-16, 17):
+				var candidate_gimbal := deg_to_rad(float(step) * 0.5)
+				gimbal_angle = candidate_gimbal
+				var candidate_profile := _engine_force_profile(center_of_mass, pressure_ratio, expected_throttle)
+				var candidate_torque := absf(float(candidate_profile.get("torque", 0.0)))
+				if candidate_torque < lowest_torque:
+					lowest_torque = candidate_torque
+					best_gimbal = candidate_gimbal
+			gimbal_angle = best_gimbal
+			potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
 	else:
 		gimbal_angle = 0.0
 	var body_target_rotation := target_rotation - gimbal_angle
