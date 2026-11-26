@@ -1302,7 +1302,20 @@ func _add_action_for_selected_part(stage_index: int) -> void:
 	if part_uid.is_empty():
 		return
 	_push_undo()
-	_update_staging_component(part_uid, {"staging_action_disabled": false, "staging_stage": stage_index})
+	var action := str(component.get("staging_action", ""))
+	if action.is_empty() or action == "none":
+		match str(component.get("kind", "")):
+			"engine", "radial":
+				action = "activate_engine"
+			"tank":
+				action = "enable_fuel_supply"
+			"rcs":
+				action = "activate_rcs"
+			"decoupler":
+				action = "separate"
+			_:
+				action = "deploy" if bool(component.get("deployable", false)) else "activate"
+	_update_staging_component(part_uid, {"staging_action_disabled": false, "staging_stage": stage_index, "staging_action": action})
 	_changed()
 
 func _move_action_stage(stage_index: int, direction: int) -> void:
