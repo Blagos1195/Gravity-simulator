@@ -80,6 +80,17 @@ func _initialize() -> void:
 	assert(generated_plan[2].actions[0].action == "activate_engine")
 	var merged := StagingSystem.merge_plans(plan_a, plan_b)
 	assert(merged.size() == 1 and merged[0].actions.size() == 2)
+	var grouped_staging: Array = [
+		{"id":"stage_0","actions":[
+			{"id":"tug:engine","module_id":"tug","part_id":"engine","action":"activate_engine"},
+			{"id":"station:panel","module_id":"station","part_id":"panel","action":"deploy"},
+			{"id":"satellite:antenna","module_id":"satellite","part_id":"antenna","action":"deploy"}
+		]}
+	]
+	var detached_staging := StagingSystem.filter_module_plan_members(grouped_staging, {"station":true,"satellite":true})
+	assert(detached_staging[0].actions.size() == 2)
+	var retained_staging := StagingSystem.remove_module_plan_members(grouped_staging, {"station":true,"satellite":true})
+	assert(retained_staging[0].actions.size() == 1 and retained_staging[0].actions[0].module_id == "tug")
 	var rearmed := StagingSystem.rearm_stage(merged, 0)
 	assert(not bool(rearmed[0].actions[0].completed))
 	var completed := StagingSystem.mark_stage_completed(rearmed, 0)
