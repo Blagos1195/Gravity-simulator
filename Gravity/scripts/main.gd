@@ -946,7 +946,7 @@ func _show_time_skip_dialog() -> void:
 	if not is_instance_valid(sim) or sim.paused:
 		return
 	var window := Window.new()
-	window.title = "FAST FORWARD TIME"
+	window.title = "JUMP AHEAD"
 	window.size = Vector2i(620, 300)
 	window.min_size = Vector2i(520, 260)
 	window.transient = true
