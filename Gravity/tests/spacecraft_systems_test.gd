@@ -35,6 +35,17 @@ func _initialize() -> void:
 	assert(is_zero_approx(ResourceNetwork.transfer_between_tanks(source, destination, "solid_propellant", 10.0)))
 	var groups := ResourceNetwork.split_connected_modules(["tug", "station", "satellite"], [{"id":"dock_a","a":"tug","b":"station"},{"id":"dock_b","a":"station","b":"satellite"}], "dock_a")
 	assert(groups.size() == 2 and groups[0].size() == 1 and groups[1].size() == 2)
+	var parallel_graph := ModuleGraph.create(["left_module", "right_module"])
+	var parallel_link := ModuleGraph.connect_modules(parallel_graph, "left_module", "right_module", "left_port_1", "right_port_1")
+	assert(bool(parallel_link.valid))
+	parallel_graph = parallel_link.graph
+	parallel_link = ModuleGraph.connect_modules(parallel_graph, "left_module", "right_module", "left_port_2", "right_port_2")
+	assert(bool(parallel_link.valid), "A pair of modules must support more than one independent docking connector")
+	parallel_graph = parallel_link.graph
+	var parallel_cut := ModuleGraph.disconnect_connection(parallel_graph, "left_port_1|right_port_1")
+	assert(bool(parallel_cut.valid) and parallel_cut.groups.size() == 1)
+	parallel_cut = ModuleGraph.disconnect_connection(parallel_cut.graph, "left_port_2|right_port_2")
+	assert(bool(parallel_cut.valid) and parallel_cut.groups.size() == 2)
 	var graph := ModuleGraph.create(["a", "b", "c"])
 	var connected := ModuleGraph.connect_modules(graph, "a", "b", "port_a", "port_b")
 	assert(bool(connected.valid))
