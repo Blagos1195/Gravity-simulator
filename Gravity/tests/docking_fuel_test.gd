@@ -177,6 +177,15 @@ func _initialize() -> void:
 	main._save_game(false)
 	main._load_game_from_path(save_path)
 	assert(str(main.docking_assists.get(loaded_parent.vehicle_name, "")) == loaded_child.vehicle_name, "Rendezvous assist state was not restored from save")
+	loaded_parent.rotation_angle = 0.0
+	loaded_child.rotation_angle = PI
+	loaded_parent.rocket_position = Vector2(1000000.0, 2000000.0)
+	loaded_child.rocket_position = loaded_parent.rocket_position + Vector2(25.0, 0.0)
+	loaded_parent.velocity = Vector2.ZERO
+	loaded_child.velocity = Vector2.ZERO
+	main._apply_docking_assists(1.0)
+	assert(main._are_docked(loaded_parent.vehicle_name, loaded_child.vehicle_name), "Rendezvous assist did not automatically dock aligned spacecraft")
+	assert(main.docking_assists.is_empty(), "Rendezvous assist remained active after automatic docking")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Docking and fuel transfer test passed.")
 	main.queue_free()
