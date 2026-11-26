@@ -103,6 +103,61 @@ static func add_component(stage: Dictionary, component_id: String, attachment: S
 	configured["components"] = components
 	return compile_stage(configured, components)
 
+
+static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
+	var design := source_design.duplicate(true)
+	var stages: Array = design.get("stages", []).duplicate(true)
+	for stage_index in range(stages.size()):
+		var stage := ensure_stage_components(stages[stage_index])
+		var components: Array = stage.get("components", []).duplicate(true)
+		var has_rcs := false
+		for component in components:
+			if str(component.get("preset_hardware_role", "")) == "rcs":
+				has_rcs = true
+				break
+		if not has_rcs:
+			stage = add_component(stage, "rcs_thruster_block", "side", true, 1, 0)
+			components = stage.get("components", []).duplicate(true)
+			var rcs: Dictionary = components.back()
+			rcs["preset_hardware_role"] = "rcs"
+			rcs["staging_action"] = "activate_rcs"
+			rcs["staging_stage"] = stage_index
+			components[components.size() - 1] = rcs
+			stage = compile_stage(stage, components)
+		if stage_index < stages.size() - 1:
+			var has_separator := false
+			for component in stage.get("components", []):
+				if str(component.get("preset_hardware_role", "")) == "separator":
+					has_separator = true
+					break
+			if not has_separator:
+				stage = add_component(stage, "stack_decoupler")
+				components = stage.get("components", []).duplicate(true)
+				var separator: Dictionary = components.back()
+				separator["preset_hardware_role"] = "separator"
+				separator["staging_action"] = "separate"
+				separator["staging_stage"] = stage_index + 1
+				components[components.size() - 1] = separator
+				stage = compile_stage(stage, components)
+		if stage_index == stages.size() - 1:
+			var has_connector := false
+			for component in stage.get("components", []):
+				if str(component.get("preset_hardware_role", "")) == "connector":
+					has_connector = true
+					break
+			if not has_connector:
+				stage = add_component(stage, "standard_docking_port")
+				components = stage.get("components", []).duplicate(true)
+				var connector: Dictionary = components.pop_back()
+				connector["preset_hardware_role"] = "connector"
+				connector["port_facing"] = 1
+				components.insert(0, connector)
+				stage = compile_stage(stage, components)
+		stages[stage_index] = stage
+	design["stages"] = stages
+	design["staging_stage_count"] = maxi(int(design.get("staging_stage_count", 0)), stages.size())
+	return design
+
 static func remove_component(stage: Dictionary, component_index: int) -> Dictionary:
 	var configured := ensure_stage_components(stage)
 	var components: Array = configured.get("components", []).duplicate(true)
