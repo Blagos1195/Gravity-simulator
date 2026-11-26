@@ -3199,8 +3199,12 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 		inventory_owner._sync_legacy_fuel_from_tanks()
 	_sync_external_module_fuel(donor, inventory_owner)
 	_sync_external_module_fuel(recipient, inventory_owner)
-	var available := donor.total_propellant_remaining()
-	var recipient_remaining := recipient.total_propellant_remaining()
+	var available := 0.0
+	var recipient_remaining := 0.0
+	for amount in donor.stage_fuel_remaining:
+		available += maxf(0.0, float(amount))
+	for amount in recipient.stage_fuel_remaining:
+		recipient_remaining += maxf(0.0, float(amount))
 	var room := maxf(0.0, recipient.total_propellant_capacity() - recipient_remaining)
 	var remaining := minf(available, room)
 	var transferred := 0.0
