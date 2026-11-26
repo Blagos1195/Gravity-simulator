@@ -114,7 +114,7 @@ class AssemblyCanvas extends Control:
 			component_position_changed.emit(from_index, position_m)
 
 	func _find_attachment_target(position: Vector2) -> Dictionary:
-		var best_distance := 20.0
+		var best_distance := 36.0
 		var best_target: Dictionary = {}
 		for item in _component_rects:
 			if item.get("rotation_handle", false):
@@ -598,15 +598,15 @@ func _build_interface() -> void:
 	canvas_heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	canvas_tools.add_child(canvas_heading)
 	var snap_label := Label.new()
-	snap_label.text = "Snap"
+	snap_label.text = "Placement"
 	canvas_tools.add_child(snap_label)
 	_snap_selector = OptionButton.new()
-	_snap_selector.tooltip_text = "Attach snaps a new part to a nearby top, bottom or side node. Off places it freely. Grid options place it freely on a measured grid."
-	for mode in ["Off", "Attach", "0.25 m", "0.5 m", "1 m", "2 m", "5 m", "Centreline"]:
+	_snap_selector.tooltip_text = "Parts snaps a part directly onto another part connection point. Free allows unrestricted placement."
+	for mode in ["Free", "Parts"]:
 		_snap_selector.add_item(mode)
 	_snap_selector.select(0)
 	_snap_selector.item_selected.connect(func(index: int):
-		_canvas.snap_mode = _snap_selector.get_item_text(index)
+		_canvas.snap_mode = "Attach" if _snap_selector.get_item_text(index) == "Parts" else "Off"
 		_canvas.queue_redraw()
 	)
 	canvas_tools.add_child(_snap_selector)
@@ -827,7 +827,7 @@ func _build_interface() -> void:
 	payload_edit.pressed.connect(func(): payload_edit_requested.emit())
 	vehicle_page.add_child(payload_edit)
 	var vehicle_hint := Label.new()
-	vehicle_hint.text = "Drag parts into place. Snap: Off = free placement, Attach = connect to a highlighted node, grid = measured positioning. Rotate with the handle; Ctrl temporarily disables angle snapping."
+	vehicle_hint.text = "Placement: Free or Parts. Parts mode snaps directly to connection points on existing parts. Rotate with the handle; Ctrl temporarily disables angle snapping."
 	vehicle_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vehicle_page.add_child(vehicle_hint)
 
@@ -867,7 +867,7 @@ func _refresh() -> void:
 	_canvas.selected_stage_index = selected_stage_index
 	_canvas.selected_index = selected_component_index
 	_canvas.set_meta("mirror_enabled", mirror_enabled)
-	_canvas.snap_mode = _snap_selector.get_item_text(_snap_selector.selected) if is_instance_valid(_snap_selector) else "Off"
+	_canvas.snap_mode = "Attach" if is_instance_valid(_snap_selector) and _snap_selector.get_item_text(_snap_selector.selected) == "Parts" else "Off"
 	_canvas.queue_redraw()
 	_refresh_parts()
 	_refresh_stages()
