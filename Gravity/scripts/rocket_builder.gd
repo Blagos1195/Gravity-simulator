@@ -186,6 +186,8 @@ class AssemblyCanvas extends Control:
 		for stage_data in stages:
 			var core_radius := 0.5
 			var side_mount_radii: Dictionary = {}
+			var stack_length := 0.0
+			var stage_extent := 0.0
 			for component in stage_data.get("components", []):
 				var attachment := str(component.get("attachment", "stack"))
 				if attachment == "radial":
@@ -194,8 +196,14 @@ class AssemblyCanvas extends Control:
 					var mount_index := int(component.get("mount_index", -1))
 					side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 1.0)) * 1.75
 					continue
-				total_length += maxf(0.5, float(component.get("length_m", 1.0)))
-				core_radius = maxf(core_radius, float(component.get("collision_radius_m", 1.0)))
+				if attachment == "free":
+					var position_data: Variant = component.get("position_m", [0.0, 0.0])
+					if position_data is Array and position_data.size() >= 2:
+						stage_extent = maxf(stage_extent, absf(float(position_data[1])) * 2.0 + float(component.get("length_m", 1.0)))
+				else:
+					stack_length += maxf(0.5, float(component.get("length_m", 1.0)))
+					core_radius = maxf(core_radius, float(component.get("collision_radius_m", 1.0)))
+			total_length += maxf(stack_length, stage_extent)
 			var widest_side_mount := 0.0
 			for mount_radius in side_mount_radii.values():
 				widest_side_mount = maxf(widest_side_mount, float(mount_radius))
@@ -217,7 +225,18 @@ class AssemblyCanvas extends Control:
 
 	func _draw_stage(stage_data: Dictionary, stage_index: int, center_x: float, start_y: float, scale: float, width_scale: float, max_radius: float, editable: bool) -> float:
 		var components: Array = stage_data.get("components", [])
-		var current_y := start_y
+		var stack_length := 0.0
+		var stage_extent := 0.0
+		for component in components:
+			var attachment := str(component.get("attachment", "stack"))
+			if attachment == "stack":
+				stack_length += maxf(0.5, float(component.get("length_m", 1.0)))
+			elif attachment == "free":
+				var position_data: Variant = component.get("position_m", [0.0, 0.0])
+				if position_data is Array and position_data.size() >= 2:
+					stage_extent = maxf(stage_extent, absf(float(position_data[1])) * 2.0 + float(component.get("length_m", 1.0)))
+		stage_extent = maxf(stage_extent, stack_length)
+		var current_y := start_y + (stage_extent - stack_length) * scale * 0.5
 		var axial_centers: Dictionary = {}
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
@@ -276,7 +295,7 @@ class AssemblyCanvas extends Control:
 				if editable:
 					_register_component_rect(index, rect, "radial")
 				draw_line(Vector2(center_x + float(direction) * max_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
-		var stage_center_y := (start_y + current_y) * 0.5
+		var stage_center_y := start_y + stage_extent * scale * 0.5
 		if editable:
 			_drawing_scale = scale
 			_drawing_width_scale = width_scale
@@ -295,7 +314,7 @@ class AssemblyCanvas extends Control:
 			_draw_part(rect, component, editable and index == selected_index, 1.0 if editable else 0.34)
 			if editable:
 				_register_component_rect(index, rect, "free")
-		return current_y
+		return start_y + stage_extent * scale
 
 	func _register_component_rect(index: int, rect: Rect2, attachment: String) -> void:
 		_component_rects.append({"index": index, "rect": rect, "attachment": attachment})
