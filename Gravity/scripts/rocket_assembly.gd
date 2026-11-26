@@ -469,6 +469,53 @@ static func docking_module_boundaries(stages: Array) -> Dictionary:
 				break
 	return boundaries
 
+static func component_group_id(component: Dictionary) -> String:
+	return str(component.get("subassembly_id", "main")).strip_edges() if not str(component.get("subassembly_id", "main")).strip_edges().is_empty() else "main"
+
+static func docking_component_group_boundaries(stage: Dictionary) -> Dictionary:
+	var ports := stage_docking_ports(stage)
+	var components: Array = stage.get("components", [])
+	var boundaries: Dictionary = {}
+	for first_index in range(ports.size()):
+		var first: Dictionary = ports[first_index]
+		var first_component: Dictionary = components[int(first.get("component_index", -1))]
+		for second_index in range(first_index + 1, ports.size()):
+			var second: Dictionary = ports[second_index]
+			var second_component: Dictionary = components[int(second.get("component_index", -1))]
+			var first_group := component_group_id(first_component)
+			var second_group := component_group_id(second_component)
+			if first_group == second_group:
+				continue
+			if Vector2(first.normal).dot(Vector2(second.normal)) > -0.94:
+				continue
+			if Vector2(first.position).distance_to(Vector2(second.position)) > 3.0:
+				continue
+			var upper_port: Dictionary = first if float(first.position.y) > float(second.position.y) else second
+			var upper_component: Dictionary = first_component if upper_port == first else second_component
+			boundaries[str(upper_port.get("part_uid", ""))] = {
+				"part_uid": str(upper_port.get("part_uid", "")),
+				"subassembly_id": component_group_id(upper_component),
+				"offset": Vector2(upper_port.position),
+				"separation_direction": -Vector2(upper_port.normal).normalized()
+			}
+	return boundaries
+
+static func split_stage_by_group(stage: Dictionary, group_id: String) -> Dictionary:
+	var configured := ensure_stage_components(stage)
+	var selected: Array = []
+	var retained: Array = []
+	for component in configured.get("components", []):
+		if component_group_id(component) == group_id:
+			selected.append(component.duplicate(true))
+		else:
+			retained.append(component.duplicate(true))
+	if selected.is_empty() or retained.is_empty():
+		return {}
+	return {
+		"released": compile_stage(configured, selected),
+		"retained": compile_stage(configured, retained)
+	}
+
 static func component_summary(stage: Dictionary) -> Dictionary:
 	var components: Array = stage.get("components", [])
 	var counts := {"tank": 0, "engine": 0, "decoupler": 0, "structure": 0, "rcs": 0, "docking_port": 0}
