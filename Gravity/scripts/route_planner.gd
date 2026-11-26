@@ -304,7 +304,6 @@ func _build_interface() -> void:
 	root.add_child(navigation_description)
 	var navigation_row := HBoxContainer.new()
 	root.add_child(navigation_row)
-	var visited_body_names: Dictionary = simulation.get("visited_body_names")
 	var discovered_body_names: Dictionary = simulation.get("discovered_body_names")
 	navigation_planet_dropdown = OptionButton.new()
 	navigation_planet_dropdown.add_item("Earth", -2)
@@ -313,7 +312,6 @@ func _build_interface() -> void:
 		var planet_name := str(planet.get("name", "Unknown"))
 		if discovered_body_names.has(planet_name):
 			navigation_planet_dropdown.add_item(planet_name, planet_index)
-			navigation_planet_dropdown.set_item_disabled(navigation_planet_dropdown.item_count - 1, not visited_body_names.has(planet_name))
 	navigation_planet_dropdown.item_selected.connect(func(_index: int):
 		_rebuild_navigation_moons(navigation_planet_dropdown.get_selected_id())
 		_invalidate_navigation_plan()
@@ -588,15 +586,14 @@ func _rebuild_navigation_moons(parent_target_index: int) -> void:
 	navigation_moon_dropdown.add_item("Planet only", parent_target_index)
 	if parent_target_index == -2:
 		if discovered_body_names.has("Moon"):
-			navigation_moon_dropdown.add_item("Moon", -1)
-			navigation_moon_dropdown.set_item_disabled(navigation_moon_dropdown.item_count - 1, not visited_body_names.has("Moon"))
+			navigation_moon_dropdown.add_item("Moon")
+			navigation_moon_dropdown.set_item_id(navigation_moon_dropdown.item_count - 1, -1)
 	else:
 		var parent_name := FlightComputer.target_body_name(parent_target_index)
 		for satellite in FlightComputer.satellite_targets_for_host(parent_name):
 			var satellite_name := str(satellite.get("name", ""))
 			if discovered_body_names.has(satellite_name):
 				navigation_moon_dropdown.add_item(str(satellite.get("display_name", satellite.get("name", "Unknown"))), int(satellite.get("id", -1)))
-				navigation_moon_dropdown.set_item_disabled(navigation_moon_dropdown.item_count - 1, not visited_body_names.has(satellite_name))
 	navigation_moon_dropdown.select(0)
 	navigation_moon_dropdown.disabled = navigation_moon_dropdown.item_count <= 1
 
@@ -823,6 +820,9 @@ func _refresh_navigation_state() -> void:
 	var target_mode := str(simulation.get("autopilot_target_mode"))
 	var autopilot_target_id := int(simulation.get("autopilot_planet_index"))
 	var phase := str(simulation.get("autopilot_phase"))
+	var visited_body_names: Dictionary = simulation.get("visited_body_names")
+	var planned_target_name := str(navigation_plan.get("target_name", FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))))
+	var planned_target_visited := visited_body_names.has(planned_target_name)
 	var destination_mission := target_mode == "ORBIT" and (autopilot_enabled or phase in ["COMPLETE", "FAILED", "ARRIVAL_PENDING"])
 	navigation_cancel_button.visible = destination_mission
 	navigation_cancel_button.text = "CANCEL DESTINATION MISSION" if autopilot_enabled else "CLEAR MISSION STATUS"
@@ -830,11 +830,12 @@ func _refresh_navigation_state() -> void:
 		navigation_engage_button.disabled = true
 		navigation_engage_button.text = "AUTOPILOT ACTIVE"
 	elif destination_mission:
-		navigation_engage_button.disabled = not navigation_plan_valid
+		navigation_engage_button.disabled = not navigation_plan_valid or not planned_target_visited
 		navigation_engage_button.text = "SEND NEW PLAN"
 	else:
-		navigation_engage_button.disabled = not navigation_plan_valid
+		navigation_engage_button.disabled = not navigation_plan_valid or not planned_target_visited
 		navigation_engage_button.text = "SEND TO AUTOPILOT"
+	navigation_engage_button.tooltip_text = "" if planned_target_visited else "Autopilot requires a physical visit. Telescope discoveries can still be planned and flown manually."
 	if destination_mission:
 		var target_name := FlightComputer.target_body_name(autopilot_target_id)
 		var target_state: Dictionary = simulation.call("_surface_body_state", target_name)
@@ -885,6 +886,11 @@ func _cancel_destination_autopilot() -> void:
 
 func _send_destination_to_autopilot() -> void:
 	if not navigation_plan_valid or not is_instance_valid(simulation) or bool(simulation.get("crashed")):
+		return
+	var visited_body_names: Dictionary = simulation.get("visited_body_names")
+	var gate_target_name := str(navigation_plan.get("target_name", FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))))
+	if not visited_body_names.has(gate_target_name):
+		navigation_report.text = "AUTOPILOT LOCKED  •  VISIT %s BEFORE ENABLING AUTOMATIC NAVIGATION. MANUAL FLIGHT-COMPUTER GUIDANCE REMAINS AVAILABLE." % gate_target_name.to_upper()
 		return
 	simulation.set("manual_flight_plan", {})
 	simulation.set("manual_burn_tracking_enabled", false)

@@ -500,13 +500,35 @@ func _initialize() -> void:
 	var planner_sim: Variant = SimulationView.new()
 	planner_sim.set_rocket_design(RocketDesign.create_default())
 	planner_sim.landed = false
-	planner_sim.visited_body_names["Moon"] = true
-	planner_sim.visited_body_names["Mars"] = true
+	planner_sim.discovered_body_names["Moon"] = true
+	planner_sim.discovered_body_names["Mars"] = true
+	planner_sim.visited_body_names.erase("Moon")
+	planner_sim.visited_body_names.erase("Mars")
 	planner_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
 	planner_sim.velocity = Vector2(manoeuvre_speed, 0.0)
 	var route_planner_window: Window = RoutePlanner.new()
 	root.add_child(route_planner_window)
 	route_planner_window.configure(planner_sim, RocketDesign.create_default())
+	assert(route_planner_window.navigation_moon_dropdown.get_item_text(1) == "Moon", "Telescope-spotted Moon should appear in the Flight Computer")
+	assert(route_planner_window.navigation_moon_dropdown.get_item_id(1) == -1, "Moon target ID must remain distinct from planet indices")
+	assert(not route_planner_window.navigation_moon_dropdown.is_item_disabled(1), "Telescope-spotted Moon should be selectable before visiting")
+	var mars_option := -1
+	for option_index in range(route_planner_window.navigation_planet_dropdown.item_count):
+		if route_planner_window.navigation_planet_dropdown.get_item_text(option_index) == "Mars":
+			mars_option = option_index
+	assert(mars_option >= 0, "Telescope-spotted Mars should appear in the Flight Computer")
+	assert(not route_planner_window.navigation_planet_dropdown.is_item_disabled(mars_option), "Telescope-spotted Mars should be selectable before visiting")
+	route_planner_window.navigation_plan_valid = true
+	route_planner_window.navigation_plan = {"target_id": route_planner_window.navigation_planet_dropdown.get_item_id(mars_option), "target_name": "Mars"}
+	route_planner_window._refresh_navigation_state()
+	assert(route_planner_window.navigation_engage_button.disabled, "Autopilot must remain locked until Mars has been visited")
+	assert(not route_planner_window.manual_navigation_button.disabled, "Manual Flight Computer guidance should remain available for telescope-only targets")
+	planner_sim.visited_body_names["Mars"] = true
+	route_planner_window._refresh_navigation_state()
+	assert(not route_planner_window.navigation_engage_button.disabled, "Autopilot should unlock after physically visiting Mars")
+	planner_sim.visited_body_names.erase("Mars")
+	route_planner_window.navigation_plan_valid = false
+	route_planner_window.navigation_plan.clear()
 	assert(route_planner_window.interface_scroll is ScrollContainer)
 	assert(route_planner_window.target_x_input is SpinBox)
 	assert(route_planner_window.target_y_input is SpinBox)
