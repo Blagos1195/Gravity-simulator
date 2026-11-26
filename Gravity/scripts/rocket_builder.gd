@@ -870,6 +870,10 @@ func _refresh_inspector() -> void:
 			_update_component_property("port_facing", int(facing_selector.get_item_metadata(index)))
 		)
 		_inspector.add_child(facing_selector)
+		var connector_note := Label.new()
+		connector_note.text = "To make a detachable module, place a matching docking port on the adjacent stage, facing this port. The upper module can then be released using its assigned staging action."
+		connector_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_inspector.add_child(connector_note)
 	var rotation_label := Label.new()
 	rotation_label.text = "Part rotation (degrees)"
 	_inspector.add_child(rotation_label)
