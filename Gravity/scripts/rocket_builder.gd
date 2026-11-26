@@ -1027,7 +1027,7 @@ func _on_component_repositioned(index: int, attachment: String, side: int, inser
 			continue
 		var mounted: Dictionary = components[candidate]
 		if str(mounted.get("attachment", "stack")) in ["side", "radial"] and int(mounted.get("mount_index", -1)) == index:
-			moved_children.append(candidate)
+			moved_children.append(candidate - (1 if candidate > index else 0))
 	components.remove_at(index)
 	for candidate in range(components.size()):
 		var mounted: Dictionary = components[candidate]
