@@ -22,7 +22,7 @@ func _initialize() -> void:
 	assert(builder._snap_selector.item_count == 2)
 	assert(builder._snap_selector.get_item_text(0) == "Free")
 	assert(builder._snap_selector.get_item_text(1) == "Parts")
-	assert(builder._snap_selector.get_item_text(builder._snap_selector.selected) == "Off")
+	assert(builder._snap_selector.get_item_text(builder._snap_selector.selected) == "Free")
 	assert(builder._canvas.snap_mode == "Off")
 	assert(is_equal_approx(builder._canvas.rotation_snap_degrees, 15.0))
 	assert(builder._canvas._snap_position(Vector2(0.62, 0.62)) == Vector2(0.62, 0.62))
