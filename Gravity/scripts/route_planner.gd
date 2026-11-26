@@ -819,6 +819,9 @@ func _refresh_navigation_state() -> void:
 	var target_mode := str(simulation.get("autopilot_target_mode"))
 	var autopilot_target_id := int(simulation.get("autopilot_planet_index"))
 	var phase := str(simulation.get("autopilot_phase"))
+	var visited_body_names: Dictionary = simulation.get("visited_body_names")
+	var planned_target_name := FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))
+	var planned_target_visited := visited_body_names.has(planned_target_name)
 	var destination_mission := target_mode == "ORBIT" and (autopilot_enabled or phase in ["COMPLETE", "FAILED", "ARRIVAL_PENDING"])
 	navigation_cancel_button.visible = destination_mission
 	navigation_cancel_button.text = "CANCEL DESTINATION MISSION" if autopilot_enabled else "CLEAR MISSION STATUS"
@@ -826,11 +829,12 @@ func _refresh_navigation_state() -> void:
 		navigation_engage_button.disabled = true
 		navigation_engage_button.text = "AUTOPILOT ACTIVE"
 	elif destination_mission:
-		navigation_engage_button.disabled = not navigation_plan_valid
+		navigation_engage_button.disabled = not navigation_plan_valid or not planned_target_visited
 		navigation_engage_button.text = "SEND NEW PLAN"
 	else:
-		navigation_engage_button.disabled = not navigation_plan_valid
+		navigation_engage_button.disabled = not navigation_plan_valid or not planned_target_visited
 		navigation_engage_button.text = "SEND TO AUTOPILOT"
+	navigation_engage_button.tooltip_text = "" if planned_target_visited else "Autopilot requires a physical visit. Telescope discoveries can still be planned and flown manually."
 	if destination_mission:
 		var target_name := FlightComputer.target_body_name(autopilot_target_id)
 		var target_state: Dictionary = simulation.call("_surface_body_state", target_name)
@@ -881,6 +885,11 @@ func _cancel_destination_autopilot() -> void:
 
 func _send_destination_to_autopilot() -> void:
 	if not navigation_plan_valid or not is_instance_valid(simulation) or bool(simulation.get("crashed")):
+		return
+	var visited_body_names: Dictionary = simulation.get("visited_body_names")
+	var target_name := FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))
+	if not visited_body_names.has(target_name):
+		navigation_report.text = "AUTOPILOT LOCKED  •  VISIT %s BEFORE ENABLING AUTOMATIC NAVIGATION. MANUAL FLIGHT-COMPUTER GUIDANCE REMAINS AVAILABLE." % target_name.to_upper()
 		return
 	simulation.set("manual_flight_plan", {})
 	simulation.set("manual_burn_tracking_enabled", false)
