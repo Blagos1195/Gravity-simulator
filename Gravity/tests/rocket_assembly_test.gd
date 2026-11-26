@@ -168,6 +168,20 @@ func _initialize() -> void:
 	lower_port["port_facing"] = -1
 	inline_parts.append(upper_port)
 	inline_parts.append(lower_port)
+	var upper_rcs := RocketAssembly.component_definition("rcs_thruster_block")
+	upper_rcs["part_uid"] = "inline_upper_rcs"
+	upper_rcs["attachment"] = "side"
+	upper_rcs["mirror"] = false
+	upper_rcs["side"] = 1
+	upper_rcs["subassembly_id"] = "payload_group"
+	var lower_rcs := RocketAssembly.component_definition("rcs_thruster_block")
+	lower_rcs["part_uid"] = "inline_lower_rcs"
+	lower_rcs["attachment"] = "side"
+	lower_rcs["mirror"] = false
+	lower_rcs["side"] = -1
+	lower_rcs["subassembly_id"] = "main"
+	inline_parts.append(upper_rcs)
+	inline_parts.append(lower_rcs)
 	inline_stage = RocketAssembly.compile_stage(inline_stage, inline_parts)
 	var inline_boundaries := RocketAssembly.docking_component_group_boundaries(inline_stage)
 	assert(inline_boundaries.has("inline_upper_port"), "Opposing docking ports between component groups should create an in-stage release boundary")
