@@ -1034,7 +1034,8 @@ func _jump_to_selected_node() -> void:
 	var base_time := manual_guidance_start_time if manual_guidance_node_index == selected_node_index else node_reference_time
 	var target_time := base_time + node_time - 5.0
 	if target_time <= float(simulation.get("sim_time")) + 1.0:
-		manual_guidance_report.text = "THE SELECTED NODE IS ALREADY WITHIN THE FIVE-SECOND APPROACH WINDOW."
+		if is_instance_valid(manual_guidance_report):
+			manual_guidance_report.text = "THE SELECTED NODE IS ALREADY WITHIN THE FIVE-SECOND APPROACH WINDOW."
 		return
 	time_jump_requested.emit(target_time)
 
