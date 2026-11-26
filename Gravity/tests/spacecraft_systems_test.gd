@@ -61,6 +61,16 @@ func _initialize() -> void:
 	assert(bool(loop_cut.valid) and loop_cut.groups.size() == 1, "Removing one connector in a loop must not split the spacecraft")
 	var disconnected := ModuleGraph.disconnect_connection(loop_cut.graph, "port_e|port_f")
 	assert(bool(disconnected.valid) and disconnected.groups.size() == 2, "Removing a connector that separates the graph must produce two spacecraft groups")
+	assert(ModuleGraph.validate(graph).is_empty(), "A valid docking loop failed graph validation")
+	assert(ModuleGraph.connection_for_port(graph, "port_c").get("id", "") == "port_c|port_d")
+	assert(ModuleGraph.connection_between(graph, "a", "c").size() == 1)
+	var removed_module := ModuleGraph.remove_module(graph, "b")
+	assert(bool(removed_module.valid) and removed_module.removed_connections.size() == 2)
+	assert(removed_module.groups.size() == 2 and removed_module.graph.modules.size() == 2)
+	var invalid_graph := ModuleGraph.create(["a", "b"])
+	invalid_graph.connections = [{"id":"bad","a":"a","b":"missing","port_a":"same","port_b":"same"}]
+	assert(not ModuleGraph.validate(invalid_graph).is_empty(), "Invalid module and duplicated-port connections were accepted")
+	assert(not ModuleGraph.can_connect(ModuleGraph.create(["a", "b"]), "a", "b", "same", "same"), "A docking connector cannot mate with itself")
 	var plan_a: Array = [{"id":"stage_0","actions":[{"id":"a:engine","part_id":"engine","action":"activate_engine","completed":true,"reversible":true}]}]
 	var plan_b: Array = [{"id":"stage_0","actions":[{"id":"b:deploy","part_id":"panel","action":"deploy","completed":false,"reversible":true}]}]
 	var plan_modules := [{"name":"tug","staging_stage_count":3,"stages":[{"components":[{"id":"engine","kind":"engine","part_uid":"engine","staging_stage":2},{"id":"tank","kind":"tank","part_uid":"tank","staging_stage":1}]}]}]
