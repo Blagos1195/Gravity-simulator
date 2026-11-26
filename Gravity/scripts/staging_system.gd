@@ -1,6 +1,8 @@
 extends RefCounted
 class_name StagingSystem
 
+const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
+
 static func create_plan(modules: Array) -> Array:
 	var stages: Array = []
 	var stage_count := 0
@@ -26,6 +28,7 @@ static func create_plan(modules: Array) -> Array:
 					continue
 				var component: Dictionary = component_variant
 				var kind := str(component.get("kind", ""))
+				var part_id := str(component.get("part_uid", component.get("id", "")))
 				var action_name := str(component.get("staging_action", ""))
 				if action_name.is_empty():
 					if kind in ["engine", "radial"]:
@@ -35,6 +38,8 @@ static func create_plan(modules: Array) -> Array:
 							action_name = "activate_engine"
 					elif kind == "decoupler":
 						action_name = "separate"
+					elif kind == "docking_port" and docking_boundaries.has(physical_stage_index) and str(docking_boundaries[physical_stage_index].get("upper_part_uid", "")) == part_id:
+						action_name = "undock_module"
 					elif kind == "tank":
 						action_name = "enable_fuel_supply"
 					elif kind == "rcs":
@@ -44,8 +49,7 @@ static func create_plan(modules: Array) -> Array:
 				if action_name.is_empty():
 					continue
 				var assigned_stage := clampi(int(component.get("staging_stage", physical_stage_index)), 0, maxi(0, stages.size() - 1))
-				var part_id := str(component.get("part_uid", component.get("id", "")))
-				stages[assigned_stage].actions.append({"id":"%s:%s:%s" % [module_id, part_id, action_name], "module_id":module_id, "physical_stage_index":physical_stage_index, "part_id":part_id, "action":action_name, "completed":false, "reversible":action_name != "separate"})
+				stages[assigned_stage].actions.append({"id":"%s:%s:%s" % [module_id, part_id, action_name], "module_id":module_id, "physical_stage_index":physical_stage_index, "part_id":part_id, "action":action_name, "completed":false, "reversible":action_name not in ["separate", "undock_module"]})
 	return stages
 
 static func merge_plans(first_plan: Array, second_plan: Array) -> Array:
@@ -148,6 +152,8 @@ static func execute_stage(plan: Array, stage_index: int, part_states: Dictionary
 				if not bool(state.get("attached", true)):
 					continue
 				state["attached"] = false
+			"undock_module":
+				state["module_release_requested"] = true
 			"attach":
 				if not bool(state.get("can_attach", false)):
 					continue
