@@ -110,6 +110,12 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 	for stage_index in range(stages.size()):
 		var stage := ensure_stage_components(stages[stage_index])
 		var components: Array = stage.get("components", []).duplicate(true)
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			component["staging_stage"] = stage_index * 2
+			components[component_index] = component
+		stage = compile_stage(stage, components)
+		components = stage.get("components", []).duplicate(true)
 		var has_rcs := false
 		for component in components:
 			if str(component.get("preset_hardware_role", "")) == "rcs":
@@ -121,7 +127,7 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 			var rcs: Dictionary = components.back()
 			rcs["preset_hardware_role"] = "rcs"
 			rcs["staging_action"] = "activate_rcs"
-			rcs["staging_stage"] = stage_index
+			rcs["staging_stage"] = stage_index * 2
 			components[components.size() - 1] = rcs
 			stage = compile_stage(stage, components)
 		if stage_index < stages.size() - 1:
@@ -136,7 +142,7 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 				var separator: Dictionary = components.back()
 				separator["preset_hardware_role"] = "separator"
 				separator["staging_action"] = "separate"
-				separator["staging_stage"] = stage_index + 1
+				separator["staging_stage"] = stage_index * 2 + 1
 				components[components.size() - 1] = separator
 				stage = compile_stage(stage, components)
 		if stage_index == stages.size() - 1:
@@ -155,7 +161,13 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 				stage = compile_stage(stage, components)
 		stages[stage_index] = stage
 	design["stages"] = stages
-	design["staging_stage_count"] = maxi(int(design.get("staging_stage_count", 0)), stages.size())
+	var action_stage_labels: Array = []
+	for stage_index in range(stages.size()):
+		action_stage_labels.append("Stage %d: Ignite" % (stage_index + 1))
+		if stage_index < stages.size() - 1:
+			action_stage_labels.append("Stage %d: Separate" % (stage_index + 1))
+	design["staging_stage_labels"] = action_stage_labels
+	design["staging_stage_count"] = action_stage_labels.size()
 	return design
 
 static func remove_component(stage: Dictionary, component_index: int) -> Dictionary:
