@@ -2618,7 +2618,12 @@ func _update_guidance(dt: float) -> void:
 	angular_velocity = 0.0
 
 func _flight_input_blocked_by_gui() -> bool:
-	var focus_owner := get_viewport().gui_get_focus_owner()
+	if not is_inside_tree():
+		return false
+	var viewport := get_viewport()
+	if viewport == null:
+		return false
+	var focus_owner := viewport.gui_get_focus_owner()
 	return focus_owner is LineEdit or focus_owner is TextEdit or focus_owner is CodeEdit
 
 func _input(event: InputEvent) -> void:
