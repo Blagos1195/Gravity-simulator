@@ -2756,6 +2756,7 @@ func _rebuild_docking_spanning_tree(root_name: String) -> void:
 	if module_group.size() <= 1:
 		return
 	var visited: Dictionary = {root_name: true}
+	var tree_connections: Dictionary = {}
 	var queue: Array = [root_name]
 	while not queue.is_empty():
 		var current := str(queue.pop_front())
@@ -2764,32 +2765,30 @@ func _rebuild_docking_spanning_tree(root_name: String) -> void:
 				continue
 			var first := str(connection.get("a", ""))
 			var second := str(connection.get("b", ""))
-			var neighbour := ""
-			if first == current:
-				neighbour = second
-			elif second == current:
-				neighbour = first
+			var neighbour := second if first == current else (first if second == current else "")
 			if neighbour.is_empty() or visited.has(neighbour):
 				continue
 			visited[neighbour] = true
 			queue.append(neighbour)
+			var connection_id := str(connection.get("id", ""))
+			tree_connections[connection_id] = true
+			var parent := _find_vehicle_by_name(current)
+			var child := _find_vehicle_by_name(neighbour)
+			if parent == null or child == null:
+				continue
 			for link_index in range(docking_links.size()):
 				var link: Dictionary = docking_links[link_index]
-				if str(link.get("port_a", "")) + "|" + str(link.get("port_b", "")) != str(connection.get("id", "")) and str(link.get("port_b", "")) + "|" + str(link.get("port_a", "")) != str(connection.get("id", "")):
+				var link_id := str(link.get("port_a", "")) + "|" + str(link.get("port_b", ""))
+				var reverse_id := str(link.get("port_b", "")) + "|" + str(link.get("port_a", ""))
+				if link_id != connection_id and reverse_id != connection_id:
 					continue
-				var parent := _find_vehicle_by_name(current)
-				var child := _find_vehicle_by_name(neighbour)
-				if parent == null or child == null:
-					break
-				link["structural"] = true
 				if str(link.get("parent_name", "")) != current:
-					var old_parent := str(link.get("parent_name", ""))
-					var old_child := str(link.get("child_name", ""))
-					link["parent_name"] = old_child
-					link["child_name"] = old_parent
+					link["parent_name"] = current
+					link["child_name"] = neighbour
 					var old_port_a := str(link.get("port_a", ""))
 					link["port_a"] = str(link.get("port_b", ""))
 					link["port_b"] = old_port_a
+				link["structural"] = true
 				var offset := (child.rocket_position - parent.rocket_position).rotated(-parent.rotation_angle)
 				link["offset_x"] = offset.x
 				link["offset_y"] = offset.y
@@ -2797,10 +2796,13 @@ func _rebuild_docking_spanning_tree(root_name: String) -> void:
 				break
 	for link_index in range(docking_links.size()):
 		var link: Dictionary = docking_links[link_index]
-		if module_group.has(str(link.get("parent_name", ""))) and module_group.has(str(link.get("child_name", ""))):
-			if not bool(visited.has(str(link.get("child_name", "")))) or str(link.get("child_name", "")) == root_name:
-				link["structural"] = false
-				docking_links[link_index] = link
+		if not module_group.has(str(link.get("parent_name", ""))) or not module_group.has(str(link.get("child_name", ""))):
+			continue
+		var link_id := str(link.get("port_a", "")) + "|" + str(link.get("port_b", ""))
+		var reverse_id := str(link.get("port_b", "")) + "|" + str(link.get("port_a", ""))
+		link["structural"] = tree_connections.has(link_id) or tree_connections.has(reverse_id)
+		docking_links[link_index] = link
+
 
 func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 	for index in range(docking_links.size()):
