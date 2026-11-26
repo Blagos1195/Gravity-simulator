@@ -519,6 +519,7 @@ func _initialize() -> void:
 	route_planner_window.navigation_plan = {"target_id": route_planner_window.navigation_planet_dropdown.get_item_id(mars_option), "target_name": "Mars"}
 	route_planner_window._refresh_navigation_state()
 	assert(route_planner_window.navigation_engage_button.disabled, "Autopilot must remain locked until Mars has been visited")
+	assert(not route_planner_window.manual_navigation_button.disabled, "Manual Flight Computer guidance should remain available for telescope-only targets")
 	planner_sim.visited_body_names["Mars"] = true
 	route_planner_window._refresh_navigation_state()
 	assert(not route_planner_window.navigation_engage_button.disabled, "Autopilot should unlock after physically visiting Mars")
