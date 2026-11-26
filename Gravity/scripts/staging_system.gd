@@ -24,6 +24,7 @@ static func create_plan(modules: Array) -> Array:
 		var docking_boundaries := RocketAssembly.docking_module_boundaries(module.get("stages", []))
 		for physical_stage_index in range((module.get("stages", []) as Array).size()):
 			var physical_stage: Dictionary = module.stages[physical_stage_index]
+			var component_group_boundaries := RocketAssembly.docking_component_group_boundaries(physical_stage)
 			for component_variant in physical_stage.get("components", []):
 				if not component_variant is Dictionary:
 					continue
@@ -32,7 +33,10 @@ static func create_plan(modules: Array) -> Array:
 				var part_id := str(component.get("part_uid", component.get("id", "")))
 				var action_name := str(component.get("staging_action", ""))
 				if kind == "docking_port":
-					action_name = "undock_module" if docking_boundaries.has(physical_stage_index) and str(docking_boundaries[physical_stage_index].get("upper_part_uid", "")) == part_id else ""
+					if component_group_boundaries.has(part_id):
+						action_name = "undock_component_group"
+					else:
+						action_name = "undock_module" if docking_boundaries.has(physical_stage_index) and str(docking_boundaries[physical_stage_index].get("upper_part_uid", "")) == part_id else ""
 				elif action_name.is_empty():
 					if kind in ["engine", "radial"]:
 						if bool(component.get("solid_motor", false)):
