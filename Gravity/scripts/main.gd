@@ -2656,13 +2656,9 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 	if sim.landed or sim.crashed or target.landed or target.crashed:
 		return false
 	var graph := _current_module_graph()
-	var already_docked_pair := _are_docked(sim.vehicle_name, target.vehicle_name)
 	var graph_members := ModuleGraph.connected_to(graph, sim.vehicle_name)
 	var same_assembly := graph_members.has(target.vehicle_name)
-	if same_assembly:
-		if already_docked_pair:
-			return false
-	elif _is_docked_child(sim.vehicle_name) or _is_docked_child(target.vehicle_name):
+	if not same_assembly and (_is_docked_child(sim.vehicle_name) or _is_docked_child(target.vehicle_name)):
 		return false
 	if not sim.has_rcs_installed() or not target.has_rcs_installed() or not sim.has_docking_port() or not target.has_docking_port():
 		return false
