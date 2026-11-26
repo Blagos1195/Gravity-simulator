@@ -143,6 +143,15 @@ func _initialize() -> void:
 			if str(action.get("action", "")) == "undock_module" and int(action.get("physical_stage_index", -1)) == 1:
 				has_module_release_action = true
 	assert(has_module_release_action, "The upper connector should create a module-release staging action")
+	var grouped_stage := RocketAssembly.add_component(port_stage.duplicate(true), "standard_docking_port")
+	var grouped_components: Array = grouped_stage.components.duplicate(true)
+	for component_index in range(grouped_components.size()):
+		var grouped_component: Dictionary = grouped_components[component_index]
+		if str(grouped_component.get("kind", "")) == "docking_port":
+			grouped_component["subassembly_id"] = "payload_group" if component_index == grouped_components.size() - 1 else "main"
+		grouped_components[component_index] = grouped_component
+	grouped_stage = RocketAssembly.compile_stage(grouped_stage, grouped_components)
+	assert(RocketAssembly.split_stage_by_group(grouped_stage, "payload_group").size() == 2, "A physical stage should split into retained and released component groups")
 	var unpaired_port_stage := RocketAssembly.add_component(RocketAssembly.ensure_stage_components({}), "standard_docking_port")
 	for component in unpaired_port_stage.components:
 		if str(component.get("kind", "")) == "docking_port":
