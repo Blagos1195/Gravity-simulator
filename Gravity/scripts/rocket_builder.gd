@@ -871,7 +871,7 @@ func _refresh_inspector() -> void:
 		)
 		_inspector.add_child(facing_selector)
 		var connector_note := Label.new()
-		connector_note.text = "To make a detachable module, place a matching docking port on the adjacent stage, facing this port. The upper module can then be released using its assigned staging action."
+		connector_note.text = "A docking port is a reusable spacecraft connection, not a stage separator. To release a built module, place a matching port on the adjoining stage, facing this one. The upper section then gets a module-release staging action."
 		connector_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_inspector.add_child(connector_note)
 	var rotation_label := Label.new()
@@ -919,8 +919,10 @@ func _refresh_inspector() -> void:
 			action_options = [{"id":"enable_fuel_supply","label":"Enable fuel supply"},{"id":"disable_fuel_supply","label":"Disable fuel supply"}]
 		"rcs":
 			action_options = [{"id":"activate_rcs","label":"Activate RCS"},{"id":"deactivate_rcs","label":"Deactivate RCS"}]
-		"decoupler", "docking_port":
-			action_options = [{"id":"separate","label":"Separate connection"},{"id":"attach","label":"Attach connection"}]
+		"decoupler":
+			action_options = [{"id":"separate","label":"Separate stage"},{"id":"attach","label":"Attach stage"}]
+		"docking_port":
+			action_options = [{"id":"undock_module","label":"Release docked module"}]
 		_:
 			if bool(component.get("deployable", false)):
 				action_options = [{"id":"deploy","label":"Deploy"},{"id":"retract","label":"Retract"}]
