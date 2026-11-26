@@ -1166,6 +1166,21 @@ func _process(delta: float) -> void:
 			trail.pop_front()
 	queue_redraw()
 
+func next_autopilot_event_time() -> float:
+	if autopilot_enabled:
+		match autopilot_phase:
+			"WAIT_WINDOW":
+				return float(autopilot_precomputed_transfer_plan.get("departure_time_seconds", -1.0))
+			"ROUTE_COAST":
+				if autopilot_route_node_index < autopilot_route_nodes.size():
+					return float(autopilot_route_nodes[autopilot_route_node_index].get("time", -1.0))
+			_:
+				return -1.0
+	var plan: Dictionary = manual_flight_plan
+	if not plan.is_empty() and bool(plan.get("active", false)) and str(plan.get("phase", "")) == "WAIT_DEPARTURE":
+		return float(plan.get("departure_time", -1.0))
+	return -1.0
+
 func _physics_step(dt: float) -> void:
 	var start_time := sim_time
 	var end_time := sim_time + dt

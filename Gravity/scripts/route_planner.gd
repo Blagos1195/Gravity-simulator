@@ -1,5 +1,7 @@
 extends Window
 
+signal time_jump_requested(target_time: float)
+
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 
@@ -60,6 +62,7 @@ var navigation_plan: Dictionary = {}
 var manual_guidance_report: Label
 var manual_guidance_node_index := -1
 var manual_guidance_start_time := 0.0
+var node_reference_time := 0.0
 var manual_guidance_burn_vector := Vector2.ZERO
 var manual_guidance_target_delta_v := 0.0
 var manual_guidance_angle_from_prograde := 0.0
@@ -249,6 +252,7 @@ class OrbitPlot extends Control:
 
 func configure(simulation_node: Control, design: Dictionary) -> void:
 	simulation = simulation_node
+	node_reference_time = float(simulation_node.get("sim_time"))
 	rocket_design = design.duplicate(true)
 	var initial_stages: Array = rocket_design.get("stages", [])
 	if not initial_stages.is_empty() and not bool(simulation.get("infinite_weightless_fuel")):
@@ -534,6 +538,10 @@ func _build_interface() -> void:
 	guide_button.text = "ARM / DISARM SELECTED BURN"
 	guide_button.pressed.connect(_arm_manual_guidance)
 	node_actions.add_child(guide_button)
+	var jump_button := Button.new()
+	jump_button.text = "JUMP TO NODE"
+	jump_button.pressed.connect(_jump_to_selected_node)
+	node_actions.add_child(jump_button)
 	var remove_button := Button.new()
 	remove_button.text = "REMOVE SELECTED NODE"
 	remove_button.pressed.connect(_remove_node)
@@ -1018,6 +1026,18 @@ func _arm_manual_guidance() -> void:
 	simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
 	simulation.set("thrust_key_down", false)
 	_update_manual_guidance()
+
+func _jump_to_selected_node() -> void:
+	if not is_instance_valid(simulation) or selected_node_index < 0 or selected_node_index >= nodes.size():
+		return
+	var node_time := maxf(0.0, float(nodes[selected_node_index].get("time_offset", 0.0)))
+	var base_time := manual_guidance_start_time if manual_guidance_node_index == selected_node_index else node_reference_time
+	var target_time := base_time + node_time - 5.0
+	if target_time <= float(simulation.get("sim_time")) + 1.0:
+		if is_instance_valid(manual_guidance_report):
+			manual_guidance_report.text = "THE SELECTED NODE IS ALREADY WITHIN THE FIVE-SECOND APPROACH WINDOW."
+		return
+	time_jump_requested.emit(target_time)
 
 func _manual_node_state(node_time: float) -> Dictionary:
 	if node_time <= 0.0 or planned_path.size() < 3 or planned_path_times.size() != planned_path.size():

@@ -6,6 +6,7 @@ const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
+const RoutePlanner = preload("res://scripts/route_planner.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -14,6 +15,42 @@ func _initialize() -> void:
 	main._start_flight()
 	assert(main.fleet_sims.size() == 1)
 	var first: SimulationView = main.fleet_sims[0]
+	first.landed = false
+	first._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
+	first.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
+	assert(main._fast_forward_to_time(3600.0), "A safe stable-orbit time jump was rejected")
+	assert(is_equal_approx(first.sim_time, 3600.0), "Stable-orbit time jump did not reach its target")
+	first.autopilot_enabled = true
+	first.autopilot_phase = "WAIT_WINDOW"
+	first.autopilot_precomputed_transfer_plan = {"departure_time_seconds": 7200.0}
+	assert(not main._fast_forward_to_time(7200.0), "Autopilot time jump passed its departure event")
+	assert(main._fast_forward_to_time(7195.0), "Safe autopilot wait jump was rejected")
+	assert(is_equal_approx(first.sim_time, 7195.0), "Autopilot jump did not stop before departure")
+	first.autopilot_phase = "TRANSFER_COAST"
+	first.autopilot_transfer_start_time = 7195.0
+	first.autopilot_transfer_duration = 10000.0
+	assert(not main._fast_forward_to_time(8000.0), "Autopilot transfer coast allowed a jump with an unpredictable encounter")
+	first.autopilot_enabled = false
+	first.autopilot_phase = "IDLE"
+	first.passive_orbit_active = false
+	first.passive_orbit_data.clear()
+	var planner := RoutePlanner.new()
+	planner.simulation = first
+	planner.node_reference_time = first.sim_time
+	planner.nodes = [{"time_offset": 120.0}]
+	planner.selected_node_index = 0
+	main.active_route_planner = planner
+	var requested_jump_times: Array[float] = []
+	planner.time_jump_requested.connect(func(target_time: float): requested_jump_times.append(target_time))
+	planner._jump_to_selected_node()
+	assert(requested_jump_times.size() == 1, "Flight Computer did not request a predictive jump")
+	assert(is_equal_approx(requested_jump_times[0], first.sim_time + 115.0), "Flight Computer jump did not stop five seconds before its node")
+	assert(not main._fast_forward_to_time(first.sim_time + 120.0), "Predictive jump passed a Flight Computer manoeuvre node")
+	assert(main._fast_forward_to_time(requested_jump_times[0]), "Flight Computer node jump was rejected")
+	planner._jump_to_selected_node()
+	assert(requested_jump_times.size() == 1, "Flight Computer allowed a repeated jump past the same manoeuvre node")
+	main.active_route_planner = null
+	planner.free()
 	main._add_new_vehicle()
 	assert(main.fleet_sims.size() == 2)
 	var second: SimulationView = main.sim
@@ -25,6 +62,28 @@ func _initialize() -> void:
 	assert(not first.is_processing(), "Fleet vehicles must not advance both through their own process and the fleet manager")
 	assert(first.vehicle_name == "Vehicle 1")
 	assert(second.vehicle_name == "Vehicle 2")
+	main._switch_vehicle(0)
+	first._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
+	first.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
+	second._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200100.0))
+	second.velocity = first.velocity
+	main.docking_links = [{
+		"parent_name": first.vehicle_name,
+		"child_name": second.vehicle_name,
+		"port_a": "test-parent-port",
+		"port_b": "test-child-port",
+		"offset_x": 0.0,
+		"offset_y": 100.0,
+		"rotation_offset": 0.0,
+		"structural": true
+	}]
+	main._update_docked_masses()
+	main._sync_docked_vehicles()
+	assert(main._fast_forward_to_time(first.sim_time + 60.0), "A docked assembly could not use predictive time jump")
+	assert(is_equal_approx(first.sim_time, second.sim_time), "Docked module time was not synchronised after a jump")
+	main.docking_links.clear()
+	main._update_docked_masses()
+	main._sync_docked_vehicles()
 	main._switch_vehicle(0)
 	first.rocket_position = Vector2(1.0e9, 0.0)
 	second.landed = false

@@ -35,6 +35,21 @@ func _initialize() -> void:
 	assert(main._docking_assist_in_range(parent, child), "Same-altitude spacecraft outside the distance limit were not eligible for rendezvous")
 	var orbital_approach := main._docking_orbit_approach(parent, child)
 	assert(absf(Vector2(orbital_approach.direction).dot((child.rocket_position - parent.rocket_position).normalized())) < 0.01, "Distant orbital rendezvous attempted a direct path through the central body")
+	parent.rocket_position = Vector2.ZERO
+	child.rocket_position = Vector2(100000.0, 0.0)
+	second_child.rocket_position = Vector2(5000.0, 0.0)
+	parent.velocity = Vector2.ZERO
+	child.velocity = Vector2.ZERO
+	second_child.velocity = Vector2.ZERO
+	var avoidance_velocity := main._docking_avoidance_velocity(parent, child, Vector2(100.0, 0.0))
+	assert(avoidance_velocity.distance_to(Vector2(100.0, 0.0)) > 1.0, "Docking rendezvous did not steer around a spacecraft crossing its approach path")
+	assert(absf((avoidance_velocity - Vector2(100.0, 0.0)).dot(Vector2.RIGHT)) < 0.01, "Docking traffic avoidance did not choose a lateral path")
+	var own_approach_port := {"position": parent.rocket_position, "normal": Vector2.LEFT}
+	var far_side_port := {"position": child.rocket_position, "normal": Vector2.RIGHT}
+	var approach_waypoint := main._docking_approach_waypoint(parent, child, own_approach_port, far_side_port)
+	var required_clearance := RocketDesign.vehicle_collision_radius_m({"stages": parent.rocket_stages}, parent.stage_index) + RocketDesign.vehicle_collision_radius_m({"stages": child.rocket_stages}, child.stage_index) + 500.0
+	assert(approach_waypoint.distance_to(child.rocket_position) >= required_clearance - 1.0, "Far-side docking waypoint entered the spacecraft collision boundary")
+	assert(absf(approach_waypoint.y - child.rocket_position.y) > 1.0, "Far-side docking approach tried to pass straight through the spacecraft")
 	second_child.rotation_angle = PI
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
@@ -193,11 +208,27 @@ func _initialize() -> void:
 	loaded_child.rotation_angle = PI
 	loaded_parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	loaded_child.rocket_position = loaded_parent.rocket_position + Vector2(25.0, 0.0)
+	var own_port_state: Dictionary = loaded_parent.docking_port_world_state()
+	var child_port_state: Dictionary = loaded_child.docking_port_world_state()
+	var child_port_offset: Vector2 = Vector2(child_port_state.position) - loaded_child.rocket_position
+	loaded_child.rocket_position = Vector2(own_port_state.position) + Vector2(own_port_state.normal) * 25.0 - child_port_offset
 	loaded_parent.velocity = Vector2.ZERO
 	loaded_child.velocity = Vector2.ZERO
+	var selected_pair := main._available_docking_port_pair(loaded_parent, loaded_child)
+	assert(not selected_pair.is_empty(), "Automatic docking could not find an unobstructed port pair")
 	main._apply_docking_assists(1.0)
 	assert(main._are_docked(loaded_parent.vehicle_name, loaded_child.vehicle_name), "Rendezvous assist did not automatically dock aligned spacecraft")
 	assert(main.docking_assists.is_empty(), "Rendezvous assist remained active after automatic docking")
+	assert(main._undock_vehicle(loaded_child.vehicle_name), "Docking test could not separate spacecraft for approach-only check")
+	var safe_standoff := maxf(1000.0, RocketDesign.vehicle_collision_radius_m({"stages": loaded_parent.rocket_stages}, loaded_parent.stage_index) + RocketDesign.vehicle_collision_radius_m({"stages": loaded_child.rocket_stages}, loaded_child.stage_index) + 500.0)
+	loaded_child.rocket_position = loaded_parent.rocket_position + Vector2(safe_standoff + 10.0, 0.0)
+	loaded_parent.velocity = Vector2.ZERO
+	loaded_child.velocity = Vector2.ZERO
+	main.docking_assists[loaded_parent.vehicle_name] = loaded_child.vehicle_name
+	main.docking_assist_modes[loaded_parent.vehicle_name] = "approach_only"
+	main._apply_docking_assists(1.0)
+	assert(main.docking_assists.is_empty(), "Approach-only assist did not hand control back at its safe standoff distance")
+	assert(not main._are_docked(loaded_parent.vehicle_name, loaded_child.vehicle_name), "Approach-only assist docked without user input")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Docking and fuel transfer test passed.")
 	main.queue_free()
