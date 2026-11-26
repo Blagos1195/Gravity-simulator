@@ -122,9 +122,9 @@ class AssemblyCanvas extends Control:
 			var rect: Rect2 = item.rect
 			var index := int(item.index)
 			var nodes := [
-				{"position": Vector2(rect.get_center().x, rect.position.y), "attachment": "stack", "side": 1, "insert_index": index},
-				{"position": Vector2(rect.get_center().x, rect.end.y), "attachment": "stack", "side": 1, "insert_index": index + 1},
-				{"position": Vector2(rect.position.x, rect.get_center().y), "attachment": "side", "side": -1, "insert_index": index},
+				{"position": Vector2(rect.get_center().x, rect.position.y), "attachment": "stack", "side": 1, "insert_index": index, "component_index": index},
+				{"position": Vector2(rect.get_center().x, rect.end.y), "attachment": "stack", "side": 1, "insert_index": index + 1, "component_index": index},
+				{"position": Vector2(rect.position.x, rect.get_center().y), "attachment": "side", "side": -1, "insert_index": index, "component_index": index},
 				{"position": Vector2(rect.end.x, rect.get_center().y), "attachment": "side", "side": 1, "insert_index": index}
 			]
 			for node in nodes:
@@ -377,9 +377,9 @@ class AssemblyCanvas extends Control:
 			var target_position: Vector2 = target.position
 			match str(target.get("attachment", "")):
 				"stack":
-					preview_position.y = target_position.y + (-length * 0.5 if int(target.get("insert_index", 0)) < int(target.get("index", 0)) else length * 0.5)
+					preview_position.y = target_position.y + (-length * 0.5 if int(target.get("insert_index", 0)) <= int(target.get("component_index", 0)) else length * 0.5)
 				"side":
-					preview_position.x = target_position.x + (width * 0.5 if int(target.get("side", 1)) < 0 else -width * 0.5)
+					preview_position.x = target_position.x + float(int(target.get("side", 1))) * width * 0.5
 			draw_circle(target_position, 13.0, Color(0.12, 0.62, 0.9, 0.22))
 			draw_arc(target_position, 12.0, 0.0, TAU, 32, Color(0.35, 0.88, 1.0, 0.95), 2.5)
 			draw_line(preview_position, target_position, Color(0.35, 0.88, 1.0, 0.7), 1.5)
