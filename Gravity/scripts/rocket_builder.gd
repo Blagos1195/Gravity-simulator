@@ -50,6 +50,9 @@ class AssemblyCanvas extends Control:
 		queue_redraw()
 
 	func _get_drag_data(at_position: Vector2) -> Variant:
+		for item in _component_rects:
+			if item.get("rotation_handle", false) and item.rect.has_point(at_position):
+				return null
 		for index in range(_component_rects.size()):
 			var item: Dictionary = _component_rects[index]
 			if item.rect.has_point(at_position):
@@ -277,9 +280,10 @@ class AssemblyCanvas extends Control:
 					_register_component_rect(index, rect, "radial")
 				draw_line(Vector2(center_x + float(direction) * max_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		var stage_center_y := (start_y + current_y) * 0.5
-		_drawing_scale = scale
-		_drawing_width_scale = width_scale
-		_drawing_stage_center_y = stage_center_y
+		if editable:
+			_drawing_scale = scale
+			_drawing_width_scale = width_scale
+			_drawing_stage_center_y = stage_center_y
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
 			if str(component.get("attachment", "stack")) != "free":
