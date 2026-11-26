@@ -569,10 +569,12 @@ static func stage_docking_ports(stage: Dictionary, stage_center_y: float = 0.0) 
 		if str(component.get("kind", "")) != "docking_port":
 			continue
 		for position_variant in positions.get(index, []):
+			var component_position: Vector2 = position_variant + Vector2(0.0, stage_center_y)
 			var normal := Vector2.UP.rotated(deg_to_rad(float(component.get("rotation_deg", 0.0)))) * float(component.get("port_facing", 1))
-			var position: Vector2 = position_variant + normal * maxf(0.0, float(component.get("length_m", 0.0))) * 0.5 + Vector2(0.0, stage_center_y)
+			var position := component_position + normal * maxf(0.0, float(component.get("length_m", 0.0))) * 0.5
 			ports.append({
 				"position": position,
+				"component_position": component_position,
 				"normal": normal,
 				"component_index": index,
 				"part_uid": str(component.get("part_uid", component.get("id", "")))
@@ -638,7 +640,7 @@ static func docking_component_group_boundaries(stage: Dictionary) -> Dictionary:
 				continue
 			if Vector2(first.position).distance_to(Vector2(second.position)) > 3.0:
 				continue
-			var upper_port: Dictionary = first if float(first.position.y) > float(second.position.y) else second
+			var upper_port: Dictionary = first if float(first.component_position.y) > float(second.component_position.y) else second
 			var upper_component: Dictionary = first_component if upper_port == first else second_component
 			boundaries[str(upper_port.get("part_uid", ""))] = {
 				"part_uid": str(upper_port.get("part_uid", "")),
