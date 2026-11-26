@@ -26,6 +26,7 @@ var stage_fuel_remaining: Array[float] = []
 var payload_mass := 500.0
 var payload_type := "probe"
 var payload_visual: Dictionary = {}
+var payload_subassembly_id := "main"
 var vehicle_name := "Vehicle 1"
 var is_debris := false
 var input_enabled := true
@@ -184,6 +185,7 @@ func set_rocket_design(design: Dictionary) -> void:
 	payload_type = str(design.get("payload_type", "probe"))
 	var visual_data: Variant = design.get("payload_visual", {})
 	payload_visual = visual_data.duplicate(true) if visual_data is Dictionary else {}
+	payload_subassembly_id = str(design.get("payload_subassembly_id", "main"))
 	stage_index = 0
 	action_stage_index = 0
 	stage_fuel_remaining.clear()
@@ -1669,7 +1671,11 @@ func _release_component_group(port_uid: String) -> bool:
 		released_rcs_capacity += RocketDesign.stage_rcs_propellant_capacity(stage)
 	var own_rcs_remaining := maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
 	var released_rcs_fuel := own_rcs_remaining * released_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
-	var released_mass := released_rcs_fuel
+	var carries_payload := payload_subassembly_id == group_id
+	var released_payload_mass := payload_mass if carries_payload else 0.001
+	var released_payload_type := payload_type if carries_payload else "debris"
+	var released_payload_visual := payload_visual.duplicate(true) if carries_payload else {}
+	var released_mass := released_rcs_fuel + released_payload_mass
 	for index in range(released_stages.size()):
 		released_mass += RocketDesign.stage_total_dry_mass(released_stages[index]) + released_fuel[index]
 	for tank in released_tanks:
@@ -1698,6 +1704,11 @@ func _release_component_group(port_uid: String) -> bool:
 	resource_tanks = retained_tanks
 	stage_index = retained_stage_index
 	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - released_rcs_fuel)
+	if carries_payload:
+		payload_mass = 0.001
+		payload_type = "debris"
+		payload_visual.clear()
+		payload_subassembly_id = "main"
 	_set_rocket_position_components(retained_position.x, retained_position.y)
 	velocity = retained_velocity
 	fuel = stage_fuel_remaining[stage_index] if stage_index < stage_fuel_remaining.size() else 0.0
@@ -1725,9 +1736,9 @@ func _release_component_group(port_uid: String) -> bool:
 	stage_separated.emit({
 		"stages": released_stages,
 		"stage_fuel_remaining": released_fuel,
-		"payload_mass": 0.001,
-		"payload_type": "debris",
-		"payload_visual": {},
+		"payload_mass": released_payload_mass,
+		"payload_type": released_payload_type,
+		"payload_visual": released_payload_visual,
 		"fuel": released_fuel[released_stage_index],
 		"rcs_fuel": released_rcs_fuel,
 		"resource_tanks": released_tanks,
