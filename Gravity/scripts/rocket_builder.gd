@@ -36,6 +36,7 @@ class AssemblyCanvas extends Control:
 	var selected_index := -1
 	var zoom := 1.0
 	var snap_mode := "Off"
+	var rotation_snap_degrees := 15.0
 	var _component_rects: Array[Dictionary] = []
 	var _rotating_index := -1
 	var _rotation_center := Vector2.ZERO
@@ -113,7 +114,7 @@ class AssemblyCanvas extends Control:
 			component_position_changed.emit(from_index, position_m)
 
 	func _find_attachment_target(position: Vector2) -> Dictionary:
-		var best_distance := 14.0
+		var best_distance := 20.0
 		var best_target: Dictionary = {}
 		for item in _component_rects:
 			if item.get("rotation_handle", false):
@@ -189,7 +190,9 @@ class AssemblyCanvas extends Control:
 		elif event is InputEventMouseMotion and _rotating_index >= 0 and (event.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
 			var angle_delta := rad_to_deg((event.position - _rotation_center).angle() - _rotation_start_angle)
 			var rotation := wrapf(_rotation_start_degrees + angle_delta, -180.0, 180.0)
-			if Input.is_key_pressed(KEY_SHIFT):
+			if rotation_snap_degrees > 0.0 and not Input.is_key_pressed(KEY_CTRL):
+				rotation = snappedf(rotation, rotation_snap_degrees)
+			elif Input.is_key_pressed(KEY_SHIFT):
 				rotation = snappedf(rotation, 15.0)
 			component_rotated.emit(_rotating_index, rotation)
 			accept_event()
@@ -593,13 +596,28 @@ func _build_interface() -> void:
 	canvas_tools.add_child(snap_label)
 	_snap_selector = OptionButton.new()
 	_snap_selector.tooltip_text = "Attach snaps a new part to a nearby top, bottom or side node. Off places it freely. Grid options place it freely on a measured grid."
-	for mode in ["Attach", "Off", "0.25 m", "0.5 m", "1 m"]:
+	for mode in ["Off", "Attach", "0.25 m", "0.5 m", "1 m", "2 m", "5 m", "Centreline"]:
 		_snap_selector.add_item(mode)
-	_snap_selector.select(1)
+	_snap_selector.select(0)
 	_snap_selector.item_selected.connect(func(index: int):
 		_canvas.snap_mode = _snap_selector.get_item_text(index)
+		_canvas.queue_redraw()
 	)
 	canvas_tools.add_child(_snap_selector)
+	var rotation_snap_label := Label.new()
+	rotation_snap_label.text = "Angle"
+	rotation_snap_label.tooltip_text = "Rotation increment for the selected part"
+	canvas_tools.add_child(rotation_snap_label)
+	var rotation_snap_selector := OptionButton.new()
+	rotation_snap_selector.tooltip_text = "Choose the angle increment used while rotating parts. Hold Ctrl to rotate freely."
+	for angle in ["Off", "1°", "5°", "15°", "30°", "45°", "90°"]:
+		rotation_snap_selector.add_item(angle)
+	rotation_snap_selector.select(3)
+	rotation_snap_selector.item_selected.connect(func(index: int):
+		var selected_angle := rotation_snap_selector.get_item_text(index)
+		_canvas.rotation_snap_degrees = 0.0 if selected_angle == "Off" else float(selected_angle.replace("°", ""))
+	)
+	canvas_tools.add_child(rotation_snap_selector)
 	_canvas = AssemblyCanvas.new()
 	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -803,7 +821,7 @@ func _build_interface() -> void:
 	payload_edit.pressed.connect(func(): payload_edit_requested.emit())
 	vehicle_page.add_child(payload_edit)
 	var vehicle_hint := Label.new()
-	vehicle_hint.text = "Drag parts onto the build area. Select a part to edit it. Use the rotation handle above a selected part. Snap controls only affect placement."
+	vehicle_hint.text = "Drag parts into place. Snap: Off = free placement, Attach = connect to a highlighted node, grid = measured positioning. Rotate with the handle; Ctrl temporarily disables angle snapping."
 	vehicle_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vehicle_page.add_child(vehicle_hint)
 
