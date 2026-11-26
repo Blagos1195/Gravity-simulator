@@ -43,7 +43,7 @@ func _initialize() -> void:
 						has_stage_rcs = str(preset_component.get("kind", "")) == "rcs"
 					"separator":
 						has_separator = str(preset_component.get("id", "")) == "stack_decoupler"
-					"top_docking_port_left", "top_docking_port_right":
+					"top_docking_port_upper", "top_docking_port_lower":
 						top_port_count += 1
 			assert(has_stage_rcs and RocketDesign.stage_rcs_propellant_capacity(preset_stage) > 0.0, "Every preset stage needs independent RCS and propellant")
 			assert(has_separator == (preset_stage_index < preset_stages.size() - 1), "Each physical stage boundary needs one real decoupler")
@@ -52,6 +52,11 @@ func _initialize() -> void:
 		assert(top_ports.size() == 2, "Preset top ports should both expose docking faces")
 		assert(Vector2(top_ports[0].normal).dot(Vector2(top_ports[1].normal)) < -0.99, "Preset top docking ports must face one another")
 		assert(Vector2(top_ports[0].position).distance_to(Vector2(top_ports[1].position)) < 0.01, "Preset top docking faces must meet")
+		assert(absf(Vector2(top_ports[0].component_position).x - Vector2(top_ports[1].component_position).x) < 0.01, "Preset docking ports must share the same vertical axis")
+		assert(absf(Vector2(top_ports[0].component_position).y - Vector2(top_ports[1].component_position).y) > 0.1, "Preset docking ports must be stacked vertically")
+		for port in top_ports:
+			var port_component: Dictionary = preset_stages[-1].components[int(port.component_index)]
+			assert(str(port_component.get("attachment", "")) == "stack", "Preset docking ports must extend the physical stack instead of creating empty stage bounds")
 		var preset_plan := StagingSystem.create_plan([preset_design])
 		assert(preset_plan.size() == preset_stages.size() * 2 - 1, "Preset ignition and separation need distinct action stages")
 		for boundary_index in range(preset_stages.size() - 1):
