@@ -507,6 +507,13 @@ class AssemblyCanvas extends Control:
 	func _component_attachment_nodes(rect: Rect2, component: Dictionary) -> Array[Dictionary]:
 		var result: Array[Dictionary] = []
 		var definitions: Array = component.get("attachment_nodes", [])
+		if definitions.is_empty():
+			definitions = [
+				{"id": "top", "position": [0.0, -0.5], "direction": [0.0, -1.0]},
+				{"id": "bottom", "position": [0.0, 0.5], "direction": [0.0, 1.0]},
+				{"id": "left", "position": [-0.5, 0.0], "direction": [-1.0, 0.0]},
+				{"id": "right", "position": [0.5, 0.0], "direction": [1.0, 0.0]}
+			]
 		var center := rect.get_center()
 		var angle := deg_to_rad(float(component.get("rotation_deg", 0.0)))
 		for definition in definitions:
