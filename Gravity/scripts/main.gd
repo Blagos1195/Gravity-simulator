@@ -2798,6 +2798,7 @@ func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 			else:
 				retained_rcs[str(module_name)] = float(parent.docked_rcs_propellant[module_name])
 		parent.docked_rcs_propellant = retained_rcs
+		parent.rcs_propellant_remaining = maxf(0.0, parent.rcs_propellant_remaining - child.rcs_propellant_remaining)
 		parent._sync_legacy_fuel_from_tanks()
 		child.staging_plan = StagingSystem.filter_module_plan_members(parent.staging_plan, child_modules)
 		parent.staging_plan = StagingSystem.remove_module_plan_members(parent.staging_plan, child_modules)
