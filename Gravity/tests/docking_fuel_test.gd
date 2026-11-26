@@ -4,7 +4,6 @@ const Main = preload("res://scripts/main.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
-const ModuleGraph = preload("res://scripts/module_graph.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -86,7 +85,6 @@ func _initialize() -> void:
 	var child_parallel_port: Dictionary = child.docking_port_world_states()[1]
 	child.rocket_position = Vector2(parent_parallel_port.position) - (Vector2(child_parallel_port.position) - child.rocket_position)
 	var first_connection_port := str(main.docking_links[0].get("port_a", ""))
-	print("DOCK DEBUG ", parent.docking_port_world_states(), " CHILD ", child.docking_port_world_states(), " GRAPH ", main._current_module_graph(), " VALIDATION ", ModuleGraph.validate(main._current_module_graph()))
 	assert(main._dock_vehicle(child.vehicle_name), "A second independent connector could not join an already docked pair")
 	assert(main.docking_links.size() == 2)
 	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass()), "A second connector double-counted the docked mass")
