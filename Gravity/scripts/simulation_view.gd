@@ -1974,6 +1974,8 @@ func _autopilot_target_state() -> Dictionary:
 func _fail_autopilot(reason: String) -> void:
 	autopilot_phase = "FAILED"
 	thrust_key_down = false
+	rcs_rotation_input = 0.0
+	rcs_rotation_scale = 0.0
 	status_message = "AUTOPILOT FAILED  •  %s" % reason
 
 func _begin_arrival_capture(target_state: Dictionary) -> void:
@@ -2543,6 +2545,10 @@ func _update_guidance(dt: float) -> void:
 			var landing_direction_tangential_acceleration := -landing_direction_tangential_speed / 180.0
 			var landing_direction_vector := landing_direction_up * landing_direction_radial_acceleration + landing_direction_tangent * landing_direction_tangential_acceleration
 			autopilot_direction = landing_direction_vector.normalized() if landing_direction_vector.length_squared() > 0.001 else landing_direction_up
+		if autopilot_phase == "FAILED":
+			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
+			return
 		var autopilot_target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
 		var burn_expected := autopilot_phase in ["ASCENT", "CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN", "LANDING_DESCENT"]
 		var attitude_ready := _autopilot_attitude_control(autopilot_target_rotation, dt, burn_expected)
@@ -2571,6 +2577,8 @@ func _input(event: InputEvent) -> void:
 		if autopilot_enabled:
 			autopilot_enabled = false
 			guidance_enabled = false
+			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
 		if landed and (infinite_weightless_fuel or fuel > 0.0):
 			thrust_key_down = true
 		else:
@@ -2579,6 +2587,8 @@ func _input(event: InputEvent) -> void:
 		if autopilot_enabled:
 			autopilot_enabled = false
 			guidance_enabled = false
+			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
 		thrust_key_down = false
 		throttle_cutoff_key_down = false
 
@@ -2642,6 +2652,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not guidance_enabled:
 			autopilot_enabled = false
 			thrust_key_down = false
+			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
 	else:
 		match event.keycode:
 			KEY_HOME:
