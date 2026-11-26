@@ -105,6 +105,7 @@ func _initialize() -> void:
 	assert(builder.design.stages[0].components.size() == part_count + 1)
 	var connected_design := RocketDesign.create_default()
 	var connected_stage: Dictionary = RocketAssembly.ensure_stage_components(connected_design.stages[0])
+	connected_design.stages[0] = connected_stage
 	var connected_components: Array = connected_stage.components
 	var parent_uid := str(connected_components[0].get("part_uid", ""))
 	var graph_builder := RocketBuilder.new()
