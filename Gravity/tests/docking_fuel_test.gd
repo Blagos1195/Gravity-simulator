@@ -106,7 +106,6 @@ func _initialize() -> void:
 	second_child.rocket_stages[0] = RocketAssembly.add_component(second_child.rocket_stages[0], "standard_docking_port")
 	var child_loop_port: Dictionary = child.docking_port_world_states()[1]
 	var second_loop_stage: Dictionary = second_child.rocket_stages[0].duplicate(true)
-	var second_loop_port_uid := str(second_loop_stage.components[second_loop_stage.components.size() - 1].get("part_uid", ""))
 	second_loop_stage.components[second_loop_stage.components.size() - 1]["rotation_deg"] = 180.0
 	second_child.rocket_stages[0] = RocketAssembly.compile_stage(second_loop_stage, second_loop_stage.components)
 	var second_loop_port: Dictionary = second_child.docking_port_world_states()[1]
