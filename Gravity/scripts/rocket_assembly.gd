@@ -509,12 +509,12 @@ static func split_stage_by_group(stage: Dictionary, group_id: String) -> Diction
 			selected.append(component.duplicate(true))
 		else:
 			retained.append(component.duplicate(true))
-	if selected.is_empty() or retained.is_empty():
+	if selected.is_empty():
 		return {}
-	return {
-		"released": compile_stage(configured, selected),
-		"retained": compile_stage(configured, retained)
-	}
+	var result := {"released": compile_stage(configured, selected)}
+	if not retained.is_empty():
+		result["retained"] = compile_stage(configured, retained)
+	return result
 
 static func component_summary(stage: Dictionary) -> Dictionary:
 	var components: Array = stage.get("components", [])
