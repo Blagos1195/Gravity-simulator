@@ -93,6 +93,7 @@ func _initialize() -> void:
 	var remaining_connection_port := str(main.docking_links[0].get("port_a", ""))
 	assert(main._undock_vehicle(child.vehicle_name, remaining_connection_port), "The final parallel connector could not be released")
 	assert(main.docking_links.is_empty() and not child.resource_inventory_external, "The spacecraft remained connected after its final connector was released")
+	assert(main._dock_vehicle(child.vehicle_name, first_connection_port), "The spacecraft could not reconnect after a complete undock")
 	parent.rocket_stages[0] = RocketAssembly.add_component(parent.rocket_stages[0], "standard_docking_port")
 	var second_parent_port: Dictionary = parent.docking_port_world_states()[1]
 	var second_child_port: Dictionary = second_child.docking_port_world_state()
