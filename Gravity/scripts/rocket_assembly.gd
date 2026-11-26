@@ -123,6 +123,12 @@ static func move_component(stage: Dictionary, component_index: int, direction: i
 
 static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 	var configured := stage.duplicate(true)
+	components = components.duplicate(true)
+	for component_index in range(components.size()):
+		var component: Dictionary = components[component_index]
+		if str(component.get("part_uid", "")).is_empty():
+			component["part_uid"] = "part_%d_%d" % [Time.get_ticks_usec(), component_index]
+		components[component_index] = component
 	var dry_mass := 0.0
 	var fuel_capacity := 0.0
 	var thrust := 0.0
