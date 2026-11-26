@@ -2832,9 +2832,12 @@ func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 		var child_modules: Dictionary = {}
 		for module_name in child_group:
 			child_modules[str(module_name)] = true
+		var inventory_owner := _resource_inventory_owner(parent)
+		if inventory_owner == null:
+			return false
 		var retained_tanks: Array = []
 		child.resource_tanks.clear()
-		for tank_variant in parent.resource_tanks:
+		for tank_variant in inventory_owner.resource_tanks:
 			if not tank_variant is Dictionary:
 				continue
 			var tank: Dictionary = tank_variant
@@ -2842,26 +2845,26 @@ func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 				child.resource_tanks.append(tank.duplicate(true))
 			else:
 				retained_tanks.append(tank.duplicate(true))
-		parent.resource_tanks = retained_tanks
+		inventory_owner.resource_tanks = retained_tanks
 		child.resource_inventory_external = false
 		child._sync_legacy_fuel_from_tanks()
 		var retained_rcs: Dictionary = {}
 		child.docked_rcs_propellant.clear()
-		for module_name in parent.docked_rcs_propellant:
+		for module_name in inventory_owner.docked_rcs_propellant:
 			if child_modules.has(str(module_name)):
 				if str(module_name) == child_name:
-					child.rcs_propellant_remaining = float(parent.docked_rcs_propellant[module_name])
+					child.rcs_propellant_remaining = float(inventory_owner.docked_rcs_propellant[module_name])
 				else:
-					child.docked_rcs_propellant[str(module_name)] = float(parent.docked_rcs_propellant[module_name])
+					child.docked_rcs_propellant[str(module_name)] = float(inventory_owner.docked_rcs_propellant[module_name])
 			else:
-				retained_rcs[str(module_name)] = float(parent.docked_rcs_propellant[module_name])
-		parent.docked_rcs_propellant = retained_rcs
-		parent.rcs_propellant_remaining = maxf(0.0, parent.rcs_propellant_remaining - child.rcs_propellant_remaining)
-		parent._sync_legacy_fuel_from_tanks()
-		child.staging_plan = StagingSystem.filter_module_plan_members(parent.staging_plan, child_modules)
-		parent.staging_plan = StagingSystem.remove_module_plan_members(parent.staging_plan, child_modules)
+				retained_rcs[str(module_name)] = float(inventory_owner.docked_rcs_propellant[module_name])
+		inventory_owner.docked_rcs_propellant = retained_rcs
+		inventory_owner.rcs_propellant_remaining = maxf(0.0, inventory_owner.rcs_propellant_remaining - child.rcs_propellant_remaining)
+		inventory_owner._sync_legacy_fuel_from_tanks()
+		child.staging_plan = StagingSystem.filter_module_plan_members(inventory_owner.staging_plan, child_modules)
+		inventory_owner.staging_plan = StagingSystem.remove_module_plan_members(inventory_owner.staging_plan, child_modules)
 		child.action_stage_index = clampi(child.action_stage_index, 0, maxi(0, child.staging_plan.size() - 1))
-		parent.staging_changed.emit()
+		inventory_owner.staging_changed.emit()
 		child.input_enabled = child == sim
 		var separation_axis := Vector2(float(link.get("offset_x", 1.0)), float(link.get("offset_y", 0.0))).rotated(parent.rotation_angle).normalized()
 		if separation_axis.length_squared() > 0.0:
