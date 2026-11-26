@@ -3987,28 +3987,40 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			transfer_button.disabled = true
 			return
 		var own_port: Dictionary = sim.docking_port_world_state(selected_port_uid)
-		var target_port: Dictionary = target.docking_port_world_state()
+		var target_port: Dictionary = {}
+		var used_target_ports: Dictionary = {}
+		for link in docking_links:
+			if str(link.get("parent_name", "")) == target_name:
+				used_target_ports[str(link.get("port_a", ""))] = true
+			elif str(link.get("child_name", "")) == target_name:
+				used_target_ports[str(link.get("port_b", ""))] = true
+		for candidate_port in target.docking_port_world_states():
+			if not used_target_ports.has(str(candidate_port.get("part_uid", ""))):
+				target_port = candidate_port
+				break
 		var separation := INF
 		var ports_aligned := false
 		if not own_port.is_empty() and not target_port.is_empty():
 			separation = Vector2(own_port.position).distance_to(Vector2(target_port.position))
 			ports_aligned = Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
 		var relative_speed: float = (sim.velocity - target.velocity).length()
-		var docked := _are_docked(parent_name, target_name)
-		if docked and not selected_port_uid.is_empty():
-			docked = false
-			for link in docking_links:
-				if ((str(link.get("parent_name", "")) == parent_name and str(link.get("child_name", "")) == target_name) or (str(link.get("parent_name", "")) == target_name and str(link.get("child_name", "")) == parent_name)) and selected_port_uid in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
-					docked = true
-					break
+		var connected_assembly := _are_docked(parent_name, target_name)
+		var connector_connected := false
+		for link in docking_links:
+			if ((str(link.get("parent_name", "")) == parent_name and str(link.get("child_name", "")) == target_name) or (str(link.get("parent_name", "")) == target_name and str(link.get("child_name", "")) == parent_name)) and selected_port_uid in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
+				connector_connected = true
+				break
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
-		var free_flying: bool = not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
+		var assembly_roots_available := connected_assembly or (not _is_docked_child(parent_name) and not _is_docked_child(target_name))
+		var assembly_operational := assembly_roots_available and not sim.landed and not sim.crashed and not target.landed and not target.crashed
 		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs_installed() and target.has_rcs_installed()
 		var rcs_assist_ready: bool = sim.has_rcs() and target.has_rcs()
-		var available_to_dock: bool = not docked and free_flying and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
-		var available_to_assist: bool = not docked and free_flying and hardware_ready and rcs_assist_ready and separation <= DOCKING_ASSIST_MAX_RANGE
-		if docked:
-			status.text = "DOCKED  •  %s\nCombined mass is included in the parent spacecraft's flight dynamics." % target_name
+		var available_to_dock: bool = not connector_connected and assembly_operational and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
+		var available_to_assist: bool = not connected_assembly and assembly_operational and hardware_ready and rcs_assist_ready and separation <= DOCKING_ASSIST_MAX_RANGE
+		if connector_connected:
+			status.text = "CONNECTED AT THIS PORT  •  %s\nUse UNDOCK to release this connector. Other connectors can keep the assembly joined." % target_name
+		elif connected_assembly:
+			status.text = "SAME CONNECTED ASSEMBLY  •  %s\nUnused docking ports can create another connection between modules." % target_name
 		elif not sim.has_docking_port() or not target.has_docking_port():
 			status.text = "DOCKING PORTS REQUIRED\nBoth spacecraft need a docking port. Only matching ports can connect."
 		elif not sim.has_rcs_installed() or not target.has_rcs_installed():
@@ -4026,10 +4038,10 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 		dock_button.disabled = not available_to_dock
 		assist_button.disabled = not available_to_assist and not assist_active
 		assist_button.text = "STOP RENDEZVOUS ASSIST" if assist_active else "START RENDEZVOUS ASSIST"
-		undock_button.disabled = not docked
-		fuel_direction.disabled = not docked
-		transfer_button.disabled = not docked
-		if docked and fuel_direction.item_count > 0:
+		undock_button.disabled = not connector_connected
+		fuel_direction.disabled = not connected_assembly
+		transfer_button.disabled = not connected_assembly
+		if connected_assembly and fuel_direction.item_count > 0:
 			var direction: Dictionary = fuel_direction.get_item_metadata(fuel_direction.selected)
 			var donor := _find_vehicle_by_name(str(direction.get("from", "")))
 			var recipient := _find_vehicle_by_name(str(direction.get("to", "")))
@@ -4043,7 +4055,7 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 				transfer_button.disabled = amount <= 0.0 or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel
 				fuel_status.text = "Available: %.0f kg  •  Receiver space: %.0f kg across remaining stages" % [available, room]
 		else:
-			fuel_status.text = "Dock spacecraft to enable transfer. Transfers fill the receiver's active tank first, then its later stages."
+			fuel_status.text = "Connect spacecraft to enable transfer. Transfers fill the receiver's active tank first, then its later stages."
 	var target_changed := func(_index: int) -> void:
 		docking_assists.erase(parent_name)
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
