@@ -87,17 +87,12 @@ class AssemblyCanvas extends Control:
 					selected_indices = [index]
 				selected_index = index
 				component_selected.emit(selected_index)
-				var item_stage := int(item.get("stage_index", selected_stage_index))
-				if item_stage != selected_stage_index:
-					selected_stage_index = item_stage
-					stage = (design.get("stages", []) as Array)[selected_stage_index]
-					component_stage_selected.emit(selected_stage_index, index)
 				var components: Array = stage.get("components", [])
 				var dragged_indices: Array[int] = []
 				var start_rects: Array[Dictionary] = []
 				for selected in selected_indices:
 					for selected_item in _component_rects:
-						if int(selected_item.get("index", -1)) == selected and not selected_item.get("rotation_handle", false):
+						if int(selected_item.get("stage_index", selected_stage_index)) == selected_stage_index and int(selected_item.get("index", -1)) == selected and not selected_item.get("rotation_handle", false):
 							dragged_indices.append(selected)
 							start_rects.append({"index": selected, "rect": selected_item.rect, "component": components[selected].duplicate(true)})
 							break
@@ -288,15 +283,49 @@ class AssemblyCanvas extends Control:
 			if event.pressed:
 				for item in _component_rects:
 					if item.get("rotation_handle", false) and _rect_hit(item, event.position):
+						var item_stage := int(item.get("stage_index", selected_stage_index))
+						if item_stage != selected_stage_index:
+							selected_stage_index = item_stage
+							stage = (design.get("stages", []) as Array)[selected_stage_index]
+							component_stage_selected.emit(selected_stage_index, int(item.index))
 						_rotating_index = int(item.index)
 						_rotation_center = Vector2(item.center)
-						var component: Dictionary = (stage.get("components", []) as Array)[_rotating_index]
-						_rotation_start_degrees = float(component.get("rotation_deg", 0.0))
 						_rotation_start_angle = (event.position - _rotation_center).angle()
-						component_rotation_started.emit(_rotating_index)
+						_group_rotation_indices.clear()
+						_group_rotation_centers.clear()
+						_group_rotation_degrees.clear()
+						if selected_indices.size() > 1 and selected_indices.has(_rotating_index):
+							var group_center := Vector2.ZERO
+							var group_items: Array[Dictionary] = []
+							for selected in selected_indices:
+								for part_item in _component_rects:
+									if not part_item.get("rotation_handle", false) and int(part_item.get("stage_index", selected_stage_index)) == selected_stage_index and int(part_item.index) == selected:
+										group_items.append(part_item)
+										group_center += part_item.rect.get_center()
+										break
+							if group_items.size() > 1:
+								group_center /= float(group_items.size())
+								_rotation_center = group_center
+								var group_components: Array = stage.get("components", [])
+								for part_item in group_items:
+									var part_index := int(part_item.index)
+									_group_rotation_indices.append(part_index)
+									_group_rotation_centers.append(part_item.rect.get_center())
+									_group_rotation_degrees.append(float(group_components[part_index].get("rotation_deg", 0.0)))
+								_group_rotation_stage_center_y = float(part_item.get("stage_center_y", _drawing_stage_center_y))
+								component_group_rotation_started.emit(_group_rotation_indices)
+						else:
+							component_rotation_started.emit(_rotating_index)
 						accept_event()
 						return
-					if _rect_hit(item, event.position):
+					if not item.get("rotation_handle", false) and _rect_hit(item, event.position):
+						var item_stage := int(item.get("stage_index", selected_stage_index))
+						if item_stage != selected_stage_index:
+							selected_stage_index = item_stage
+							stage = (design.get("stages", []) as Array)[selected_stage_index]
+							selected_indices.clear()
+							selected_index = -1
+							component_stage_selected.emit(selected_stage_index, int(item.index))
 						var index := int(item.index)
 						if event.ctrl_pressed or event.shift_pressed:
 							if selected_indices.has(index):
@@ -448,7 +477,7 @@ class AssemblyCanvas extends Control:
 			var height := maxf(12.0, float(component.get("length_m", 1.0)) * scale)
 			var half_width := clampf(float(component.get("collision_radius_m", 1.0)) * width_scale, 9.0, size.x * 0.2)
 			var rect := Rect2(Vector2(center_x - half_width, current_y), Vector2(half_width * 2.0, height))
-			_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if stage_index == selected_stage_index else 0.72)
+			_draw_part(rect, component, stage_index == selected_stage_index and selected_indices.has(index), 1.0 if stage_index == selected_stage_index else 0.72)
 			axial_centers[index] = rect.get_center().y
 			if editable:
 				_register_component_rect(index, rect, "stack", component, stage_index, start_y + stage_extent * scale * 0.5)
@@ -1309,8 +1338,76 @@ func _on_component_repositioned(index: int, attachment: String, side: int, inser
 	selected_component_index = components.find(component)
 	_changed()
 
+func _on_canvas_stage_selected(stage_index: int, component_index: int) -> void:
+	selected_stage_index = clampi(stage_index, 0, maxi(0, design.get("stages", []).size() - 1))
+	selected_component_index = component_index
+	_canvas.stage = _current_stage()
+	_canvas.selected_stage_index = selected_stage_index
+	_canvas.selected_index = component_index
+	_canvas.selected_indices = [component_index]
+	_refresh()
+
 func _on_component_rotation_started(_index: int) -> void:
 	_push_undo()
+
+func _on_component_group_rotation_started(_indices: Array) -> void:
+	_push_undo()
+
+func _on_components_group_rotated(indices: Array, positions: Array, rotations: Array) -> void:
+	var stage := _current_stage()
+	var components: Array = stage.get("components", []).duplicate(true)
+	if indices.size() != positions.size() or indices.size() != rotations.size() or indices.is_empty():
+		return
+	var selected: Dictionary = {}
+	for value in indices:
+		selected[int(value)] = true
+	var parent_indices: Dictionary = {}
+	var previous_stack := -1
+	for component_index in range(components.size()):
+		var component: Dictionary = components[component_index]
+		var parent_index := -1
+		var parent_uid := str(component.get("structural_parent_uid", ""))
+		if not parent_uid.is_empty():
+			for candidate in range(components.size()):
+				if str(components[candidate].get("part_uid", "")) == parent_uid:
+					parent_index = candidate
+					break
+		elif str(component.get("attachment", "stack")) == "stack":
+			parent_index = previous_stack
+		elif str(component.get("attachment", "stack")) in ["side", "radial"]:
+			parent_index = int(component.get("mount_index", -1))
+		if str(component.get("attachment", "stack")) == "stack":
+			previous_stack = component_index
+		parent_indices[component_index] = parent_index
+	for item in range(indices.size()):
+		var index := int(indices[item])
+		if index < 0 or index >= components.size():
+			continue
+		var component: Dictionary = components[index]
+		var parent_index := int(parent_indices.get(index, -1))
+		if parent_index >= 0 and selected.has(parent_index):
+			component["structural_parent_uid"] = str(components[parent_index].get("part_uid", ""))
+			component["structural_parent_node_id"] = str(component.get("structural_parent_node_id", "legacy"))
+			component.erase("structural_root")
+		elif parent_index < 0:
+			component.erase("structural_parent_uid")
+			component.erase("structural_parent_node_id")
+			component["structural_root"] = true
+		else:
+			component.erase("structural_parent_uid")
+			component.erase("structural_parent_node_id")
+			component.erase("structural_root")
+		component["attachment"] = "free"
+		component.erase("mirror")
+		component.erase("side")
+		component.erase("mount_index")
+		var position_m: Vector2 = positions[item]
+		component["position_m"] = [position_m.x, position_m.y]
+		component["rotation_deg"] = float(rotations[item])
+		components[index] = component
+	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(stage, components)
+	selected_component_index = int(indices.back())
+	_changed(false)
 
 func _on_component_rotated(index: int, rotation_deg: float) -> void:
 	if index < 0 or index >= _current_stage().get("components", []).size():
