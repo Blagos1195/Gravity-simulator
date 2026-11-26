@@ -23,7 +23,7 @@ class PartCard extends Button:
 		return {"source": "catalog", "id": str(component.get("id", "")), "kind": str(component.get("kind", "")), "component": component.duplicate(true)}
 
 class AssemblyCanvas extends Control:
-	signal component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2)
+	signal component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2, parent_uid: String, parent_node_id: String)
 	signal component_moved(from_index: int, to_index: int)
 	signal component_position_changed(index: int, position_m: Vector2)
 	signal component_repositioned(index: int, attachment: String, side: int, insert_index: int)
@@ -124,7 +124,15 @@ class AssemblyCanvas extends Control:
 				mirrored = bool(get_meta("mirror_enabled", false)) if attachment == "side" else false
 				side = int(target.get("side", 1))
 				insert_index = int(target.get("insert_index", -1))
-			component_dropped.emit(str(data.get("id", "")), attachment, mirrored, side, insert_index, position_m)
+			var parent_uid := ""
+			var parent_node_id := ""
+			if not target.is_empty():
+				var target_components: Array = stage.get("components", [])
+				var target_index := int(target.get("component_index", -1))
+				if target_index >= 0 and target_index < target_components.size():
+					parent_uid = str(target_components[target_index].get("part_uid", ""))
+					parent_node_id = str(target.get("node_id", ""))
+			component_dropped.emit(str(data.get("id", "")), attachment, mirrored, side, insert_index, position_m, parent_uid, parent_node_id)
 		else:
 			var from_index := int(data.get("index", -1))
 			var components: Array = stage.get("components", [])
@@ -1075,10 +1083,10 @@ func _refresh_parts() -> void:
 		card.pressed.connect(func(): _add_component(str(option.get("id", "")), "free", false, 1, -1, Vector2.ZERO))
 		_parts_list.add_child(card)
 
-func _on_component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2) -> void:
-	_add_component(component_id, attachment, mirrored, side, insert_index, position_m)
+func _on_component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2, parent_uid: String = "", parent_node_id: String = "") -> void:
+	_add_component(component_id, attachment, mirrored, side, insert_index, position_m, parent_uid, parent_node_id)
 
-func _add_component(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2 = Vector2.ZERO) -> void:
+func _add_component(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2 = Vector2.ZERO, parent_uid: String = "", parent_node_id: String = "") -> void:
 	var stage := _current_stage()
 	if stage.is_empty():
 		return
@@ -1087,6 +1095,12 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 	if updated.is_empty():
 		return
 	var components: Array = updated.get("components", [])
+	if not components.is_empty() and not parent_uid.is_empty():
+		var added_component: Dictionary = components.back()
+		added_component["structural_parent_uid"] = parent_uid
+		added_component["structural_parent_node_id"] = parent_node_id
+		components[components.size() - 1] = added_component
+		updated = RocketAssembly.compile_stage(updated, components)
 	if attachment == "free" and not components.is_empty():
 		var added_component: Dictionary = components.back()
 		added_component["position_m"] = [position_m.x, position_m.y]
@@ -1139,6 +1153,8 @@ func _on_component_position_changed(index: int, position_m: Vector2) -> void:
 	component.erase("mirror")
 	component.erase("side")
 	component.erase("mount_index")
+	component.erase("structural_parent_uid")
+	component.erase("structural_parent_node_id")
 	component["position_m"] = [position_m.x, position_m.y]
 	components[index] = component
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(_current_stage(), components)
@@ -1292,6 +1308,8 @@ func _on_components_position_changed(indices: Array, positions: Array) -> void:
 		component.erase("mirror")
 		component.erase("side")
 		component.erase("mount_index")
+		component.erase("structural_parent_uid")
+		component.erase("structural_parent_node_id")
 		var position_m: Vector2 = positions[item]
 		component["position_m"] = [position_m.x, position_m.y]
 		components[index] = component
