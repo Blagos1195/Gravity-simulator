@@ -4375,12 +4375,12 @@ func _load_game_from_path(path: String) -> void:
 				"structural": bool(saved_link.get("structural", true))
 			})
 
-	var loaded_graph := _current_module_graph()
+	var normalized_graph := _current_module_graph()
 	var normalized_modules: Dictionary = {}
 	for vehicle in fleet_sims:
 		if normalized_modules.has(vehicle.vehicle_name):
 			continue
-		var connected_modules := ModuleGraph.connected_to(loaded_graph, vehicle.vehicle_name)
+		var connected_modules := ModuleGraph.connected_to(normalized_graph, vehicle.vehicle_name)
 		var root_name := vehicle.vehicle_name
 		for module_name in connected_modules:
 			normalized_modules[str(module_name)] = true
