@@ -410,6 +410,24 @@ func _docking_orbit_altitudes_compatible(first: SimulationView, second: Simulati
 func _docking_assist_in_range(first: SimulationView, second: SimulationView) -> bool:
 	return first.rocket_position.distance_to(second.rocket_position) <= DOCKING_ASSIST_MAX_RANGE or _docking_orbit_altitudes_compatible(first, second)
 
+func _docking_orbit_approach(first: SimulationView, second: SimulationView) -> Dictionary:
+	var body: Dictionary = first._nearest_body_state(first.rocket_position, first.rocket_position_precise)
+	var first_position: Vector2 = Vector2(body.get("relative_position", Vector2.ZERO))
+	var second_body: Dictionary = second._nearest_body_state(second.rocket_position, second.rocket_position_precise)
+	var second_position: Vector2 = Vector2(second_body.get("relative_position", Vector2.ZERO))
+	var relative_velocity: Vector2 = first.velocity - Vector2(body.get("velocity", Vector2.ZERO))
+	var orbit := FlightComputer.orbital_state(first_position, relative_velocity, FlightComputer.G * float(body.get("mass", 0.0)))
+	var orbit_direction := 1.0 if float(orbit.get("angular_momentum", 0.0)) >= 0.0 else -1.0
+	var phase_delta := wrapf((second_position.angle() - first_position.angle()) * orbit_direction, -PI, PI)
+	var tangent := Vector2(-first_position.normalized().y, first_position.normalized().x) * orbit_direction
+	var approach_direction := tangent * signf(phase_delta)
+	var arc_distance := absf(phase_delta) * (first_position.length() + second_position.length()) * 0.5
+	return {
+		"direction": approach_direction.normalized(),
+		"distance": arc_distance,
+		"orbital_velocity": relative_velocity + Vector2(body.get("velocity", Vector2.ZERO))
+	}
+
 func _apply_docking_assists(delta: float) -> void:
 	for vehicle_name_variant in docking_assists.keys():
 		var vehicle_name := str(vehicle_name_variant)
@@ -431,8 +449,15 @@ func _apply_docking_assists(delta: float) -> void:
 			docking_assists.erase(vehicle_name)
 			continue
 		var direction := relative_position / separation
-		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, separation - DOCKING_CAPTURE_DISTANCE)))
-		var desired_velocity: Vector2 = target.velocity + direction * desired_closing_speed
+		var approach_distance := separation
+		var reference_velocity: Vector2 = target.velocity
+		if separation > DOCKING_ASSIST_MAX_RANGE:
+			var orbital_approach := _docking_orbit_approach(vehicle, target)
+			direction = Vector2(orbital_approach.get("direction", direction))
+			approach_distance = float(orbital_approach.get("distance", separation))
+			reference_velocity = Vector2(orbital_approach.get("orbital_velocity", vehicle.velocity))
+		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, approach_distance - DOCKING_CAPTURE_DISTANCE)))
+		var desired_velocity: Vector2 = reference_velocity + direction * desired_closing_speed
 		var velocity_correction := (desired_velocity - vehicle.velocity).limit_length(DOCKING_ASSIST_ACCELERATION)
 		var engine_controlled := separation > 50000.0 and vehicle.has_docking_engine() and velocity_correction.length() > 0.05
 		if engine_controlled:
