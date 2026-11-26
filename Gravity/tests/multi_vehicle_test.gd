@@ -7,6 +7,7 @@ const SimulationView = preload("res://scripts/simulation_view.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
+const RoutePlanner = preload("res://scripts/route_planner.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -34,6 +35,20 @@ func _initialize() -> void:
 	first.autopilot_phase = "IDLE"
 	first.passive_orbit_active = false
 	first.passive_orbit_data.clear()
+	var planner := RoutePlanner.new()
+	planner.simulation = first
+	planner.nodes = [{"time_offset": 120.0}]
+	planner.selected_node_index = 0
+	planner.manual_guidance_report = Label.new()
+	main.active_route_planner = planner
+	var requested_jump_time := -1.0
+	planner.time_jump_requested.connect(func(target_time: float): requested_jump_time = target_time)
+	planner._jump_to_selected_node()
+	assert(is_equal_approx(requested_jump_time, first.sim_time + 115.0), "Flight Computer did not request a predictive jump to five seconds before its node")
+	assert(not main._fast_forward_to_time(first.sim_time + 120.0), "Predictive jump passed a Flight Computer manoeuvre node")
+	assert(main._fast_forward_to_time(requested_jump_time), "Flight Computer node jump was rejected")
+	main.active_route_planner = null
+	planner.free()
 	main._add_new_vehicle()
 	assert(main.fleet_sims.size() == 2)
 	var second: SimulationView = main.sim
