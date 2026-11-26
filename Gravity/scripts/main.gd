@@ -2611,7 +2611,7 @@ func _sync_docked_vehicles() -> void:
 		child.thrust_key_down = false
 		child.docked_mass = 0.0
 
-func _dock_vehicle(target_name: String) -> bool:
+func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 	var target := _find_vehicle_by_name(target_name)
 	if target == null or sim == null or target == sim:
 		return false
@@ -2635,7 +2635,7 @@ func _dock_vehicle(target_name: String) -> bool:
 	var own_port: Dictionary = {}
 	var target_port: Dictionary = {}
 	for port in sim.docking_port_world_states():
-		if not own_used_ports.has(str(port.get("part_uid", ""))):
+		if (own_port_uid.is_empty() or str(port.get("part_uid", "")) == own_port_uid) and not own_used_ports.has(str(port.get("part_uid", ""))):
 			own_port = port
 			break
 	for port in target.docking_port_world_states():
@@ -2697,10 +2697,12 @@ func _dock_vehicle(target_name: String) -> bool:
 	_sync_docked_vehicles()
 	return true
 
-func _undock_vehicle(target_name: String) -> bool:
+func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 	for index in range(docking_links.size()):
 		var link: Dictionary = docking_links[index]
 		if not ((str(link.parent_name) == sim.vehicle_name and str(link.child_name) == target_name) or (str(link.parent_name) == target_name and str(link.child_name) == sim.vehicle_name)):
+			continue
+		if not port_uid.is_empty() and port_uid not in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
 			continue
 		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
 		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
@@ -2850,10 +2852,10 @@ func _show_part_actions(part_uid: String) -> void:
 		layout.add_child(fuel_button)
 	if kind == "docking_port":
 		var docking_button := Button.new()
-		docking_button.text = "DOCK / UNDOCK SPACECRAFT"
+		docking_button.text = "DOCK / UNDOCK AT THIS CONNECTOR"
 		docking_button.pressed.connect(func():
 			window.queue_free()
-			_show_docking_panel()
+			_show_docking_panel(part_uid)
 		)
 		layout.add_child(docking_button)
 	window.popup_centered()
@@ -3712,7 +3714,7 @@ func _show_flight_computer() -> void:
 	planner.position = Vector2i(maxi(20, screen_size.x - planner.size.x - 24), 40)
 	planner.popup()
 
-func _show_docking_panel() -> void:
+func _show_docking_panel(selected_port_uid: String = "") -> void:
 	var window := Window.new()
 	window.title = "DOCKING AND FUEL TRANSFER"
 	window.size = Vector2i(500, 580)
@@ -3812,7 +3814,7 @@ func _show_docking_panel() -> void:
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			return
-		var own_port: Dictionary = sim.docking_port_world_state()
+		var own_port: Dictionary = sim.docking_port_world_state(selected_port_uid)
 		var target_port: Dictionary = target.docking_port_world_state()
 		var separation := INF
 		var ports_aligned := false
@@ -3821,6 +3823,12 @@ func _show_docking_panel() -> void:
 			ports_aligned = Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
 		var relative_speed: float = (sim.velocity - target.velocity).length()
 		var docked := _are_docked(parent_name, target_name)
+		if docked and not selected_port_uid.is_empty():
+			docked = false
+			for link in docking_links:
+				if ((str(link.get("parent_name", "")) == parent_name and str(link.get("child_name", "")) == target_name) or (str(link.get("parent_name", "")) == target_name and str(link.get("child_name", "")) == parent_name)) and selected_port_uid in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
+					docked = true
+					break
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
 		var free_flying: bool = not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
 		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs_installed() and target.has_rcs_installed()
@@ -3876,7 +3884,7 @@ func _show_docking_panel() -> void:
 			refresh_panel.call()
 			return
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
-		if _dock_vehicle(target_name):
+		if _dock_vehicle(target_name, selected_port_uid):
 			fuel_status.text = "Docking complete."
 		refresh_panel.call()
 	)
@@ -3896,7 +3904,7 @@ func _show_docking_panel() -> void:
 			refresh_panel.call()
 			return
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
-		if _undock_vehicle(target_name):
+		if _undock_vehicle(target_name, selected_port_uid):
 			fuel_status.text = "Spacecraft undocked."
 		refresh_panel.call()
 	)
