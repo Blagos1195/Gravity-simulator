@@ -183,7 +183,7 @@ func _initialize() -> void:
 	var physical_satellite_profile := RocketAssembly.physical_payload_profile([freeform_stage])
 	assert(str(physical_satellite_profile.get("visual_type", "")) == "satellite")
 	assert(is_equal_approx(float(physical_satellite_profile.get("telescope_range_au", 0.0)), 3.5))
-	assert(is_equal_approx(float(physical_satellite_profile.get("revenue_per_day", 0.0)), 30000.0)
+	assert(is_equal_approx(float(physical_satellite_profile.get("revenue_per_day", 0.0)), 30000.0))
 	assert(is_equal_approx(float(freeform_stage.dry_mass), RocketAssembly.ensure_stage_components(design.stages[0]).dry_mass + 350.0))
 	assert(RocketDesign.tank_scale_options().size() >= 3)
 	var mod_overlay := {
