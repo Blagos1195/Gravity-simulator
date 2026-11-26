@@ -89,7 +89,7 @@ func _initialize() -> void:
 	simulation.angular_velocity = 0.0
 	simulation.gimbal_angle = 0.0
 	var attitude_atmosphere := simulation._atmosphere_at(simulation.rocket_position, simulation.velocity, simulation.sim_time, simulation.rocket_position_precise)
-	var attitude_pressure_ratio := float(attitude_atmosphere.get("density", 0.0)) * float(attitude_atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(attitude_atmosphere.get("temperature", 250.0)) / 101325.0
+	var attitude_pressure_ratio := float(attitude_atmosphere.get("density", 0.0)) * float(attitude_atmosphere.get("gas_constant", 287.05)) * float(attitude_atmosphere.get("temperature", 250.0)) / 101325.0
 	var untrimmed_torque := absf(float(simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, attitude_pressure_ratio, 1.0).torque))
 	simulation._autopilot_attitude_control(0.0, 10.0, true)
 	var trimmed_profile := simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, attitude_pressure_ratio, 1.0)
