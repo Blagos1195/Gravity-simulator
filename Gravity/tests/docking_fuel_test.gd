@@ -117,6 +117,12 @@ func _initialize() -> void:
 	assert(main._undock_vehicle(second_child.vehicle_name, str(child_loop_port.get("part_uid", ""))), "An additional assembly loop could not be released")
 	assert(main.docking_links.size() == 2 and main._are_docked(parent.vehicle_name, second_child.vehicle_name))
 	main.sim = parent
+	parent.resource_tanks.append({"part_uid":"child_xenon_test","module_id":child.vehicle_name,"resources":{"xenon":50.0},"resource_capacities":{"xenon":100.0}})
+	parent.resource_tanks.append({"part_uid":"second_child_xenon_test","module_id":second_child.vehicle_name,"resources":{"xenon":0.0},"resource_capacities":{"xenon":100.0}})
+	var transitive_resource_transfer := main._transfer_between_tanks(child.vehicle_name, "child_xenon_test", second_child.vehicle_name, "second_child_xenon_test", "xenon", 30.0)
+	assert(is_equal_approx(transitive_resource_transfer, 30.0), "Connected modules could not transfer resources through the assembly graph")
+	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 2].resources.xenon), 20.0))
+	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 1].resources.xenon), 30.0))
 	var expected_docked_mass := child._current_vehicle_mass() + second_child._current_vehicle_mass()
 	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
