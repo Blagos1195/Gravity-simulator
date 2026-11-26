@@ -201,8 +201,13 @@ func _initialize() -> void:
 	var inline_released: Array[Dictionary] = []
 	inline_simulation.stage_separated.connect(func(stage_data: Dictionary): inline_released.append(stage_data))
 	assert(inline_simulation._release_component_group("inline_upper_port"), "An individual component group should release from its physical stage")
-	assert(inline_simulation.rocket_stages[0].components.size() == 1, "The parent should retain only its own component group")
-	assert(inline_released.size() == 1 and inline_released[0].stages[0].components.size() == 1, "The released spacecraft should contain only the selected component group")
+	var retained_group_components: Array = inline_simulation.rocket_stages[0].components
+	assert(retained_group_components.size() == 2, "The parent should retain its docking port and RCS component")
+	for component in retained_group_components:
+		assert(RocketAssembly.component_group_id(component) == "main")
+	assert(inline_released.size() == 1 and inline_released[0].stages[0].components.size() == 2, "The released spacecraft should retain its docking port and RCS component")
+	for component in inline_released[0].stages[0].components:
+		assert(RocketAssembly.component_group_id(component) == "payload_group")
 	inline_simulation.free()
 	var unpaired_port_stage := RocketAssembly.add_component(RocketAssembly.ensure_stage_components({}), "standard_docking_port")
 	for component in unpaired_port_stage.components:
