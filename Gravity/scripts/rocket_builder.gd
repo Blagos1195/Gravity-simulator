@@ -1266,7 +1266,7 @@ func _move_action(part_uid: String, stage_index: int, direction: int) -> void:
 	var ordered_uids: Array[String] = []
 	for action in actions:
 		ordered_uids.append(str(action.get("part_id", "")))
-	var moved_uid := ordered_uids.pop_at(current_index)
+	var moved_uid: String = ordered_uids.pop_at(current_index)
 	ordered_uids.insert(destination, moved_uid)
 	var order_by_uid: Dictionary = {}
 	for index in range(ordered_uids.size()):
