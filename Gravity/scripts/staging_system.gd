@@ -95,6 +95,34 @@ static func remove_module_plan(plan: Array, module_id: String) -> Array:
 		result.append(stage)
 	return result
 
+static func filter_module_plan_members(plan: Array, module_ids: Dictionary) -> Array:
+	var result: Array = []
+	for stage_variant in plan:
+		if not stage_variant is Dictionary:
+			continue
+		var stage: Dictionary = stage_variant.duplicate(true)
+		var actions: Array = []
+		for action in stage.get("actions", []):
+			if action is Dictionary and module_ids.has(str(action.get("module_id", ""))):
+				actions.append(action.duplicate(true))
+		stage["actions"] = actions
+		result.append(stage)
+	return result
+
+static func remove_module_plan_members(plan: Array, module_ids: Dictionary) -> Array:
+	var result: Array = []
+	for stage_variant in plan:
+		if not stage_variant is Dictionary:
+			continue
+		var stage: Dictionary = stage_variant.duplicate(true)
+		var actions: Array = []
+		for action in stage.get("actions", []):
+			if action is Dictionary and not module_ids.has(str(action.get("module_id", ""))):
+				actions.append(action.duplicate(true))
+		stage["actions"] = actions
+		result.append(stage)
+	return result
+
 static func rearm_stage(plan: Array, stage_index: int, part_states: Dictionary = {}) -> Array:
 	var result: Array = []
 	for index in range(plan.size()):
