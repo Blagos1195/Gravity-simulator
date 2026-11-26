@@ -84,6 +84,15 @@ func _initialize() -> void:
 	var balanced_mass := simulation._vehicle_mass_properties()
 	var balanced_profile := simulation._engine_force_profile(balanced_mass.center_of_mass, 1.0, 1.0)
 	assert(absf(float(balanced_profile.torque)) < 0.001, "The flight model should preserve torque balance for mirrored engines")
+	simulation.set_rocket_design(asymmetric_design)
+	simulation.rotation_angle = 0.0
+	simulation.angular_velocity = 0.0
+	simulation.gimbal_angle = 0.0
+	var untrimmed_torque := absf(float(simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, 1.0, 1.0).torque))
+	simulation._autopilot_attitude_control(0.0, 0.1, true)
+	var trimmed_profile := simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, 1.0, 1.0)
+	assert(absf(simulation.gimbal_angle) > 0.001, "Autopilot should trim engine gimbal to compensate for an offset centre of mass")
+	assert(absf(float(trimmed_profile.torque)) < untrimmed_torque, "Autopilot gimbal trim should reduce thrust-induced torque")
 	var rcs_stage := RocketAssembly.add_component(assembled, "rcs_thruster_block")
 	assert(is_equal_approx(RocketDesign.stage_rcs_propellant_capacity(rcs_stage), 250.0))
 	assert(is_equal_approx(float(rcs_stage.rcs_thrust), 1800.0))
