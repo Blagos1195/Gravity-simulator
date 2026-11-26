@@ -44,6 +44,12 @@ func _initialize() -> void:
 	var avoidance_velocity := main._docking_avoidance_velocity(parent, child, Vector2(100.0, 0.0))
 	assert(avoidance_velocity.distance_to(Vector2(100.0, 0.0)) > 1.0, "Docking rendezvous did not steer around a spacecraft crossing its approach path")
 	assert(absf((avoidance_velocity - Vector2(100.0, 0.0)).dot(Vector2.RIGHT)) < 0.01, "Docking traffic avoidance did not choose a lateral path")
+	var own_approach_port := {"position": parent.rocket_position, "normal": Vector2.LEFT}
+	var far_side_port := {"position": child.rocket_position, "normal": Vector2.RIGHT}
+	var approach_waypoint := main._docking_approach_waypoint(parent, child, own_approach_port, far_side_port)
+	var required_clearance := RocketDesign.vehicle_collision_radius_m({"stages": parent.rocket_stages}, parent.stage_index) + RocketDesign.vehicle_collision_radius_m({"stages": child.rocket_stages}, child.stage_index) + 500.0
+	assert(approach_waypoint.distance_to(child.rocket_position) >= required_clearance - 1.0, "Far-side docking waypoint entered the spacecraft collision boundary")
+	assert(absf(approach_waypoint.y - child.rocket_position.y) > 1.0, "Far-side docking approach tried to pass straight through the spacecraft")
 	second_child.rotation_angle = PI
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
