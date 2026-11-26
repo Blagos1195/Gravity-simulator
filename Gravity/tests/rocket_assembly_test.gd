@@ -4,6 +4,7 @@ const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const RocketBuilder = preload("res://scripts/rocket_builder.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const StagingSystem = preload("res://scripts/staging_system.gd")
 
 func _initialize() -> void:
 	var design := RocketDesign.create_default()
@@ -121,6 +122,38 @@ func _initialize() -> void:
 			component["port_facing"] = -1
 	var aft_ports := RocketAssembly.stage_docking_ports(aft_port_stage)
 	assert(Vector2(aft_ports[0].normal).dot(Vector2.DOWN) > 0.99)
+	var lower_module_stage := port_stage.duplicate(true)
+	var lower_port_index := -1
+	for component_index in range(lower_module_stage.components.size()):
+		if str(lower_module_stage.components[component_index].get("kind", "")) == "docking_port":
+			lower_port_index = component_index
+			break
+	assert(lower_port_index >= 0)
+	var lower_port_component: Dictionary = lower_module_stage.components.pop_at(lower_port_index)
+	lower_module_stage.components.insert(0, lower_port_component)
+	lower_module_stage = RocketAssembly.compile_stage(lower_module_stage, lower_module_stage.components)
+	var upper_module_stage := aft_port_stage.duplicate(true)
+	var paired_stages: Array = [lower_module_stage, upper_module_stage]
+	var module_boundaries := RocketAssembly.docking_module_boundaries(paired_stages)
+	assert(module_boundaries.has(1), "Opposing docking ports at adjacent stage ends should define a releasable module")
+	var paired_plan := StagingSystem.create_plan([{"module_id":"test_vehicle", "stages":paired_stages}])
+	var has_module_release_action := false
+	for plan_stage in paired_plan:
+		for action in plan_stage.get("actions", []):
+			if str(action.get("action", "")) == "undock_module" and int(action.get("physical_stage_index", -1)) == 1:
+				has_module_release_action = true
+	assert(has_module_release_action, "The upper connector should create a module-release staging action")
+	var release_simulation := SimulationView.new()
+	var release_design := RocketDesign.create_default()
+	release_design["stages"] = paired_stages
+	release_simulation.set_rocket_design(release_design)
+	var released_module: Dictionary = {}
+	release_simulation.stage_separated.connect(func(stage_data: Dictionary): released_module = stage_data)
+	assert(release_simulation._release_upper_module(1), "A paired docking connector should release the upper module")
+	assert(release_simulation.rocket_stages.size() == 1, "The launch vehicle should retain its lower stage after module release")
+	assert((released_module.get("stages", []) as Array).size() == 1, "The released module should retain its complete upper stack")
+	assert(is_equal_approx(float(released_module.get("payload_mass", 0.0)), float(release_design.get("payload_mass", 0.0))))
+	release_simulation.free()
 	var no_rcs_simulation := SimulationView.new()
 	no_rcs_simulation.set_rocket_design(RocketDesign.create_default())
 	assert(not no_rcs_simulation.has_rcs() and not no_rcs_simulation.apply_rcs_velocity_correction(Vector2.RIGHT, 1.0))
