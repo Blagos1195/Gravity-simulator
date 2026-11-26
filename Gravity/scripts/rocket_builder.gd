@@ -26,6 +26,7 @@ class AssemblyCanvas extends Control:
 	signal component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2)
 	signal component_moved(from_index: int, to_index: int)
 	signal component_position_changed(index: int, position_m: Vector2)
+	signal component_repositioned(index: int, attachment: String, side: int, insert_index: int)
 	signal component_rotation_started(index: int)
 	signal component_rotated(index: int, rotation_deg: float)
 	signal component_selected(index: int)
@@ -91,27 +92,29 @@ class AssemblyCanvas extends Control:
 		queue_redraw()
 
 	func _drop_data(at_position: Vector2, data: Variant) -> void:
-		var position_m := _snap_position(_canvas_to_metres(at_position))
+		var position_m := _canvas_to_metres(at_position)
+		var target := _find_attachment_target(at_position) if snap_mode == "Attach" else {}
 		_clear_drag_preview()
 		if str(data.get("source", "")) == "catalog":
 			var attachment := "free"
 			var mirrored := false
 			var side := 1
 			var insert_index := -1
-			if snap_mode == "Attach":
-				var target := _find_attachment_target(at_position)
-				if not target.is_empty():
-					attachment = str(target.attachment)
-					mirrored = bool(get_meta("mirror_enabled", false)) if attachment == "side" else false
-					side = int(target.get("side", 1))
-					insert_index = int(target.get("insert_index", -1))
+			if not target.is_empty():
+				attachment = str(target.attachment)
+				mirrored = bool(get_meta("mirror_enabled", false)) if attachment == "side" else false
+				side = int(target.get("side", 1))
+				insert_index = int(target.get("insert_index", -1))
 			component_dropped.emit(str(data.get("id", "")), attachment, mirrored, side, insert_index, position_m)
 		else:
 			var from_index := int(data.get("index", -1))
 			var components: Array = stage.get("components", [])
 			if from_index < 0 or from_index >= components.size():
 				return
-			component_position_changed.emit(from_index, position_m)
+			if not target.is_empty():
+				component_repositioned.emit(from_index, str(target.attachment), int(target.get("side", 1)), int(target.get("insert_index", -1)))
+			else:
+				component_position_changed.emit(from_index, position_m)
 
 	func _find_attachment_target(position: Vector2) -> Dictionary:
 		var best_distance := 36.0
@@ -119,8 +122,10 @@ class AssemblyCanvas extends Control:
 		for item in _component_rects:
 			if item.get("rotation_handle", false):
 				continue
-			var rect: Rect2 = item.rect
 			var index := int(item.index)
+			if str(_drag_data.get("source", "")) == "placed" and index == int(_drag_data.get("index", -1)):
+				continue
+			var rect: Rect2 = item.rect
 			var nodes := [
 				{"position": Vector2(rect.get_center().x, rect.position.y), "attachment": "stack", "side": 1, "insert_index": index, "component_index": index},
 				{"position": Vector2(rect.get_center().x, rect.end.y), "attachment": "stack", "side": 1, "insert_index": index + 1, "component_index": index},
@@ -630,6 +635,7 @@ func _build_interface() -> void:
 	_canvas.component_dropped.connect(_on_component_dropped)
 	_canvas.component_moved.connect(_on_component_moved)
 	_canvas.component_position_changed.connect(_on_component_position_changed)
+	_canvas.component_repositioned.connect(_on_component_repositioned)
 	_canvas.component_rotation_started.connect(_on_component_rotation_started)
 	_canvas.component_rotated.connect(_on_component_rotated)
 	_canvas.component_selected.connect(_on_component_selected)
@@ -1003,6 +1009,63 @@ func _on_component_position_changed(index: int, position_m: Vector2) -> void:
 	components[index] = component
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(_current_stage(), components)
 	selected_component_index = index
+	_changed()
+
+func _on_component_repositioned(index: int, attachment: String, side: int, insert_index: int) -> void:
+	var stage := _current_stage()
+	var components: Array = stage.get("components", []).duplicate(true)
+	if index < 0 or index >= components.size():
+		return
+	_push_undo()
+	var component: Dictionary = components[index]
+	components.remove_at(index)
+	component.erase("position_m")
+	component.erase("mirror")
+	component.erase("side")
+	component.erase("mount_index")
+	component["attachment"] = attachment
+	if attachment == "side":
+		var axial_indices: Array[int] = []
+		for candidate in range(components.size()):
+			if str(components[candidate].get("attachment", "stack")) == "stack":
+				axial_indices.append(candidate)
+		if not axial_indices.is_empty():
+			var mount_index := axial_indices[0]
+			for candidate in axial_indices:
+				if absi(candidate - insert_index) < absi(mount_index - insert_index):
+					mount_index = candidate
+			component["mount_index"] = mount_index
+			component["side"] = side
+		else:
+			component["attachment"] = "free"
+			component["position_m"] = [0.0, 0.0]
+	elif attachment == "stack":
+		var stack_indices: Array[int] = []
+		for candidate in range(components.size()):
+			if str(components[candidate].get("attachment", "stack")) == "stack":
+				stack_indices.append(candidate)
+		var insert_at := components.size()
+		if not stack_indices.is_empty():
+			insert_at = clampi(insert_index, stack_indices[0], stack_indices[-1] + 1)
+		for candidate in range(components.size()):
+			var mounted: Dictionary = components[candidate]
+			if str(mounted.get("attachment", "stack")) in ["side", "radial"] and int(mounted.get("mount_index", -1)) >= index:
+				mounted["mount_index"] = maxi(0, int(mounted.get("mount_index", -1)) - 1)
+				components[candidate] = mounted
+		components.insert(insert_at, component)
+		for candidate in range(components.size()):
+			var mounted: Dictionary = components[candidate]
+			if str(mounted.get("attachment", "stack")) in ["side", "radial"] and int(mounted.get("mount_index", -1)) >= insert_at:
+				mounted["mount_index"] = int(mounted.get("mount_index", -1)) + 1
+				components[candidate] = mounted
+	else:
+		component["attachment"] = "free"
+		component["position_m"] = [0.0, 0.0]
+		components.append(component)
+	if attachment != "stack":
+		components.append(component)
+	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(stage, components)
+	selected_component_index = components.find(component)
 	_changed()
 
 func _on_component_rotation_started(_index: int) -> void:
