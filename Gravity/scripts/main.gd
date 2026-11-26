@@ -2616,13 +2616,13 @@ func _sync_docked_vehicles() -> void:
 					"mass": float(child_mass_properties.get("mass", child._current_vehicle_mass())),
 					"center_of_mass": child_mass_properties.get("center_of_mass", Vector2.ZERO),
 					"moment_of_inertia": float(child_mass_properties.get("moment_of_inertia", 0.0)),
-					"rotation": parent.rotation_angle,
+					"rotation": parent.rotation_angle + float(link.get("rotation_offset", 0.0)),
 					"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "payload_visual": child.payload_visual.duplicate(true), "stages": child.rocket_stages},
 					"stage_index": child.stage_index
 				})
 			child.rocket_position = parent.rocket_position + world_offset
 			child.velocity = parent.velocity
-			child.rotation_angle = parent.rotation_angle
+			child.rotation_angle = parent.rotation_angle + float(link.get("rotation_offset", 0.0))
 			child.angular_velocity = parent.angular_velocity
 			child.sim_time = parent.sim_time
 			var inventory_owner := _resource_inventory_owner(parent)
@@ -2724,6 +2724,7 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 		"child_name": target.vehicle_name,
 		"offset_x": local_offset.x,
 		"offset_y": local_offset.y,
+		"rotation_offset": target.rotation_angle - sim.rotation_angle,
 		"port_a": str(own_port.get("part_uid", "")),
 		"port_b": str(target_port.get("part_uid", "")),
 		"child_staging_plan": child_staging_plan,
@@ -2788,6 +2789,7 @@ func _rebuild_docking_spanning_tree(root_name: String) -> void:
 				var offset := (child.rocket_position - parent.rocket_position).rotated(-parent.rotation_angle)
 				link["offset_x"] = offset.x
 				link["offset_y"] = offset.y
+				link["rotation_offset"] = child.rotation_angle - parent.rotation_angle
 				docking_links[link_index] = link
 				break
 	for link_index in range(docking_links.size()):
@@ -4369,6 +4371,7 @@ func _load_game_from_path(path: String) -> void:
 				"child_name": child_name,
 				"offset_x": float(offset_x),
 				"offset_y": float(offset_y),
+				"rotation_offset": float(saved_link.get("rotation_offset", 0.0)),
 				"port_a": port_a,
 				"port_b": port_b,
 				"child_staging_plan": saved_child_plan.duplicate(true) if saved_child_plan is Array else [],
