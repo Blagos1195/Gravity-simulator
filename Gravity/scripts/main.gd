@@ -2848,54 +2848,15 @@ func _show_part_actions(part_uid: String) -> void:
 			window.queue_free()
 		)
 		layout.add_child(fuel_button)
-	if kind in ["decoupler", "docking_port"]:
-		var separate_button := Button.new()
-		separate_button.text = "SEPARATE PART"
-		separate_button.pressed.connect(func():
-			_detach_vehicle_component(part_owner, part_uid)
-			window.queue_free()
-		)
-		layout.add_child(separate_button)
 	if kind == "docking_port":
-		var attach_button := Button.new()
-		attach_button.text = "DOCK / ATTACH SPACECRAFT"
-		attach_button.pressed.connect(func():
+		var docking_button := Button.new()
+		docking_button.text = "DOCK / UNDOCK SPACECRAFT"
+		docking_button.pressed.connect(func():
 			window.queue_free()
 			_show_docking_panel()
 		)
-		layout.add_child(attach_button)
+		layout.add_child(docking_button)
 	window.popup_centered()
-
-func _detach_vehicle_component(vehicle: SimulationView, part_uid: String) -> void:
-	if vehicle == null:
-		return
-	for link in docking_links.duplicate(true):
-		if (str(link.get("parent_name", "")) == vehicle.vehicle_name and str(link.get("port_a", "")) == part_uid) or (str(link.get("child_name", "")) == vehicle.vehicle_name and str(link.get("port_b", "")) == part_uid):
-			_undock_vehicle(vehicle.vehicle_name)
-			break
-	var inventory_owner := _resource_inventory_owner(vehicle)
-	if inventory_owner == null or inventory_owner == vehicle:
-		vehicle.detach_component(part_uid)
-		vehicle._prune_staging_plan_to_attached_parts()
-		return
-	vehicle.resource_tanks = ResourceNetwork.tank_states_for_module(inventory_owner.resource_tanks, vehicle.vehicle_name)
-	inventory_owner.resource_tanks = ResourceNetwork.tank_states_without_module(inventory_owner.resource_tanks, vehicle.vehicle_name)
-	vehicle.resource_inventory_external = false
-	vehicle._sync_legacy_fuel_from_tanks()
-	var previous_rcs := float(inventory_owner.docked_rcs_propellant.get(vehicle.vehicle_name, vehicle.rcs_propellant_remaining))
-	vehicle.detach_component(part_uid)
-	vehicle._prune_staging_plan_to_attached_parts()
-	var remaining_rcs := vehicle.rcs_propellant_remaining
-	inventory_owner.rcs_propellant_remaining = maxf(0.0, inventory_owner.rcs_propellant_remaining - previous_rcs + remaining_rcs)
-	inventory_owner.docked_rcs_propellant[vehicle.vehicle_name] = remaining_rcs
-	inventory_owner.resource_tanks = ResourceNetwork.merge_tank_states(inventory_owner.resource_tanks, vehicle.resource_tanks)
-	vehicle.resource_tanks.clear()
-	vehicle.resource_inventory_external = true
-	vehicle.fuel = 0.0
-	vehicle._sync_legacy_fuel_from_external_tanks(inventory_owner.resource_tanks)
-	_prune_module_staging_actions(vehicle)
-	_sync_docked_vehicles()
-	_update_docked_masses()
 
 func _show_tank_transfer_panel() -> void:
 	var window := Window.new()
