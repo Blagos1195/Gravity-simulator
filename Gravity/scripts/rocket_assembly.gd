@@ -107,14 +107,16 @@ static func add_component(stage: Dictionary, component_id: String, attachment: S
 static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 	var design := source_design.duplicate(true)
 	var stages: Array = design.get("stages", []).duplicate(true)
-	var payload_boundary_index := stages.size() - 2
 	for stage_index in range(stages.size()):
 		var stage := ensure_stage_components(stages[stage_index])
 		var components: Array = stage.get("components", []).duplicate(true)
+		components = components.filter(func(component: Dictionary) -> bool:
+			return not ["connector", "payload_interface_lower", "payload_interface_upper"].has(str(component.get("preset_hardware_role", "")))
+		)
+		stage = compile_stage(stage, components)
 		for component_index in range(components.size()):
 			var component: Dictionary = components[component_index]
-			if str(component.get("preset_hardware_role", "")) != "payload_interface_upper":
-				component["staging_stage"] = stage_index * 2
+			component["staging_stage"] = stage_index * 2
 			components[component_index] = component
 		stage = compile_stage(stage, components)
 		components = stage.get("components", []).duplicate(true)
@@ -145,53 +147,38 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 				separator["preset_hardware_role"] = "separator"
 				separator["staging_action"] = "separate"
 				separator["staging_stage"] = stage_index * 2 + 1
-				separator["staging_action_disabled"] = stage_index == payload_boundary_index
+				separator["staging_action_disabled"] = false
 				components.pop_back()
 				components.insert(0, separator)
 				stage = compile_stage(stage, components)
-		if stage_index == payload_boundary_index:
-			var has_lower_interface := false
-			for component in stage.get("components", []):
-				if str(component.get("preset_hardware_role", "")) == "payload_interface_lower":
-					has_lower_interface = true
-					break
-			if not has_lower_interface:
-				stage = add_component(stage, "standard_docking_port")
-				components = stage.get("components", []).duplicate(true)
-				var lower_port: Dictionary = components.pop_back()
-				lower_port["preset_hardware_role"] = "payload_interface_lower"
-				lower_port["port_facing"] = 1
-				components.insert(0, lower_port)
-				stage = compile_stage(stage, components)
 		if stage_index == stages.size() - 1:
-			if stages.size() > 1:
-				var has_upper_interface := false
-				for component in stage.get("components", []):
-					if str(component.get("preset_hardware_role", "")) == "payload_interface_upper":
-						has_upper_interface = true
-						break
-				if not has_upper_interface:
-					stage = add_component(stage, "standard_docking_port")
-					components = stage.get("components", []).duplicate(true)
-					var upper_port: Dictionary = components.back()
-					upper_port["preset_hardware_role"] = "payload_interface_upper"
-					upper_port["port_facing"] = -1
-					upper_port["staging_stage"] = payload_boundary_index * 2 + 1
-					components[components.size() - 1] = upper_port
-					stage = compile_stage(stage, components)
-			var has_connector := false
+			var has_top_ports := 0
 			for component in stage.get("components", []):
-				if str(component.get("preset_hardware_role", "")) == "connector":
-					has_connector = true
-					break
-			if not has_connector:
-				stage = add_component(stage, "standard_docking_port")
-				components = stage.get("components", []).duplicate(true)
-				var connector: Dictionary = components.pop_back()
-				connector["preset_hardware_role"] = "connector"
-				connector["port_facing"] = 1
-				components.insert(0, connector)
-				stage = compile_stage(stage, components)
+				if str(component.get("preset_hardware_role", "")).begins_with("top_docking_port_"):
+					has_top_ports += 1
+			if has_top_ports == 0:
+				var stack_length := 0.0
+				var parent_uid := ""
+				for component in stage.get("components", []):
+					if str(component.get("attachment", "stack")) != "stack":
+						continue
+					stack_length += maxf(0.1, float(component.get("length_m", 1.0)))
+					if parent_uid.is_empty():
+						parent_uid = str(component.get("part_uid", ""))
+				var port_y := stack_length * 0.5 + 0.7
+				for port_index in range(2):
+					var port := component_definition("standard_docking_port")
+					port["attachment"] = "free"
+					port["part_uid"] = "preset_top_port_%d_%d" % [stage_index, port_index]
+					port["position_m"] = [-0.85 if port_index == 0 else 0.85, port_y]
+					port["structural_parent_uid"] = parent_uid
+					port["structural_parent_node_id"] = "top"
+					port["preset_hardware_role"] = "top_docking_port_left" if port_index == 0 else "top_docking_port_right"
+					port["port_facing"] = 1
+					port["staging_stage"] = (stages.size() - 1) * 2
+					components = stage.get("components", []).duplicate(true)
+					components.append(port)
+					stage = compile_stage(stage, components)
 		components = stage.get("components", []).duplicate(true)
 		var tank_mount_index := 0
 		for component_index in range(components.size()):
@@ -214,7 +201,7 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 	for stage_index in range(stages.size()):
 		action_stage_labels.append("Stage %d: Ignite" % (stage_index + 1))
 		if stage_index < stages.size() - 1:
-			var boundary_label := "Release payload" if stage_index == payload_boundary_index else "Separate"
+			var boundary_label := "Separate"
 			action_stage_labels.append("Stage %d: %s" % [stage_index + 1, boundary_label])
 	design["staging_stage_labels"] = action_stage_labels
 	design["staging_stage_count"] = action_stage_labels.size()

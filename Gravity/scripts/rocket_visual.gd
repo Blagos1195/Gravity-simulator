@@ -98,7 +98,7 @@ static func draw_vehicle(canvas: CanvasItem, design: Dictionary, origin: Vector2
 			if show_stage_labels:
 				canvas.draw_string(ThemeDB.fallback_font, _point(origin, Vector2(half + 4.0, y + height * 0.65), rotation, scale), "S%d" % (active_stage_index + i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.8, 0.92))
 			_draw_component_stack(canvas, origin, rotation, scale, components, stage.get("boosters", []), y, height, width, i == 0 and engine_enabled, throttle)
-			y += height + 4.0
+			y += height
 			continue
 		_polygon(canvas, origin, [Vector2(-half, y), Vector2(half, y), Vector2(half * 0.92, y + height), Vector2(-half * 0.92, y + height)], rotation, scale, body_color)
 		_polygon(canvas, origin, [Vector2(-half * 0.62, y + 2.0), Vector2(half * 0.62, y + 2.0), Vector2(half * 0.62, y + height * 0.62), Vector2(-half * 0.62, y + height * 0.62)], rotation, scale, Color(0.58, 0.73, 0.81, 0.8))
