@@ -93,6 +93,7 @@ class AssemblyCanvas extends Control:
 
 	func _drop_data(at_position: Vector2, data: Variant) -> void:
 		var position_m := _canvas_to_metres(at_position)
+		_drag_data = data.duplicate(true)
 		var target := _find_attachment_target(at_position) if snap_mode == "Attach" else {}
 		_clear_drag_preview()
 		if str(data.get("source", "")) == "catalog":
@@ -1046,7 +1047,7 @@ func _on_component_repositioned(index: int, attachment: String, side: int, inser
 				stack_indices.append(candidate)
 		var insert_at := components.size()
 		if not stack_indices.is_empty():
-			insert_at = clampi(insert_index, stack_indices[0], stack_indices[-1] + 1)
+			insert_at = clampi(insert_index - (1 if index < insert_index else 0), stack_indices[0], stack_indices[-1] + 1)
 		for candidate in range(components.size()):
 			var mounted: Dictionary = components[candidate]
 			if str(mounted.get("attachment", "stack")) in ["side", "radial"] and int(mounted.get("mount_index", -1)) >= index:
@@ -1061,8 +1062,6 @@ func _on_component_repositioned(index: int, attachment: String, side: int, inser
 	else:
 		component["attachment"] = "free"
 		component["position_m"] = [0.0, 0.0]
-		components.append(component)
-	if attachment != "stack":
 		components.append(component)
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(stage, components)
 	selected_component_index = components.find(component)
