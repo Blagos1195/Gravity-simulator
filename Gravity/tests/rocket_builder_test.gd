@@ -19,7 +19,18 @@ func _initialize() -> void:
 	builder._build_interface()
 	builder._refresh()
 	assert(_find_label(builder, "VEHICLE BUILDER"))
+	assert(builder._snap_selector.item_count == 5)
+	assert(builder._snap_selector.get_item_text(builder._snap_selector.selected) == "Attach")
+	assert(builder._canvas.snap_mode == "Attach")
 	assert(builder._parts_list.get_child_count() >= 14)
+	builder._canvas.stage = {"components": [{}]}
+	builder._canvas._component_rects = [{"index": 0, "rect": Rect2(100.0, 100.0, 50.0, 100.0), "attachment": "stack"}]
+	var top_node: Dictionary = builder._canvas._find_attachment_target(Vector2(125.0, 101.0))
+	assert(str(top_node.get("attachment", "")) == "stack")
+	assert(int(top_node.get("insert_index", -1)) == 0)
+	var side_node: Dictionary = builder._canvas._find_attachment_target(Vector2(101.0, 150.0))
+	assert(str(side_node.get("attachment", "")) == "side")
+	assert(int(side_node.get("side", 0)) == -1)
 	assert(builder._stage_list.get_child_count() == design.stages.size())
 	builder._payload_mass_input.value = 900.0
 	if not is_equal_approx(float(builder.design.payload_mass), 900.0):

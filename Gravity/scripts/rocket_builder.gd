@@ -71,13 +71,47 @@ class AssemblyCanvas extends Control:
 	func _drop_data(at_position: Vector2, data: Variant) -> void:
 		var position_m := _snap_position(_canvas_to_metres(at_position))
 		if str(data.get("source", "")) == "catalog":
-			component_dropped.emit(str(data.get("id", "")), "free", false, 1, -1, position_m)
+			var attachment := "free"
+			var mirrored := false
+			var side := 1
+			var insert_index := -1
+			if snap_mode == "Attach":
+				var target := _find_attachment_target(at_position)
+				if not target.is_empty():
+					attachment = str(target.attachment)
+					mirrored = bool(get_meta("mirror_enabled", false)) if attachment == "side" else false
+					side = int(target.get("side", 1))
+					insert_index = int(target.get("insert_index", -1))
+			component_dropped.emit(str(data.get("id", "")), attachment, mirrored, side, insert_index, position_m)
 		else:
 			var from_index := int(data.get("index", -1))
 			var components: Array = stage.get("components", [])
 			if from_index < 0 or from_index >= components.size():
 				return
 			component_position_changed.emit(from_index, position_m)
+
+	func _find_attachment_target(position: Vector2) -> Dictionary:
+		var best_distance := 58.0
+		var best_target: Dictionary = {}
+		for item in _component_rects:
+			if item.get("rotation_handle", false):
+				continue
+			var rect: Rect2 = item.rect
+			var index := int(item.index)
+			var nodes := [
+				{"position": Vector2(rect.get_center().x, rect.position.y), "attachment": "stack", "side": 1, "insert_index": index},
+				{"position": Vector2(rect.get_center().x, rect.end.y), "attachment": "stack", "side": 1, "insert_index": index + 1},
+				{"position": Vector2(rect.position.x, rect.get_center().y), "attachment": "side", "side": -1, "insert_index": index},
+				{"position": Vector2(rect.end.x, rect.get_center().y), "attachment": "side", "side": 1, "insert_index": index}
+			]
+			for node in nodes:
+				var distance := position.distance_to(Vector2(node.position))
+				if distance < best_distance:
+					best_distance = distance
+					best_target = node
+		if best_target.get("attachment", "") == "stack":
+			best_target["insert_index"] = clampi(int(best_target.insert_index), 0, (stage.get("components", []) as Array).size())
+		return best_target
 
 	func _canvas_to_metres(position: Vector2) -> Vector2:
 		var scale := maxf(1.0, _drawing_scale)
@@ -99,17 +133,6 @@ class AssemblyCanvas extends Control:
 				grid = 5.0
 			"Centreline":
 				position.x = 0.0
-			"Attachment points":
-				var geometry := RocketAssembly.stage_geometry(stage)
-				var nearest := position
-				var nearest_distance := 1.5
-				for index in geometry.component_positions:
-					for point in geometry.component_positions[index]:
-						var distance := position.distance_to(Vector2(point))
-						if distance < nearest_distance:
-							nearest_distance = distance
-							nearest = Vector2(point)
-				position = nearest
 		if grid > 0.0:
 			position.x = snappedf(position.x, grid)
 			position.y = snappedf(position.y, grid)
@@ -316,6 +339,12 @@ class AssemblyCanvas extends Control:
 
 	func _register_component_rect(index: int, rect: Rect2, attachment: String) -> void:
 		_component_rects.append({"index": index, "rect": rect, "attachment": attachment})
+		if snap_mode == "Attach":
+			var node_color := Color(0.35, 0.82, 1.0, 0.9)
+			draw_circle(Vector2(rect.get_center().x, rect.position.y), 4.5, node_color)
+			draw_circle(Vector2(rect.get_center().x, rect.end.y), 4.5, node_color)
+			draw_circle(Vector2(rect.position.x, rect.get_center().y), 4.5, node_color)
+			draw_circle(Vector2(rect.end.x, rect.get_center().y), 4.5, node_color)
 		if index == selected_index:
 			var handle_center := Vector2(rect.get_center().x, rect.position.y - 20.0)
 			draw_line(Vector2(rect.get_center().x, rect.position.y), handle_center, Color(0.45, 0.82, 1.0), 1.5)
@@ -413,31 +442,23 @@ func _ready() -> void:
 	_refresh()
 
 func _build_interface() -> void:
-
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 8)
-	root.add_theme_constant_override("margin_left", 12)
-	root.add_theme_constant_override("margin_right", 12)
-	root.add_theme_constant_override("margin_top", 10)
-	root.add_theme_constant_override("margin_bottom", 10)
+	root.add_theme_constant_override("separation", 6)
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_theme_constant_override("margin_left", 10)
+	root.add_theme_constant_override("margin_right", 10)
+	root.add_theme_constant_override("margin_top", 8)
+	root.add_theme_constant_override("margin_bottom", 8)
 	add_child(root)
-	var header := VBoxContainer.new()
-	root.add_child(header)
-	var header_primary := VBoxContainer.new()
-	header.add_child(header_primary)
-	var identity_row := HBoxContainer.new()
-	header_primary.add_child(identity_row)
-	var payload_row := HBoxContainer.new()
-	header_primary.add_child(payload_row)
-	var title_label := Label.new()
-	title_label.text = "VEHICLE BUILDER"
-	title_label.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-	title_label.add_theme_font_size_override("font_size", 20)
-	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	title_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	title_label.custom_minimum_size.x = 190.0
-	identity_row.add_child(title_label)
+
+	var toolbar := HBoxContainer.new()
+	toolbar.add_theme_constant_override("separation", 8)
+	root.add_child(toolbar)
+	var title := Label.new()
+	title.text = "VEHICLE BUILDER"
+	title.add_theme_font_size_override("font_size", 19)
+	title.add_theme_color_override("font_color", Color(0.62, 0.84, 1.0))
+	toolbar.add_child(title)
 	var name_input := LineEdit.new()
 	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_input.placeholder_text = "Vehicle name"
@@ -446,17 +467,239 @@ func _build_interface() -> void:
 		design["name"] = value
 		_emit_design()
 	)
-	identity_row.add_child(name_input)
+	toolbar.add_child(name_input)
 	_vehicle_name = name_input
 	var preset_button := Button.new()
-	preset_button.text = "LOAD PRESET"
+	preset_button.text = "PRESETS"
 	preset_button.pressed.connect(_show_preset_dialog)
-	identity_row.add_child(preset_button)
-	var payload_label := Label.new()
-	payload_label.text = "PAYLOAD"
-	payload_row.add_child(payload_label)
+	toolbar.add_child(preset_button)
+	var undo_button := Button.new()
+	undo_button.text = "UNDO"
+	undo_button.pressed.connect(_undo_change)
+	toolbar.add_child(undo_button)
+	var redo_button := Button.new()
+	redo_button.text = "REDO"
+	redo_button.pressed.connect(_redo_change)
+	toolbar.add_child(redo_button)
+
+	var workspace := HBoxContainer.new()
+	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	workspace.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	workspace.add_theme_constant_override("separation", 6)
+	root.add_child(workspace)
+
+	var parts_panel := PanelContainer.new()
+	parts_panel.custom_minimum_size.x = 245.0
+	parts_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parts_panel.name = "PARTS"
+	workspace.add_child(parts_panel)
+	var parts_column := VBoxContainer.new()
+	parts_column.add_theme_constant_override("separation", 6)
+	parts_panel.add_child(parts_column)
+	var parts_heading := Label.new()
+	parts_heading.text = "PARTS"
+	parts_heading.add_theme_font_size_override("font_size", 16)
+	parts_heading.add_theme_color_override("font_color", Color(0.62, 0.84, 1.0))
+	parts_column.add_child(parts_heading)
+	_search_input = LineEdit.new()
+	_search_input.placeholder_text = "Search parts..."
+	_search_input.text_changed.connect(func(value: String):
+		_search = value.to_lower()
+		_refresh_parts()
+	)
+	parts_column.add_child(_search_input)
+	_part_filter = OptionButton.new()
+	_part_filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for category in ["all", "tank", "engine", "decoupler", "structure", "rcs", "docking_port", "power", "payload", "radial"]:
+		_part_filter.add_item("All parts" if category == "all" else category.replace("_", " ").capitalize())
+		_part_filter.set_item_metadata(_part_filter.item_count - 1, category)
+	_part_filter.item_selected.connect(func(index: int):
+		_category = str(_part_filter.get_item_metadata(index))
+		_refresh_parts()
+	)
+	parts_column.add_child(_part_filter)
+	var parts_scroll := ScrollContainer.new()
+	parts_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parts_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	parts_column.add_child(parts_scroll)
+	_parts_list = VBoxContainer.new()
+	_parts_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_parts_list.add_theme_constant_override("separation", 4)
+	parts_scroll.add_child(_parts_list)
+
+	var center_panel := PanelContainer.new()
+	center_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center_panel.custom_minimum_size.x = 420.0
+	center_panel.name = "BUILD SPACE"
+	workspace.add_child(center_panel)
+	var center_column := VBoxContainer.new()
+	center_column.add_theme_constant_override("separation", 4)
+	center_panel.add_child(center_column)
+	var canvas_tools := HBoxContainer.new()
+	canvas_tools.add_theme_constant_override("separation", 6)
+	center_column.add_child(canvas_tools)
+	var canvas_heading := Label.new()
+	canvas_heading.text = "ASSEMBLY"
+	canvas_heading.add_theme_font_size_override("font_size", 16)
+	canvas_heading.add_theme_color_override("font_color", Color(0.62, 0.84, 1.0))
+	canvas_heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	canvas_tools.add_child(canvas_heading)
+	var snap_label := Label.new()
+	snap_label.text = "Snap"
+	canvas_tools.add_child(snap_label)
+	_snap_selector = OptionButton.new()
+	_snap_selector.tooltip_text = "Attach snaps a new part to a nearby top, bottom or side node. Off places it freely. Grid options place it freely on a measured grid."
+	for mode in ["Attach", "Off", "0.25 m", "0.5 m", "1 m"]:
+		_snap_selector.add_item(mode)
+	_snap_selector.select(0)
+	_snap_selector.item_selected.connect(func(index: int):
+		_canvas.snap_mode = _snap_selector.get_item_text(index)
+	)
+	canvas_tools.add_child(_snap_selector)
+	_canvas = AssemblyCanvas.new()
+	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_canvas.component_dropped.connect(_on_component_dropped)
+	_canvas.component_moved.connect(_on_component_moved)
+	_canvas.component_position_changed.connect(_on_component_position_changed)
+	_canvas.component_rotation_started.connect(_on_component_rotation_started)
+	_canvas.component_rotated.connect(_on_component_rotated)
+	_canvas.component_selected.connect(_on_component_selected)
+	center_column.add_child(_canvas)
+	var view_tools := HBoxContainer.new()
+	view_tools.alignment = BoxContainer.ALIGNMENT_CENTER
+	center_column.add_child(view_tools)
+	var zoom_out := Button.new()
+	zoom_out.text = "−"
+	zoom_out.tooltip_text = "Zoom out"
+	zoom_out.pressed.connect(func():
+		_canvas.zoom = maxf(0.35, _canvas.zoom / 1.15)
+		_canvas.queue_redraw()
+	)
+	view_tools.add_child(zoom_out)
+	var zoom_in := Button.new()
+	zoom_in.text = "+"
+	zoom_in.tooltip_text = "Zoom in"
+	zoom_in.pressed.connect(func():
+		_canvas.zoom = minf(3.0, _canvas.zoom * 1.15)
+		_canvas.queue_redraw()
+	)
+	view_tools.add_child(zoom_in)
+	var fit_button := Button.new()
+	fit_button.text = "FIT"
+	fit_button.tooltip_text = "Fit the complete vehicle in view"
+	fit_button.pressed.connect(func():
+		_canvas.zoom = 1.0
+		_canvas.queue_redraw()
+	)
+	view_tools.add_child(fit_button)
+
+	var right_panel := PanelContainer.new()
+	right_panel.custom_minimum_size.x = 290.0
+	right_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_panel.name = "VEHICLE TOOLS"
+	workspace.add_child(right_panel)
+	var tabs := TabContainer.new()
+	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_panel.add_child(tabs)
+
+	var staging_page := VBoxContainer.new()
+	staging_page.name = "Stages"
+	staging_page.add_theme_constant_override("separation", 6)
+	tabs.add_child(staging_page)
+	var stage_heading := Label.new()
+	stage_heading.text = "PHYSICAL STAGES"
+	stage_heading.add_theme_color_override("font_color", Color(0.62, 0.84, 1.0))
+	staging_page.add_child(stage_heading)
+	var stage_scroll := ScrollContainer.new()
+	stage_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stage_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	staging_page.add_child(stage_scroll)
+	_stage_list = VBoxContainer.new()
+	_stage_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stage_scroll.add_child(_stage_list)
+	var stage_options := OptionButton.new()
+	stage_options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for option in RocketDesign.stage_part_options():
+		stage_options.add_item(str(option.get("label", "Stage")))
+		stage_options.set_item_metadata(stage_options.item_count - 1, str(option.get("id", "")))
+	var stage_tools := GridContainer.new()
+	stage_tools.columns = 2
+	staging_page.add_child(stage_tools)
+	stage_tools.add_child(stage_options)
+	var add_stage := Button.new()
+	add_stage.text = "ADD STAGE"
+	add_stage.pressed.connect(func():
+		var stage := RocketDesign.configure_stage(str(stage_options.get_selected_metadata()), 1, 1.0)
+		if not stage.is_empty():
+			_push_undo()
+			var stages: Array = design.get("stages", [])
+			stages.append(RocketAssembly.ensure_stage_components(stage))
+			design["stages"] = stages
+			selected_stage_index = stages.size() - 1
+			selected_component_index = -1
+			_changed()
+	)
+	stage_tools.add_child(add_stage)
+	var duplicate_stage := Button.new()
+	duplicate_stage.text = "DUPLICATE"
+	duplicate_stage.pressed.connect(_duplicate_selected_stage)
+	stage_tools.add_child(duplicate_stage)
+	var delete_stage := Button.new()
+	delete_stage.text = "DELETE"
+	delete_stage.pressed.connect(_delete_selected_stage)
+	stage_tools.add_child(delete_stage)
+	var stage_up := Button.new()
+	stage_up.text = "MOVE TO TOP"
+	stage_up.pressed.connect(func(): _move_stage(1))
+	stage_tools.add_child(stage_up)
+	var stage_down := Button.new()
+	stage_down.text = "MOVE TO BOTTOM"
+	stage_down.pressed.connect(func(): _move_stage(-1))
+	stage_tools.add_child(stage_down)
+	var action_heading := Label.new()
+	action_heading.text = "ACTION STAGING"
+	action_heading.add_theme_color_override("font_color", Color(0.62, 0.84, 1.0))
+	staging_page.add_child(action_heading)
+	var action_header := HBoxContainer.new()
+	staging_page.add_child(action_header)
+	var add_action_stage := Button.new()
+	add_action_stage.text = "ADD ACTION STAGE"
+	add_action_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_action_stage.pressed.connect(func():
+		design["staging_stage_count"] = maxi(int(design.get("staging_stage_count", 0)), _action_stage_list.get_child_count()) + 1
+		_changed()
+	)
+	action_header.add_child(add_action_stage)
+	var action_scroll := ScrollContainer.new()
+	action_scroll.custom_minimum_size.y = 130.0
+	action_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	action_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	staging_page.add_child(action_scroll)
+	_action_stage_list = VBoxContainer.new()
+	action_scroll.add_child(_action_stage_list)
+
+	var inspector_page := ScrollContainer.new()
+	inspector_page.name = "Part"
+	inspector_page.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tabs.add_child(inspector_page)
+	_inspector = VBoxContainer.new()
+	_inspector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_inspector.add_theme_constant_override("separation", 7)
+	inspector_page.add_child(_inspector)
+
+	var vehicle_page := VBoxContainer.new()
+	vehicle_page.name = "Vehicle"
+	vehicle_page.add_theme_constant_override("separation", 8)
+	tabs.add_child(vehicle_page)
+	var payload_heading := Label.new()
+	payload_heading.text = "PAYLOAD"
+	payload_heading.add_theme_color_override("font_color", Color(0.62, 0.84, 1.0))
+	vehicle_page.add_child(payload_heading)
 	var payload_selector := OptionButton.new()
-	payload_selector.custom_minimum_size.x = 180
+	payload_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var payload_options := RocketDesign.payload_options()
 	var selected_payload := 0
 	for index in range(payload_options.size()):
@@ -472,312 +715,82 @@ func _build_interface() -> void:
 		design["payload_mass"] = float(option.get("mass", design.get("payload_mass", 500.0)))
 		design["payload_type"] = str(option.get("id", "probe"))
 		design["payload_visual"] = RocketDesign.payload_visual_data(str(option.get("id", "probe")))
-		if is_instance_valid(_payload_mass_input):
-			_payload_mass_input.set_value_no_signal(float(option.get("mass", 500.0)))
-		_emit_design()
+		_payload_mass_input.set_value_no_signal(float(option.get("mass", 500.0)))
 		_refresh_stats()
+		_emit_design()
 	)
-	payload_row.add_child(payload_selector)
+	vehicle_page.add_child(payload_selector)
 	_payload_selector = payload_selector
 	var payload_limits := RocketDesign.payload_mass_limits()
 	var payload_mass_input := SpinBox.new()
-	payload_mass_input.custom_minimum_size.x = 125.0
 	payload_mass_input.min_value = float(payload_limits.get("minimum", 0.001))
 	payload_mass_input.max_value = float(payload_limits.get("maximum", 1.0e300))
 	payload_mass_input.step = float(payload_limits.get("step", 1.0))
 	payload_mass_input.value = float(design.get("payload_mass", 500.0))
 	payload_mass_input.tooltip_text = "Payload mass in kilograms"
+	vehicle_page.add_child(payload_mass_input)
 	payload_mass_input.value_changed.connect(func(value: float):
 		design["payload_mass"] = value
 		design["payload_type"] = "custom"
 		_refresh_stats()
 		_emit_design()
 	)
-	payload_row.add_child(payload_mass_input)
 	_payload_mass_input = payload_mass_input
 	var payload_group_input := LineEdit.new()
-	payload_group_input.custom_minimum_size.x = 115.0
-	payload_group_input.placeholder_text = "Payload group"
+	payload_group_input.placeholder_text = "Payload subassembly group"
 	payload_group_input.text = str(design.get("payload_subassembly_id", "main"))
-	payload_group_input.tooltip_text = "Assign the payload to a detachable subassembly group"
 	payload_group_input.text_submitted.connect(func(value: String):
-		design["payload_subassembly_id"] = value.strip_edges().to_lower().replace(" ", "_") if not value.strip_edges().is_empty() else "main"
+		design["payload_subassembly_id"] = value.strip_edges().to_lower().replace(" ", "_")
 		_emit_design()
 	)
-	payload_group_input.focus_exited.connect(func():
-		var value := payload_group_input.text.strip_edges().to_lower().replace(" ", "_")
-		if value.is_empty():
-			value = "main"
-		design["payload_subassembly_id"] = value
-		payload_group_input.text = value
-		_emit_design()
-	)
-	payload_row.add_child(payload_group_input)
+	vehicle_page.add_child(payload_group_input)
 	_payload_group_input = payload_group_input
-	var header_actions := GridContainer.new()
-	header_actions.columns = 3
-	header.add_child(header_actions)
-	var payload_edit := Button.new()
-	payload_edit.text = "EDIT PAYLOAD"
-	payload_edit.pressed.connect(func(): payload_edit_requested.emit())
-	header_actions.add_child(payload_edit)
-	var new_vehicle := Button.new()
-	new_vehicle.text = "NEW"
-	new_vehicle.tooltip_text = "Start a blank vehicle design"
-	new_vehicle.pressed.connect(func():
-		_push_undo()
-		design = RocketDesign.create_blank()
-		selected_stage_index = 0
-		selected_component_index = -1
-		_changed()
-	)
-	header_actions.add_child(new_vehicle)
 	var mirror := CheckButton.new()
-	mirror.text = "MIRROR NEW SIDE PARTS"
-	mirror.button_pressed = true
+	mirror.text = "Mirror side-mounted parts"
+	mirror.button_pressed = mirror_enabled
 	mirror.toggled.connect(func(enabled: bool):
 		mirror_enabled = enabled
 		if is_instance_valid(_canvas):
 			_canvas.set_meta("mirror_enabled", enabled)
 	)
-	header_actions.add_child(mirror)
+	vehicle_page.add_child(mirror)
 	_mirror_button = mirror
-	var undo_button := Button.new()
-	undo_button.text = "UNDO"
-	undo_button.pressed.connect(_undo_change)
-	header_actions.add_child(undo_button)
-	var redo_button := Button.new()
-	redo_button.text = "REDO"
-	redo_button.pressed.connect(_redo_change)
-	header_actions.add_child(redo_button)
-	var workspace := HBoxContainer.new()
-	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	workspace.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	root.add_child(workspace)
-	var parts_panel := PanelContainer.new()
-	parts_panel.custom_minimum_size.x = 200.0
-	parts_panel.name = "PARTS CATALOGUE"
-	workspace.add_child(parts_panel)
-	var parts_column := VBoxContainer.new()
-	parts_column.add_theme_constant_override("separation", 6)
-	parts_panel.add_child(parts_column)
-	var parts_heading := Label.new()
-	parts_heading.text = "PARTS CATALOGUE"
-	parts_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-	parts_column.add_child(parts_heading)
-	_search_input = LineEdit.new()
-	_search_input.placeholder_text = "Search parts..."
-	_search_input.text_changed.connect(func(value: String):
-		_search = value.to_lower()
-		_refresh_parts()
-	)
-	parts_column.add_child(_search_input)
-	_part_filter = OptionButton.new()
-	for category in ["all", "tank", "engine", "decoupler", "structure", "rcs", "docking_port", "power", "payload", "radial"]:
-		_part_filter.add_item(category.capitalize())
-		_part_filter.set_item_metadata(_part_filter.item_count - 1, category)
-	_part_filter.item_selected.connect(func(index: int):
-		_category = str(_part_filter.get_item_metadata(index))
-		_refresh_parts()
-	)
-	parts_column.add_child(_part_filter)
-	var parts_scroll := ScrollContainer.new()
-	parts_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parts_column.add_child(parts_scroll)
-	_parts_list = VBoxContainer.new()
-	_parts_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	parts_scroll.add_child(_parts_list)
-	var center_panel := PanelContainer.new()
-	center_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center_panel.custom_minimum_size.x = 420.0
-	center_panel.name = "ASSEMBLY"
-	workspace.add_child(center_panel)
-	var center_column := VBoxContainer.new()
-	center_column.add_theme_constant_override("separation", 6)
-	center_panel.add_child(center_column)
-	var canvas_heading := Label.new()
-	canvas_heading.text = "ASSEMBLY VIEW  •  PLACE PARTS FREELY AND ROTATE THEM WITH THE HANDLE"
-	canvas_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	canvas_heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	canvas_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-	center_column.add_child(canvas_heading)
-	_canvas = AssemblyCanvas.new()
-	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_canvas.component_dropped.connect(_on_component_dropped)
-	_canvas.component_moved.connect(_on_component_moved)
-	_canvas.component_position_changed.connect(_on_component_position_changed)
-	_canvas.component_rotation_started.connect(_on_component_rotation_started)
-	_canvas.component_rotated.connect(_on_component_rotated)
-	_canvas.component_selected.connect(_on_component_selected)
-	_snap_selector = OptionButton.new()
-	for mode in ["Off", "0.25 m", "0.5 m", "1 m", "2 m", "5 m", "Centreline", "Attachment points"]:
-		_snap_selector.add_item(mode)
-	_snap_selector.select(2)
-	_snap_selector.item_selected.connect(func(index: int):
-		_canvas.snap_mode = _snap_selector.get_item_text(index)
-	)
-	center_column.add_child(_snap_selector)
-	center_column.add_child(_canvas)
-	var canvas_tools := HBoxContainer.new()
-	canvas_tools.alignment = BoxContainer.ALIGNMENT_CENTER
-	var zoom_out := Button.new()
-	zoom_out.text = "−"
-	zoom_out.pressed.connect(func():
-		_canvas.zoom = maxf(0.45, _canvas.zoom / 1.15)
-		_canvas.queue_redraw()
-	)
-	canvas_tools.add_child(zoom_out)
-	var zoom_in := Button.new()
-	zoom_in.text = "+"
-	zoom_in.pressed.connect(func():
-		_canvas.zoom = minf(2.5, _canvas.zoom * 1.15)
-		_canvas.queue_redraw()
-	)
-	canvas_tools.add_child(zoom_in)
-	var fit := Button.new()
-	fit.text = "FIT"
-	fit.pressed.connect(func():
-		_canvas.zoom = 1.0
-		_canvas.queue_redraw()
-	)
-	canvas_tools.add_child(fit)
-	center_column.add_child(canvas_tools)
-	var right_panel := PanelContainer.new()
-	right_panel.custom_minimum_size.x = 280.0
-	right_panel.size_flags_horizontal = Control.SIZE_SHRINK_END
-	right_panel.name = "STAGING & INSPECTOR"
-	workspace.add_child(right_panel)
-	var right_column := VBoxContainer.new()
-	right_column.add_theme_constant_override("separation", 6)
-	right_panel.add_child(right_column)
-	var stage_heading := Label.new()
-	stage_heading.text = "STAGING"
-	stage_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-	right_column.add_child(stage_heading)
-	var stage_scroll := ScrollContainer.new()
-	stage_scroll.custom_minimum_size.y = 155.0
-	stage_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_column.add_child(stage_scroll)
-	_stage_list = VBoxContainer.new()
-	stage_scroll.add_child(_stage_list)
-	var stage_tools := GridContainer.new()
-	stage_tools.columns = 3
-	right_column.add_child(stage_tools)
-	var stage_options := OptionButton.new()
-	stage_options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for option in RocketDesign.stage_part_options():
-		stage_options.add_item(str(option.get("label", "Stage")))
-		stage_options.set_item_metadata(stage_options.item_count - 1, str(option.get("id", "")))
-	stage_tools.add_child(stage_options)
-	var add_stage := Button.new()
-	add_stage.text = "+"
-	add_stage.tooltip_text = "Add a new staging group"
-	add_stage.pressed.connect(func():
-		var stage := RocketDesign.configure_stage(str(stage_options.get_selected_metadata()), 1, 1.0)
-		if not stage.is_empty():
-			_push_undo()
-			var stages: Array = design.get("stages", [])
-			stages.append(RocketAssembly.ensure_stage_components(stage))
-			design["stages"] = stages
-			selected_stage_index = stages.size() - 1
-			selected_component_index = -1
-			_changed()
-	)
-	stage_tools.add_child(add_stage)
-	var duplicate_stage := Button.new()
-	duplicate_stage.text = "COPY"
-	duplicate_stage.pressed.connect(_duplicate_selected_stage)
-	stage_tools.add_child(duplicate_stage)
-	var delete_stage := Button.new()
-	delete_stage.text = "DEL"
-	delete_stage.pressed.connect(_delete_selected_stage)
-	stage_tools.add_child(delete_stage)
-	var move_stage_row := HBoxContainer.new()
-	right_column.add_child(move_stage_row)
-	var stage_up := Button.new()
-	stage_up.text = "TO PAYLOAD"
-	stage_up.tooltip_text = "Move selected stage toward the payload"
-	stage_up.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stage_up.pressed.connect(func(): _move_stage(1))
-	move_stage_row.add_child(stage_up)
-	var stage_down := Button.new()
-	stage_down.text = "TO ENGINE"
-	stage_down.tooltip_text = "Move selected stage toward the engine"
-	stage_down.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stage_down.pressed.connect(func(): _move_stage(-1))
-	move_stage_row.add_child(stage_down)
-	var action_header := HBoxContainer.new()
-	right_column.add_child(action_header)
-	var action_heading := Label.new()
-	action_heading.text = "ACTION STAGING"
-	action_heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	action_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-	action_header.add_child(action_heading)
-	var add_action_stage := Button.new()
-	add_action_stage.text = "+"
-	add_action_stage.tooltip_text = "Add an empty action stage"
-	add_action_stage.pressed.connect(func():
-		design["staging_stage_count"] = maxi(int(design.get("staging_stage_count", 0)), _action_stage_list.get_child_count()) + 1
-		_changed()
-	)
-	action_header.add_child(add_action_stage)
-	var action_scroll := ScrollContainer.new()
-	action_scroll.custom_minimum_size.y = 115.0
-	action_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_column.add_child(action_scroll)
-	_action_stage_list = VBoxContainer.new()
-	action_scroll.add_child(_action_stage_list)
-	var separator := HSeparator.new()
-	right_column.add_child(separator)
-	var selected_heading := Label.new()
-	selected_heading.text = "PART INSPECTOR"
-	selected_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-	right_column.add_child(selected_heading)
-	var inspector_scroll := ScrollContainer.new()
-	inspector_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inspector_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	inspector_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	right_column.add_child(inspector_scroll)
-	_inspector = VBoxContainer.new()
-	_inspector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_inspector.add_theme_constant_override("separation", 6)
-	inspector_scroll.add_child(_inspector)
+	var payload_edit := Button.new()
+	payload_edit.text = "EDIT PAYLOAD DETAILS"
+	payload_edit.pressed.connect(func(): payload_edit_requested.emit())
+	vehicle_page.add_child(payload_edit)
+	var vehicle_hint := Label.new()
+	vehicle_hint.text = "Drag parts onto the build area. Select a part to edit it. Use the rotation handle above a selected part. Snap controls only affect placement."
+	vehicle_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vehicle_page.add_child(vehicle_hint)
+
 	_refresh_inspector()
 	var stats := Label.new()
 	stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	stats.add_theme_color_override("font_color", Color(0.76, 0.85, 0.94))
+	stats.add_theme_color_override("font_color", Color(0.82, 0.89, 0.96))
 	root.add_child(stats)
 	_stats = stats
 	var footer := HBoxContainer.new()
-	footer.alignment = BoxContainer.ALIGNMENT_CENTER
+	footer.alignment = BoxContainer.ALIGNMENT_END
 	root.add_child(footer)
-	var note := Label.new()
-	note.text = "Stack parts centrally or mount them to either side. RCS uses the arrow keys for translation and A/D for rotation. Docking needs RCS and a port on both craft. Put ports and RCS on both sides of a stage boundary to detach a controllable module in orbit."
-	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	footer.add_child(note)
-	var footer_actions := HBoxContainer.new()
-	footer.add_child(footer_actions)
 	var save_button := Button.new()
-	save_button.text = "SAVE DESIGN"
+	save_button.text = "SAVE"
 	save_button.pressed.connect(func(): save_requested.emit())
-	footer_actions.add_child(save_button)
+	footer.add_child(save_button)
 	var load_button := Button.new()
-	load_button.text = "LOAD DESIGN"
+	load_button.text = "LOAD"
 	load_button.pressed.connect(func(): load_requested.emit())
-	footer_actions.add_child(load_button)
+	footer.add_child(load_button)
 	var launch_button := Button.new()
 	launch_button.text = "LAUNCH"
-	launch_button.custom_minimum_size.x = 110.0
+	launch_button.custom_minimum_size.x = 130.0
 	launch_button.pressed.connect(func(): launch_requested.emit())
-	footer_actions.add_child(launch_button)
+	footer.add_child(launch_button)
 	var back_button := Button.new()
 	back_button.text = "BACK"
 	back_button.pressed.connect(func(): back_requested.emit())
-	footer_actions.add_child(back_button)
-	_canvas.set_meta("mirror_enabled", mirror_enabled)
+	footer.add_child(back_button)
+
 
 func _refresh() -> void:
 	if not is_instance_valid(_canvas):
@@ -1398,6 +1411,42 @@ func _show_preset_dialog() -> void:
 	)
 	buttons.add_child(load_button)
 	window.popup_centered()
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not event is InputEventKey or not event.pressed or event.echo:
+		return
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is SpinBox or focus is TextEdit:
+		return
+	if event.ctrl_pressed and event.keycode == KEY_Z:
+		_undo_change()
+		get_viewport().set_input_as_handled()
+		return
+	if event.ctrl_pressed and event.keycode == KEY_Y:
+		_redo_change()
+		get_viewport().set_input_as_handled()
+		return
+	if event.ctrl_pressed and event.keycode == KEY_D:
+		_duplicate_selected_component()
+		get_viewport().set_input_as_handled()
+		return
+	if event.keycode == KEY_DELETE or event.keycode == KEY_BACKSPACE:
+		_remove_selected_component()
+		get_viewport().set_input_as_handled()
+		return
+	if selected_component_index < 0:
+		return
+	var components: Array = _current_stage().get("components", [])
+	if selected_component_index >= components.size():
+		return
+	var rotation := float(components[selected_component_index].get("rotation_deg", 0.0))
+	if event.keycode == KEY_Q:
+		_update_component_property("rotation_deg", rotation - 15.0)
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_E:
+		_update_component_property("rotation_deg", rotation + 15.0)
+		get_viewport().set_input_as_handled()
+
 
 func _finish() -> void:
 	_emit_design()
