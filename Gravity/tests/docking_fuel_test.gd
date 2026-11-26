@@ -202,6 +202,10 @@ func _initialize() -> void:
 	loaded_child.rotation_angle = PI
 	loaded_parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	loaded_child.rocket_position = loaded_parent.rocket_position + Vector2(25.0, 0.0)
+	var own_port_state: Dictionary = loaded_parent.docking_port_world_state()
+	var child_port_state: Dictionary = loaded_child.docking_port_world_state()
+	var child_port_offset: Vector2 = Vector2(child_port_state.position) - loaded_child.rocket_position
+	loaded_child.rocket_position = Vector2(own_port_state.position) + Vector2(own_port_state.normal) * 25.0 - child_port_offset
 	loaded_parent.velocity = Vector2.ZERO
 	loaded_child.velocity = Vector2.ZERO
 	var selected_pair := main._available_docking_port_pair(loaded_parent, loaded_child)
