@@ -304,63 +304,6 @@ static func total_delta_v(design: Dictionary) -> float:
 	var mass := total_initial_mass(design)
 	for i in range(stages.size()):
 		var stage: Dictionary = stages[i]
-		var components: Array = stage.get("components", [])
-		if not components.is_empty():
-			var uid_indices: Dictionary = {}
-			for component_index in range(components.size()):
-				var component: Dictionary = components[component_index]
-				var uid := str(component.get("part_uid", ""))
-				if uid.is_empty():
-					uid = "legacy_part_%d" % component_index
-					component["part_uid"] = uid
-					components[component_index] = component
-				uid_indices[uid] = component_index
-			var links: Array[Array] = []
-			var previous_stack := -1
-			for component_index in range(components.size()):
-				var component: Dictionary = components[component_index]
-				var parent_uid := str(component.get("structural_parent_uid", ""))
-				var parent_index := -1
-				if not parent_uid.is_empty():
-					parent_index = int(uid_indices.get(parent_uid, -1))
-					if parent_index < 0 or parent_index == component_index:
-						errors.append("Stage %d contains a part connected to a missing or invalid attachment." % (i + 1))
-				elif str(component.get("attachment", "stack")) == "stack":
-					parent_index = previous_stack
-				elif str(component.get("attachment", "stack")) in ["side", "radial"]:
-					parent_index = int(component.get("mount_index", -1))
-				if str(component.get("attachment", "stack")) == "stack":
-					previous_stack = component_index
-				if parent_index >= 0 and parent_index < components.size():
-					links.append([component_index, parent_index])
-			var visited: Dictionary = {}
-			var root_index := -1
-			for component_index in range(components.size()):
-				if str(components[component_index].get("attachment", "stack")) == "stack":
-					root_index = component_index
-					break
-			if root_index < 0:
-				for component_index in range(components.size()):
-					if bool(components[component_index].get("structural_root", false)):
-						root_index = component_index
-						break
-			var has_structural_root := root_index >= 0
-			if not has_structural_root:
-				errors.append("Stage %d has no structural root. Attach the assembly to a stack-mounted part." % (i + 1))
-			var pending: Array[int] = [root_index] if has_structural_root else []
-			while not pending.is_empty():
-				var current := pending.pop_back()
-				if visited.has(current):
-					continue
-				visited[current] = true
-				for link in links:
-					if int(link[0]) == current and not visited.has(int(link[1])):
-						pending.append(int(link[1]))
-					elif int(link[1]) == current and not visited.has(int(link[0])):
-						pending.append(int(link[0]))
-			for component_index in range(components.size()):
-				if not visited.has(component_index):
-					errors.append("Stage %d has a disconnected part: %s. Attach it to another part before launch." % [i + 1, str(components[component_index].get("label", components[component_index].get("id", "Part")))])
 		var fuel := stage_total_fuel_capacity(stage)
 		var flow := stage_total_flow(stage)
 		var thrust := stage_total_thrust(stage, true)
@@ -423,6 +366,64 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 		errors.append("Total vehicle mass must be positive.")
 	for i in range(stages.size()):
 		var stage: Dictionary = stages[i]
+		var components: Array = stage.get("components", [])
+		if not components.is_empty():
+			var uid_indices: Dictionary = {}
+			for component_index in range(components.size()):
+				var component: Dictionary = components[component_index]
+				var uid := str(component.get("part_uid", ""))
+				if uid.is_empty():
+					uid = "legacy_part_%d" % component_index
+					component["part_uid"] = uid
+					components[component_index] = component
+				uid_indices[uid] = component_index
+			var links: Array[Array] = []
+			var previous_stack := -1
+			for component_index in range(components.size()):
+				var component: Dictionary = components[component_index]
+				var parent_uid := str(component.get("structural_parent_uid", ""))
+				var parent_index := -1
+				if not parent_uid.is_empty():
+					parent_index = int(uid_indices.get(parent_uid, -1))
+					if parent_index < 0 or parent_index == component_index:
+						errors.append("Stage %d contains a part connected to a missing or invalid attachment." % (i + 1))
+				elif str(component.get("attachment", "stack")) == "stack":
+					parent_index = previous_stack
+				elif str(component.get("attachment", "stack")) in ["side", "radial"]:
+					parent_index = int(component.get("mount_index", -1))
+				if str(component.get("attachment", "stack")) == "stack":
+					previous_stack = component_index
+				if parent_index >= 0 and parent_index < components.size():
+					links.append([component_index, parent_index])
+			var visited: Dictionary = {}
+			var root_index := -1
+			for component_index in range(components.size()):
+				if str(components[component_index].get("attachment", "stack")) == "stack":
+					root_index = component_index
+					break
+			if root_index < 0:
+				for component_index in range(components.size()):
+					if bool(components[component_index].get("structural_root", false)):
+						root_index = component_index
+						break
+			var has_structural_root := root_index >= 0
+			if not has_structural_root:
+				errors.append("Stage %d has no structural root. Attach the assembly to a stack-mounted part." % (i + 1))
+			var pending: Array[int] = [root_index] if has_structural_root else []
+			while not pending.is_empty():
+				var current: int = pending.pop_back()
+				if visited.has(current):
+					continue
+				visited[current] = true
+				for link in links:
+					if int(link[0]) == current and not visited.has(int(link[1])):
+						pending.append(int(link[1]))
+					elif int(link[1]) == current and not visited.has(int(link[0])):
+						pending.append(int(link[0]))
+			for component_index in range(components.size()):
+				if not visited.has(component_index):
+					errors.append("Stage %d has a disconnected part: %s. Attach it to another part before launch." % [i + 1, str(components[component_index].get("label", components[component_index].get("id", "Part")))])
+
 		var dry := stage_total_dry_mass(stage)
 		var fuel := stage_total_fuel_capacity(stage)
 		var sea_thrust := float(stage.get("thrust", 0.0))
