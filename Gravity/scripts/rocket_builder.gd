@@ -262,7 +262,7 @@ class AssemblyCanvas extends Control:
 	func _insert_index(y_position: float) -> int:
 		for item in _component_rects:
 			var rect: Rect2 = item.rect
-			if str(item.get("attachment", "stack")) == "stack" and y_position < rect.get_center().y:
+			if int(item.get("stage_index", selected_stage_index)) == selected_stage_index and str(item.get("attachment", "stack")) == "stack" and y_position < rect.get_center().y:
 				return int(item.index)
 		return (stage.get("components", []) as Array).size()
 
@@ -304,6 +304,7 @@ class AssemblyCanvas extends Control:
 										group_center += part_item.rect.get_center()
 										break
 							if group_items.size() > 1:
+								_rotation_start_degrees = 0.0
 								group_center /= float(group_items.size())
 								_rotation_center = group_center
 								var group_components: Array = stage.get("components", [])
@@ -315,6 +316,8 @@ class AssemblyCanvas extends Control:
 								_group_rotation_stage_center_y = float(part_item.get("stage_center_y", _drawing_stage_center_y))
 								component_group_rotation_started.emit(_group_rotation_indices)
 						else:
+							var selected_component: Dictionary = (stage.get("components", []) as Array)[_rotating_index]
+							_rotation_start_degrees = float(selected_component.get("rotation_deg", 0.0))
 							component_rotation_started.emit(_rotating_index)
 						accept_event()
 						return
@@ -528,7 +531,7 @@ class AssemblyCanvas extends Control:
 					_register_component_rect(index, rect, "radial", component, stage_index, start_y + stage_extent * scale * 0.5)
 				draw_line(Vector2(center_x + float(direction) * max_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		var stage_center_y := start_y + stage_extent * scale * 0.5
-		if editable:
+		if editable and stage_index == selected_stage_index:
 			_drawing_scale = scale
 			_drawing_width_scale = width_scale
 			_drawing_stage_center_y = stage_center_y
