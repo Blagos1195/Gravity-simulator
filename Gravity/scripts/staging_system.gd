@@ -33,7 +33,7 @@ static func create_plan(modules: Array) -> Array:
 							action_name = "ignite_solid_motor"
 						else:
 							action_name = "activate_engine"
-					elif kind in ["decoupler", "docking_port"]:
+					elif kind == "decoupler":
 						action_name = "separate"
 					elif kind == "tank":
 						action_name = "enable_fuel_supply"
