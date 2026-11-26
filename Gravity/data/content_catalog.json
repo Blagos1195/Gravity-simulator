@@ -1,1924 +1,3120 @@
 {
-  "schema_version": 1,
-  "system": {
-    "gravitational_constant": 6.6743e-11,
-    "astronomical_unit_m": 149597870700,
-    "sun_mass_kg": 1.98847e+30,
-    "sun_radius_m": 695700000,
-    "sun_color_rgb": [
-      1,
-      0.78,
-      0.28
-    ],
-    "ephemeris_epoch_jd": 2461364.5,
-    "j2000_jd": 2451545,
-    "j2000_century_days": 36525,
-    "earth_atmosphere": {
-      "height_m": 120000,
-      "sea_level_density_kg_m3": 1.225,
-      "scale_height_m": 8500,
-      "gravity_m_s2": 9.80665,
-      "gas_constant_j_kg_k": 287.05287,
-      "gamma": 1.4,
-      "base_altitudes_m": [
-        0,
-        11000,
-        20000,
-        32000,
-        47000,
-        51000,
-        71000,
-        84852
-      ],
-      "base_temperatures_k": [
-        288.15,
-        216.65,
-        216.65,
-        228.65,
-        270.65,
-        270.65,
-        214.65,
-        186.946
-      ],
-      "lapse_rates_k_m": [
-        -0.0065,
-        0,
-        0.001,
-        0.0028,
-        0,
-        -0.0028,
-        -0.002,
-        0
-      ],
-      "base_pressures_pa": [
-        101325,
-        22632.1,
-        5474.89,
-        868.019,
-        110.906,
-        66.9389,
-        3.95642,
-        0.3734
-      ]
-    },
-    "small_body_belts": [
-      {
-        "name": "Main Asteroid Belt",
-        "inner_radius_au": 2.1,
-        "outer_radius_au": 3.3,
-        "particle_count": 420,
-        "seed": 1907,
-        "particle_size_px": 1.1,
-        "opacity": 0.5,
-        "collision_radius_min_m": 500,
-        "collision_radius_max_m": 25000,
-        "color_rgb": [
-          0.78,
-          0.64,
-          0.45
-        ]
-      },
-      {
-        "name": "Kuiper Belt",
-        "inner_radius_au": 30,
-        "outer_radius_au": 50,
-        "particle_count": 520,
-        "seed": 4807,
-        "particle_size_px": 0.9,
-        "opacity": 0.34,
-        "collision_radius_min_m": 1000,
-        "collision_radius_max_m": 50000,
-        "color_rgb": [
-          0.48,
-          0.64,
-          0.84
-        ]
-      }
-    ]
-  },
-  "moon": {
-    "mass_kg": 7.342e+22,
-    "radius_m": 1737400,
-    "semi_major_axis_m": 384743583.21,
-    "transfer_orbit_radius_m": 384400000,
-    "eccentricity": 0.0549,
-    "rotation_period_s": 2360591.424,
-    "mean_anomaly_j2000_rad": 2.355555,
-    "perihelion_j2000_rad": 3.63734,
-    "mean_motion_rad_s": 0.0000026616995272,
-    "perihelion_rate_rad_s": 0,
-    "soi_radius_m": 66100000,
-    "rotation_rate_rad_s": 0.0000026616995272,
-    "solid": true,
-    "color_rgb": [
-      0.72,
-      0.74,
-      0.78
-    ]
-  },
-  "planets": [
-    {
-      "name": "Mercury",
-      "mass": 3.3011e+23,
-      "radius": 2439700,
-      "a": 0.38709927,
-      "adot": 3.7e-7,
-      "e": 0.20563593,
-      "edot": 0.00001906,
-      "i": 7.00497902,
-      "idot": -0.00594749,
-      "L": 252.2503235,
-      "Ldot": 149472.67411175,
-      "peri": 77.45779628,
-      "peridot": 0.16047689,
-      "node": 48.33076593,
-      "nodedot": -0.12534081,
-      "orbital_period": 87.969,
-      "rotation_rate_rad_s": 0.00000124,
-      "solid": true,
-      "color_rgb": [
-        0.68,
-        0.64,
-        0.58
-      ],
-      "atmosphere": {
-        "model": "none",
-        "height_m": 0,
-        "visual_height_m": 0,
-        "surface_density_kg_m3": 0,
-        "scale_height_m": 1,
-        "temperature_k": 250,
-        "gas_constant_j_kg_k": 287.05287,
-        "gamma": 1.4,
-        "color_rgb": [
-          0,
-          0,
-          0
-        ]
-      },
-      "satellites": []
-    },
-    {
-      "name": "Venus",
-      "mass": 4.8675e+24,
-      "radius": 6051800,
-      "a": 0.72333566,
-      "adot": 0.0000039,
-      "e": 0.00677672,
-      "edot": -0.00004107,
-      "i": 3.39467605,
-      "idot": -0.0007889,
-      "L": 181.9790995,
-      "Ldot": 58517.81538729,
-      "peri": 131.60246718,
-      "peridot": 0.00268329,
-      "node": 76.67984255,
-      "nodedot": -0.27769418,
-      "orbital_period": 224.701,
-      "rotation_rate_rad_s": -2.9924e-7,
-      "solid": true,
-      "color_rgb": [
-        0.91,
-        0.73,
-        0.43
-      ],
-      "atmosphere": {
-        "model": "exponential",
-        "height_m": 250000,
-        "visual_height_m": 250000,
-        "surface_density_kg_m3": 65,
-        "scale_height_m": 15900,
-        "temperature_k": 735,
-        "gas_constant_j_kg_k": 188.9,
-        "gamma": 1.3,
-        "color_rgb": [
-          0.96,
-          0.72,
-          0.36
-        ]
-      },
-      "satellites": []
-    },
-    {
-      "name": "Earth",
-      "mass": 5.972e+24,
-      "radius": 6371000,
-      "a": 1.00000261,
-      "adot": 0.00000562,
-      "e": 0.01671123,
-      "edot": -0.00004392,
-      "i": -0.00001531,
-      "idot": -0.01294668,
-      "L": 100.46457166,
-      "Ldot": 35999.37244981,
-      "peri": 102.93768193,
-      "peridot": 0.32327364,
-      "node": 0,
-      "nodedot": 0,
-      "orbital_period": 365.256,
-      "rotation_rate_rad_s": 0.000072921159,
-      "soi_radius_m": 925000000,
-      "solid": true,
-      "color_rgb": [
-        0.22,
-        0.68,
-        1
-      ],
-      "surface_color_rgb": [
-        0.1,
-        0.28,
-        0.53
-      ],
-      "atmosphere": {
-        "model": "standard",
-        "height_m": 120000,
-        "visual_height_m": 100000,
-        "surface_density_kg_m3": 1.225,
-        "scale_height_m": 8500,
-        "temperature_k": 288.15,
-        "gas_constant_j_kg_k": 287.05287,
-        "gamma": 1.4,
-        "color_rgb": [
-          0.22,
-          0.62,
-          1
-        ]
-      },
-      "satellites": []
-    },
-    {
-      "name": "Mars",
-      "mass": 6.4171e+23,
-      "radius": 3389500,
-      "a": 1.52371034,
-      "adot": 0.00001847,
-      "e": 0.0933941,
-      "edot": 0.00007882,
-      "i": 1.84969142,
-      "idot": -0.00813131,
-      "L": -4.55343205,
-      "Ldot": 19140.30268499,
-      "peri": -23.94362959,
-      "peridot": 0.44441088,
-      "node": 49.55953891,
-      "nodedot": -0.29257343,
-      "orbital_period": 686.98,
-      "rotation_rate_rad_s": 0.000070882,
-      "solid": true,
-      "color_rgb": [
-        0.88,
-        0.39,
-        0.24
-      ],
-      "atmosphere": {
-        "model": "exponential",
-        "height_m": 125000,
-        "visual_height_m": 125000,
-        "surface_density_kg_m3": 0.02,
-        "scale_height_m": 11100,
-        "temperature_k": 210,
-        "gas_constant_j_kg_k": 188.9,
-        "gamma": 1.3,
-        "color_rgb": [
-          0.91,
-          0.48,
-          0.31
-        ]
-      },
-      "satellites": [
-        {
-          "name": "Phobos",
-          "mass_kg": 10659000000000000,
-          "radius_m": 11266,
-          "semi_major_axis_m": 9376000,
-          "orbital_period_s": 27552,
-          "phase_rad": 1.2,
-          "rotation_rate_rad_s": 0.000228,
-          "solid": true,
-          "color_rgb": [
-            0.56,
-            0.51,
-            0.44
-          ]
-        },
-        {
-          "name": "Deimos",
-          "mass_kg": 1476200000000000,
-          "radius_m": 6200,
-          "semi_major_axis_m": 23463000,
-          "orbital_period_s": 109123,
-          "phase_rad": 4.1,
-          "rotation_rate_rad_s": 0.0000576,
-          "solid": true,
-          "color_rgb": [
-            0.62,
-            0.57,
-            0.5
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Jupiter",
-      "mass": 1.8982e+27,
-      "radius": 69911000,
-      "a": 5.202887,
-      "adot": -0.00011607,
-      "e": 0.04838624,
-      "edot": -0.00013253,
-      "i": 1.30439695,
-      "idot": -0.00183714,
-      "L": 34.39644051,
-      "Ldot": 3034.74612775,
-      "peri": 14.72847983,
-      "peridot": 0.21252668,
-      "node": 100.47390909,
-      "nodedot": 0.20469106,
-      "orbital_period": 4332.59,
-      "rotation_rate_rad_s": 0.00017585,
-      "solid": false,
-      "color_rgb": [
-        0.82,
-        0.66,
-        0.48
-      ],
-      "atmosphere": {
-        "model": "exponential",
-        "height_m": 1000000,
-        "visual_height_m": 1000000,
-        "surface_density_kg_m3": 0.16,
-        "scale_height_m": 27000,
-        "temperature_k": 165,
-        "gas_constant_j_kg_k": 3500,
-        "gamma": 1.4,
-        "color_rgb": [
-          0.86,
-          0.67,
-          0.48
-        ]
-      },
-      "rings": {
-        "enabled": true,
-        "inner_radius_ratio": 1.3,
-        "outer_radius_ratio": 2,
-        "color_rgb": [
-          0.72,
-          0.65,
-          0.52
-        ],
-        "opacity": 0.4
-      },
-      "satellites": [
-        {
-          "name": "Io",
-          "mass_kg": 8.9319e+22,
-          "radius_m": 1821600,
-          "semi_major_axis_m": 421700000,
-          "orbital_period_s": 152853,
-          "phase_rad": 0.3,
-          "rotation_rate_rad_s": 0.0000411,
-          "solid": true,
-          "color_rgb": [
-            0.91,
-            0.78,
-            0.49
-          ]
-        },
-        {
-          "name": "Europa",
-          "mass_kg": 4.8e+22,
-          "radius_m": 1560800,
-          "semi_major_axis_m": 671100000,
-          "orbital_period_s": 306822,
-          "phase_rad": 2,
-          "rotation_rate_rad_s": 0.0000205,
-          "solid": true,
-          "color_rgb": [
-            0.78,
-            0.72,
-            0.61
-          ]
-        },
-        {
-          "name": "Ganymede",
-          "mass_kg": 1.4819e+23,
-          "radius_m": 2634100,
-          "semi_major_axis_m": 1070400000,
-          "orbital_period_s": 618153,
-          "phase_rad": 3.7,
-          "rotation_rate_rad_s": 0.0000102,
-          "solid": true,
-          "color_rgb": [
-            0.6,
-            0.57,
-            0.52
-          ]
-        },
-        {
-          "name": "Callisto",
-          "mass_kg": 1.0759e+23,
-          "radius_m": 2410300,
-          "semi_major_axis_m": 1882700000,
-          "orbital_period_s": 1441920,
-          "phase_rad": 5,
-          "rotation_rate_rad_s": 0.00000436,
-          "solid": true,
-          "color_rgb": [
-            0.48,
-            0.45,
-            0.41
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Saturn",
-      "mass": 5.6834e+26,
-      "radius": 58232000,
-      "a": 9.53667594,
-      "adot": -0.0012506,
-      "e": 0.05386179,
-      "edot": -0.00050991,
-      "i": 2.48599187,
-      "idot": 0.00193609,
-      "L": 49.95424423,
-      "Ldot": 1222.49362201,
-      "peri": 92.59887831,
-      "peridot": -0.41897216,
-      "node": 113.66242448,
-      "nodedot": -0.28867794,
-      "orbital_period": 10759.22,
-      "rotation_rate_rad_s": 0.00016379,
-      "solid": false,
-      "color_rgb": [
-        0.82,
-        0.75,
-        0.53
-      ],
-      "atmosphere": {
-        "model": "exponential",
-        "height_m": 1500000,
-        "visual_height_m": 1500000,
-        "surface_density_kg_m3": 0.19,
-        "scale_height_m": 60000,
-        "temperature_k": 135,
-        "gas_constant_j_kg_k": 3500,
-        "gamma": 1.4,
-        "color_rgb": [
-          0.91,
-          0.79,
-          0.56
-        ]
-      },
-      "rings": {
-        "enabled": true,
-        "inner_radius_ratio": 1.2,
-        "outer_radius_ratio": 2.3,
-        "color_rgb": [
-          0.85,
-          0.78,
-          0.58
-        ],
-        "opacity": 0.8
-      },
-      "satellites": [
-        {
-          "name": "Enceladus",
-          "mass_kg": 108000000000000000000,
-          "radius_m": 252100,
-          "semi_major_axis_m": 237948000,
-          "orbital_period_s": 118386,
-          "phase_rad": 0.5,
-          "rotation_rate_rad_s": 0.0000531,
-          "solid": true,
-          "color_rgb": [
-            0.82,
-            0.86,
-            0.91
-          ]
-        },
-        {
-          "name": "Rhea",
-          "mass_kg": 2.3065e+21,
-          "radius_m": 763800,
-          "semi_major_axis_m": 527108000,
-          "orbital_period_s": 390000,
-          "phase_rad": 2.2,
-          "rotation_rate_rad_s": 0.0000161,
-          "solid": true,
-          "color_rgb": [
-            0.72,
-            0.73,
-            0.75
-          ]
-        },
-        {
-          "name": "Titan",
-          "mass_kg": 1.3452e+23,
-          "radius_m": 2574730,
-          "semi_major_axis_m": 1221870000,
-          "orbital_period_s": 1375080,
-          "phase_rad": 4,
-          "rotation_rate_rad_s": 0.00000457,
-          "solid": true,
-          "color_rgb": [
-            0.89,
-            0.64,
-            0.34
-          ],
-          "atmosphere": {
-            "model": "exponential",
-            "height_m": 600000,
-            "visual_height_m": 600000,
-            "surface_density_kg_m3": 5.3,
-            "scale_height_m": 40000,
-            "temperature_k": 94,
-            "gas_constant_j_kg_k": 296.8,
-            "gamma": 1.4,
-            "color_rgb": [
-              0.92,
-              0.67,
-              0.38
-            ]
-          }
-        },
-        {
-          "name": "Iapetus",
-          "mass_kg": 1.8056e+21,
-          "radius_m": 734500,
-          "semi_major_axis_m": 3560820000,
-          "orbital_period_s": 6850000,
-          "phase_rad": 5.4,
-          "rotation_rate_rad_s": 9.17e-7,
-          "solid": true,
-          "color_rgb": [
-            0.62,
-            0.59,
-            0.54
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Uranus",
-      "mass": 8.681e+25,
-      "radius": 25362000,
-      "a": 19.18916464,
-      "adot": -0.00196176,
-      "e": 0.04725744,
-      "edot": -0.00004397,
-      "i": 0.77263783,
-      "idot": -0.00242939,
-      "L": 313.23810451,
-      "Ldot": 428.48202785,
-      "peri": 170.9542763,
-      "peridot": 0.40805281,
-      "node": 74.01692503,
-      "nodedot": 0.04240589,
-      "orbital_period": 30688.5,
-      "rotation_rate_rad_s": -0.00010124,
-      "solid": false,
-      "color_rgb": [
-        0.48,
-        0.78,
-        0.82
-      ],
-      "atmosphere": {
-        "model": "exponential",
-        "height_m": 1000000,
-        "visual_height_m": 1000000,
-        "surface_density_kg_m3": 0.42,
-        "scale_height_m": 50000,
-        "temperature_k": 76,
-        "gas_constant_j_kg_k": 3500,
-        "gamma": 1.4,
-        "color_rgb": [
-          0.46,
-          0.81,
-          0.86
-        ]
-      },
-      "rings": {
-        "enabled": true,
-        "inner_radius_ratio": 1.4,
-        "outer_radius_ratio": 2,
-        "color_rgb": [
-          0.62,
-          0.71,
-          0.75
-        ],
-        "opacity": 0.45
-      },
-      "satellites": [
-        {
-          "name": "Miranda",
-          "mass_kg": 65900000000000000000,
-          "radius_m": 235800,
-          "semi_major_axis_m": 129900000,
-          "orbital_period_s": 122064,
-          "phase_rad": 1,
-          "rotation_rate_rad_s": 0.0000515,
-          "solid": true,
-          "color_rgb": [
-            0.67,
-            0.69,
-            0.72
-          ]
-        },
-        {
-          "name": "Ariel",
-          "mass_kg": 1.35e+21,
-          "radius_m": 578900,
-          "semi_major_axis_m": 190900000,
-          "orbital_period_s": 190900,
-          "phase_rad": 2.4,
-          "rotation_rate_rad_s": 0.0000329,
-          "solid": true,
-          "color_rgb": [
-            0.77,
-            0.79,
-            0.81
-          ]
-        },
-        {
-          "name": "Umbriel",
-          "mass_kg": 1.17e+21,
-          "radius_m": 584700,
-          "semi_major_axis_m": 266000000,
-          "orbital_period_s": 358000,
-          "phase_rad": 3.8,
-          "rotation_rate_rad_s": 0.0000176,
-          "solid": true,
-          "color_rgb": [
-            0.49,
-            0.51,
-            0.54
-          ]
-        },
-        {
-          "name": "Titania",
-          "mass_kg": 3.4e+21,
-          "radius_m": 788900,
-          "semi_major_axis_m": 435910000,
-          "orbital_period_s": 752000,
-          "phase_rad": 5,
-          "rotation_rate_rad_s": 0.00000836,
-          "solid": true,
-          "color_rgb": [
-            0.7,
-            0.72,
-            0.74
-          ]
-        },
-        {
-          "name": "Oberon",
-          "mass_kg": 3.076e+21,
-          "radius_m": 761400,
-          "semi_major_axis_m": 583520000,
-          "orbital_period_s": 1160000,
-          "phase_rad": 5.8,
-          "rotation_rate_rad_s": 0.00000542,
-          "solid": true,
-          "color_rgb": [
-            0.58,
-            0.6,
-            0.62
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Neptune",
-      "mass": 1.0241e+26,
-      "radius": 24622000,
-      "a": 30.06992276,
-      "adot": 0.00026291,
-      "e": 0.00859048,
-      "edot": 0.00005105,
-      "i": 1.77004347,
-      "idot": 0.00035372,
-      "L": -55.12002969,
-      "Ldot": 218.45945325,
-      "peri": 44.96476227,
-      "peridot": -0.32241464,
-      "node": 131.78422574,
-      "nodedot": -0.00508664,
-      "orbital_period": 60182,
-      "rotation_rate_rad_s": 0.00010834,
-      "solid": false,
-      "color_rgb": [
-        0.32,
-        0.48,
-        0.92
-      ],
-      "atmosphere": {
-        "model": "exponential",
-        "height_m": 1500000,
-        "visual_height_m": 1500000,
-        "surface_density_kg_m3": 0.45,
-        "scale_height_m": 60000,
-        "temperature_k": 72,
-        "gas_constant_j_kg_k": 3500,
-        "gamma": 1.4,
-        "color_rgb": [
-          0.36,
-          0.53,
-          1
-        ]
-      },
-      "rings": {
-        "enabled": true,
-        "inner_radius_ratio": 1.5,
-        "outer_radius_ratio": 2.1,
-        "color_rgb": [
-          0.46,
-          0.56,
-          0.78
-        ],
-        "opacity": 0.4
-      },
-      "satellites": [
-        {
-          "name": "Triton",
-          "mass_kg": 2.14e+22,
-          "radius_m": 1353400,
-          "semi_major_axis_m": 354759000,
-          "orbital_period_s": 507768,
-          "phase_rad": 2.7,
-          "orbital_direction": -1,
-          "rotation_rate_rad_s": 0.0000124,
-          "solid": true,
-          "color_rgb": [
-            0.74,
-            0.7,
-            0.67
-          ]
-        },
-        {
-          "name": "Nereid",
-          "mass_kg": 31000000000000000000,
-          "radius_m": 170000,
-          "semi_major_axis_m": 5513400000,
-          "orbital_period_s": 36000000,
-          "phase_rad": 5.2,
-          "rotation_rate_rad_s": 1.75e-7,
-          "solid": true,
-          "color_rgb": [
-            0.58,
-            0.64,
-            0.75
-          ]
-        }
-      ]
-    }
-  ],
-  "rocket": {
-    "default_design": {
-      "name": "Explorer I",
-      "payload_mass": 500,
-      "stages": [
-        "explorer_first_stage",
-        "explorer_upper_stage"
-      ]
-    },
-    "presets": {
-      "SMALL_SAT": {
-        "label": "Scout · Small satellite / LEO",
-        "description": "Light payloads and small scientific satellites. Optimised for low Earth orbit.",
-        "name": "Scout · Small Satellite",
-        "payload_mass": 150,
-        "stages": [
-          "scout_booster",
-          "scout_upper",
-          "scout_kick"
-        ]
-      },
-      "LEO_CARGO": {
-        "label": "Freighter · LEO cargo",
-        "description": "Heavy uncrewed cargo and station logistics. A practical general-purpose orbital launcher.",
-        "name": "Freighter · LEO Cargo",
-        "payload_mass": 8000,
-        "stages": [
-          "freighter_core",
-          "freighter_upper",
-          "freighter_insertion"
-        ]
-      },
-      "CREW_ORBIT": {
-        "label": "Pioneer · Crewed orbital",
-        "description": "Crew capsule and crew-support payloads. Balanced for reliable low Earth orbit insertion.",
-        "name": "Pioneer · Crewed Orbital",
-        "payload_mass": 6500,
-        "stages": [
-          "pioneer_core",
-          "pioneer_upper",
-          "pioneer_insertion"
-        ]
-      },
-      "LUNAR_CARGO": {
-        "label": "Pathfinder · Lunar cargo",
-        "description": "Large robotic payloads and lunar transfer missions. Includes a dedicated injection stage.",
-        "name": "Pathfinder · Lunar Cargo",
-        "payload_mass": 12000,
-        "stages": [
-          "pathfinder_core",
-          "pathfinder_transfer",
-          "pathfinder_injection"
-        ]
-      },
-      "DEEP_SPACE": {
-        "label": "Odyssey · Deep-space probe",
-        "description": "Smaller probes with extra departure energy for interplanetary missions. Payload capacity is deliberately lower.",
-        "name": "Odyssey · Deep-Space Probe",
-        "payload_mass": 1800,
-        "payload_id": "probe",
-        "stages": [
-          "odyssey_core",
-          "odyssey_upper",
-          "odyssey_transfer",
-          "odyssey_kick"
-        ]
-      }
-    },
-    "stage_parts": [
-      {
-        "id": "explorer_first_stage",
-        "label": "Explorer · First Stage",
-        "name": "FIRST STAGE",
-        "dry_mass": 30000,
-        "fuel_capacity": 300000,
-        "thrust": 5000000,
-        "vacuum_thrust": 6000000,
-        "flow": 1500,
-        "engine_count": 1,
-        "visual_length_factor": 1.18,
-        "visual_diameter_factor": 1.12,
-        "visual_color_rgb": [
-          0.32,
-          0.52,
-          0.68
-        ],
-        "physical_length_m": 40,
-        "collision_radius_m": 2.05
-      },
-      {
-        "id": "explorer_upper_stage",
-        "label": "Explorer · Upper Stage",
-        "name": "UPPER STAGE",
-        "dry_mass": 4000,
-        "fuel_capacity": 30000,
-        "thrust": 200000,
-        "vacuum_thrust": 250000,
-        "flow": 63.3,
-        "engine_count": 1,
-        "visual_length_factor": 0.94,
-        "visual_diameter_factor": 0.9,
-        "visual_color_rgb": [
-          0.43,
-          0.64,
-          0.76
-        ],
-        "physical_length_m": 15,
-        "collision_radius_m": 1.55
-      },
-      {
-        "id": "scout_booster",
-        "label": "Scout · Booster",
-        "name": "BOOSTER",
-        "dry_mass": 3500,
-        "fuel_capacity": 35000,
-        "thrust": 750000,
-        "vacuum_thrust": 850000,
-        "flow": 250,
-        "engine_count": 1,
-        "visual_length_factor": 1.18,
-        "visual_diameter_factor": 1.12,
-        "visual_color_rgb": [
-          0.32,
-          0.52,
-          0.68
-        ],
-        "physical_length_m": 18,
-        "collision_radius_m": 1.2
-      },
-      {
-        "id": "scout_upper",
-        "label": "Scout · Upper Stage",
-        "name": "UPPER STAGE",
-        "dry_mass": 1200,
-        "fuel_capacity": 9000,
-        "thrust": 180000,
-        "vacuum_thrust": 220000,
-        "flow": 65,
-        "engine_count": 1,
-        "visual_length_factor": 0.94,
-        "visual_diameter_factor": 0.9,
-        "visual_color_rgb": [
-          0.43,
-          0.64,
-          0.76
-        ],
-        "physical_length_m": 12,
-        "collision_radius_m": 1.5
-      },
-      {
-        "id": "scout_kick",
-        "label": "Scout · Kick Stage",
-        "name": "ORBITAL KICK STAGE",
-        "dry_mass": 1300,
-        "fuel_capacity": 3500,
-        "thrust": 100000,
-        "vacuum_thrust": 110000,
-        "flow": 30,
-        "engine_count": 1,
-        "visual_length_factor": 0.78,
-        "visual_diameter_factor": 0.78,
-        "visual_color_rgb": [
-          0.52,
-          0.58,
-          0.68
-        ],
-        "physical_length_m": 8,
-        "collision_radius_m": 1.2
-      },
-      {
-        "id": "freighter_core",
-        "label": "Freighter · Core Booster",
-        "name": "CORE BOOSTER",
-        "dry_mass": 22000,
-        "fuel_capacity": 240000,
-        "thrust": 5000000,
-        "vacuum_thrust": 5700000,
-        "flow": 1650,
-        "engine_count": 1,
-        "visual_length_factor": 1.18,
-        "visual_diameter_factor": 1.12,
-        "visual_color_rgb": [
-          0.32,
-          0.52,
-          0.68
-        ],
-        "physical_length_m": 38,
-        "collision_radius_m": 2.5
-      },
-      {
-        "id": "freighter_upper",
-        "label": "Freighter · Upper Stage",
-        "name": "UPPER STAGE",
-        "dry_mass": 5500,
-        "fuel_capacity": 65000,
-        "thrust": 900000,
-        "vacuum_thrust": 1100000,
-        "flow": 320,
-        "engine_count": 1,
-        "visual_length_factor": 0.94,
-        "visual_diameter_factor": 0.9,
-        "visual_color_rgb": [
-          0.43,
-          0.64,
-          0.76
-        ],
-        "physical_length_m": 16,
-        "collision_radius_m": 1.8
-      },
-      {
-        "id": "freighter_insertion",
-        "label": "Freighter · Insertion Stage",
-        "name": "ORBITAL INSERTION STAGE",
-        "dry_mass": 1800,
-        "fuel_capacity": 15000,
-        "thrust": 220000,
-        "vacuum_thrust": 260000,
-        "flow": 75,
-        "engine_count": 1,
-        "visual_length_factor": 0.78,
-        "visual_diameter_factor": 0.78,
-        "visual_color_rgb": [
-          0.52,
-          0.58,
-          0.68
-        ],
-        "physical_length_m": 9,
-        "collision_radius_m": 1.25
-      },
-      {
-        "id": "pioneer_core",
-        "label": "Pioneer · Core Booster",
-        "name": "CORE BOOSTER",
-        "dry_mass": 24000,
-        "fuel_capacity": 250000,
-        "thrust": 5600000,
-        "vacuum_thrust": 6400000,
-        "flow": 1800,
-        "engine_count": 1,
-        "visual_length_factor": 1.18,
-        "visual_diameter_factor": 1.12,
-        "visual_color_rgb": [
-          0.32,
-          0.52,
-          0.68
-        ],
-        "physical_length_m": 42,
-        "collision_radius_m": 2.5
-      },
-      {
-        "id": "pioneer_upper",
-        "label": "Pioneer · Upper Stage",
-        "name": "UPPER STAGE",
-        "dry_mass": 6000,
-        "fuel_capacity": 75000,
-        "thrust": 1100000,
-        "vacuum_thrust": 1300000,
-        "flow": 370,
-        "engine_count": 1,
-        "visual_length_factor": 0.94,
-        "visual_diameter_factor": 0.9,
-        "visual_color_rgb": [
-          0.43,
-          0.64,
-          0.76
-        ],
-        "physical_length_m": 18,
-        "collision_radius_m": 1.8
-      },
-      {
-        "id": "pioneer_insertion",
-        "label": "Pioneer · Insertion Stage",
-        "name": "ORBITAL INSERTION STAGE",
-        "dry_mass": 2200,
-        "fuel_capacity": 18000,
-        "thrust": 240000,
-        "vacuum_thrust": 290000,
-        "flow": 82,
-        "engine_count": 1,
-        "visual_length_factor": 0.78,
-        "visual_diameter_factor": 0.78,
-        "visual_color_rgb": [
-          0.52,
-          0.58,
-          0.68
-        ],
-        "physical_length_m": 10,
-        "collision_radius_m": 1.25
-      },
-      {
-        "id": "pathfinder_core",
-        "label": "Pathfinder · Heavy Core",
-        "name": "HEAVY CORE",
-        "dry_mass": 30000,
-        "fuel_capacity": 540000,
-        "thrust": 10080000,
-        "vacuum_thrust": 10800000,
-        "flow": 3000,
-        "engine_count": 1,
-        "visual_length_factor": 1.18,
-        "visual_diameter_factor": 1.12,
-        "visual_color_rgb": [
-          0.32,
-          0.52,
-          0.68
-        ],
-        "physical_length_m": 44,
-        "collision_radius_m": 2.6
-      },
-      {
-        "id": "pathfinder_transfer",
-        "label": "Pathfinder · Transfer Stage",
-        "name": "TRANSFER STAGE",
-        "dry_mass": 6000,
-        "fuel_capacity": 108000,
-        "thrust": 1230000,
-        "vacuum_thrust": 1500000,
-        "flow": 390,
-        "engine_count": 1,
-        "visual_length_factor": 0.94,
-        "visual_diameter_factor": 0.9,
-        "visual_color_rgb": [
-          0.43,
-          0.64,
-          0.76
-        ],
-        "physical_length_m": 18,
-        "collision_radius_m": 1.8
-      },
-      {
-        "id": "pathfinder_injection",
-        "label": "Pathfinder · Injection Stage",
-        "name": "INJECTION STAGE",
-        "dry_mass": 2000,
-        "fuel_capacity": 36000,
-        "thrust": 400000,
-        "vacuum_thrust": 460000,
-        "flow": 110,
-        "engine_count": 1,
-        "visual_length_factor": 0.78,
-        "visual_diameter_factor": 0.78,
-        "visual_color_rgb": [
-          0.52,
-          0.58,
-          0.68
-        ],
-        "physical_length_m": 10,
-        "collision_radius_m": 1.25
-      },
-      {
-        "id": "odyssey_core",
-        "label": "Odyssey · Core Booster",
-        "name": "CORE BOOSTER",
-        "dry_mass": 28000,
-        "fuel_capacity": 300000,
-        "thrust": 6200000,
-        "vacuum_thrust": 7000000,
-        "flow": 1950,
-        "engine_count": 1,
-        "visual_length_factor": 1.18,
-        "visual_diameter_factor": 1.12,
-        "visual_color_rgb": [
-          0.32,
-          0.52,
-          0.68
-        ],
-        "physical_length_m": 42,
-        "collision_radius_m": 2.5
-      },
-      {
-        "id": "odyssey_upper",
-        "label": "Odyssey · Upper Stage",
-        "name": "UPPER STAGE",
-        "dry_mass": 7000,
-        "fuel_capacity": 80000,
-        "thrust": 1200000,
-        "vacuum_thrust": 1450000,
-        "flow": 410,
-        "engine_count": 1,
-        "visual_length_factor": 0.94,
-        "visual_diameter_factor": 0.9,
-        "visual_color_rgb": [
-          0.43,
-          0.64,
-          0.76
-        ],
-        "physical_length_m": 18,
-        "collision_radius_m": 1.8
-      },
-      {
-        "id": "odyssey_transfer",
-        "label": "Odyssey · Transfer Stage",
-        "name": "TRANSFER STAGE",
-        "dry_mass": 2500,
-        "fuel_capacity": 24000,
-        "thrust": 250000,
-        "vacuum_thrust": 310000,
-        "flow": 87,
-        "engine_count": 1,
-        "visual_length_factor": 0.94,
-        "visual_diameter_factor": 0.9,
-        "visual_color_rgb": [
-          0.43,
-          0.64,
-          0.76
-        ],
-        "physical_length_m": 12,
-        "collision_radius_m": 1.5
-      },
-      {
-        "id": "odyssey_kick",
-        "label": "Odyssey · Deep-Space Kick Stage",
-        "name": "DEEP-SPACE KICK STAGE",
-        "dry_mass": 700,
-        "fuel_capacity": 4500,
-        "thrust": 100000,
-        "vacuum_thrust": 120000,
-        "flow": 34,
-        "engine_count": 1,
-        "visual_length_factor": 0.78,
-        "visual_diameter_factor": 0.78,
-        "visual_color_rgb": [
-          0.52,
-          0.58,
-          0.68
-        ],
-        "physical_length_m": 7,
-        "collision_radius_m": 1.1
-      }
-    ],
-    "builder_options": {
-      "payloads": [
-        {
-          "id": "satellite",
-          "label": "Scout telescope satellite · 150 kg",
-          "mass": 150,
-          "visual_type": "satellite",
-          "visual_width_factor": 1,
-          "visual_height_factor": 1,
-          "visual_color_rgb": [
-            0.78,
-            0.7,
-            0.42
-          ],
-          "telescope_range_au": 1.2,
-          "satellite_role": "observation",
-          "revenue_per_day": 15000,
-          "operating_cost_per_day": 4000,
-          "operational_lifetime_days": 3650
-        },
-        {
-          "id": "communications_satellite",
-          "label": "Communications satellite · 450 kg",
-          "mass": 450,
-          "visual_type": "satellite",
-          "visual_width_factor": 1.1,
-          "visual_height_factor": 1,
-          "visual_color_rgb": [
-            0.55,
-            0.82,
-            0.72
-          ],
-          "telescope_range_au": 0,
-          "satellite_role": "communications",
-          "revenue_per_day": 45000,
-          "operating_cost_per_day": 9000,
-          "operational_lifetime_days": 3650
-        },
-        {
-          "id": "survey_satellite",
-          "label": "Survey telescope satellite · 350 kg",
-          "mass": 350,
-          "visual_type": "satellite",
-          "visual_width_factor": 1.1,
-          "visual_height_factor": 1,
-          "visual_color_rgb": [
-            0.68,
-            0.78,
-            0.9
-          ],
-          "telescope_range_au": 3.5,
-          "satellite_role": "science",
-          "revenue_per_day": 30000,
-          "operating_cost_per_day": 10000,
-          "operational_lifetime_days": 2920
-        },
-        {
-          "id": "deep_space_telescope",
-          "label": "Deep-space telescope · 1800 kg",
-          "mass": 1800,
-          "visual_type": "satellite",
-          "visual_width_factor": 1.25,
-          "visual_height_factor": 1.15,
-          "visual_color_rgb": [
-            0.88,
-            0.72,
-            0.42
-          ],
-          "telescope_range_au": 10.5,
-          "satellite_role": "navigation",
-          "revenue_per_day": 50000,
-          "operating_cost_per_day": 20000,
-          "operational_lifetime_days": 1825
-        },
-        {
-          "id": "probe",
-          "label": "Science probe · 1.8 t",
-          "mass": 1800,
-          "visual_type": "probe",
-          "visual_width_factor": 1,
-          "visual_height_factor": 1,
-          "visual_color_rgb": [
-            0.82,
-            0.87,
-            0.93
-          ]
-        },
-        {
-          "id": "crew",
-          "label": "Crew capsule · 6.5 t",
-          "mass": 6500,
-          "visual_type": "crew",
-          "visual_width_factor": 1,
-          "visual_height_factor": 1,
-          "visual_color_rgb": [
-            0.84,
-            0.88,
-            0.94
-          ]
-        },
-        {
-          "id": "cargo",
-          "label": "Cargo module · 8 t",
-          "mass": 8000,
-          "visual_type": "cargo",
-          "visual_width_factor": 1,
-          "visual_height_factor": 1,
-          "visual_color_rgb": [
-            0.62,
-            0.68,
-            0.76
-          ]
-        },
-        {
-          "id": "heavy_cargo",
-          "label": "Heavy cargo · 12 t",
-          "mass": 12000,
-          "visual_type": "cargo",
-          "visual_width_factor": 1.35,
-          "visual_height_factor": 1.2,
-          "visual_color_rgb": [
-            0.5,
-            0.58,
-            0.68
-          ]
-        }
-      ],
-      "booster_options": [
-        {
-          "id": "solid_booster_pair",
-          "label": "Solid strap-on booster pair",
-          "dry_mass": 8000,
-          "fuel_capacity": 42000,
-          "thrust": 550000,
-          "vacuum_thrust": 600000,
-          "flow": 180,
-          "pair_count": 2,
-          "visual_width_factor": 0.48,
-          "visual_length_factor": 0.88,
-          "visual_color_rgb": [
-            0.72,
-            0.74,
-            0.78
-          ],
-          "collision_radius_m": 1.1
-        },
-        {
-          "id": "liquid_booster_pair",
-          "label": "Liquid strap-on booster pair",
-          "dry_mass": 11000,
-          "fuel_capacity": 65000,
-          "thrust": 800000,
-          "vacuum_thrust": 900000,
-          "flow": 240,
-          "pair_count": 2,
-          "visual_width_factor": 0.56,
-          "visual_length_factor": 1,
-          "visual_color_rgb": [
-            0.62,
-            0.7,
-            0.8
-          ],
-          "collision_radius_m": 1.3
-        }
-      ],
-      "engine_counts": [
-        1,
-        2,
-        3,
-        4,
-        6,
-        8,
-        12,
-        16,
-        20,
-        24,
-        32
-      ],
-      "tank_scales": [
-        {
-          "label": "Compact tank",
-          "scale": 0.75
-        },
-        {
-          "label": "Standard tank",
-          "scale": 1
-        },
-        {
-          "label": "Extended tank",
-          "scale": 1.25
-        },
-        {
-          "label": "Large tank",
-          "scale": 1.5
-        },
-        {
-          "label": "Heavy tank",
-          "scale": 2
-        },
-        {
-          "label": "Oversized tank",
-          "scale": 3
-        },
-        {
-          "label": "Very large tank",
-          "scale": 5
-        },
-        {
-          "label": "Extreme tank",
-          "scale": 10
-        }
-      ]
-    },
-    "components": {
-      "tanks": [
-        {
-          "id": "compact_tank",
-          "label": "Compact propellant tank",
-          "dry_mass": 1800,
-          "fuel_capacity": 12000,
-          "length_m": 6,
-          "collision_radius_m": 1.2,
-          "color_rgb": [
-            0.62,
-            0.72,
-            0.8
-          ]
-        },
-        {
-          "id": "medium_tank",
-          "label": "Medium propellant tank",
-          "dry_mass": 6000,
-          "fuel_capacity": 80000,
-          "length_m": 12,
-          "collision_radius_m": 1.8,
-          "color_rgb": [
-            0.45,
-            0.62,
-            0.76
-          ]
-        },
-        {
-          "id": "large_tank",
-          "label": "Large propellant tank",
-          "dry_mass": 15000,
-          "fuel_capacity": 200000,
-          "length_m": 22,
-          "collision_radius_m": 2.4,
-          "color_rgb": [
-            0.35,
-            0.55,
-            0.7
-          ]
-        },
-        {
-          "id": "heavy_tank",
-          "label": "Heavy propellant tank",
-          "dry_mass": 26000,
-          "fuel_capacity": 360000,
-          "length_m": 30,
-          "collision_radius_m": 2.8,
-          "color_rgb": [
-            0.3,
-            0.48,
-            0.65
-          ]
-        },
-        {
-          "id": "xenon_tank",
-          "label": "Xenon propellant tank",
-          "dry_mass": 120,
-          "fuel_capacity": 0,
-          "resource_capacities": {
-            "xenon": 500
-          },
-          "length_m": 2.2,
-          "collision_radius_m": 0.65,
-          "color_rgb": [
-            0.42,
-            0.58,
-            0.78
-          ]
-        }
-      ],
-      "engines": [
-        {
-          "id": "sea_level_engine",
-          "label": "Sea-level engine",
-          "dry_mass": 2500,
-          "thrust": 900000,
-          "vacuum_thrust": 1050000,
-          "flow": 300,
-          "length_m": 4,
-          "collision_radius_m": 1.2,
-          "color_rgb": [
-            0.58,
-            0.62,
-            0.68
-          ]
-        },
-        {
-          "id": "vacuum_engine",
-          "label": "Vacuum engine",
-          "dry_mass": 900,
-          "thrust": 250000,
-          "vacuum_thrust": 310000,
-          "flow": 85,
-          "length_m": 3,
-          "collision_radius_m": 0.9,
-          "color_rgb": [
-            0.62,
-            0.66,
-            0.72
-          ]
-        },
-        {
-          "id": "heavy_engine",
-          "label": "Heavy engine",
-          "dry_mass": 6500,
-          "thrust": 2800000,
-          "vacuum_thrust": 3100000,
-          "flow": 900,
-          "length_m": 5,
-          "collision_radius_m": 1.8,
-          "color_rgb": [
-            0.52,
-            0.58,
-            0.66
-          ]
-        },
-        {
-          "id": "small_engine_cluster",
-          "label": "Small engine cluster",
-          "dry_mass": 1800,
-          "thrust": 520000,
-          "vacuum_thrust": 620000,
-          "flow": 170,
-          "length_m": 3,
-          "collision_radius_m": 1.1,
-          "color_rgb": [
-            0.65,
-            0.68,
-            0.73
-          ]
-        },
-        {
-          "id": "ion_engine",
-          "label": "Electric ion engine",
-          "dry_mass": 250,
-          "thrust": 1,
-          "vacuum_thrust": 1,
-          "flow": 0.000034,
-          "fuel_type": "xenon",
-          "electric_draw_w": 25000,
-          "length_m": 2.8,
-          "collision_radius_m": 0.8,
-          "color_rgb": [
-            0.45,
-            0.72,
-            0.9
-          ]
-        },
-        {
-          "id": "solid_fuel_motor",
-          "label": "Solid rocket motor",
-          "dry_mass": 900,
-          "thrust": 800000,
-          "vacuum_thrust": 900000,
-          "flow": 260,
-          "fuel_type": "solid_propellant",
-          "solid_propellant_capacity": 12000,
-          "solid_motor": true,
-          "ignited": false,
-          "length_m": 5.5,
-          "collision_radius_m": 1.5,
-          "color_rgb": [
-            0.62,
-            0.48,
-            0.36
-          ]
-        }
-      ],
-      "decouplers": [
-        {
-          "id": "stack_decoupler",
-          "label": "Stack decoupler",
-          "dry_mass": 280,
-          "length_m": 1.2,
-          "collision_radius_m": 1.4,
-          "color_rgb": [
-            0.72,
-            0.75,
-            0.8
-          ]
-        },
-        {
-          "id": "heavy_decoupler",
-          "label": "Heavy decoupler",
-          "dry_mass": 650,
-          "length_m": 1.8,
-          "collision_radius_m": 2.1,
-          "color_rgb": [
-            0.58,
-            0.64,
-            0.72
-          ]
-        }
-      ],
-      "structures": [
-        {
-          "id": "structural_adapter",
-          "label": "Structural adapter",
-          "dry_mass": 450,
-          "length_m": 2,
-          "collision_radius_m": 1.5,
-          "color_rgb": [
-            0.46,
-            0.55,
-            0.65
-          ]
-        },
-        {
-          "id": "payload_fairing",
-          "label": "Payload fairing",
-          "dry_mass": 900,
-          "length_m": 5,
-          "collision_radius_m": 1.7,
-          "color_rgb": [
-            0.78,
-            0.82,
-            0.88
-          ]
-        }
-      ],
-      "rcs": [
-        {
-          "id": "rcs_thruster_block",
-          "label": "RCS thruster block",
-          "dry_mass": 180,
-          "rcs_propellant_capacity": 250,
-          "rcs_thrust": 1800,
-          "rcs_flow": 0.83,
-          "rcs_torque": 1800,
-          "length_m": 1.8,
-          "collision_radius_m": 0.65,
-          "color_rgb": [
-            0.72,
-            0.76,
-            0.82
-          ]
-        }
-      ],
-      "docking_ports": [
-        {
-          "id": "standard_docking_port",
-          "label": "Standard docking port",
-          "dry_mass": 220,
-          "length_m": 1.4,
-          "collision_radius_m": 0.85,
-          "port_facing": 1,
-          "color_rgb": [
-            0.78,
-            0.72,
-            0.48
-          ]
-        }
-      ],
-      "power": [
-        {
-          "id": "battery_pack",
-          "label": "Battery pack",
-          "dry_mass": 300,
-          "electric_capacity": 270000000,
-          "length_m": 2.2,
-          "collision_radius_m": 0.7,
-          "color_rgb": [
-            0.36,
-            0.62,
-            0.45
-          ]
-        },
-        {
-          "id": "solar_array",
-          "label": "Deployable solar array",
-          "dry_mass": 180,
-          "power_generation_w": 5000,
-          "deployable": true,
-          "length_m": 4,
-          "collision_radius_m": 0.15,
-          "color_rgb": [
-            0.25,
-            0.42,
-            0.72
-          ]
-        }
-      ],
-      "payloads": [
-        {
-          "id": "scout_telescope_bus",
-          "label": "Scout telescope satellite bus",
-          "dry_mass": 150,
-          "fuel_capacity": 0,
-          "length_m": 1.8,
-          "collision_radius_m": 0.65,
-          "color_rgb": [
-            0.78,
-            0.7,
-            0.42
-          ],
-          "visual_type": "satellite",
-          "telescope_range_au": 1.2,
-          "satellite_role": "observation",
-          "revenue_per_day": 15000,
-          "operating_cost_per_day": 4000,
-          "operational_lifetime_days": 3650
-        },
-        {
-          "id": "communications_satellite_bus",
-          "label": "Communications satellite bus",
-          "dry_mass": 450,
-          "fuel_capacity": 0,
-          "length_m": 2.4,
-          "collision_radius_m": 0.8,
-          "color_rgb": [
-            0.55,
-            0.82,
-            0.72
-          ],
-          "visual_type": "satellite",
-          "satellite_role": "communications",
-          "revenue_per_day": 45000,
-          "operating_cost_per_day": 9000,
-          "operational_lifetime_days": 3650
-        },
-        {
-          "id": "survey_satellite_bus",
-          "label": "Survey telescope satellite bus",
-          "dry_mass": 350,
-          "fuel_capacity": 0,
-          "length_m": 2.2,
-          "collision_radius_m": 0.8,
-          "color_rgb": [
-            0.68,
-            0.78,
-            0.9
-          ],
-          "visual_type": "satellite",
-          "telescope_range_au": 3.5,
-          "satellite_role": "science",
-          "revenue_per_day": 30000,
-          "operating_cost_per_day": 10000,
-          "operational_lifetime_days": 2920
-        },
-        {
-          "id": "deep_space_telescope_bus",
-          "label": "Deep-space telescope bus",
-          "dry_mass": 1800,
-          "fuel_capacity": 0,
-          "length_m": 3.8,
-          "collision_radius_m": 1.1,
-          "color_rgb": [
-            0.88,
-            0.72,
-            0.42
-          ],
-          "visual_type": "satellite",
-          "telescope_range_au": 10.5,
-          "satellite_role": "navigation",
-          "revenue_per_day": 50000,
-          "operating_cost_per_day": 20000,
-          "operational_lifetime_days": 1825
-        },
-        {
-          "id": "science_probe_bus",
-          "label": "Science probe bus",
-          "dry_mass": 1800,
-          "fuel_capacity": 0,
-          "length_m": 3,
-          "collision_radius_m": 1,
-          "color_rgb": [
-            0.82,
-            0.87,
-            0.93
-          ],
-          "visual_type": "probe"
-        },
-        {
-          "id": "crew_capsule",
-          "label": "Crew capsule",
-          "dry_mass": 6500,
-          "fuel_capacity": 0,
-          "length_m": 4.5,
-          "collision_radius_m": 1.5,
-          "color_rgb": [
-            0.84,
-            0.88,
-            0.94
-          ],
-          "visual_type": "crew"
-        },
-        {
-          "id": "cargo_module",
-          "label": "Cargo module",
-          "dry_mass": 8000,
-          "fuel_capacity": 0,
-          "length_m": 5,
-          "collision_radius_m": 1.7,
-          "color_rgb": [
-            0.62,
-            0.68,
-            0.76
-          ],
-          "visual_type": "cargo"
-        },
-        {
-          "id": "heavy_cargo_module",
-          "label": "Heavy cargo module",
-          "dry_mass": 12000,
-          "fuel_capacity": 0,
-          "length_m": 6,
-          "collision_radius_m": 2,
-          "color_rgb": [
-            0.5,
-            0.58,
-            0.68
-          ],
-          "visual_type": "cargo"
-        },
-        {
-          "id": "avionics_control_module",
-          "label": "Avionics and guidance module",
-          "dry_mass": 250,
-          "fuel_capacity": 0,
-          "length_m": 1.4,
-          "collision_radius_m": 0.55,
-          "color_rgb": [
-            0.38,
-            0.62,
-            0.68
-          ],
-          "visual_type": "avionics"
-        }
-      ]
-    }
-  },
-  "missions": [
-    {
-      "id": "first_orbit",
-      "title": "First Orbit",
-      "description": "Establish a stable orbit around Earth.",
-      "condition": "orbit_body",
-      "body": "Earth",
-      "reward": 5000000
-    },
-    {
-      "id": "lunar_orbit",
-      "title": "Lunar Survey",
-      "description": "Establish a stable orbit around the Moon.",
-      "condition": "orbit_body",
-      "body": "Moon",
-      "reward": 15000000
-    },
-    {
-      "id": "mars_discovery",
-      "title": "Red Planet Reconnaissance",
-      "description": "Spot Mars with a telescope or by visiting its sphere of influence.",
-      "condition": "discover_body",
-      "body": "Mars",
-      "reward": 12000000
-    },
-    {
-      "id": "inner_survey",
-      "title": "Inner System Survey",
-      "description": "Permanently discover four planets.",
-      "condition": "discover_count",
-      "count": 4,
-      "reward": 20000000
-    },
-    {
-      "id": "jovian_discovery",
-      "title": "Jovian Reconnaissance",
-      "description": "Permanently discover Jupiter.",
-      "condition": "discover_body",
-      "body": "Jupiter",
-      "reward": 35000000
-    },
-    {
-      "id": "saturn_orbit",
-      "title": "Saturn Operations",
-      "description": "Establish a stable orbit around Saturn.",
-      "condition": "orbit_body",
-      "body": "Saturn",
-      "reward": 50000000
-    },
-    {
-      "id": "uranus_discovery",
-      "title": "Uranus Reconnaissance",
-      "description": "Permanently discover Uranus.",
-      "condition": "discover_body",
-      "body": "Uranus",
-      "reward": 75000000
-    },
-    {
-      "id": "neptune_discovery",
-      "title": "Neptune Exploration",
-      "description": "Permanently discover Neptune.",
-      "condition": "discover_body",
-      "body": "Neptune",
-      "reward": 100000000
-    },
-    {
-      "id": "satellite_network",
-      "title": "Orbital Network",
-      "description": "Operate three satellites simultaneously.",
-      "condition": "operational_satellites",
-      "count": 3,
-      "reward": 25000000
-    }
-  ]
+	"schema_version": 1,
+	"system": {
+		"gravitational_constant": 6.6743e-11,
+		"astronomical_unit_m": 149597870700,
+		"sun_mass_kg": 1.98847e+30,
+		"sun_radius_m": 695700000,
+		"sun_color_rgb": [
+			1,
+			0.78,
+			0.28
+		],
+		"ephemeris_epoch_jd": 2461364.5,
+		"j2000_jd": 2451545,
+		"j2000_century_days": 36525,
+		"earth_atmosphere": {
+			"height_m": 120000,
+			"sea_level_density_kg_m3": 1.225,
+			"scale_height_m": 8500,
+			"gravity_m_s2": 9.80665,
+			"gas_constant_j_kg_k": 287.05287,
+			"gamma": 1.4,
+			"base_altitudes_m": [
+				0,
+				11000,
+				20000,
+				32000,
+				47000,
+				51000,
+				71000,
+				84852
+			],
+			"base_temperatures_k": [
+				288.15,
+				216.65,
+				216.65,
+				228.65,
+				270.65,
+				270.65,
+				214.65,
+				186.946
+			],
+			"lapse_rates_k_m": [
+				-0.0065,
+				0,
+				0.001,
+				0.0028,
+				0,
+				-0.0028,
+				-0.002,
+				0
+			],
+			"base_pressures_pa": [
+				101325,
+				22632.1,
+				5474.89,
+				868.019,
+				110.906,
+				66.9389,
+				3.95642,
+				0.3734
+			]
+		},
+		"small_body_belts": [
+			{
+				"name": "Main Asteroid Belt",
+				"inner_radius_au": 2.1,
+				"outer_radius_au": 3.3,
+				"particle_count": 420,
+				"seed": 1907,
+				"particle_size_px": 1.1,
+				"opacity": 0.5,
+				"collision_radius_min_m": 500,
+				"collision_radius_max_m": 25000,
+				"color_rgb": [
+					0.78,
+					0.64,
+					0.45
+				]
+			},
+			{
+				"name": "Kuiper Belt",
+				"inner_radius_au": 30,
+				"outer_radius_au": 50,
+				"particle_count": 520,
+				"seed": 4807,
+				"particle_size_px": 0.9,
+				"opacity": 0.34,
+				"collision_radius_min_m": 1000,
+				"collision_radius_max_m": 50000,
+				"color_rgb": [
+					0.48,
+					0.64,
+					0.84
+				]
+			}
+		]
+	},
+	"moon": {
+		"mass_kg": 7.342e+22,
+		"radius_m": 1737400,
+		"semi_major_axis_m": 384743583.21,
+		"transfer_orbit_radius_m": 384400000,
+		"eccentricity": 0.0549,
+		"rotation_period_s": 2360591.424,
+		"mean_anomaly_j2000_rad": 2.355555,
+		"perihelion_j2000_rad": 3.63734,
+		"mean_motion_rad_s": 0.0000026616995272,
+		"perihelion_rate_rad_s": 0,
+		"soi_radius_m": 66100000,
+		"rotation_rate_rad_s": 0.0000026616995272,
+		"solid": true,
+		"color_rgb": [
+			0.72,
+			0.74,
+			0.78
+		]
+	},
+	"planets": [
+		{
+			"name": "Mercury",
+			"mass": 3.3011e+23,
+			"radius": 2439700,
+			"a": 0.38709927,
+			"adot": 3.7e-7,
+			"e": 0.20563593,
+			"edot": 0.00001906,
+			"i": 7.00497902,
+			"idot": -0.00594749,
+			"L": 252.2503235,
+			"Ldot": 149472.67411175,
+			"peri": 77.45779628,
+			"peridot": 0.16047689,
+			"node": 48.33076593,
+			"nodedot": -0.12534081,
+			"orbital_period": 87.969,
+			"rotation_rate_rad_s": 0.00000124,
+			"solid": true,
+			"color_rgb": [
+				0.68,
+				0.64,
+				0.58
+			],
+			"atmosphere": {
+				"model": "none",
+				"height_m": 0,
+				"visual_height_m": 0,
+				"surface_density_kg_m3": 0,
+				"scale_height_m": 1,
+				"temperature_k": 250,
+				"gas_constant_j_kg_k": 287.05287,
+				"gamma": 1.4,
+				"color_rgb": [
+					0,
+					0,
+					0
+				]
+			},
+			"satellites": []
+		},
+		{
+			"name": "Venus",
+			"mass": 4.8675e+24,
+			"radius": 6051800,
+			"a": 0.72333566,
+			"adot": 0.0000039,
+			"e": 0.00677672,
+			"edot": -0.00004107,
+			"i": 3.39467605,
+			"idot": -0.0007889,
+			"L": 181.9790995,
+			"Ldot": 58517.81538729,
+			"peri": 131.60246718,
+			"peridot": 0.00268329,
+			"node": 76.67984255,
+			"nodedot": -0.27769418,
+			"orbital_period": 224.701,
+			"rotation_rate_rad_s": -2.9924e-7,
+			"solid": true,
+			"color_rgb": [
+				0.91,
+				0.73,
+				0.43
+			],
+			"atmosphere": {
+				"model": "exponential",
+				"height_m": 250000,
+				"visual_height_m": 250000,
+				"surface_density_kg_m3": 65,
+				"scale_height_m": 15900,
+				"temperature_k": 735,
+				"gas_constant_j_kg_k": 188.9,
+				"gamma": 1.3,
+				"color_rgb": [
+					0.96,
+					0.72,
+					0.36
+				]
+			},
+			"satellites": []
+		},
+		{
+			"name": "Earth",
+			"mass": 5.972e+24,
+			"radius": 6371000,
+			"a": 1.00000261,
+			"adot": 0.00000562,
+			"e": 0.01671123,
+			"edot": -0.00004392,
+			"i": -0.00001531,
+			"idot": -0.01294668,
+			"L": 100.46457166,
+			"Ldot": 35999.37244981,
+			"peri": 102.93768193,
+			"peridot": 0.32327364,
+			"node": 0,
+			"nodedot": 0,
+			"orbital_period": 365.256,
+			"rotation_rate_rad_s": 0.000072921159,
+			"soi_radius_m": 925000000,
+			"solid": true,
+			"color_rgb": [
+				0.22,
+				0.68,
+				1
+			],
+			"surface_color_rgb": [
+				0.1,
+				0.28,
+				0.53
+			],
+			"atmosphere": {
+				"model": "standard",
+				"height_m": 120000,
+				"visual_height_m": 100000,
+				"surface_density_kg_m3": 1.225,
+				"scale_height_m": 8500,
+				"temperature_k": 288.15,
+				"gas_constant_j_kg_k": 287.05287,
+				"gamma": 1.4,
+				"color_rgb": [
+					0.22,
+					0.62,
+					1
+				]
+			},
+			"satellites": []
+		},
+		{
+			"name": "Mars",
+			"mass": 6.4171e+23,
+			"radius": 3389500,
+			"a": 1.52371034,
+			"adot": 0.00001847,
+			"e": 0.0933941,
+			"edot": 0.00007882,
+			"i": 1.84969142,
+			"idot": -0.00813131,
+			"L": -4.55343205,
+			"Ldot": 19140.30268499,
+			"peri": -23.94362959,
+			"peridot": 0.44441088,
+			"node": 49.55953891,
+			"nodedot": -0.29257343,
+			"orbital_period": 686.98,
+			"rotation_rate_rad_s": 0.000070882,
+			"solid": true,
+			"color_rgb": [
+				0.88,
+				0.39,
+				0.24
+			],
+			"atmosphere": {
+				"model": "exponential",
+				"height_m": 125000,
+				"visual_height_m": 125000,
+				"surface_density_kg_m3": 0.02,
+				"scale_height_m": 11100,
+				"temperature_k": 210,
+				"gas_constant_j_kg_k": 188.9,
+				"gamma": 1.3,
+				"color_rgb": [
+					0.91,
+					0.48,
+					0.31
+				]
+			},
+			"satellites": [
+				{
+					"name": "Phobos",
+					"mass_kg": 10659000000000000,
+					"radius_m": 11266,
+					"semi_major_axis_m": 9376000,
+					"orbital_period_s": 27552,
+					"phase_rad": 1.2,
+					"rotation_rate_rad_s": 0.000228,
+					"solid": true,
+					"color_rgb": [
+						0.56,
+						0.51,
+						0.44
+					]
+				},
+				{
+					"name": "Deimos",
+					"mass_kg": 1476200000000000,
+					"radius_m": 6200,
+					"semi_major_axis_m": 23463000,
+					"orbital_period_s": 109123,
+					"phase_rad": 4.1,
+					"rotation_rate_rad_s": 0.0000576,
+					"solid": true,
+					"color_rgb": [
+						0.62,
+						0.57,
+						0.5
+					]
+				}
+			]
+		},
+		{
+			"name": "Jupiter",
+			"mass": 1.8982e+27,
+			"radius": 69911000,
+			"a": 5.202887,
+			"adot": -0.00011607,
+			"e": 0.04838624,
+			"edot": -0.00013253,
+			"i": 1.30439695,
+			"idot": -0.00183714,
+			"L": 34.39644051,
+			"Ldot": 3034.74612775,
+			"peri": 14.72847983,
+			"peridot": 0.21252668,
+			"node": 100.47390909,
+			"nodedot": 0.20469106,
+			"orbital_period": 4332.59,
+			"rotation_rate_rad_s": 0.00017585,
+			"solid": false,
+			"color_rgb": [
+				0.82,
+				0.66,
+				0.48
+			],
+			"atmosphere": {
+				"model": "exponential",
+				"height_m": 1000000,
+				"visual_height_m": 1000000,
+				"surface_density_kg_m3": 0.16,
+				"scale_height_m": 27000,
+				"temperature_k": 165,
+				"gas_constant_j_kg_k": 3500,
+				"gamma": 1.4,
+				"color_rgb": [
+					0.86,
+					0.67,
+					0.48
+				]
+			},
+			"rings": {
+				"enabled": true,
+				"inner_radius_ratio": 1.3,
+				"outer_radius_ratio": 2,
+				"color_rgb": [
+					0.72,
+					0.65,
+					0.52
+				],
+				"opacity": 0.4
+			},
+			"satellites": [
+				{
+					"name": "Io",
+					"mass_kg": 8.9319e+22,
+					"radius_m": 1821600,
+					"semi_major_axis_m": 421700000,
+					"orbital_period_s": 152853,
+					"phase_rad": 0.3,
+					"rotation_rate_rad_s": 0.0000411,
+					"solid": true,
+					"color_rgb": [
+						0.91,
+						0.78,
+						0.49
+					]
+				},
+				{
+					"name": "Europa",
+					"mass_kg": 4.8e+22,
+					"radius_m": 1560800,
+					"semi_major_axis_m": 671100000,
+					"orbital_period_s": 306822,
+					"phase_rad": 2,
+					"rotation_rate_rad_s": 0.0000205,
+					"solid": true,
+					"color_rgb": [
+						0.78,
+						0.72,
+						0.61
+					]
+				},
+				{
+					"name": "Ganymede",
+					"mass_kg": 1.4819e+23,
+					"radius_m": 2634100,
+					"semi_major_axis_m": 1070400000,
+					"orbital_period_s": 618153,
+					"phase_rad": 3.7,
+					"rotation_rate_rad_s": 0.0000102,
+					"solid": true,
+					"color_rgb": [
+						0.6,
+						0.57,
+						0.52
+					]
+				},
+				{
+					"name": "Callisto",
+					"mass_kg": 1.0759e+23,
+					"radius_m": 2410300,
+					"semi_major_axis_m": 1882700000,
+					"orbital_period_s": 1441920,
+					"phase_rad": 5,
+					"rotation_rate_rad_s": 0.00000436,
+					"solid": true,
+					"color_rgb": [
+						0.48,
+						0.45,
+						0.41
+					]
+				}
+			]
+		},
+		{
+			"name": "Saturn",
+			"mass": 5.6834e+26,
+			"radius": 58232000,
+			"a": 9.53667594,
+			"adot": -0.0012506,
+			"e": 0.05386179,
+			"edot": -0.00050991,
+			"i": 2.48599187,
+			"idot": 0.00193609,
+			"L": 49.95424423,
+			"Ldot": 1222.49362201,
+			"peri": 92.59887831,
+			"peridot": -0.41897216,
+			"node": 113.66242448,
+			"nodedot": -0.28867794,
+			"orbital_period": 10759.22,
+			"rotation_rate_rad_s": 0.00016379,
+			"solid": false,
+			"color_rgb": [
+				0.82,
+				0.75,
+				0.53
+			],
+			"atmosphere": {
+				"model": "exponential",
+				"height_m": 1500000,
+				"visual_height_m": 1500000,
+				"surface_density_kg_m3": 0.19,
+				"scale_height_m": 60000,
+				"temperature_k": 135,
+				"gas_constant_j_kg_k": 3500,
+				"gamma": 1.4,
+				"color_rgb": [
+					0.91,
+					0.79,
+					0.56
+				]
+			},
+			"rings": {
+				"enabled": true,
+				"inner_radius_ratio": 1.2,
+				"outer_radius_ratio": 2.3,
+				"color_rgb": [
+					0.85,
+					0.78,
+					0.58
+				],
+				"opacity": 0.8
+			},
+			"satellites": [
+				{
+					"name": "Enceladus",
+					"mass_kg": 108000000000000000000,
+					"radius_m": 252100,
+					"semi_major_axis_m": 237948000,
+					"orbital_period_s": 118386,
+					"phase_rad": 0.5,
+					"rotation_rate_rad_s": 0.0000531,
+					"solid": true,
+					"color_rgb": [
+						0.82,
+						0.86,
+						0.91
+					]
+				},
+				{
+					"name": "Rhea",
+					"mass_kg": 2.3065e+21,
+					"radius_m": 763800,
+					"semi_major_axis_m": 527108000,
+					"orbital_period_s": 390000,
+					"phase_rad": 2.2,
+					"rotation_rate_rad_s": 0.0000161,
+					"solid": true,
+					"color_rgb": [
+						0.72,
+						0.73,
+						0.75
+					]
+				},
+				{
+					"name": "Titan",
+					"mass_kg": 1.3452e+23,
+					"radius_m": 2574730,
+					"semi_major_axis_m": 1221870000,
+					"orbital_period_s": 1375080,
+					"phase_rad": 4,
+					"rotation_rate_rad_s": 0.00000457,
+					"solid": true,
+					"color_rgb": [
+						0.89,
+						0.64,
+						0.34
+					],
+					"atmosphere": {
+						"model": "exponential",
+						"height_m": 600000,
+						"visual_height_m": 600000,
+						"surface_density_kg_m3": 5.3,
+						"scale_height_m": 40000,
+						"temperature_k": 94,
+						"gas_constant_j_kg_k": 296.8,
+						"gamma": 1.4,
+						"color_rgb": [
+							0.92,
+							0.67,
+							0.38
+						]
+					}
+				},
+				{
+					"name": "Iapetus",
+					"mass_kg": 1.8056e+21,
+					"radius_m": 734500,
+					"semi_major_axis_m": 3560820000,
+					"orbital_period_s": 6850000,
+					"phase_rad": 5.4,
+					"rotation_rate_rad_s": 9.17e-7,
+					"solid": true,
+					"color_rgb": [
+						0.62,
+						0.59,
+						0.54
+					]
+				}
+			]
+		},
+		{
+			"name": "Uranus",
+			"mass": 8.681e+25,
+			"radius": 25362000,
+			"a": 19.18916464,
+			"adot": -0.00196176,
+			"e": 0.04725744,
+			"edot": -0.00004397,
+			"i": 0.77263783,
+			"idot": -0.00242939,
+			"L": 313.23810451,
+			"Ldot": 428.48202785,
+			"peri": 170.9542763,
+			"peridot": 0.40805281,
+			"node": 74.01692503,
+			"nodedot": 0.04240589,
+			"orbital_period": 30688.5,
+			"rotation_rate_rad_s": -0.00010124,
+			"solid": false,
+			"color_rgb": [
+				0.48,
+				0.78,
+				0.82
+			],
+			"atmosphere": {
+				"model": "exponential",
+				"height_m": 1000000,
+				"visual_height_m": 1000000,
+				"surface_density_kg_m3": 0.42,
+				"scale_height_m": 50000,
+				"temperature_k": 76,
+				"gas_constant_j_kg_k": 3500,
+				"gamma": 1.4,
+				"color_rgb": [
+					0.46,
+					0.81,
+					0.86
+				]
+			},
+			"rings": {
+				"enabled": true,
+				"inner_radius_ratio": 1.4,
+				"outer_radius_ratio": 2,
+				"color_rgb": [
+					0.62,
+					0.71,
+					0.75
+				],
+				"opacity": 0.45
+			},
+			"satellites": [
+				{
+					"name": "Miranda",
+					"mass_kg": 65900000000000000000,
+					"radius_m": 235800,
+					"semi_major_axis_m": 129900000,
+					"orbital_period_s": 122064,
+					"phase_rad": 1,
+					"rotation_rate_rad_s": 0.0000515,
+					"solid": true,
+					"color_rgb": [
+						0.67,
+						0.69,
+						0.72
+					]
+				},
+				{
+					"name": "Ariel",
+					"mass_kg": 1.35e+21,
+					"radius_m": 578900,
+					"semi_major_axis_m": 190900000,
+					"orbital_period_s": 190900,
+					"phase_rad": 2.4,
+					"rotation_rate_rad_s": 0.0000329,
+					"solid": true,
+					"color_rgb": [
+						0.77,
+						0.79,
+						0.81
+					]
+				},
+				{
+					"name": "Umbriel",
+					"mass_kg": 1.17e+21,
+					"radius_m": 584700,
+					"semi_major_axis_m": 266000000,
+					"orbital_period_s": 358000,
+					"phase_rad": 3.8,
+					"rotation_rate_rad_s": 0.0000176,
+					"solid": true,
+					"color_rgb": [
+						0.49,
+						0.51,
+						0.54
+					]
+				},
+				{
+					"name": "Titania",
+					"mass_kg": 3.4e+21,
+					"radius_m": 788900,
+					"semi_major_axis_m": 435910000,
+					"orbital_period_s": 752000,
+					"phase_rad": 5,
+					"rotation_rate_rad_s": 0.00000836,
+					"solid": true,
+					"color_rgb": [
+						0.7,
+						0.72,
+						0.74
+					]
+				},
+				{
+					"name": "Oberon",
+					"mass_kg": 3.076e+21,
+					"radius_m": 761400,
+					"semi_major_axis_m": 583520000,
+					"orbital_period_s": 1160000,
+					"phase_rad": 5.8,
+					"rotation_rate_rad_s": 0.00000542,
+					"solid": true,
+					"color_rgb": [
+						0.58,
+						0.6,
+						0.62
+					]
+				}
+			]
+		},
+		{
+			"name": "Neptune",
+			"mass": 1.0241e+26,
+			"radius": 24622000,
+			"a": 30.06992276,
+			"adot": 0.00026291,
+			"e": 0.00859048,
+			"edot": 0.00005105,
+			"i": 1.77004347,
+			"idot": 0.00035372,
+			"L": -55.12002969,
+			"Ldot": 218.45945325,
+			"peri": 44.96476227,
+			"peridot": -0.32241464,
+			"node": 131.78422574,
+			"nodedot": -0.00508664,
+			"orbital_period": 60182,
+			"rotation_rate_rad_s": 0.00010834,
+			"solid": false,
+			"color_rgb": [
+				0.32,
+				0.48,
+				0.92
+			],
+			"atmosphere": {
+				"model": "exponential",
+				"height_m": 1500000,
+				"visual_height_m": 1500000,
+				"surface_density_kg_m3": 0.45,
+				"scale_height_m": 60000,
+				"temperature_k": 72,
+				"gas_constant_j_kg_k": 3500,
+				"gamma": 1.4,
+				"color_rgb": [
+					0.36,
+					0.53,
+					1
+				]
+			},
+			"rings": {
+				"enabled": true,
+				"inner_radius_ratio": 1.5,
+				"outer_radius_ratio": 2.1,
+				"color_rgb": [
+					0.46,
+					0.56,
+					0.78
+				],
+				"opacity": 0.4
+			},
+			"satellites": [
+				{
+					"name": "Triton",
+					"mass_kg": 2.14e+22,
+					"radius_m": 1353400,
+					"semi_major_axis_m": 354759000,
+					"orbital_period_s": 507768,
+					"phase_rad": 2.7,
+					"orbital_direction": -1,
+					"rotation_rate_rad_s": 0.0000124,
+					"solid": true,
+					"color_rgb": [
+						0.74,
+						0.7,
+						0.67
+					]
+				},
+				{
+					"name": "Nereid",
+					"mass_kg": 31000000000000000000,
+					"radius_m": 170000,
+					"semi_major_axis_m": 5513400000,
+					"orbital_period_s": 36000000,
+					"phase_rad": 5.2,
+					"rotation_rate_rad_s": 1.75e-7,
+					"solid": true,
+					"color_rgb": [
+						0.58,
+						0.64,
+						0.75
+					]
+				}
+			]
+		}
+	],
+	"rocket": {
+		"default_design": {
+			"name": "Explorer I",
+			"payload_mass": 500,
+			"stages": [
+				"explorer_first_stage",
+				"explorer_upper_stage"
+			]
+		},
+		"presets": {
+			"SMALL_SAT": {
+				"label": "Scout · Small satellite / LEO",
+				"description": "Light payloads and small scientific satellites. Optimised for low Earth orbit.",
+				"name": "Scout · Small Satellite",
+				"payload_mass": 150,
+				"stages": [
+					"scout_booster",
+					"scout_upper",
+					"scout_kick"
+				]
+			},
+			"LEO_CARGO": {
+				"label": "Freighter · LEO cargo",
+				"description": "Heavy uncrewed cargo and station logistics. A practical general-purpose orbital launcher.",
+				"name": "Freighter · LEO Cargo",
+				"payload_mass": 8000,
+				"stages": [
+					"freighter_core",
+					"freighter_upper",
+					"freighter_insertion"
+				]
+			},
+			"CREW_ORBIT": {
+				"label": "Pioneer · Crewed orbital",
+				"description": "Crew capsule and crew-support payloads. Balanced for reliable low Earth orbit insertion.",
+				"name": "Pioneer · Crewed Orbital",
+				"payload_mass": 6500,
+				"stages": [
+					"pioneer_core",
+					"pioneer_upper",
+					"pioneer_insertion"
+				]
+			},
+			"LUNAR_CARGO": {
+				"label": "Pathfinder · Lunar cargo",
+				"description": "Large robotic payloads and lunar transfer missions. Includes a dedicated injection stage.",
+				"name": "Pathfinder · Lunar Cargo",
+				"payload_mass": 12000,
+				"stages": [
+					"pathfinder_core",
+					"pathfinder_transfer",
+					"pathfinder_injection"
+				]
+			},
+			"DEEP_SPACE": {
+				"label": "Odyssey · Deep-space probe",
+				"description": "Smaller probes with extra departure energy for interplanetary missions. Payload capacity is deliberately lower.",
+				"name": "Odyssey · Deep-Space Probe",
+				"payload_mass": 1800,
+				"payload_id": "probe",
+				"stages": [
+					"odyssey_core",
+					"odyssey_upper",
+					"odyssey_transfer",
+					"odyssey_kick"
+				]
+			}
+		},
+		"stage_parts": [
+			{
+				"id": "explorer_first_stage",
+				"label": "Explorer · First Stage",
+				"name": "FIRST STAGE",
+				"dry_mass": 30000,
+				"fuel_capacity": 300000,
+				"thrust": 5000000,
+				"vacuum_thrust": 6000000,
+				"flow": 1500,
+				"engine_count": 1,
+				"visual_length_factor": 1.18,
+				"visual_diameter_factor": 1.12,
+				"visual_color_rgb": [
+					0.32,
+					0.52,
+					0.68
+				],
+				"physical_length_m": 40,
+				"collision_radius_m": 2.05
+			},
+			{
+				"id": "explorer_upper_stage",
+				"label": "Explorer · Upper Stage",
+				"name": "UPPER STAGE",
+				"dry_mass": 4000,
+				"fuel_capacity": 30000,
+				"thrust": 200000,
+				"vacuum_thrust": 250000,
+				"flow": 63.3,
+				"engine_count": 1,
+				"visual_length_factor": 0.94,
+				"visual_diameter_factor": 0.9,
+				"visual_color_rgb": [
+					0.43,
+					0.64,
+					0.76
+				],
+				"physical_length_m": 15,
+				"collision_radius_m": 1.55
+			},
+			{
+				"id": "scout_booster",
+				"label": "Scout · Booster",
+				"name": "BOOSTER",
+				"dry_mass": 3500,
+				"fuel_capacity": 35000,
+				"thrust": 750000,
+				"vacuum_thrust": 850000,
+				"flow": 250,
+				"engine_count": 1,
+				"visual_length_factor": 1.18,
+				"visual_diameter_factor": 1.12,
+				"visual_color_rgb": [
+					0.32,
+					0.52,
+					0.68
+				],
+				"physical_length_m": 18,
+				"collision_radius_m": 1.2
+			},
+			{
+				"id": "scout_upper",
+				"label": "Scout · Upper Stage",
+				"name": "UPPER STAGE",
+				"dry_mass": 1200,
+				"fuel_capacity": 9000,
+				"thrust": 180000,
+				"vacuum_thrust": 220000,
+				"flow": 65,
+				"engine_count": 1,
+				"visual_length_factor": 0.94,
+				"visual_diameter_factor": 0.9,
+				"visual_color_rgb": [
+					0.43,
+					0.64,
+					0.76
+				],
+				"physical_length_m": 12,
+				"collision_radius_m": 1.5
+			},
+			{
+				"id": "scout_kick",
+				"label": "Scout · Kick Stage",
+				"name": "ORBITAL KICK STAGE",
+				"dry_mass": 1300,
+				"fuel_capacity": 3500,
+				"thrust": 100000,
+				"vacuum_thrust": 110000,
+				"flow": 30,
+				"engine_count": 1,
+				"visual_length_factor": 0.78,
+				"visual_diameter_factor": 0.78,
+				"visual_color_rgb": [
+					0.52,
+					0.58,
+					0.68
+				],
+				"physical_length_m": 8,
+				"collision_radius_m": 1.2
+			},
+			{
+				"id": "freighter_core",
+				"label": "Freighter · Core Booster",
+				"name": "CORE BOOSTER",
+				"dry_mass": 22000,
+				"fuel_capacity": 240000,
+				"thrust": 5000000,
+				"vacuum_thrust": 5700000,
+				"flow": 1650,
+				"engine_count": 1,
+				"visual_length_factor": 1.18,
+				"visual_diameter_factor": 1.12,
+				"visual_color_rgb": [
+					0.32,
+					0.52,
+					0.68
+				],
+				"physical_length_m": 38,
+				"collision_radius_m": 2.5
+			},
+			{
+				"id": "freighter_upper",
+				"label": "Freighter · Upper Stage",
+				"name": "UPPER STAGE",
+				"dry_mass": 5500,
+				"fuel_capacity": 65000,
+				"thrust": 900000,
+				"vacuum_thrust": 1100000,
+				"flow": 320,
+				"engine_count": 1,
+				"visual_length_factor": 0.94,
+				"visual_diameter_factor": 0.9,
+				"visual_color_rgb": [
+					0.43,
+					0.64,
+					0.76
+				],
+				"physical_length_m": 16,
+				"collision_radius_m": 1.8
+			},
+			{
+				"id": "freighter_insertion",
+				"label": "Freighter · Insertion Stage",
+				"name": "ORBITAL INSERTION STAGE",
+				"dry_mass": 1800,
+				"fuel_capacity": 15000,
+				"thrust": 220000,
+				"vacuum_thrust": 260000,
+				"flow": 75,
+				"engine_count": 1,
+				"visual_length_factor": 0.78,
+				"visual_diameter_factor": 0.78,
+				"visual_color_rgb": [
+					0.52,
+					0.58,
+					0.68
+				],
+				"physical_length_m": 9,
+				"collision_radius_m": 1.25
+			},
+			{
+				"id": "pioneer_core",
+				"label": "Pioneer · Core Booster",
+				"name": "CORE BOOSTER",
+				"dry_mass": 24000,
+				"fuel_capacity": 250000,
+				"thrust": 5600000,
+				"vacuum_thrust": 6400000,
+				"flow": 1800,
+				"engine_count": 1,
+				"visual_length_factor": 1.18,
+				"visual_diameter_factor": 1.12,
+				"visual_color_rgb": [
+					0.32,
+					0.52,
+					0.68
+				],
+				"physical_length_m": 42,
+				"collision_radius_m": 2.5
+			},
+			{
+				"id": "pioneer_upper",
+				"label": "Pioneer · Upper Stage",
+				"name": "UPPER STAGE",
+				"dry_mass": 6000,
+				"fuel_capacity": 75000,
+				"thrust": 1100000,
+				"vacuum_thrust": 1300000,
+				"flow": 370,
+				"engine_count": 1,
+				"visual_length_factor": 0.94,
+				"visual_diameter_factor": 0.9,
+				"visual_color_rgb": [
+					0.43,
+					0.64,
+					0.76
+				],
+				"physical_length_m": 18,
+				"collision_radius_m": 1.8
+			},
+			{
+				"id": "pioneer_insertion",
+				"label": "Pioneer · Insertion Stage",
+				"name": "ORBITAL INSERTION STAGE",
+				"dry_mass": 2200,
+				"fuel_capacity": 18000,
+				"thrust": 240000,
+				"vacuum_thrust": 290000,
+				"flow": 82,
+				"engine_count": 1,
+				"visual_length_factor": 0.78,
+				"visual_diameter_factor": 0.78,
+				"visual_color_rgb": [
+					0.52,
+					0.58,
+					0.68
+				],
+				"physical_length_m": 10,
+				"collision_radius_m": 1.25
+			},
+			{
+				"id": "pathfinder_core",
+				"label": "Pathfinder · Heavy Core",
+				"name": "HEAVY CORE",
+				"dry_mass": 30000,
+				"fuel_capacity": 540000,
+				"thrust": 10080000,
+				"vacuum_thrust": 10800000,
+				"flow": 3000,
+				"engine_count": 1,
+				"visual_length_factor": 1.18,
+				"visual_diameter_factor": 1.12,
+				"visual_color_rgb": [
+					0.32,
+					0.52,
+					0.68
+				],
+				"physical_length_m": 44,
+				"collision_radius_m": 2.6
+			},
+			{
+				"id": "pathfinder_transfer",
+				"label": "Pathfinder · Transfer Stage",
+				"name": "TRANSFER STAGE",
+				"dry_mass": 6000,
+				"fuel_capacity": 108000,
+				"thrust": 1230000,
+				"vacuum_thrust": 1500000,
+				"flow": 390,
+				"engine_count": 1,
+				"visual_length_factor": 0.94,
+				"visual_diameter_factor": 0.9,
+				"visual_color_rgb": [
+					0.43,
+					0.64,
+					0.76
+				],
+				"physical_length_m": 18,
+				"collision_radius_m": 1.8
+			},
+			{
+				"id": "pathfinder_injection",
+				"label": "Pathfinder · Injection Stage",
+				"name": "INJECTION STAGE",
+				"dry_mass": 2000,
+				"fuel_capacity": 36000,
+				"thrust": 400000,
+				"vacuum_thrust": 460000,
+				"flow": 110,
+				"engine_count": 1,
+				"visual_length_factor": 0.78,
+				"visual_diameter_factor": 0.78,
+				"visual_color_rgb": [
+					0.52,
+					0.58,
+					0.68
+				],
+				"physical_length_m": 10,
+				"collision_radius_m": 1.25
+			},
+			{
+				"id": "odyssey_core",
+				"label": "Odyssey · Core Booster",
+				"name": "CORE BOOSTER",
+				"dry_mass": 28000,
+				"fuel_capacity": 300000,
+				"thrust": 6200000,
+				"vacuum_thrust": 7000000,
+				"flow": 1950,
+				"engine_count": 1,
+				"visual_length_factor": 1.18,
+				"visual_diameter_factor": 1.12,
+				"visual_color_rgb": [
+					0.32,
+					0.52,
+					0.68
+				],
+				"physical_length_m": 42,
+				"collision_radius_m": 2.5
+			},
+			{
+				"id": "odyssey_upper",
+				"label": "Odyssey · Upper Stage",
+				"name": "UPPER STAGE",
+				"dry_mass": 7000,
+				"fuel_capacity": 80000,
+				"thrust": 1200000,
+				"vacuum_thrust": 1450000,
+				"flow": 410,
+				"engine_count": 1,
+				"visual_length_factor": 0.94,
+				"visual_diameter_factor": 0.9,
+				"visual_color_rgb": [
+					0.43,
+					0.64,
+					0.76
+				],
+				"physical_length_m": 18,
+				"collision_radius_m": 1.8
+			},
+			{
+				"id": "odyssey_transfer",
+				"label": "Odyssey · Transfer Stage",
+				"name": "TRANSFER STAGE",
+				"dry_mass": 2500,
+				"fuel_capacity": 24000,
+				"thrust": 250000,
+				"vacuum_thrust": 310000,
+				"flow": 87,
+				"engine_count": 1,
+				"visual_length_factor": 0.94,
+				"visual_diameter_factor": 0.9,
+				"visual_color_rgb": [
+					0.43,
+					0.64,
+					0.76
+				],
+				"physical_length_m": 12,
+				"collision_radius_m": 1.5
+			},
+			{
+				"id": "odyssey_kick",
+				"label": "Odyssey · Deep-Space Kick Stage",
+				"name": "DEEP-SPACE KICK STAGE",
+				"dry_mass": 700,
+				"fuel_capacity": 4500,
+				"thrust": 100000,
+				"vacuum_thrust": 120000,
+				"flow": 34,
+				"engine_count": 1,
+				"visual_length_factor": 0.78,
+				"visual_diameter_factor": 0.78,
+				"visual_color_rgb": [
+					0.52,
+					0.58,
+					0.68
+				],
+				"physical_length_m": 7,
+				"collision_radius_m": 1.1
+			}
+		],
+		"builder_options": {
+			"payloads": [
+				{
+					"id": "satellite",
+					"label": "Scout telescope satellite · 150 kg",
+					"mass": 150,
+					"visual_type": "satellite",
+					"visual_width_factor": 1,
+					"visual_height_factor": 1,
+					"visual_color_rgb": [
+						0.78,
+						0.7,
+						0.42
+					],
+					"telescope_range_au": 1.2,
+					"satellite_role": "observation",
+					"revenue_per_day": 15000,
+					"operating_cost_per_day": 4000,
+					"operational_lifetime_days": 3650
+				},
+				{
+					"id": "communications_satellite",
+					"label": "Communications satellite · 450 kg",
+					"mass": 450,
+					"visual_type": "satellite",
+					"visual_width_factor": 1.1,
+					"visual_height_factor": 1,
+					"visual_color_rgb": [
+						0.55,
+						0.82,
+						0.72
+					],
+					"telescope_range_au": 0,
+					"satellite_role": "communications",
+					"revenue_per_day": 45000,
+					"operating_cost_per_day": 9000,
+					"operational_lifetime_days": 3650
+				},
+				{
+					"id": "survey_satellite",
+					"label": "Survey telescope satellite · 350 kg",
+					"mass": 350,
+					"visual_type": "satellite",
+					"visual_width_factor": 1.1,
+					"visual_height_factor": 1,
+					"visual_color_rgb": [
+						0.68,
+						0.78,
+						0.9
+					],
+					"telescope_range_au": 3.5,
+					"satellite_role": "science",
+					"revenue_per_day": 30000,
+					"operating_cost_per_day": 10000,
+					"operational_lifetime_days": 2920
+				},
+				{
+					"id": "deep_space_telescope",
+					"label": "Deep-space telescope · 1800 kg",
+					"mass": 1800,
+					"visual_type": "satellite",
+					"visual_width_factor": 1.25,
+					"visual_height_factor": 1.15,
+					"visual_color_rgb": [
+						0.88,
+						0.72,
+						0.42
+					],
+					"telescope_range_au": 10.5,
+					"satellite_role": "navigation",
+					"revenue_per_day": 50000,
+					"operating_cost_per_day": 20000,
+					"operational_lifetime_days": 1825
+				},
+				{
+					"id": "probe",
+					"label": "Science probe · 1.8 t",
+					"mass": 1800,
+					"visual_type": "probe",
+					"visual_width_factor": 1,
+					"visual_height_factor": 1,
+					"visual_color_rgb": [
+						0.82,
+						0.87,
+						0.93
+					]
+				},
+				{
+					"id": "crew",
+					"label": "Crew capsule · 6.5 t",
+					"mass": 6500,
+					"visual_type": "crew",
+					"visual_width_factor": 1,
+					"visual_height_factor": 1,
+					"visual_color_rgb": [
+						0.84,
+						0.88,
+						0.94
+					]
+				},
+				{
+					"id": "cargo",
+					"label": "Cargo module · 8 t",
+					"mass": 8000,
+					"visual_type": "cargo",
+					"visual_width_factor": 1,
+					"visual_height_factor": 1,
+					"visual_color_rgb": [
+						0.62,
+						0.68,
+						0.76
+					]
+				},
+				{
+					"id": "heavy_cargo",
+					"label": "Heavy cargo · 12 t",
+					"mass": 12000,
+					"visual_type": "cargo",
+					"visual_width_factor": 1.35,
+					"visual_height_factor": 1.2,
+					"visual_color_rgb": [
+						0.5,
+						0.58,
+						0.68
+					]
+				}
+			],
+			"booster_options": [
+				{
+					"id": "solid_booster_pair",
+					"label": "Solid strap-on booster pair",
+					"dry_mass": 8000,
+					"fuel_capacity": 42000,
+					"thrust": 550000,
+					"vacuum_thrust": 600000,
+					"flow": 180,
+					"pair_count": 2,
+					"visual_width_factor": 0.48,
+					"visual_length_factor": 0.88,
+					"visual_color_rgb": [
+						0.72,
+						0.74,
+						0.78
+					],
+					"collision_radius_m": 1.1
+				},
+				{
+					"id": "liquid_booster_pair",
+					"label": "Liquid strap-on booster pair",
+					"dry_mass": 11000,
+					"fuel_capacity": 65000,
+					"thrust": 800000,
+					"vacuum_thrust": 900000,
+					"flow": 240,
+					"pair_count": 2,
+					"visual_width_factor": 0.56,
+					"visual_length_factor": 1,
+					"visual_color_rgb": [
+						0.62,
+						0.7,
+						0.8
+					],
+					"collision_radius_m": 1.3
+				}
+			],
+			"engine_counts": [
+				1,
+				2,
+				3,
+				4,
+				6,
+				8,
+				12,
+				16,
+				20,
+				24,
+				32
+			],
+			"tank_scales": [
+				{
+					"label": "Compact tank",
+					"scale": 0.75
+				},
+				{
+					"label": "Standard tank",
+					"scale": 1
+				},
+				{
+					"label": "Extended tank",
+					"scale": 1.25
+				},
+				{
+					"label": "Large tank",
+					"scale": 1.5
+				},
+				{
+					"label": "Heavy tank",
+					"scale": 2
+				},
+				{
+					"label": "Oversized tank",
+					"scale": 3
+				},
+				{
+					"label": "Very large tank",
+					"scale": 5
+				},
+				{
+					"label": "Extreme tank",
+					"scale": 10
+				}
+			]
+		},
+		"components": {
+			"tanks": [
+				{
+					"id": "compact_tank",
+					"label": "Compact propellant tank",
+					"dry_mass": 1800,
+					"fuel_capacity": 12000,
+					"length_m": 6,
+					"collision_radius_m": 1.2,
+					"color_rgb": [
+						0.62,
+						0.72,
+						0.8
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_upper",
+							"position": [
+								-0.5,
+								-0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_lower",
+							"position": [
+								-0.5,
+								0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_upper",
+							"position": [
+								0.5,
+								-0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_lower",
+							"position": [
+								0.5,
+								0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "medium_tank",
+					"label": "Medium propellant tank",
+					"dry_mass": 6000,
+					"fuel_capacity": 80000,
+					"length_m": 12,
+					"collision_radius_m": 1.8,
+					"color_rgb": [
+						0.45,
+						0.62,
+						0.76
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_upper",
+							"position": [
+								-0.5,
+								-0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_lower",
+							"position": [
+								-0.5,
+								0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_upper",
+							"position": [
+								0.5,
+								-0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_lower",
+							"position": [
+								0.5,
+								0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "large_tank",
+					"label": "Large propellant tank",
+					"dry_mass": 15000,
+					"fuel_capacity": 200000,
+					"length_m": 22,
+					"collision_radius_m": 2.4,
+					"color_rgb": [
+						0.35,
+						0.55,
+						0.7
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_upper",
+							"position": [
+								-0.5,
+								-0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_lower",
+							"position": [
+								-0.5,
+								0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_upper",
+							"position": [
+								0.5,
+								-0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_lower",
+							"position": [
+								0.5,
+								0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "heavy_tank",
+					"label": "Heavy propellant tank",
+					"dry_mass": 26000,
+					"fuel_capacity": 360000,
+					"length_m": 30,
+					"collision_radius_m": 2.8,
+					"color_rgb": [
+						0.3,
+						0.48,
+						0.65
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_upper",
+							"position": [
+								-0.5,
+								-0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_lower",
+							"position": [
+								-0.5,
+								0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_upper",
+							"position": [
+								0.5,
+								-0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_lower",
+							"position": [
+								0.5,
+								0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "xenon_tank",
+					"label": "Xenon propellant tank",
+					"dry_mass": 120,
+					"fuel_capacity": 0,
+					"resource_capacities": {
+						"xenon": 500
+					},
+					"length_m": 2.2,
+					"collision_radius_m": 0.65,
+					"color_rgb": [
+						0.42,
+						0.58,
+						0.78
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_upper",
+							"position": [
+								-0.5,
+								-0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left_lower",
+							"position": [
+								-0.5,
+								0.28
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_upper",
+							"position": [
+								0.5,
+								-0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right_lower",
+							"position": [
+								0.5,
+								0.28
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				}
+			],
+			"engines": [
+				{
+					"id": "sea_level_engine",
+					"label": "Sea-level engine",
+					"dry_mass": 2500,
+					"thrust": 900000,
+					"vacuum_thrust": 1050000,
+					"flow": 300,
+					"length_m": 4,
+					"collision_radius_m": 1.2,
+					"color_rgb": [
+						0.58,
+						0.62,
+						0.68
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "vacuum_engine",
+					"label": "Vacuum engine",
+					"dry_mass": 900,
+					"thrust": 250000,
+					"vacuum_thrust": 310000,
+					"flow": 85,
+					"length_m": 3,
+					"collision_radius_m": 0.9,
+					"color_rgb": [
+						0.62,
+						0.66,
+						0.72
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "heavy_engine",
+					"label": "Heavy engine",
+					"dry_mass": 6500,
+					"thrust": 2800000,
+					"vacuum_thrust": 3100000,
+					"flow": 900,
+					"length_m": 5,
+					"collision_radius_m": 1.8,
+					"color_rgb": [
+						0.52,
+						0.58,
+						0.66
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "small_engine_cluster",
+					"label": "Small engine cluster",
+					"dry_mass": 1800,
+					"thrust": 520000,
+					"vacuum_thrust": 620000,
+					"flow": 170,
+					"length_m": 3,
+					"collision_radius_m": 1.1,
+					"color_rgb": [
+						0.65,
+						0.68,
+						0.73
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "ion_engine",
+					"label": "Electric ion engine",
+					"dry_mass": 250,
+					"thrust": 1,
+					"vacuum_thrust": 1,
+					"flow": 0.000034,
+					"fuel_type": "xenon",
+					"electric_draw_w": 25000,
+					"length_m": 2.8,
+					"collision_radius_m": 0.8,
+					"color_rgb": [
+						0.45,
+						0.72,
+						0.9
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "solid_fuel_motor",
+					"label": "Solid rocket motor",
+					"dry_mass": 900,
+					"thrust": 800000,
+					"vacuum_thrust": 900000,
+					"flow": 260,
+					"fuel_type": "solid_propellant",
+					"solid_propellant_capacity": 12000,
+					"solid_motor": true,
+					"ignited": false,
+					"length_m": 5.5,
+					"collision_radius_m": 1.5,
+					"color_rgb": [
+						0.62,
+						0.48,
+						0.36
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						}
+					]
+				}
+			],
+			"decouplers": [
+				{
+					"id": "stack_decoupler",
+					"label": "Stack decoupler",
+					"dry_mass": 280,
+					"length_m": 1.2,
+					"collision_radius_m": 1.4,
+					"color_rgb": [
+						0.72,
+						0.75,
+						0.8
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "heavy_decoupler",
+					"label": "Heavy decoupler",
+					"dry_mass": 650,
+					"length_m": 1.8,
+					"collision_radius_m": 2.1,
+					"color_rgb": [
+						0.58,
+						0.64,
+						0.72
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						}
+					]
+				}
+			],
+			"structures": [
+				{
+					"id": "structural_adapter",
+					"label": "Structural adapter",
+					"dry_mass": 450,
+					"length_m": 2,
+					"collision_radius_m": 1.5,
+					"color_rgb": [
+						0.46,
+						0.55,
+						0.65
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "payload_fairing",
+					"label": "Payload fairing",
+					"dry_mass": 900,
+					"length_m": 5,
+					"collision_radius_m": 1.7,
+					"color_rgb": [
+						0.78,
+						0.82,
+						0.88
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				}
+			],
+			"rcs": [
+				{
+					"id": "rcs_thruster_block",
+					"label": "RCS thruster block",
+					"dry_mass": 180,
+					"rcs_propellant_capacity": 250,
+					"rcs_thrust": 1800,
+					"rcs_flow": 0.83,
+					"rcs_torque": 1800,
+					"length_m": 1.8,
+					"collision_radius_m": 0.65,
+					"color_rgb": [
+						0.72,
+						0.76,
+						0.82
+					],
+					"attachment_nodes": [
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				}
+			],
+			"docking_ports": [
+				{
+					"id": "standard_docking_port",
+					"label": "Standard docking port",
+					"dry_mass": 220,
+					"length_m": 1.4,
+					"collision_radius_m": 0.85,
+					"port_facing": 1,
+					"color_rgb": [
+						0.78,
+						0.72,
+						0.48
+					],
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						}
+					]
+				}
+			],
+			"power": [
+				{
+					"id": "battery_pack",
+					"label": "Battery pack",
+					"dry_mass": 300,
+					"electric_capacity": 270000000,
+					"length_m": 2.2,
+					"collision_radius_m": 0.7,
+					"color_rgb": [
+						0.36,
+						0.62,
+						0.45
+					],
+					"attachment_nodes": [
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "solar_array",
+					"label": "Deployable solar array",
+					"dry_mass": 180,
+					"power_generation_w": 5000,
+					"deployable": true,
+					"length_m": 4,
+					"collision_radius_m": 0.15,
+					"color_rgb": [
+						0.25,
+						0.42,
+						0.72
+					],
+					"attachment_nodes": [
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				}
+			],
+			"payloads": [
+				{
+					"id": "scout_telescope_bus",
+					"label": "Scout telescope satellite bus",
+					"dry_mass": 150,
+					"fuel_capacity": 0,
+					"length_m": 1.8,
+					"collision_radius_m": 0.65,
+					"color_rgb": [
+						0.78,
+						0.7,
+						0.42
+					],
+					"visual_type": "satellite",
+					"telescope_range_au": 1.2,
+					"satellite_role": "observation",
+					"revenue_per_day": 15000,
+					"operating_cost_per_day": 4000,
+					"operational_lifetime_days": 3650,
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "communications_satellite_bus",
+					"label": "Communications satellite bus",
+					"dry_mass": 450,
+					"fuel_capacity": 0,
+					"length_m": 2.4,
+					"collision_radius_m": 0.8,
+					"color_rgb": [
+						0.55,
+						0.82,
+						0.72
+					],
+					"visual_type": "satellite",
+					"satellite_role": "communications",
+					"revenue_per_day": 45000,
+					"operating_cost_per_day": 9000,
+					"operational_lifetime_days": 3650,
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "survey_satellite_bus",
+					"label": "Survey telescope satellite bus",
+					"dry_mass": 350,
+					"fuel_capacity": 0,
+					"length_m": 2.2,
+					"collision_radius_m": 0.8,
+					"color_rgb": [
+						0.68,
+						0.78,
+						0.9
+					],
+					"visual_type": "satellite",
+					"telescope_range_au": 3.5,
+					"satellite_role": "science",
+					"revenue_per_day": 30000,
+					"operating_cost_per_day": 10000,
+					"operational_lifetime_days": 2920,
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "deep_space_telescope_bus",
+					"label": "Deep-space telescope bus",
+					"dry_mass": 1800,
+					"fuel_capacity": 0,
+					"length_m": 3.8,
+					"collision_radius_m": 1.1,
+					"color_rgb": [
+						0.88,
+						0.72,
+						0.42
+					],
+					"visual_type": "satellite",
+					"telescope_range_au": 10.5,
+					"satellite_role": "navigation",
+					"revenue_per_day": 50000,
+					"operating_cost_per_day": 20000,
+					"operational_lifetime_days": 1825,
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "science_probe_bus",
+					"label": "Science probe bus",
+					"dry_mass": 1800,
+					"fuel_capacity": 0,
+					"length_m": 3,
+					"collision_radius_m": 1,
+					"color_rgb": [
+						0.82,
+						0.87,
+						0.93
+					],
+					"visual_type": "probe",
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "crew_capsule",
+					"label": "Crew capsule",
+					"dry_mass": 6500,
+					"fuel_capacity": 0,
+					"length_m": 4.5,
+					"collision_radius_m": 1.5,
+					"color_rgb": [
+						0.84,
+						0.88,
+						0.94
+					],
+					"visual_type": "crew",
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "cargo_module",
+					"label": "Cargo module",
+					"dry_mass": 8000,
+					"fuel_capacity": 0,
+					"length_m": 5,
+					"collision_radius_m": 1.7,
+					"color_rgb": [
+						0.62,
+						0.68,
+						0.76
+					],
+					"visual_type": "cargo",
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "heavy_cargo_module",
+					"label": "Heavy cargo module",
+					"dry_mass": 12000,
+					"fuel_capacity": 0,
+					"length_m": 6,
+					"collision_radius_m": 2,
+					"color_rgb": [
+						0.5,
+						0.58,
+						0.68
+					],
+					"visual_type": "cargo",
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				},
+				{
+					"id": "avionics_control_module",
+					"label": "Avionics and guidance module",
+					"dry_mass": 250,
+					"fuel_capacity": 0,
+					"length_m": 1.4,
+					"collision_radius_m": 0.55,
+					"color_rgb": [
+						0.38,
+						0.62,
+						0.68
+					],
+					"visual_type": "avionics",
+					"attachment_nodes": [
+						{
+							"id": "top",
+							"position": [
+								0,
+								-0.5
+							],
+							"direction": [
+								0,
+								-1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "bottom",
+							"position": [
+								0,
+								0.5
+							],
+							"direction": [
+								0,
+								1
+							],
+							"type": "structural"
+						},
+						{
+							"id": "left",
+							"position": [
+								-0.5,
+								0
+							],
+							"direction": [
+								-1,
+								0
+							],
+							"type": "structural"
+						},
+						{
+							"id": "right",
+							"position": [
+								0.5,
+								0
+							],
+							"direction": [
+								1,
+								0
+							],
+							"type": "structural"
+						}
+					]
+				}
+			]
+		}
+	},
+	"missions": [
+		{
+			"id": "first_orbit",
+			"title": "First Orbit",
+			"description": "Establish a stable orbit around Earth.",
+			"condition": "orbit_body",
+			"body": "Earth",
+			"reward": 5000000
+		},
+		{
+			"id": "lunar_orbit",
+			"title": "Lunar Survey",
+			"description": "Establish a stable orbit around the Moon.",
+			"condition": "orbit_body",
+			"body": "Moon",
+			"reward": 15000000
+		},
+		{
+			"id": "mars_discovery",
+			"title": "Red Planet Reconnaissance",
+			"description": "Spot Mars with a telescope or by visiting its sphere of influence.",
+			"condition": "discover_body",
+			"body": "Mars",
+			"reward": 12000000
+		},
+		{
+			"id": "inner_survey",
+			"title": "Inner System Survey",
+			"description": "Permanently discover four planets.",
+			"condition": "discover_count",
+			"count": 4,
+			"reward": 20000000
+		},
+		{
+			"id": "jovian_discovery",
+			"title": "Jovian Reconnaissance",
+			"description": "Permanently discover Jupiter.",
+			"condition": "discover_body",
+			"body": "Jupiter",
+			"reward": 35000000
+		},
+		{
+			"id": "saturn_orbit",
+			"title": "Saturn Operations",
+			"description": "Establish a stable orbit around Saturn.",
+			"condition": "orbit_body",
+			"body": "Saturn",
+			"reward": 50000000
+		},
+		{
+			"id": "uranus_discovery",
+			"title": "Uranus Reconnaissance",
+			"description": "Permanently discover Uranus.",
+			"condition": "discover_body",
+			"body": "Uranus",
+			"reward": 75000000
+		},
+		{
+			"id": "neptune_discovery",
+			"title": "Neptune Exploration",
+			"description": "Permanently discover Neptune.",
+			"condition": "discover_body",
+			"body": "Neptune",
+			"reward": 100000000
+		},
+		{
+			"id": "satellite_network",
+			"title": "Orbital Network",
+			"description": "Operate three satellites simultaneously.",
+			"condition": "operational_satellites",
+			"count": 3,
+			"reward": 25000000
+		}
+	]
 }
