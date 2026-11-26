@@ -195,6 +195,7 @@ func _initialize() -> void:
 	var inline_simulation := SimulationView.new()
 	var inline_design := RocketDesign.create_default()
 	inline_design["payload_mass"] = 100.0
+	inline_design["preserve_part_uids"] = true
 	inline_design["stages"] = [inline_stage]
 	inline_simulation.set_rocket_design(inline_design)
 	var inline_released: Array[Dictionary] = []
