@@ -576,6 +576,7 @@ func _apply_docking_assists(delta: float) -> void:
 			selected_pair = _available_docking_port_pair(vehicle, target)
 			if selected_pair.is_empty():
 				docking_assists.erase(vehicle_name)
+				docking_assist_modes.erase(vehicle_name)
 				vehicle.status_message = "DOCKING PAUSED  •  NO CLEAR PORT APPROACH"
 				continue
 			var own_port: Dictionary = selected_pair.own
@@ -4217,10 +4218,12 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			status.text = "RCS REQUIRED\nBoth spacecraft need RCS thruster hardware."
 		elif not rcs_assist_ready and not engine_assist_ready:
 			status.text = "RENDEZVOUS PROPULSION UNAVAILABLE\nLiquid engine fuel or RCS propellant is required."
-		elif available_to_dock:
-			status.text = "DOCKING CONDITIONS MET\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		elif assist_active and assist_approach_only:
 			status.text = "APPROACH-ONLY ASSIST ACTIVE\nThe spacecraft will stop outside the collision boundary and return control to you for final port alignment."
+		elif selected_pair.is_empty():
+			status.text = "NO CLEAR PORT APPROACH\nMove the spacecraft or choose a different docking port arrangement."
+		elif available_to_dock:
+			status.text = "DOCKING CONDITIONS MET\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		elif assist_active:
 			status.text = "AUTOMATIC RENDEZVOUS ACTIVE\nPort range: %.1f m  •  Relative speed: %.2f m/s\nEngines handle long-range rendezvous; RCS handles the final approach and port alignment." % [separation, relative_speed]
 		elif not ports_aligned:
