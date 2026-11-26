@@ -1611,6 +1611,10 @@ func _release_component_group(port_uid: String) -> bool:
 	var released_old_indices: Array[int] = []
 	var retained_old_indices: Array[int] = []
 	for old_index in range(rocket_stages.size()):
+		if old_index < stage_index:
+			retained_stages.append(rocket_stages[old_index].duplicate(true))
+			retained_old_indices.append(old_index)
+			continue
 		var split := RocketAssembly.split_stage_by_group(rocket_stages[old_index], group_id)
 		if split.is_empty():
 			retained_stages.append(rocket_stages[old_index].duplicate(true))
@@ -1622,6 +1626,18 @@ func _release_component_group(port_uid: String) -> bool:
 				retained_stages.append(split.retained)
 				retained_old_indices.append(old_index)
 	if released_stages.is_empty() or retained_stages.is_empty() or not retained_old_indices.has(stage_index):
+		return false
+	var released_has_rcs := false
+	var retained_has_rcs := false
+	for stage in released_stages:
+		for component in stage.get("components", []):
+			if str(component.get("kind", "")) == "rcs" and float(component.get("rcs_thrust", 0.0)) > 0.0:
+				released_has_rcs = true
+	for stage in retained_stages:
+		for component in stage.get("components", []):
+			if str(component.get("kind", "")) == "rcs" and float(component.get("rcs_thrust", 0.0)) > 0.0:
+				retained_has_rcs = true
+	if not released_has_rcs or not retained_has_rcs:
 		return false
 	var group_parts: Dictionary = {}
 	for stage in released_stages:
