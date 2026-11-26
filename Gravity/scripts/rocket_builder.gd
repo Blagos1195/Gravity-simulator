@@ -226,6 +226,12 @@ class AssemblyCanvas extends Control:
 				continue
 			var component: Dictionary = item.get("component", {})
 			for node in _component_attachment_nodes(item.rect, component):
+				if is_separator:
+					var node_direction: Vector2 = node.direction
+					if is_adjacent_separator and node_direction.y >= -0.5:
+						continue
+					if not is_adjacent_separator and node_direction.y <= 0.5:
+						continue
 				var dragged_component: Dictionary = _drag_data.get("component", {})
 				if not dragged_component.is_empty() and not _has_matching_attachment_node(dragged_component, Vector2(node.direction), str(node.type)):
 					continue
