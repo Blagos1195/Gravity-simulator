@@ -141,7 +141,8 @@ class AssemblyCanvas extends Control:
 			var parent_uid := ""
 			var parent_node_id := ""
 			if not target.is_empty():
-				var target_components: Array = stage.get("components", [])
+				var target_stage_index := int(target.get("target_stage_index", selected_stage_index))
+				var target_components: Array = (design.get("stages", []) as Array)[target_stage_index].get("components", [])
 				var target_index := int(target.get("component_index", -1))
 				if target_index >= 0 and target_index < target_components.size():
 					parent_uid = str(target_components[target_index].get("part_uid", ""))
@@ -162,8 +163,10 @@ class AssemblyCanvas extends Control:
 			elif not target.is_empty():
 				var target_uid := ""
 				var target_index := int(target.get("component_index", -1))
-				if target_index >= 0 and target_index < components.size():
-					target_uid = str(components[target_index].get("part_uid", ""))
+				var target_stage_index := int(target.get("target_stage_index", selected_stage_index))
+				var target_components: Array = (design.get("stages", []) as Array)[target_stage_index].get("components", [])
+				if target_index >= 0 and target_index < target_components.size():
+					target_uid = str(target_components[target_index].get("part_uid", ""))
 				component_repositioned.emit(from_index, str(target.attachment), int(target.get("side", 1)), int(target.get("insert_index", -1)), target_uid, str(target.get("node_id", "")), position_m)
 			else:
 				component_position_changed.emit(from_index, position_m)
@@ -212,9 +215,14 @@ class AssemblyCanvas extends Control:
 			if item.get("rotation_handle", false):
 				continue
 			var index := int(item.index)
-			if int(item.get("stage_index", selected_stage_index)) != selected_stage_index:
+			var target_stage_index := int(item.get("stage_index", selected_stage_index))
+			var is_separator := str(item.get("component", {}).get("preset_hardware_role", "")) == "separator"
+			var is_adjacent_separator := is_separator and target_stage_index == selected_stage_index - 1
+			if target_stage_index != selected_stage_index and not is_adjacent_separator:
 				continue
-			if str(_drag_data.get("source", "")) == "placed" and index in _drag_data.get("indices", [_drag_data.get("index", -1)]):
+			if is_adjacent_separator and int(item.get("stage_index", -1)) + 1 != selected_stage_index:
+				continue
+			if str(_drag_data.get("source", "")) == "placed" and index in _drag_data.get("indices", [_drag_data.get("index", -1)]) and target_stage_index == selected_stage_index:
 				continue
 			var component: Dictionary = item.get("component", {})
 			for node in _component_attachment_nodes(item.rect, component):
@@ -230,7 +238,10 @@ class AssemblyCanvas extends Control:
 				if str(item.get("attachment", "stack")) == "free":
 					attachment = "free"
 				best_distance = distance
-				best_target = {"position": node.position, "direction": direction, "node_id": node.id, "node_type": node.type, "attachment": attachment, "edge": edge, "side": -1 if direction.x < 0.0 else 1, "insert_index": index if direction.y < 0.0 else index + 1, "component_index": index}
+				var insert_index := index if direction.y < 0.0 else index + 1
+				if is_adjacent_separator:
+					insert_index = 0
+				best_target = {"position": node.position, "direction": direction, "node_id": node.id, "node_type": node.type, "attachment": attachment, "edge": edge, "side": -1 if direction.x < 0.0 else 1, "insert_index": insert_index, "component_index": index, "target_stage_index": target_stage_index, "separator_boundary": is_separator}
 		if best_target.get("attachment", "") == "stack":
 			best_target["insert_index"] = clampi(int(best_target.insert_index), 0, (stage.get("components", []) as Array).size())
 		return best_target
