@@ -30,11 +30,14 @@ func _initialize() -> void:
 		var preset_stages: Array = preset_design.get("stages", [])
 		assert(not preset_stages.is_empty(), "Preset %s should contain physical stages" % preset_id)
 		var top_port_count := 0
+		var docking_port_count := 0
 		for preset_stage_index in range(preset_stages.size()):
 			var preset_stage: Dictionary = preset_stages[preset_stage_index]
 			var has_stage_rcs := false
 			var has_separator := false
 			for preset_component in preset_stage.get("components", []):
+				if str(preset_component.get("kind", "")) == "docking_port":
+					docking_port_count += 1
 				match str(preset_component.get("preset_hardware_role", "")):
 					"rcs":
 						has_stage_rcs = str(preset_component.get("kind", "")) == "rcs"
@@ -44,7 +47,7 @@ func _initialize() -> void:
 						top_port_count += 1
 			assert(has_stage_rcs and RocketDesign.stage_rcs_propellant_capacity(preset_stage) > 0.0, "Every preset stage needs independent RCS and propellant")
 			assert(has_separator == (preset_stage_index < preset_stages.size() - 1), "Each physical stage boundary needs one real decoupler")
-		assert(top_port_count == 2, "Each preset must have exactly two docking ports at the top of its payload")
+		assert(top_port_count == 2 and docking_port_count == 2, "Each preset must have exactly two docking ports at the top of its payload")
 		var preset_plan := StagingSystem.create_plan([preset_design])
 		assert(preset_plan.size() == preset_stages.size() * 2 - 1, "Preset ignition and separation need distinct action stages")
 		for boundary_index in range(preset_stages.size() - 1):
