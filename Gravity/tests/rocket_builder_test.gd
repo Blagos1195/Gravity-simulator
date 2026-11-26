@@ -107,7 +107,7 @@ func _initialize() -> void:
 	graph_builder._add_component("battery_pack", "free", false, 1, -1, Vector2(0.0, 0.0), parent_uid, "right")
 	var linked_component: Dictionary = graph_builder.design.stages[0].components.back()
 	assert(str(linked_component.get("structural_parent_uid", "")) == parent_uid)
-	assert(RocketDesign.validation_errors(graph_builder.design).filter(func(error: String): return error.contains("disconnected part")).is_empty())
+	assert(not str(RocketDesign.validation_errors(graph_builder.design)).contains("disconnected part"))
 	var loose_design := RocketDesign.create_default()
 	var loose_builder := RocketBuilder.new()
 	loose_builder.configure(loose_design, 0)
@@ -115,7 +115,7 @@ func _initialize() -> void:
 	loose_builder._refresh()
 	loose_builder._add_component("battery_pack", "free", false, 1, -1, Vector2(0.0, 0.0))
 	var loose_errors := RocketDesign.validation_errors(loose_builder.design)
-	assert(not loose_errors.filter(func(error: String): return error.contains("disconnected part")).is_empty())
+	assert(str(loose_errors).contains("disconnected part"))
 	graph_builder.free()
 	loose_builder.free()
 	var emitted_designs: Array[Dictionary] = []
