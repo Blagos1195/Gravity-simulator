@@ -20,7 +20,7 @@ class PartCard extends Button:
 		preview.text = str(component.get("label", component.get("id", "Part")))
 		preview.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
 		set_drag_preview(preview)
-		return {"source": "catalog", "id": str(component.get("id", "")), "kind": str(component.get("kind", ""))}
+		return {"source": "catalog", "id": str(component.get("id", "")), "kind": str(component.get("kind", "")), "component": component.duplicate(true)}
 
 class AssemblyCanvas extends Control:
 	signal component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2)
@@ -44,6 +44,10 @@ class AssemblyCanvas extends Control:
 	var _drawing_scale := 1.0
 	var _drawing_width_scale := 1.0
 	var _drawing_stage_center_y := 0.0
+	var _drag_data: Dictionary = {}
+	var _drag_position := Vector2.ZERO
+	var _drag_active := false
+	var _snap_target: Dictionary = {}
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
@@ -62,14 +66,32 @@ class AssemblyCanvas extends Control:
 				var preview := Label.new()
 				preview.text = str((stage.get("components", []) as Array)[selected_index].get("label", "Part"))
 				set_drag_preview(preview)
-				return {"source": "placed", "index": selected_index}
+				return {"source": "placed", "index": selected_index, "component": (stage.get("components", []) as Array)[selected_index].duplicate(true)}
 		return null
 
-	func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
-		return data is Dictionary and str(data.get("source", "")) in ["catalog", "placed"]
+	func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
+		if not data is Dictionary or str(data.get("source", "")) not in ["catalog", "placed"]:
+			return false
+		_drag_data = data.duplicate(true)
+		_drag_position = at_position
+		_drag_active = true
+		_snap_target = _find_attachment_target(at_position) if snap_mode == "Attach" else {}
+		queue_redraw()
+		return true
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_DRAG_END:
+			_clear_drag_preview()
+
+	func _clear_drag_preview() -> void:
+		_drag_data.clear()
+		_snap_target.clear()
+		_drag_active = false
+		queue_redraw()
 
 	func _drop_data(at_position: Vector2, data: Variant) -> void:
 		var position_m := _snap_position(_canvas_to_metres(at_position))
+		_clear_drag_preview()
 		if str(data.get("source", "")) == "catalog":
 			var attachment := "free"
 			var mirrored := false
@@ -91,7 +113,7 @@ class AssemblyCanvas extends Control:
 			component_position_changed.emit(from_index, position_m)
 
 	func _find_attachment_target(position: Vector2) -> Dictionary:
-		var best_distance := 58.0
+		var best_distance := 38.0
 		var best_target: Dictionary = {}
 		for item in _component_rects:
 			if item.get("rotation_handle", false):
@@ -241,6 +263,7 @@ class AssemblyCanvas extends Control:
 			if stage_index > 0:
 				draw_line(Vector2(center_x - max_radius * width_scale - 24.0, current_y + gap * 0.5), Vector2(center_x + max_radius * width_scale + 24.0, current_y + gap * 0.5), Color(0.85, 0.55, 0.28, 0.75), 1.5)
 				current_y += gap
+		_draw_drag_preview()
 		draw_string(ThemeDB.fallback_font, Vector2(12.0, 22.0), "PAYLOAD END", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.5, 0.72, 0.9))
 		draw_string(ThemeDB.fallback_font, Vector2(12.0, size.y - 12.0), "ENGINE END", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.5, 0.72, 0.9))
 
@@ -336,6 +359,26 @@ class AssemblyCanvas extends Control:
 			if editable:
 				_register_component_rect(index, rect, "free")
 		return start_y + stage_extent * scale
+
+	func _draw_drag_preview() -> void:
+		if not _drag_active:
+			return
+		var component: Dictionary = _drag_data.get("component", {})
+		if component.is_empty():
+			return
+		var length := maxf(16.0, float(component.get("length_m", 2.0)) * _drawing_scale)
+		var width := maxf(14.0, float(component.get("collision_radius_m", 0.5)) * _drawing_width_scale * 2.0)
+		var preview_rect := Rect2(_drag_position - Vector2(width, length) * 0.5, Vector2(width, length))
+		var target := _find_attachment_target(_drag_position) if snap_mode == "Attach" else {}
+		if not target.is_empty():
+			var target_position: Vector2 = target.position
+			draw_circle(target_position, 13.0, Color(0.12, 0.62, 0.9, 0.22))
+			draw_arc(target_position, 12.0, 0.0, TAU, 32, Color(0.35, 0.88, 1.0, 0.95), 2.5)
+			draw_line(_drag_position, target_position, Color(0.35, 0.88, 1.0, 0.7), 1.5)
+		_draw_part(preview_rect, component, false, 0.62)
+		draw_rect(preview_rect, Color(0.45, 0.86, 1.0, 0.9), false, 1.5)
+		if snap_mode == "Attach" and target.is_empty():
+			draw_string(ThemeDB.fallback_font, _drag_position + Vector2(14.0, -14.0), "No attachment nearby", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.72, 0.4))
 
 	func _register_component_rect(index: int, rect: Rect2, attachment: String) -> void:
 		_component_rects.append({"index": index, "rect": rect, "attachment": attachment})
