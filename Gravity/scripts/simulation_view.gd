@@ -2554,7 +2554,7 @@ func _update_guidance(dt: float) -> void:
 			var landing_direction_tangential_acceleration := -landing_direction_tangential_speed / 180.0
 			var landing_direction_vector := landing_direction_up * landing_direction_radial_acceleration + landing_direction_tangent * landing_direction_tangential_acceleration
 			autopilot_direction = landing_direction_vector.normalized() if landing_direction_vector.length_squared() > 0.001 else landing_direction_up
-		if autopilot_phase == "FAILED":
+		if autopilot_phase in ["FAILED", "COMPLETE"]:
 			rcs_rotation_input = 0.0
 			rcs_rotation_scale = 0.0
 			return
