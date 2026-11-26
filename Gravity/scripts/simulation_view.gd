@@ -2623,7 +2623,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.is_action_released("rotate_left") or event.is_action_released("rotate_right"):
 			rcs_rotation_input = 0.0
 			rcs_rotation_scale = 0.0
-			rcs_rotation_scale = 0.0
 	if not event.pressed or event.echo:
 		return
 	if event.is_action_pressed("rotate_left"):
