@@ -327,9 +327,10 @@ static func total_delta_v(design: Dictionary) -> float:
 						errors.append("Stage %d contains a part connected to a missing or invalid attachment." % (i + 1))
 				elif str(component.get("attachment", "stack")) == "stack":
 					parent_index = previous_stack
-					previous_stack = component_index
 				elif str(component.get("attachment", "stack")) in ["side", "radial"]:
 					parent_index = int(component.get("mount_index", -1))
+				if str(component.get("attachment", "stack")) == "stack":
+					previous_stack = component_index
 				if parent_index >= 0 and parent_index < components.size():
 					links.append([component_index, parent_index])
 			var visited: Dictionary = {}
@@ -338,7 +339,14 @@ static func total_delta_v(design: Dictionary) -> float:
 				if str(components[component_index].get("attachment", "stack")) == "stack":
 					root_index = component_index
 					break
-			var pending: Array[int] = [root_index]
+			var has_structural_root := false
+			for component in components:
+				if str(component.get("attachment", "stack")) == "stack":
+					has_structural_root = true
+					break
+			if not has_structural_root:
+				errors.append("Stage %d has no structural root. Attach the assembly to a stack-mounted part." % (i + 1))
+			var pending: Array[int] = [root_index] if has_structural_root else []
 			while not pending.is_empty():
 				var current := pending.pop_back()
 				if visited.has(current):
