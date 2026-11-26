@@ -428,6 +428,34 @@ func _docking_orbit_approach(first: SimulationView, second: SimulationView) -> D
 		"orbital_velocity": relative_velocity + Vector2(body.get("velocity", Vector2.ZERO))
 	}
 
+func _docking_avoidance_velocity(vehicle: SimulationView, target: SimulationView, desired_velocity: Vector2) -> Vector2:
+	var adjusted_velocity := desired_velocity
+	for obstacle in fleet_sims:
+		if obstacle == vehicle or obstacle == target or obstacle.landed or _are_docked(target.vehicle_name, obstacle.vehicle_name) or _are_docked(vehicle.vehicle_name, obstacle.vehicle_name):
+			continue
+		var relative_position: Vector2 = obstacle.rocket_position - vehicle.rocket_position
+		var relative_velocity: Vector2 = obstacle.velocity - adjusted_velocity
+		var relative_speed_squared := relative_velocity.length_squared()
+		if relative_speed_squared < 0.0001:
+			continue
+		var closest_time := clampf(-relative_position.dot(relative_velocity) / relative_speed_squared, 0.0, 90.0)
+		var closest_position := relative_position + relative_velocity * closest_time
+		var closest_distance := closest_position.length()
+		var vehicle_radius := RocketDesign.vehicle_collision_radius_m({"stages": vehicle.rocket_stages}, vehicle.stage_index)
+		var obstacle_radius := RocketDesign.vehicle_collision_radius_m({"stages": obstacle.rocket_stages}, obstacle.stage_index)
+		var safe_distance := maxf(2000.0, vehicle_radius + obstacle_radius + 1000.0)
+		if closest_distance >= safe_distance:
+			continue
+		var avoidance_direction := -closest_position.normalized()
+		if avoidance_direction.length_squared() < 0.5:
+			avoidance_direction = Vector2(-relative_velocity.y, relative_velocity.x).normalized()
+			if relative_position.cross(relative_velocity) < 0.0:
+				avoidance_direction = -avoidance_direction
+		var time_to_conflict := maxf(10.0, closest_time)
+		var avoidance_speed := clampf((safe_distance - closest_distance) / time_to_conflict * 1.5, 2.0, 60.0)
+		adjusted_velocity += avoidance_direction * avoidance_speed
+	return adjusted_velocity
+
 func _apply_docking_assists(delta: float) -> void:
 	for vehicle_name_variant in docking_assists.keys():
 		var vehicle_name := str(vehicle_name_variant)
@@ -458,6 +486,7 @@ func _apply_docking_assists(delta: float) -> void:
 			reference_velocity = Vector2(orbital_approach.get("orbital_velocity", vehicle.velocity))
 		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, approach_distance - DOCKING_CAPTURE_DISTANCE)))
 		var desired_velocity: Vector2 = reference_velocity + direction * desired_closing_speed
+		desired_velocity = _docking_avoidance_velocity(vehicle, target, desired_velocity)
 		var velocity_correction := (desired_velocity - vehicle.velocity).limit_length(DOCKING_ASSIST_ACCELERATION)
 		var engine_controlled := separation > 50000.0 and vehicle.has_docking_engine() and velocity_correction.length() > 0.05
 		if engine_controlled:
