@@ -2750,6 +2750,58 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 	return true
 
 
+func _rebuild_docking_spanning_tree(root_name: String) -> void:
+	var graph := _current_module_graph()
+	var module_group := ModuleGraph.connected_to(graph, root_name)
+	if module_group.size() <= 1:
+		return
+	var visited: Dictionary = {root_name: true}
+	var queue: Array = [root_name]
+	while not queue.is_empty():
+		var current := str(queue.pop_front())
+		for connection in graph.get("connections", []):
+			if not connection is Dictionary:
+				continue
+			var first := str(connection.get("a", ""))
+			var second := str(connection.get("b", ""))
+			var neighbour := ""
+			if first == current:
+				neighbour = second
+			elif second == current:
+				neighbour = first
+			if neighbour.is_empty() or visited.has(neighbour):
+				continue
+			visited[neighbour] = true
+			queue.append(neighbour)
+			for link_index in range(docking_links.size()):
+				var link: Dictionary = docking_links[link_index]
+				if str(link.get("port_a", "")) + "|" + str(link.get("port_b", "")) != str(connection.get("id", "")) and str(link.get("port_b", "")) + "|" + str(link.get("port_a", "")) != str(connection.get("id", "")):
+					continue
+				var parent := _find_vehicle_by_name(current)
+				var child := _find_vehicle_by_name(neighbour)
+				if parent == null or child == null:
+					break
+				link["structural"] = true
+				if str(link.get("parent_name", "")) != current:
+					var old_parent := str(link.get("parent_name", ""))
+					var old_child := str(link.get("child_name", ""))
+					link["parent_name"] = old_child
+					link["child_name"] = old_parent
+					var old_port_a := str(link.get("port_a", ""))
+					link["port_a"] = str(link.get("port_b", ""))
+					link["port_b"] = old_port_a
+				var offset := (child.rocket_position - parent.rocket_position).rotated(-parent.rotation_angle)
+				link["offset_x"] = offset.x
+				link["offset_y"] = offset.y
+				docking_links[link_index] = link
+				break
+	for link_index in range(docking_links.size()):
+		var link: Dictionary = docking_links[link_index]
+		if module_group.has(str(link.get("parent_name", ""))) and module_group.has(str(link.get("child_name", ""))):
+			if not bool(visited.has(str(link.get("child_name", "")))) or str(link.get("child_name", "")) == root_name:
+				link["structural"] = false
+				docking_links[link_index] = link
+
 func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 	for index in range(docking_links.size()):
 		var link: Dictionary = docking_links[index]
@@ -2763,6 +2815,10 @@ func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 		var remaining_graph := _current_module_graph()
 		var remaining_group := ModuleGraph.connected_to(remaining_graph, parent_name)
 		if remaining_group.has(child_name):
+			if bool(link.get("structural", true)):
+				var assembly_root := _resource_inventory_owner(_find_vehicle_by_name(parent_name))
+				if assembly_root != null:
+					_rebuild_docking_spanning_tree(assembly_root.vehicle_name)
 			_update_docked_masses()
 			_sync_docked_vehicles()
 			return true
