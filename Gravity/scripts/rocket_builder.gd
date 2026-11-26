@@ -307,6 +307,7 @@ class AssemblyCanvas extends Control:
 								_rotation_start_degrees = 0.0
 								group_center /= float(group_items.size())
 								_rotation_center = group_center
+								_rotation_start_angle = (event.position - _rotation_center).angle()
 								var group_components: Array = stage.get("components", [])
 								for part_item in group_items:
 									var part_index := int(part_item.index)
