@@ -2577,19 +2577,15 @@ func _are_docked(first_name: String, second_name: String) -> bool:
 func _update_docked_masses() -> void:
 	for vehicle in fleet_sims:
 		vehicle.docked_mass = 0.0
-	var counted_children: Dictionary = {}
-	for link in docking_links:
-		if not bool(link.get("structural", true)):
-			continue
-		var parent_name := str(link.get("parent_name", ""))
-		var child_name := str(link.get("child_name", ""))
-		if counted_children.has(child_name):
-			continue
-		counted_children[child_name] = true
-		var parent := _find_vehicle_by_name(parent_name)
-		var child := _find_vehicle_by_name(child_name)
-		if parent != null and child != null:
-			parent.docked_mass += child._current_vehicle_mass()
+	for mass_pass in range(maxi(1, fleet_sims.size())):
+		for index in range(docking_links.size() - 1, -1, -1):
+			var link: Dictionary = docking_links[index]
+			if not bool(link.get("structural", true)):
+				continue
+			var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
+			var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+			if parent != null and child != null:
+				parent.docked_mass = maxf(parent.docked_mass, child._current_vehicle_mass())
 
 func _sync_docked_vehicles() -> void:
 	for vehicle in fleet_sims:
@@ -2602,41 +2598,41 @@ func _sync_docked_vehicles() -> void:
 			var child := _find_vehicle_by_name(str(link.get("child_name", "")))
 			if parent == null or child == null:
 				continue
-		var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
-		var world_offset := local_offset.rotated(parent.rotation_angle)
-		var visual_exists := false
-		for existing_visual in parent.docked_visuals:
-			if str(existing_visual.get("name", "")) == child.vehicle_name:
-				visual_exists = true
-				break
-		if not visual_exists:
-			var child_mass_properties := child._vehicle_mass_properties()
-			parent.docked_visuals.append({
-				"name": child.vehicle_name,
-				"direction": world_offset.normalized(),
-				"offset": local_offset,
-				"mass": float(child_mass_properties.get("mass", child._current_vehicle_mass())),
-				"center_of_mass": child_mass_properties.get("center_of_mass", Vector2.ZERO),
-				"moment_of_inertia": float(child_mass_properties.get("moment_of_inertia", 0.0)),
-				"rotation": parent.rotation_angle,
-				"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "payload_visual": child.payload_visual.duplicate(true), "stages": child.rocket_stages},
-				"stage_index": child.stage_index
-			})
-		child.rocket_position = parent.rocket_position + world_offset
-		child.velocity = parent.velocity
-		child.rotation_angle = parent.rotation_angle
-		child.angular_velocity = parent.angular_velocity
-		child.sim_time = parent.sim_time
-		child._sync_legacy_fuel_from_external_tanks(parent.resource_tanks)
-		child.rcs_propellant_remaining = float(parent.docked_rcs_propellant.get(child.vehicle_name, child.rcs_propellant_remaining))
-		child.landed = parent.landed
-		child.crashed = parent.crashed
-		child.landed_body_name = parent.landed_body_name
-		child.landed_surface_normal = parent.landed_surface_normal
-		child.autopilot_enabled = false
-		child.guidance_enabled = false
-		child.thrust_key_down = false
-		child.docked_mass = 0.0
+			var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
+			var world_offset := local_offset.rotated(parent.rotation_angle)
+			var visual_exists := false
+			for existing_visual in parent.docked_visuals:
+				if str(existing_visual.get("name", "")) == child.vehicle_name:
+					visual_exists = true
+					break
+			if not visual_exists:
+				var child_mass_properties := child._vehicle_mass_properties()
+				parent.docked_visuals.append({
+					"name": child.vehicle_name,
+					"direction": world_offset.normalized(),
+					"offset": local_offset,
+					"mass": float(child_mass_properties.get("mass", child._current_vehicle_mass())),
+					"center_of_mass": child_mass_properties.get("center_of_mass", Vector2.ZERO),
+					"moment_of_inertia": float(child_mass_properties.get("moment_of_inertia", 0.0)),
+					"rotation": parent.rotation_angle,
+					"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "payload_visual": child.payload_visual.duplicate(true), "stages": child.rocket_stages},
+					"stage_index": child.stage_index
+				})
+			child.rocket_position = parent.rocket_position + world_offset
+			child.velocity = parent.velocity
+			child.rotation_angle = parent.rotation_angle
+			child.angular_velocity = parent.angular_velocity
+			child.sim_time = parent.sim_time
+			child._sync_legacy_fuel_from_external_tanks(parent.resource_tanks)
+			child.rcs_propellant_remaining = float(parent.docked_rcs_propellant.get(child.vehicle_name, child.rcs_propellant_remaining))
+			child.landed = parent.landed
+			child.crashed = parent.crashed
+			child.landed_body_name = parent.landed_body_name
+			child.landed_surface_normal = parent.landed_surface_normal
+			child.autopilot_enabled = false
+			child.guidance_enabled = false
+			child.thrust_key_down = false
+			child.docked_mass = 0.0
 
 func _current_module_graph() -> Dictionary:
 	var module_ids: Array = []
@@ -2655,6 +2651,7 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 		return false
 	if sim.landed or sim.crashed or target.landed or target.crashed:
 		return false
+	var graph := _current_module_graph()
 	var already_docked_pair := _are_docked(sim.vehicle_name, target.vehicle_name)
 	var graph_members := ModuleGraph.connected_to(graph, sim.vehicle_name)
 	var same_assembly := graph_members.has(target.vehicle_name)
@@ -2665,7 +2662,6 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 		return false
 	if not sim.has_rcs_installed() or not target.has_rcs_installed() or not sim.has_docking_port() or not target.has_docking_port():
 		return false
-	var graph := _current_module_graph()
 	if not ModuleGraph.validate(graph).is_empty():
 		return false
 	var own_used_ports: Dictionary = {}
