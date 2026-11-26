@@ -4179,34 +4179,11 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			return
-		var own_port: Dictionary = sim.docking_port_world_state(selected_port_uid)
-		if selected_port_uid.is_empty():
-			var used_own_ports: Dictionary = {}
-			for link in docking_links:
-				if str(link.get("parent_name", "")) == parent_name:
-					used_own_ports[str(link.get("port_a", ""))] = true
-				elif str(link.get("child_name", "")) == parent_name:
-					used_own_ports[str(link.get("port_b", ""))] = true
-			for candidate_port in sim.docking_port_world_states():
-				if not used_own_ports.has(str(candidate_port.get("part_uid", ""))):
-					own_port = candidate_port
-					break
-		var target_port: Dictionary = {}
-		var used_target_ports: Dictionary = {}
-		for link in docking_links:
-			if str(link.get("parent_name", "")) == target_name:
-				used_target_ports[str(link.get("port_a", ""))] = true
-			elif str(link.get("child_name", "")) == target_name:
-				used_target_ports[str(link.get("port_b", ""))] = true
-		for candidate_port in target.docking_port_world_states():
-			if not used_target_ports.has(str(candidate_port.get("part_uid", ""))):
-				target_port = candidate_port
-				break
-		var separation := INF
-		var ports_aligned := false
-		if not own_port.is_empty() and not target_port.is_empty():
-			separation = Vector2(own_port.position).distance_to(Vector2(target_port.position))
-			ports_aligned = Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
+		var selected_pair := _available_docking_port_pair(sim, target, selected_port_uid)
+		var own_port: Dictionary = selected_pair.get("own", {})
+		var target_port: Dictionary = selected_pair.get("target", {})
+		var separation := float(selected_pair.get("distance", INF))
+		var ports_aligned := not selected_pair.is_empty() and float(selected_pair.get("alignment", 1.0)) <= -0.94
 		var relative_speed: float = (sim.velocity - target.velocity).length()
 		var connected_assembly: bool = _are_docked(parent_name, target_name)
 		var connector_connected := false
