@@ -1356,9 +1356,15 @@ func _on_components_position_changed(indices: Array, positions: Array) -> void:
 		if parent_index >= 0 and selected.has(parent_index):
 			component["structural_parent_uid"] = str(components[parent_index].get("part_uid", ""))
 			component["structural_parent_node_id"] = str(component.get("structural_parent_node_id", "legacy"))
+			component.erase("structural_root")
+		elif parent_index < 0:
+			component.erase("structural_parent_uid")
+			component.erase("structural_parent_node_id")
+			component["structural_root"] = true
 		else:
 			component.erase("structural_parent_uid")
 			component.erase("structural_parent_node_id")
+			component.erase("structural_root")
 		component["attachment"] = "free"
 		component.erase("mirror")
 		component.erase("side")
