@@ -1,42 +1,3 @@
-func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
-	for index in range(docking_links.size()):
-		var link: Dictionary = docking_links[index]
-		if not ((str(link.parent_name) == sim.vehicle_name and str(link.child_name) == target_name) or (str(link.parent_name) == target_name and str(link.child_name) == sim.vehicle_name)):
-			continue
-		if not port_uid.is_empty() and port_uid not in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
-			continue
-		var parent_name := str(link.get("parent_name", ""))
-		var child_name := str(link.get("child_name", ""))
-		docking_links.remove_at(index)
-		var remaining_graph := _current_module_graph()
-		if ModuleGraph.connected_to(remaining_graph, parent_name).has(child_name):
-			_update_docked_masses()
-			_sync_docked_vehicles()
-			return true
-		var parent := _find_vehicle_by_name(parent_name)
-		var child := _find_vehicle_by_name(child_name)
-		if parent != null and child != null:
-			child.resource_tanks = ResourceNetwork.tank_states_for_module(parent.resource_tanks, child.vehicle_name)
-			parent.resource_tanks = ResourceNetwork.tank_states_without_module(parent.resource_tanks, child.vehicle_name)
-			child.resource_inventory_external = false
-			child._sync_legacy_fuel_from_tanks()
-			var child_rcs_fuel := float(parent.docked_rcs_propellant.get(child.vehicle_name, 0.0))
-			child.rcs_propellant_remaining = child_rcs_fuel
-			parent.rcs_propellant_remaining = maxf(0.0, parent.rcs_propellant_remaining - child_rcs_fuel)
-			parent.docked_rcs_propellant.erase(child.vehicle_name)
-			parent._sync_legacy_fuel_from_tanks()
-			child.staging_plan = StagingSystem.filter_module_plan(parent.staging_plan, child.vehicle_name)
-			parent.staging_plan = StagingSystem.remove_module_plan(parent.staging_plan, child.vehicle_name)
-			child.action_stage_index = clampi(child.action_stage_index, 0, maxi(0, child.staging_plan.size() - 1))
-			parent.staging_changed.emit()
-		if child != null:
-			child.input_enabled = child == sim
-			child.docked_mass = 0.0
-		_update_docked_masses()
-		_sync_docked_vehicles()
-		return true
-	return false
-
 extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
@@ -2779,9 +2740,16 @@ func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 			continue
 		if not port_uid.is_empty() and port_uid not in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
 			continue
-		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
-		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		var parent_name := str(link.get("parent_name", ""))
+		var child_name := str(link.get("child_name", ""))
 		docking_links.remove_at(index)
+		var remaining_graph := _current_module_graph()
+		if ModuleGraph.connected_to(remaining_graph, parent_name).has(child_name):
+			_update_docked_masses()
+			_sync_docked_vehicles()
+			return true
+		var parent := _find_vehicle_by_name(parent_name)
+		var child := _find_vehicle_by_name(child_name)
 		if parent != null and child != null:
 			child.resource_tanks = ResourceNetwork.tank_states_for_module(parent.resource_tanks, child.vehicle_name)
 			parent.resource_tanks = ResourceNetwork.tank_states_without_module(parent.resource_tanks, child.vehicle_name)
