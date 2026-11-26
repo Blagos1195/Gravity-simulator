@@ -61,6 +61,11 @@ func _initialize() -> void:
 	var custom_nodes := builder._canvas._component_attachment_nodes(rotated_rect, {"rotation_deg": 90.0, "attachment_nodes": [{"id": "left_mount", "position": [-0.5, 0.0], "direction": [-1.0, 0.0]}]})
 	assert(custom_nodes.size() == 1)
 	assert(Vector2(custom_nodes[0].direction).is_equal_approx(Vector2(0.0, -1.0)))
+	var rcs_definition := RocketAssembly.component_definition("rcs_thruster_block")
+	rcs_definition["attachment"] = "side"
+	assert(builder._canvas._rcs_mount_direction(Rect2(50.0, 100.0, 40.0, 80.0), rcs_definition, 200.0) == Vector2.RIGHT)
+	assert(builder._canvas._rcs_mount_direction(Rect2(250.0, 100.0, 40.0, 80.0), rcs_definition, 200.0) == Vector2.LEFT)
+	assert(builder._canvas._rcs_mount_direction(Rect2(100.0, 100.0, 40.0, 80.0), {}, 200.0) == Vector2.DOWN)
 	var side_node: Dictionary = builder._canvas._find_attachment_target(Vector2(101.0, 150.0))
 	assert(str(side_node.get("attachment", "")) == "side")
 	assert(int(side_node.get("side", 0)) == -1)

@@ -462,7 +462,7 @@ class AssemblyCanvas extends Control:
 			for mount_radius in side_mount_radii.values():
 				widest_side_mount = maxf(widest_side_mount, float(mount_radius))
 			max_radius = maxf(max_radius, maxf(core_radius + widest_side_mount, free_radius))
-		var gap := 16.0 * zoom
+		var gap := 0.0
 		var scale := minf(5.0, (size.y - 72.0 - gap * float(maxi(0, stages.size() - 1))) / maxf(1.0, total_length)) * zoom
 		var total_height := total_length * scale + gap * float(maxi(0, stages.size() - 1))
 		var current_y := (size.y - total_height) * 0.5 + view_offset.y
@@ -640,6 +640,11 @@ class AssemblyCanvas extends Control:
 			result.append({"id": str(definition.get("id", "node")), "position": _rotate_point(center + point, center, angle), "direction": direction, "type": str(definition.get("type", "structural"))})
 		return result
 
+	func _rcs_mount_direction(rect: Rect2, component: Dictionary, centerline: float) -> Vector2:
+		if str(component.get("attachment", "stack")) in ["side", "radial"]:
+			return Vector2.LEFT if rect.get_center().x > centerline else Vector2.RIGHT
+		return Vector2.DOWN
+
 	func _rect_hit(item: Dictionary, point: Vector2) -> bool:
 		if item.get("rotation_handle", false):
 			return item.rect.has_point(point)
@@ -670,6 +675,16 @@ class AssemblyCanvas extends Control:
 				polygon = PackedVector2Array([rect.position, rect.position + Vector2(rect.size.x, 0.0), rect.end, rect.position + Vector2(0.0, rect.size.y)])
 		draw_colored_polygon(polygon, Color(color.r, color.g, color.b, opacity))
 		draw_rect(rect, Color(0.65, 0.84, 1.0, opacity) if selected else Color(0.12, 0.18, 0.25, opacity), false, 2.0 if selected else 1.0)
+		if kind == "rcs":
+			var mount_direction := _rcs_mount_direction(rect, component, size.x * 0.5 + view_offset.x).rotated(-angle)
+			var arrow_length := minf(rect.size.x, rect.size.y) * 0.34
+			var arrow_start := rect.get_center() - mount_direction * arrow_length * 0.35
+			var arrow_end := rect.get_center() + mount_direction * arrow_length * 0.65
+			var arrow_color := Color(0.08, 0.18, 0.28, opacity)
+			draw_line(arrow_start, arrow_end, arrow_color, 2.4)
+			var arrow_back := -mount_direction * minf(rect.size.x, rect.size.y) * 0.12
+			draw_line(arrow_end, arrow_end + arrow_back.rotated(0.65), arrow_color, 2.4)
+			draw_line(arrow_end, arrow_end + arrow_back.rotated(-0.65), arrow_color, 2.4)
 		draw_string(ThemeDB.fallback_font, rect.position + Vector2(4.0, minf(16.0, rect.size.y - 2.0)), str(component.get("label", component.get("id", "PART"))), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 8.0, 10, Color(0.04, 0.06, 0.09, opacity))
 		if not is_zero_approx(angle):
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
