@@ -1325,18 +1325,44 @@ func _on_components_position_changed(indices: Array, positions: Array) -> void:
 	var components: Array = stage.get("components", []).duplicate(true)
 	if indices.size() != positions.size() or indices.is_empty():
 		return
+	var selected: Dictionary = {}
+	for value in indices:
+		selected[int(value)] = true
+	var parent_indices: Dictionary = {}
+	var previous_stack := -1
+	for component_index in range(components.size()):
+		var component: Dictionary = components[component_index]
+		var parent_index := -1
+		var parent_uid := str(component.get("structural_parent_uid", ""))
+		if not parent_uid.is_empty():
+			for candidate in range(components.size()):
+				if str(components[candidate].get("part_uid", "")) == parent_uid:
+					parent_index = candidate
+					break
+		elif str(component.get("attachment", "stack")) == "stack":
+			parent_index = previous_stack
+		elif str(component.get("attachment", "stack")) in ["side", "radial"]:
+			parent_index = int(component.get("mount_index", -1))
+		if str(component.get("attachment", "stack")) == "stack":
+			previous_stack = component_index
+		parent_indices[component_index] = parent_index
 	_push_undo()
 	for item in range(indices.size()):
 		var index := int(indices[item])
 		if index < 0 or index >= components.size():
 			continue
 		var component: Dictionary = components[index]
+		var parent_index := int(parent_indices.get(index, -1))
+		if parent_index >= 0 and selected.has(parent_index):
+			component["structural_parent_uid"] = str(components[parent_index].get("part_uid", ""))
+			component["structural_parent_node_id"] = str(component.get("structural_parent_node_id", "legacy"))
+		else:
+			component.erase("structural_parent_uid")
+			component.erase("structural_parent_node_id")
 		component["attachment"] = "free"
 		component.erase("mirror")
 		component.erase("side")
 		component.erase("mount_index")
-		component.erase("structural_parent_uid")
-		component.erase("structural_parent_node_id")
 		var position_m: Vector2 = positions[item]
 		component["position_m"] = [position_m.x, position_m.y]
 		components[index] = component
