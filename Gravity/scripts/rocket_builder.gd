@@ -64,10 +64,10 @@ class AssemblyCanvas extends Control:
 
 	func _get_drag_data(at_position: Vector2) -> Variant:
 		for item in _component_rects:
-			if item.get("rotation_handle", false) and item.rect.has_point(at_position):
+			if item.get("rotation_handle", false) and _rect_hit(item, at_position):
 				return null
 		for item in _component_rects:
-			if not item.get("rotation_handle", false) and item.rect.has_point(at_position):
+			if not item.get("rotation_handle", false) and _rect_hit(item, at_position):
 				var index := int(item.index)
 				if not selected_indices.has(index):
 					selected_indices = [index]
@@ -172,25 +172,23 @@ class AssemblyCanvas extends Control:
 			if item.get("rotation_handle", false):
 				continue
 			var index := int(item.index)
-			if str(_drag_data.get("source", "")) == "placed" and index == int(_drag_data.get("index", -1)):
+			if str(_drag_data.get("source", "")) == "placed" and index in _drag_data.get("indices", [_drag_data.get("index", -1)]):
 				continue
-			var rect: Rect2 = item.rect
-			var parent_attachment := str(item.get("attachment", "stack"))
-			var nodes := [
-				{"position": Vector2(rect.get_center().x, rect.position.y), "attachment": "stack" if parent_attachment != "free" else "free", "edge": "top", "side": 1, "insert_index": index, "component_index": index},
-				{"position": Vector2(rect.get_center().x, rect.end.y), "attachment": "stack" if parent_attachment != "free" else "free", "edge": "bottom", "side": 1, "insert_index": index + 1, "component_index": index},
-				{"position": Vector2(rect.position.x, rect.get_center().y), "attachment": "side" if parent_attachment != "free" else "free", "edge": "left", "side": -1, "insert_index": index, "component_index": index},
-				{"position": Vector2(rect.end.x, rect.get_center().y), "attachment": "side" if parent_attachment != "free" else "free", "edge": "right", "side": 1, "insert_index": index, "component_index": index}
-			]
-			for node in nodes:
+			var component: Dictionary = item.get("component", {})
+			for node in _component_attachment_nodes(item.rect, component):
 				var distance := position.distance_to(Vector2(node.position))
-				if distance < best_distance:
-					best_distance = distance
-					best_target = node
+				if distance >= best_distance:
+					continue
+				var direction: Vector2 = node.direction
+				var edge := "top" if direction.y < -0.5 else "bottom" if direction.y > 0.5 else "left" if direction.x < 0.0 else "right"
+				var attachment := "stack" if absf(direction.y) >= absf(direction.x) else "side"
+				if str(item.get("attachment", "stack")) == "free":
+					attachment = "free"
+				best_distance = distance
+				best_target = {"position": node.position, "direction": direction, "node_id": node.id, "node_type": node.type, "attachment": attachment, "edge": edge, "side": -1 if direction.x < 0.0 else 1, "insert_index": index if direction.y < 0.0 else index + 1, "component_index": index}
 		if best_target.get("attachment", "") == "stack":
 			best_target["insert_index"] = clampi(int(best_target.insert_index), 0, (stage.get("components", []) as Array).size())
 		return best_target
-
 	func _canvas_to_metres(position: Vector2) -> Vector2:
 		var scale := maxf(1.0, _drawing_scale)
 		var width_scale := maxf(1.0, _drawing_width_scale)
@@ -239,7 +237,7 @@ class AssemblyCanvas extends Control:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
 				for item in _component_rects:
-					if item.get("rotation_handle", false) and item.rect.has_point(event.position):
+					if item.get("rotation_handle", false) and _rect_hit(item, event.position):
 						_rotating_index = int(item.index)
 						_rotation_center = Vector2(item.center)
 						var component: Dictionary = (stage.get("components", []) as Array)[_rotating_index]
@@ -248,7 +246,7 @@ class AssemblyCanvas extends Control:
 						component_rotation_started.emit(_rotating_index)
 						accept_event()
 						return
-					if item.rect.has_point(event.position):
+					if _rect_hit(item, event.position):
 						var index := int(item.index)
 						if event.ctrl_pressed or event.shift_pressed:
 							if selected_indices.has(index):
@@ -392,7 +390,7 @@ class AssemblyCanvas extends Control:
 			_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if editable else 0.34)
 			axial_centers[index] = rect.get_center().y
 			if editable:
-				_register_component_rect(index, rect, "stack")
+				_register_component_rect(index, rect, "stack", component)
 				draw_circle(Vector2(center_x, rect.position.y), 4.0, Color(0.35, 0.78, 1.0))
 				draw_circle(Vector2(center_x, rect.end.y), 4.0, Color(0.35, 0.78, 1.0))
 			current_y += height
@@ -419,7 +417,7 @@ class AssemblyCanvas extends Control:
 				var rect := Rect2(Vector2(center_x + float(direction) * offset - width * 0.5, y), Vector2(width, height))
 				_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if editable else 0.34)
 				if editable:
-					_register_component_rect(index, rect, "side")
+					_register_component_rect(index, rect, "side", component)
 				draw_line(Vector2(center_x + float(direction) * mount_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
@@ -437,7 +435,7 @@ class AssemblyCanvas extends Control:
 				var rect := Rect2(Vector2(center_x + float(direction) * offset - width * 0.5, y), Vector2(width, height))
 				_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if editable else 0.34)
 				if editable:
-					_register_component_rect(index, rect, "radial")
+					_register_component_rect(index, rect, "radial", component)
 				draw_line(Vector2(center_x + float(direction) * max_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		var stage_center_y := start_y + stage_extent * scale * 0.5
 		if editable:
@@ -457,7 +455,7 @@ class AssemblyCanvas extends Control:
 			var rect := Rect2(Vector2(center_x + position_m.x * width_scale - width * 0.5, stage_center_y - position_m.y * scale - height * 0.5), Vector2(width, height))
 			_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if editable else 0.34)
 			if editable:
-				_register_component_rect(index, rect, "free")
+				_register_component_rect(index, rect, "free", component)
 		return start_y + stage_extent * scale
 
 	func _draw_drag_preview() -> void:
@@ -489,21 +487,46 @@ class AssemblyCanvas extends Control:
 		if snap_mode == "Attach" and target.is_empty():
 			draw_string(ThemeDB.fallback_font, _drag_position + Vector2(14.0, -14.0), "No attachment nearby", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.72, 0.4))
 
-	func _register_component_rect(index: int, rect: Rect2, attachment: String) -> void:
-		_component_rects.append({"index": index, "rect": rect, "attachment": attachment})
+	func _register_component_rect(index: int, rect: Rect2, attachment: String, component: Dictionary) -> void:
+		var center := rect.get_center()
+		var rotation := deg_to_rad(float(component.get("rotation_deg", 0.0)))
+		_component_rects.append({"index": index, "rect": rect, "attachment": attachment, "center": center, "rotation": rotation, "component": component.duplicate(true)})
 		if snap_mode == "Attach":
-			var node_color := Color(0.35, 0.82, 1.0, 0.9)
-			draw_circle(Vector2(rect.get_center().x, rect.position.y), 4.5, node_color)
-			draw_circle(Vector2(rect.get_center().x, rect.end.y), 4.5, node_color)
-			draw_circle(Vector2(rect.position.x, rect.get_center().y), 4.5, node_color)
-			draw_circle(Vector2(rect.end.x, rect.get_center().y), 4.5, node_color)
+			for node in _component_attachment_nodes(rect, component):
+				draw_circle(Vector2(node.position), 4.5, Color(0.35, 0.82, 1.0, 0.9))
 		if index == selected_index:
-			var handle_center := Vector2(rect.get_center().x, rect.position.y - 20.0)
-			draw_line(Vector2(rect.get_center().x, rect.position.y), handle_center, Color(0.45, 0.82, 1.0), 1.5)
+			var handle_center := _rotate_point(Vector2(rect.get_center().x, rect.position.y - 20.0), center, rotation)
+			draw_line(_rotate_point(Vector2(rect.get_center().x, rect.position.y), center, rotation), handle_center, Color(0.45, 0.82, 1.0), 1.5)
 			draw_circle(handle_center, 7.0, Color(0.12, 0.22, 0.32))
 			draw_arc(handle_center, 6.0, 0.0, TAU, 24, Color(0.55, 0.88, 1.0), 2.0)
-			_component_rects.append({"index": index, "rect": Rect2(handle_center - Vector2(9.0, 9.0), Vector2(18.0, 18.0)), "rotation_handle": true, "center": rect.get_center()})
+			_component_rects.append({"index": index, "rect": Rect2(handle_center - Vector2(9.0, 9.0), Vector2(18.0, 18.0)), "rotation_handle": true, "center": center})
 
+	func _rotate_point(point: Vector2, center: Vector2, angle: float) -> Vector2:
+		return center + (point - center).rotated(angle)
+
+	func _component_attachment_nodes(rect: Rect2, component: Dictionary) -> Array[Dictionary]:
+		var result: Array[Dictionary] = []
+		var definitions: Array = component.get("attachment_nodes", [])
+		var center := rect.get_center()
+		var angle := deg_to_rad(float(component.get("rotation_deg", 0.0)))
+		for definition in definitions:
+			if not definition is Dictionary:
+				continue
+			var local_position: Variant = definition.get("position", [0.0, 0.0])
+			var local_direction: Variant = definition.get("direction", [0.0, -1.0])
+			if not local_position is Array or local_position.size() < 2 or not local_direction is Array or local_direction.size() < 2:
+				continue
+			var point := Vector2(rect.size.x * float(local_position[0]), rect.size.y * float(local_position[1]))
+			var direction := Vector2(float(local_direction[0]), float(local_direction[1])).rotated(angle).normalized()
+			result.append({"id": str(definition.get("id", "node")), "position": _rotate_point(center + point, center, angle), "direction": direction, "type": str(definition.get("type", "structural"))})
+		return result
+
+	func _rect_hit(item: Dictionary, point: Vector2) -> bool:
+		if item.get("rotation_handle", false):
+			return item.rect.has_point(point)
+		var center: Vector2 = item.get("center", item.rect.get_center())
+		var local_point := center + (point - center).rotated(-float(item.get("rotation", 0.0)))
+		return item.rect.has_point(local_point)
 	func _draw_part(rect: Rect2, component: Dictionary, selected: bool, opacity: float = 1.0) -> void:
 		var angle := deg_to_rad(float(component.get("rotation_deg", 0.0)))
 		if not is_zero_approx(angle):
