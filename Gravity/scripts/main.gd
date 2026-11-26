@@ -964,7 +964,7 @@ func _show_time_skip_dialog() -> void:
 	layout.add_theme_constant_override("separation", 12)
 	margin.add_child(layout)
 	var description := Label.new()
-	description.text = "Skip ahead while every vehicle is landed or in a safe, stable orbit. Active burns, autopilot, close encounters and unstable trajectories prevent skipping."
+	description.text = "Jump ahead when every active spacecraft can be safely predicted. Burns, unsafe autopilot phases, close encounters and unstable trajectories block the jump. Safe autopilot waits stop five seconds before the next event."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(description)
 	var options := HBoxContainer.new()
@@ -978,7 +978,7 @@ func _show_time_skip_dialog() -> void:
 			if _fast_forward_simulation(float(option.seconds)):
 				window.queue_free()
 			else:
-				description.text = "Cannot skip safely right now. Land all vehicles or place them in stable orbits, stop burns and autopilot, and move spacecraft apart."
+				description.text = "Jump blocked: an active burn, unsafe autopilot phase, nearby spacecraft, or an orbit that cannot be safely propagated prevents this jump."
 		)
 		options.add_child(button)
 	var close := Button.new()
@@ -989,7 +989,13 @@ func _show_time_skip_dialog() -> void:
 
 
 func _fast_forward_simulation(seconds: float) -> bool:
-	if not is_instance_valid(sim) or sim.paused or seconds <= 0.0 or seconds > 157788000.0:
+	if not is_instance_valid(sim) or seconds <= 0.0:
+		return false
+	return _fast_forward_to_time(float(sim.sim_time) + seconds)
+
+
+func _fast_forward_to_time(target_time: float) -> bool:
+	if not is_instance_valid(sim) or sim.paused or target_time <= sim.sim_time + 1.0 or target_time - sim.sim_time > 157788000.0:
 		return false
 	if not docking_assists.is_empty():
 		return false
@@ -997,8 +1003,21 @@ func _fast_forward_simulation(seconds: float) -> bool:
 	for vehicle in fleet_sims:
 		if vehicle.crashed:
 			continue
-		if vehicle.autopilot_enabled or vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled or vehicle.guidance_enabled:
+		if vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled or vehicle.guidance_enabled:
 			return false
+		if vehicle.autopilot_enabled:
+			if vehicle.landed or str(vehicle.autopilot_phase) not in ["WAIT_WINDOW", "ROUTE_COAST"]:
+				return false
+			var autopilot_event_time := float(vehicle.call("next_autopilot_event_time"))
+			if autopilot_event_time <= vehicle.sim_time + 1.0 or target_time > autopilot_event_time - 5.0:
+				return false
+		var manual_plan: Dictionary = vehicle.manual_flight_plan
+		if not manual_plan.is_empty() and bool(manual_plan.get("active", false)):
+			if str(manual_plan.get("phase", "")) != "WAIT_DEPARTURE":
+				return false
+			var departure_time := float(manual_plan.get("departure_time", -1.0))
+			if departure_time <= vehicle.sim_time + 1.0 or target_time > departure_time - 5.0:
+				return false
 		if vehicle.landed:
 			continue
 		var body: Dictionary = vehicle._nearest_body_state(vehicle.rocket_position, vehicle.rocket_position_precise)
@@ -1024,7 +1043,7 @@ func _fast_forward_simulation(seconds: float) -> bool:
 			if fleet_sims[first_index].rocket_position.distance_to(fleet_sims[second_index].rocket_position) < 20000000.0:
 				return false
 	var start_time: float = float(sim.sim_time)
-	var target_time: float = start_time + seconds
+	var seconds := target_time - start_time
 	var scan_samples := mini(25000, maxi(1, ceili(seconds / 7200.0)))
 	var scan_step := seconds / float(scan_samples)
 	for sample_index in range(1, scan_samples + 1):
@@ -1061,9 +1080,29 @@ func _fast_forward_simulation(seconds: float) -> bool:
 	_update_missions()
 	_refresh_vehicle_selector()
 	if status_label:
-		status_label.text = "TIME SKIPPED  •  %s" % sim._format_time(sim.sim_time)
+		status_label.text = "TIME JUMPED  •  %s" % sim._format_time(sim.sim_time)
 	sim.queue_redraw()
 	return true
+
+
+func _on_flight_computer_jump_requested(target_time: float, planner: RoutePlanner) -> void:
+	if _fast_forward_to_time(target_time):
+		if is_instance_valid(planner.manual_guidance_report):
+			planner.manual_guidance_report.text = "TIME JUMPED  •  ARRIVED FIVE SECONDS BEFORE MANOEUVRE NODE %d." % (planner.selected_node_index + 1)
+	else:
+		if is_instance_valid(planner.manual_guidance_report):
+			planner.manual_guidance_report.text = "JUMP BLOCKED  •  THE CURRENT FLIGHT STATE CANNOT BE SAFELY PREDICTED TO THAT NODE."
+
+
+func _jump_to_next_autopilot_event(report: Label) -> void:
+	var event_time := float(sim.call("next_autopilot_event_time"))
+	if event_time <= sim.sim_time + 1.0:
+		report.text = "NO SAFELY PREDICTABLE AUTOPILOT EVENT IS AVAILABLE IN THIS PHASE."
+		return
+	if _fast_forward_to_time(event_time - 5.0):
+		report.text = "TIME JUMPED  •  ARRIVED FIVE SECONDS BEFORE THE NEXT AUTOPILOT EVENT."
+	else:
+		report.text = "JUMP BLOCKED  •  THIS PHASE OR TRAJECTORY CANNOT BE SAFELY PREDICTED WITHOUT SKIPPING AN EVENT."
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -3754,13 +3793,9 @@ func _show_autopilot_panel() -> void:
 	jump_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(jump_status)
 	var jump_button := Button.new()
-	jump_button.text = "JUMP TO NEXT AUTOPILOT EVENT"
+	jump_button.text = "JUMP TO NEXT SAFE AUTOPILOT EVENT"
 	jump_button.pressed.connect(func():
-		var event_time := float(sim.call("next_autopilot_event_time"))
-		if event_time <= sim.sim_time + 1.0:
-			jump_status.text = "NO FUTURE COAST OR MANOEUVRE EVENT IS AVAILABLE TO JUMP TO."
-		elif sim.call("begin_time_jump", event_time - 5.0):
-			jump_status.text = "TIME ADVANCE ACTIVE  •  ARRIVING FIVE SECONDS BEFORE THE NEXT AUTOPILOT EVENT."
+		_jump_to_next_autopilot_event(jump_status)
 	)
 	root.add_child(jump_button)
 	var calculate_simulated_transfer := false
@@ -4113,6 +4148,7 @@ func _show_flight_computer() -> void:
 	var planner = RoutePlanner.new()
 	add_child(planner)
 	planner.configure(sim, rocket_design)
+	planner.time_jump_requested.connect(_on_flight_computer_jump_requested.bind(planner))
 	var screen_size := DisplayServer.screen_get_size()
 	planner.size = Vector2i(mini(980, screen_size.x - 40), mini(820, screen_size.y - 80))
 	planner.position = Vector2i(maxi(20, screen_size.x - planner.size.x - 24), 40)
