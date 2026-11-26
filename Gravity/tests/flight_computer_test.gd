@@ -501,7 +501,7 @@ func _initialize() -> void:
 	planner_sim.set_rocket_design(RocketDesign.create_default())
 	planner_sim.landed = false
 	planner_sim.discovered_body_names["Mars"] = true
-	planner_sim.visited_body_names["Mars"] = false
+	planner_sim.visited_body_names.erase("Mars")
 	planner_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
 	planner_sim.velocity = Vector2(manoeuvre_speed, 0.0)
 	var route_planner_window: Window = RoutePlanner.new()
@@ -516,7 +516,7 @@ func _initialize() -> void:
 	assert(mars_option >= 0, "Telescope-spotted Mars should appear in the Flight Computer")
 	assert(not route_planner_window.navigation_planet_dropdown.is_item_disabled(mars_option), "Telescope-spotted Mars should be selectable before visiting")
 	route_planner_window.navigation_plan_valid = true
-	route_planner_window.navigation_plan = {"target_id": FlightComputer.PLANET_TARGETS.find_custom(func(body: Dictionary): return str(body.get("name", "")) == "Mars"), "target_name": "Mars"}
+	route_planner_window.navigation_plan = {"target_id": route_planner_window.navigation_planet_dropdown.get_item_id(mars_option), "target_name": "Mars"}
 	route_planner_window._refresh_navigation_state()
 	assert(route_planner_window.navigation_engage_button.disabled, "Autopilot must remain locked until Mars has been visited")
 	planner_sim.visited_body_names["Mars"] = true
