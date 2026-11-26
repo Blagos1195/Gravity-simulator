@@ -499,6 +499,7 @@ func execute_staging_actions(actions: Array) -> bool:
 	var should_ignite := false
 	var should_cutoff := false
 	var should_separate := false
+	var module_release_index := -1
 	for action in actions:
 		if not action is Dictionary:
 			continue
@@ -510,12 +511,16 @@ func execute_staging_actions(actions: Array) -> bool:
 			"separate":
 				if int(action.get("physical_stage_index", -1)) == stage_index:
 					should_separate = true
+			"undock_module":
+				module_release_index = int(action.get("physical_stage_index", -1))
 	if should_cutoff:
 		thrust_key_down = false
 	if should_ignite:
 		thrust_key_down = true
 	if should_separate:
 		_separate_stage()
+	elif module_release_index > stage_index:
+		_release_upper_module(module_release_index)
 	return true
 
 func activate_current_action_stage() -> bool:
@@ -534,6 +539,7 @@ func activate_current_action_stage() -> bool:
 	var should_ignite := false
 	var should_cutoff := false
 	var should_separate := false
+	var module_release_index := -1
 	for action in actions:
 		if not action is Dictionary or bool(action.get("completed", false)):
 			continue
@@ -545,6 +551,8 @@ func activate_current_action_stage() -> bool:
 			"separate":
 				if int(action.get("physical_stage_index", -1)) == stage_index:
 					should_separate = true
+			"undock_module":
+				module_release_index = int(action.get("physical_stage_index", -1))
 	_apply_staging_part_states()
 	if should_cutoff:
 		thrust_key_down = false
@@ -552,6 +560,8 @@ func activate_current_action_stage() -> bool:
 		thrust_key_down = true
 	if should_separate and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
+		_prune_staging_plan_to_attached_parts()
+	elif module_release_index > stage_index and _release_upper_module(module_release_index):
 		_prune_staging_plan_to_attached_parts()
 	if action_stage_index + 1 < staging_plan.size():
 		action_stage_index += 1
@@ -1551,6 +1561,110 @@ func _separate_stage() -> void:
 	_sync_legacy_fuel_from_tanks()
 	infinite_fuel_stage_remaining = fuel
 	thrust_key_down = false
+
+func _release_upper_module(module_stage_index: int) -> bool:
+	if module_stage_index <= stage_index or module_stage_index >= rocket_stages.size():
+		return false
+	var boundaries := RocketAssembly.docking_module_boundaries(rocket_stages)
+	if not boundaries.has(module_stage_index):
+		return false
+	var boundary: Dictionary = boundaries[module_stage_index]
+	var module_stages: Array = rocket_stages.slice(module_stage_index)
+	var remaining_stages: Array = rocket_stages.slice(0, module_stage_index)
+	var module_fuel: Array[float] = []
+	var remaining_fuel: Array[float] = []
+	for index in range(stage_fuel_remaining.size()):
+		if index >= module_stage_index:
+			module_fuel.append(stage_fuel_remaining[index])
+		else:
+			remaining_fuel.append(stage_fuel_remaining[index])
+	var module_tanks: Array = []
+	var remaining_tanks: Array = []
+	for tank_variant in resource_tanks:
+		if not tank_variant is Dictionary:
+			continue
+		var tank: Dictionary = tank_variant.duplicate(true)
+		if str(tank.get("module_id", vehicle_name)) == vehicle_name and int(tank.get("stage_index", -1)) >= module_stage_index:
+			tank["stage_index"] = int(tank.get("stage_index", module_stage_index)) - module_stage_index
+			module_tanks.append(tank)
+		else:
+			remaining_tanks.append(tank)
+	var module_rcs_capacity := 0.0
+	var total_rcs_capacity := _own_rcs_propellant_capacity()
+	for module_stage in module_stages:
+		module_rcs_capacity += RocketDesign.stage_rcs_propellant_capacity(module_stage)
+	var own_rcs_remaining := maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
+	var module_rcs_fuel := own_rcs_remaining * module_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
+	var module_payload_mass := payload_mass
+	var module_payload_type := payload_type
+	var module_payload_visual := payload_visual.duplicate(true)
+	var module_mass := module_payload_mass + module_rcs_fuel
+	for index in range(module_stages.size()):
+		module_mass += RocketDesign.stage_total_dry_mass(module_stages[index]) + module_fuel[index]
+	for tank in module_tanks:
+		var resources: Dictionary = tank.get("resources", {})
+		module_mass += float(resources.get("xenon", 0.0)) + float(resources.get("solid_propellant", 0.0))
+	var total_mass := maxf(0.001, _current_vehicle_mass())
+	module_mass = clampf(module_mass, 0.001, total_mass - 0.001)
+	var remaining_mass := total_mass - module_mass
+	var connector_offset: Vector2 = Vector2(boundary.get("offset", Vector2.ZERO)).rotated(rotation_angle)
+	var separation_direction: Vector2 = Vector2(boundary.get("separation_direction", Vector2.UP)).rotated(rotation_angle).normalized()
+	var old_position := rocket_position
+	var old_velocity := velocity
+	var separation_speed := 2.0
+	var module_position := old_position + connector_offset * (remaining_mass / total_mass)
+	var parent_position := old_position - connector_offset * (module_mass / total_mass)
+	var module_velocity := old_velocity + separation_direction * separation_speed * (remaining_mass / total_mass)
+	var parent_velocity := old_velocity - separation_direction * separation_speed * (module_mass / total_mass)
+	var module_name := "Module %04d" % (Time.get_ticks_usec() % 10000)
+	rocket_stages = remaining_stages
+	stage_fuel_remaining = remaining_fuel
+	resource_tanks = remaining_tanks
+	payload_mass = 0.001
+	payload_type = "debris"
+	payload_visual.clear()
+	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - module_rcs_fuel)
+	_set_rocket_position_components(parent_position.x, parent_position.y)
+	velocity = parent_velocity
+	if stage_index < stage_fuel_remaining.size():
+		fuel = stage_fuel_remaining[stage_index]
+	_sync_legacy_fuel_from_tanks()
+	infinite_fuel_stage_remaining = fuel
+	var attached_parts: Dictionary = {}
+	for stage in rocket_stages:
+		for component in stage.get("components", []):
+			attached_parts[str(component.get("part_uid", ""))] = true
+	for plan_index in range(staging_plan.size()):
+		var plan_stage: Dictionary = staging_plan[plan_index].duplicate(true)
+		var retained_actions: Array = []
+		for action in plan_stage.get("actions", []):
+			if action is Dictionary and attached_parts.has(str(action.get("part_id", ""))):
+				retained_actions.append(action)
+		plan_stage["actions"] = retained_actions
+		staging_plan[plan_index] = plan_stage
+	staging_part_states = _current_staging_part_states()
+	action_stage_index = clampi(action_stage_index, 0, maxi(0, staging_plan.size() - 1))
+	staging_changed.emit()
+	stage_separated.emit({
+		"stages": module_stages,
+		"stage_fuel_remaining": module_fuel,
+		"payload_mass": module_payload_mass,
+		"payload_type": module_payload_type,
+		"payload_visual": module_payload_visual,
+		"fuel": module_fuel[0] if not module_fuel.is_empty() else 0.0,
+		"rcs_fuel": module_rcs_fuel,
+		"resource_tanks": module_tanks,
+		"dockable_module": true,
+		"position_components": PackedFloat64Array([module_position.x, module_position.y]),
+		"velocity": module_velocity,
+		"rotation_angle": rotation_angle,
+		"angular_velocity": angular_velocity,
+		"sim_time": sim_time,
+		"launch_time": launch_time,
+		"parent_vehicle_name": vehicle_name,
+		"separation_speed": separation_speed
+	})
+	return true
 
 func _autopilot_target_body_name() -> String:
 	return FlightComputer.target_body_name(autopilot_planet_index)
