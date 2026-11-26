@@ -19,9 +19,14 @@ func _initialize() -> void:
 	builder._build_interface()
 	builder._refresh()
 	assert(_find_label(builder, "VEHICLE BUILDER"))
-	assert(builder._snap_selector.item_count == 5)
-	assert(builder._snap_selector.get_item_text(builder._snap_selector.selected) == "Attach")
-	assert(builder._canvas.snap_mode == "Attach")
+	assert(builder._snap_selector.item_count == 8)
+	assert(builder._snap_selector.get_item_text(builder._snap_selector.selected) == "Off")
+	assert(builder._canvas.snap_mode == "Off")
+	assert(is_equal_approx(builder._canvas.rotation_snap_degrees, 15.0))
+	assert(builder._canvas._snap_position(Vector2(0.62, 0.62)) == Vector2(0.62, 0.62))
+	builder._canvas.snap_mode = "0.5 m"
+	assert(builder._canvas._snap_position(Vector2(0.62, 0.62)) == Vector2(0.5, 0.5))
+	builder._canvas.snap_mode = "Off"
 	assert(builder._parts_list.get_child_count() >= 14)
 	builder._canvas.stage = {"components": [{}]}
 	builder._canvas._component_rects = [{"index": 0, "rect": Rect2(100.0, 100.0, 50.0, 100.0), "attachment": "stack"}]
