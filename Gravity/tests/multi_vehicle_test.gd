@@ -14,6 +14,25 @@ func _initialize() -> void:
 	main._start_flight()
 	assert(main.fleet_sims.size() == 1)
 	var first: SimulationView = main.fleet_sims[0]
+	first.landed = false
+	first._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
+	first.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
+	assert(main._fast_forward_to_time(3600.0), "A safe stable-orbit time jump was rejected")
+	assert(is_equal_approx(first.sim_time, 3600.0), "Stable-orbit time jump did not reach its target")
+	first.autopilot_enabled = true
+	first.autopilot_phase = "WAIT_WINDOW"
+	first.autopilot_precomputed_transfer_plan = {"departure_time_seconds": 7200.0}
+	assert(not main._fast_forward_to_time(7200.0), "Autopilot time jump passed its departure event")
+	assert(main._fast_forward_to_time(7195.0), "Safe autopilot wait jump was rejected")
+	assert(is_equal_approx(first.sim_time, 7195.0), "Autopilot jump did not stop before departure")
+	first.autopilot_phase = "TRANSFER_COAST"
+	first.autopilot_transfer_start_time = 7195.0
+	first.autopilot_transfer_duration = 10000.0
+	assert(not main._fast_forward_to_time(8000.0), "Autopilot transfer coast allowed a jump with an unpredictable encounter")
+	first.autopilot_enabled = false
+	first.autopilot_phase = "IDLE"
+	first.passive_orbit_active = false
+	first.passive_orbit_data.clear()
 	main._add_new_vehicle()
 	assert(main.fleet_sims.size() == 2)
 	var second: SimulationView = main.sim
