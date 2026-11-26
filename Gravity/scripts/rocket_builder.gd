@@ -254,6 +254,7 @@ var _search_input: LineEdit
 var _property_inputs: Dictionary = {}
 var _payload_selector: OptionButton
 var _payload_mass_input: SpinBox
+var _payload_group_input: LineEdit
 var _vehicle_name: LineEdit
 var _mirror_button: CheckButton
 
@@ -277,6 +278,8 @@ func load_design(source_design: Dictionary) -> void:
 		_vehicle_name.text = str(design.get("name", "Custom Vehicle"))
 	if is_instance_valid(_payload_mass_input):
 		_payload_mass_input.set_value_no_signal(float(design.get("payload_mass", 500.0)))
+	if is_instance_valid(_payload_group_input):
+		_payload_group_input.text = str(design.get("payload_subassembly_id", "main"))
 	if is_instance_valid(_payload_selector):
 		for index in range(_payload_selector.item_count):
 			var option: Dictionary = _payload_selector.get_item_metadata(index)
@@ -375,6 +378,25 @@ func _build_interface() -> void:
 	)
 	payload_row.add_child(payload_mass_input)
 	_payload_mass_input = payload_mass_input
+	var payload_group_input := LineEdit.new()
+	payload_group_input.custom_minimum_size.x = 115.0
+	payload_group_input.placeholder_text = "Payload group"
+	payload_group_input.text = str(design.get("payload_subassembly_id", "main"))
+	payload_group_input.tooltip_text = "Assign the payload to a detachable subassembly group"
+	payload_group_input.text_submitted.connect(func(value: String):
+		design["payload_subassembly_id"] = value.strip_edges().to_lower().replace(" ", "_") if not value.strip_edges().is_empty() else "main"
+		_emit_design()
+	)
+	payload_group_input.focus_exited.connect(func():
+		var value := payload_group_input.text.strip_edges().to_lower().replace(" ", "_")
+		if value.is_empty():
+			value = "main"
+		design["payload_subassembly_id"] = value
+		payload_group_input.text = value
+		_emit_design()
+	)
+	payload_row.add_child(payload_group_input)
+	_payload_group_input = payload_group_input
 	var header_actions := GridContainer.new()
 	header_actions.columns = 3
 	header.add_child(header_actions)
