@@ -1021,13 +1021,52 @@ func _on_component_repositioned(index: int, attachment: String, side: int, inser
 		return
 	_push_undo()
 	var component: Dictionary = components[index]
+	var moved_children: Array[int] = []
+	for candidate in range(components.size()):
+		if candidate == index:
+			continue
+		var mounted: Dictionary = components[candidate]
+		if str(mounted.get("attachment", "stack")) in ["side", "radial"] and int(mounted.get("mount_index", -1)) == index:
+			moved_children.append(candidate)
 	components.remove_at(index)
+	for candidate in range(components.size()):
+		var mounted: Dictionary = components[candidate]
+		if str(mounted.get("attachment", "stack")) not in ["side", "radial"]:
+			continue
+		var mount_index := int(mounted.get("mount_index", -1))
+		if mount_index > index:
+			mounted["mount_index"] = mount_index - 1
+		elif mount_index == index:
+			mounted["mount_index"] = -1
+		components[candidate] = mounted
 	component.erase("position_m")
 	component.erase("mirror")
 	component.erase("side")
 	component.erase("mount_index")
 	component["attachment"] = attachment
-	if attachment == "side":
+	if attachment == "stack":
+		var stack_indices: Array[int] = []
+		for candidate in range(components.size()):
+			if str(components[candidate].get("attachment", "stack")) == "stack":
+				stack_indices.append(candidate)
+		var insert_at := components.size()
+		if not stack_indices.is_empty():
+			var adjusted_target := insert_index - (1 if index < insert_index else 0)
+			insert_at = clampi(adjusted_target, stack_indices[0], stack_indices[-1] + 1)
+		components.insert(insert_at, component)
+		for candidate in range(components.size()):
+			if candidate == insert_at:
+				continue
+			var mounted: Dictionary = components[candidate]
+			if str(mounted.get("attachment", "stack")) not in ["side", "radial"]:
+				continue
+			var old_candidate := candidate - 1 if candidate > insert_at else candidate
+			if moved_children.has(old_candidate):
+				mounted["mount_index"] = insert_at
+			elif int(mounted.get("mount_index", -1)) >= insert_at:
+				mounted["mount_index"] = int(mounted.get("mount_index", -1)) + 1
+			components[candidate] = mounted
+	elif attachment == "side":
 		var axial_indices: Array[int] = []
 		for candidate in range(components.size()):
 			if str(components[candidate].get("attachment", "stack")) == "stack":
@@ -1039,28 +1078,16 @@ func _on_component_repositioned(index: int, attachment: String, side: int, inser
 					mount_index = candidate
 			component["mount_index"] = mount_index
 			component["side"] = side
+			components.append(component)
+			for candidate in range(components.size() - 1):
+				var mounted: Dictionary = components[candidate]
+				if str(mounted.get("attachment", "stack")) in ["side", "radial"] and int(mounted.get("mount_index", -1)) < 0:
+					mounted["mount_index"] = mount_index
+					components[candidate] = mounted
 		else:
 			component["attachment"] = "free"
 			component["position_m"] = [0.0, 0.0]
-	elif attachment == "stack":
-		var stack_indices: Array[int] = []
-		for candidate in range(components.size()):
-			if str(components[candidate].get("attachment", "stack")) == "stack":
-				stack_indices.append(candidate)
-		var insert_at := components.size()
-		if not stack_indices.is_empty():
-			insert_at = clampi(insert_index - (1 if index < insert_index else 0), stack_indices[0], stack_indices[-1] + 1)
-		for candidate in range(components.size()):
-			var mounted: Dictionary = components[candidate]
-			if str(mounted.get("attachment", "stack")) in ["side", "radial"] and int(mounted.get("mount_index", -1)) >= index:
-				mounted["mount_index"] = maxi(0, int(mounted.get("mount_index", -1)) - 1)
-				components[candidate] = mounted
-		components.insert(insert_at, component)
-		for candidate in range(components.size()):
-			var mounted: Dictionary = components[candidate]
-			if str(mounted.get("attachment", "stack")) in ["side", "radial"] and int(mounted.get("mount_index", -1)) >= insert_at:
-				mounted["mount_index"] = int(mounted.get("mount_index", -1)) + 1
-				components[candidate] = mounted
+			components.append(component)
 	else:
 		component["attachment"] = "free"
 		component["position_m"] = [0.0, 0.0]
