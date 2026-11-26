@@ -92,7 +92,7 @@ jobs:
           if echo "$changed_files" | grep -Eq 'mission_system|content_catalog|main.gd'; then
             run_check mission_system_test
           fi
-          if echo "$changed_files" | grep -Eq 'flight_computer|route_planner'; then
+          if echo "$changed_files" | grep -Eq 'flight_computer|route_planner|simulation_view'; then
             run_check flight_computer_test
             run_check leo_autopilot_mission_test
             run_check body_agnostic_orbit_test

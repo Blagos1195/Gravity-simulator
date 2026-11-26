@@ -61,6 +61,7 @@ var angular_velocity := 0.0
 var fuel := 300000.0
 var rcs_propellant_remaining := 0.0
 var rcs_rotation_input := 0.0
+var rcs_rotation_scale := 1.0
 var infinite_fuel_stage_remaining := 300000.0
 var stage_index := 0
 var staging_plan: Array = []
@@ -758,9 +759,11 @@ func _remaining_engine_elements(pressure_ratio: float, active_center_y: float) -
 			total_length += float(geometry.get("length", 1.0))
 		var child_active_center := -total_length * 0.5 + float(geometries[0].get("length", 1.0)) * 0.5
 		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		var attached_rotation := float(docked_visual.get("rotation", rotation_angle)) - rotation_angle
 		for engine in RocketAssembly.stage_engine_elements(stages[attached_stage_index], pressure_ratio, child_active_center):
 			var attached_engine: Dictionary = engine.duplicate(true)
-			attached_engine["position"] = Vector2(attached_engine.get("position", Vector2.ZERO)) + attached_offset
+			attached_engine["position"] = Vector2(attached_engine.get("position", Vector2.ZERO)).rotated(attached_rotation) + attached_offset
+			attached_engine["direction"] = Vector2(attached_engine.get("direction", Vector2.UP)).rotated(attached_rotation)
 			engines.append(attached_engine)
 	return engines
 
@@ -869,11 +872,13 @@ func _remaining_rcs_elements() -> Array[Dictionary]:
 			attached_length += float(geometry.get("length", 1.0))
 		var attached_cursor := -attached_length * 0.5
 		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		var attached_rotation := float(docked_visual.get("rotation", rotation_angle)) - rotation_angle
 		for geometry in attached_geometries:
 			var stage_length := float(geometry.get("length", 1.0))
 			for jet in RocketAssembly.stage_rcs_elements(geometry.stage, attached_cursor + stage_length * 0.5):
 				var attached_jet: Dictionary = jet.duplicate(true)
-				attached_jet["position"] = Vector2(attached_jet.get("position", Vector2.ZERO)) + attached_offset
+				attached_jet["position"] = Vector2(attached_jet.get("position", Vector2.ZERO)).rotated(attached_rotation) + attached_offset
+				attached_jet["direction"] = Vector2(attached_jet.get("direction", Vector2.UP)).rotated(attached_rotation)
 				elements.append(attached_jet)
 			attached_cursor += stage_length
 	return elements
@@ -898,6 +903,84 @@ func _rcs_force_profile(translation_input: Vector2, rotation_input: float, cente
 		flow_total += float(jet.get("flow", 0.0))
 		selected_jets += 1
 	return {"force": force_total, "torque": torque_total, "flow": flow_total, "jet_count": selected_jets}
+
+func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expected: bool) -> bool:
+	if dt <= 0.0:
+		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
+		return false
+	var mass_properties := _vehicle_mass_properties()
+	var center_of_mass: Vector2 = Vector2(mass_properties.center_of_mass)
+	var inertia := maxf(1.0, float(mass_properties.moment_of_inertia))
+	var pressure_ratio := 0.0
+	var expected_throttle := autopilot_throttle if autopilot_phase == "LANDING_DESCENT" else 1.0
+	var potential_engine_torque := 0.0
+	if burn_expected:
+		var atmosphere := _atmosphere_at(rocket_position, velocity, sim_time, rocket_position_precise)
+		pressure_ratio = float(atmosphere.get("density", 0.0)) * float(atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(atmosphere.get("temperature", 250.0)) / 101325.0
+		gimbal_angle = 0.0
+		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+		if absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01)):
+			var best_gimbal := 0.0
+			var lowest_torque := absf(potential_engine_torque)
+			for step in range(-16, 17):
+				var candidate_gimbal := deg_to_rad(float(step) * 0.5)
+				gimbal_angle = candidate_gimbal
+				var candidate_profile := _engine_force_profile(center_of_mass, pressure_ratio, expected_throttle)
+				var candidate_torque := absf(float(candidate_profile.get("torque", 0.0)))
+				if candidate_torque < lowest_torque:
+					lowest_torque = candidate_torque
+					best_gimbal = candidate_gimbal
+			gimbal_angle = best_gimbal
+			potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+	else:
+		gimbal_angle = 0.0
+	var body_target_rotation := target_rotation - gimbal_angle
+	var angle_error := angle_difference(rotation_angle, body_target_rotation)
+	var aligned := absf(angle_error) <= deg_to_rad(1.0) and absf(angular_velocity) <= deg_to_rad(0.5)
+	var engine_torque := potential_engine_torque if burn_expected and aligned else 0.0
+	if not has_rcs_installed():
+		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
+		if burn_expected and absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01)):
+			status_message = "AUTOPILOT  •  THRUST TORQUE NEEDS RCS"
+			return false
+		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
+		angular_velocity = 0.0
+		return true
+	if rcs_propellant_remaining <= 0.001:
+		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
+		if aligned and absf(engine_torque) <= maxf(1.0, inertia * deg_to_rad(0.01)):
+			return true
+		status_message = "AUTOPILOT  •  RCS PROPELLANT REQUIRED"
+		return false
+	var positive_profile := _rcs_force_profile(Vector2.ZERO, 1.0, center_of_mass)
+	var negative_profile := _rcs_force_profile(Vector2.ZERO, -1.0, center_of_mass)
+	var positive_authority := maxf(0.0, float(positive_profile.get("torque", 0.0)))
+	var negative_authority := maxf(0.0, -float(negative_profile.get("torque", 0.0)))
+	if burn_expected and aligned:
+		var counter_authority := positive_authority if engine_torque < 0.0 else negative_authority
+		if absf(engine_torque) > counter_authority * 0.9:
+			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
+			status_message = "AUTOPILOT  •  INSUFFICIENT RCS TORQUE"
+			return false
+	var maximum_angular_acceleration := deg_to_rad(2.0)
+	var maximum_angular_rate := deg_to_rad(8.0)
+	var desired_rate := signf(angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(angle_error)))
+	var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
+	var requested_torque := inertia * desired_acceleration - engine_torque
+	if absf(requested_torque) <= 1.0:
+		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
+	elif requested_torque > 0.0:
+		rcs_rotation_input = 1.0 if positive_authority > 0.0 else 0.0
+		rcs_rotation_scale = clampf(requested_torque / maxf(1.0, positive_authority), 0.0, 1.0)
+	else:
+		rcs_rotation_input = -1.0 if negative_authority > 0.0 else 0.0
+		rcs_rotation_scale = clampf(absf(requested_torque) / maxf(1.0, negative_authority), 0.0, 1.0)
+	return aligned
 
 func has_rcs_installed() -> bool:
 	var system := _remaining_rcs_system()
@@ -1098,7 +1181,8 @@ func _physics_step(dt: float) -> void:
 		).limit_length(1.0)
 	var initial_rcs_mass_properties := _vehicle_mass_properties()
 	var rcs_profile := _rcs_force_profile(rcs_translation_input, rcs_rotation_input, Vector2(initial_rcs_mass_properties.center_of_mass))
-	var rcs_flow_rate := float(rcs_profile.flow)
+	var rcs_control_scale := clampf(rcs_rotation_scale, 0.0, 1.0) if absf(rcs_rotation_input) > 0.001 else 1.0
+	var rcs_flow_rate := float(rcs_profile.flow) * rcs_control_scale
 	var rcs_fuel_used := minf(resource_amount("rcs_propellant"), rcs_flow_rate * dt) if not crashed else 0.0
 	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0 or resource_amount("xenon") > 0.0 or resource_amount("solid_propellant") > 0.0)
 	var solid_motor_burning := _has_ignited_solid_motor() and resource_amount("solid_propellant") > 0.0
@@ -1139,10 +1223,10 @@ func _physics_step(dt: float) -> void:
 	var rcs_impulse_local: Vector2 = Vector2.ZERO
 	if rcs_fuel_used > 0.0 and rcs_flow_rate > 0.0:
 		var rcs_power_scale := rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt)
-		var rcs_force: Vector2 = Vector2(rcs_profile.force) * rcs_power_scale
+		var rcs_force: Vector2 = Vector2(rcs_profile.force) * rcs_power_scale * rcs_control_scale
 		rcs_impulse_local = rcs_force / mass_mid * dt
 		var current_inertia: float = float(_vehicle_mass_properties(-1.0, maxf(0.0, rcs_propellant_remaining - rcs_fuel_used * 0.5)).get("moment_of_inertia", 1.0))
-		angular_acceleration += float(rcs_profile.torque) * rcs_power_scale / maxf(1.0, current_inertia)
+		angular_acceleration += float(rcs_profile.torque) * rcs_power_scale * rcs_control_scale / maxf(1.0, current_inertia)
 	angular_velocity = initial_angular_velocity + angular_acceleration * dt
 	rotation_angle = wrapf(initial_rotation_angle + initial_angular_velocity * dt + 0.5 * angular_acceleration * dt * dt, -PI, PI)
 	var thrust_delta_v := 0.0
@@ -1899,6 +1983,8 @@ func _autopilot_target_state() -> Dictionary:
 func _fail_autopilot(reason: String) -> void:
 	autopilot_phase = "FAILED"
 	thrust_key_down = false
+	rcs_rotation_input = 0.0
+	rcs_rotation_scale = 0.0
 	status_message = "AUTOPILOT FAILED  •  %s" % reason
 
 func _begin_arrival_capture(target_state: Dictionary) -> void:
@@ -2141,7 +2227,6 @@ func _update_guidance(dt: float) -> void:
 	if autopilot_enabled and autopilot_phase == "ASCENT" and not destination_is_local and maximum_stable_altitude <= minimum_safe_altitude:
 		_fail_autopilot("NO SAFE PARKING ORBIT EXISTS AROUND %s" % guidance_body_name.to_upper())
 	if autopilot_enabled:
-		gimbal_angle = 0.0
 		var orbit := FlightComputer.orbital_state(guidance_position, guidance_velocity, G * float(guidance_body.mass))
 		var target_radius := float(guidance_body.radius) + guidance_orbit_altitude
 		var target_orbit_speed := FlightComputer.circular_orbit_speed(target_radius, G * float(guidance_body.mass))
@@ -2250,10 +2335,7 @@ func _update_guidance(dt: float) -> void:
 						autopilot_apsis_correction_angle = guidance_position.angle()
 						autopilot_phase = "COAST_TO_TARGET"
 					else:
-						var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-						rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
-						angular_velocity = 0.0
-						thrust_key_down = propellant_available and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
+						thrust_key_down = propellant_available
 					if not propellant_available and stage_index >= rocket_stages.size() - 1:
 						_fail_autopilot("OUT OF PROPELLANT DURING CIRCULARISATION")
 			"CIRCULARISE":
@@ -2351,10 +2433,7 @@ func _update_guidance(dt: float) -> void:
 					autopilot_phase = "TRANSFER_BURN"
 			"MANEUVER_BURN":
 				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0f M/S" % autopilot_burn_remaining
-				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-				rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				angular_velocity = 0.0
-				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING MANOEUVRE")
 			"ROUTE_COAST":
@@ -2380,19 +2459,12 @@ func _update_guidance(dt: float) -> void:
 							autopilot_phase = "ROUTE_BURN"
 			"ROUTE_BURN":
 				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0f M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
-				var route_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-				rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				angular_velocity = 0.0
-				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ROUTE BURN")
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
-				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
-				var injection_rotation := injection_direction.angle() - Vector2.UP.angle()
-				rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				angular_velocity = 0.0
-				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING DEPARTURE BURN")
 			"TRANSFER_COAST":
@@ -2426,10 +2498,7 @@ func _update_guidance(dt: float) -> void:
 					_fail_autopilot("ARRIVAL CAPTURE WINDOW MISSED  •  SPACECRAFT IS MOVING AWAY FROM THE TARGET")
 			"ARRIVAL_CAPTURE_BURN":
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
-				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-				rotation_angle = lerp_angle(rotation_angle, capture_rotation, clampf(dt * 1.5, 0.0, 1.0))
-				angular_velocity = 0.0
-				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ARRIVAL CAPTURE")
 			"LANDING_DESCENT":
@@ -2468,7 +2537,7 @@ func _update_guidance(dt: float) -> void:
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent
 		elif autopilot_phase in ["WAIT_WINDOW", "ALIGN_DEPARTURE"]:
 			autopilot_direction = tangent * autopilot_transfer_direction
-		elif autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN"]:
+		elif autopilot_phase in ["TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"]:
 			autopilot_direction = autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 		elif autopilot_phase == "LANDING_DESCENT":
 			var landing_direction_state := _autopilot_target_state()
@@ -2485,9 +2554,15 @@ func _update_guidance(dt: float) -> void:
 			var landing_direction_tangential_acceleration := -landing_direction_tangential_speed / 180.0
 			var landing_direction_vector := landing_direction_up * landing_direction_radial_acceleration + landing_direction_tangent * landing_direction_tangential_acceleration
 			autopilot_direction = landing_direction_vector.normalized() if landing_direction_vector.length_squared() > 0.001 else landing_direction_up
+		if autopilot_phase in ["FAILED", "COMPLETE"]:
+			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
+			return
 		var autopilot_target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
-		rotation_angle = lerp_angle(rotation_angle, autopilot_target_rotation, clampf(dt * 1.2, 0.0, 1.0))
-		angular_velocity = 0.0
+		var burn_expected := autopilot_phase in ["ASCENT", "CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN", "LANDING_DESCENT"]
+		var attitude_ready := _autopilot_attitude_control(autopilot_target_rotation, dt, burn_expected)
+		if burn_expected and not attitude_ready:
+			thrust_key_down = false
 		return
 	elif guidance_velocity.length() > 1500.0:
 		pitch_above_horizon = minf(pitch_above_horizon, 12.0)
@@ -2511,6 +2586,8 @@ func _input(event: InputEvent) -> void:
 		if autopilot_enabled:
 			autopilot_enabled = false
 			guidance_enabled = false
+			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
 		if landed and (infinite_weightless_fuel or fuel > 0.0):
 			thrust_key_down = true
 		else:
@@ -2519,6 +2596,8 @@ func _input(event: InputEvent) -> void:
 		if autopilot_enabled:
 			autopilot_enabled = false
 			guidance_enabled = false
+			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
 		thrust_key_down = false
 		throttle_cutoff_key_down = false
 
@@ -2527,6 +2606,7 @@ func _notification(what: int) -> void:
 		thrust_key_down = false
 		throttle_cutoff_key_down = false
 		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not input_enabled:
@@ -2555,10 +2635,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if has_rcs_installed():
 		if event.is_action_pressed("rotate_left"):
 			rcs_rotation_input = -1.0
+			rcs_rotation_scale = 1.0
 		elif event.is_action_pressed("rotate_right"):
 			rcs_rotation_input = 1.0
+			rcs_rotation_scale = 1.0
 		elif event.is_action_released("rotate_left") or event.is_action_released("rotate_right"):
 			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
 	if not event.pressed or event.echo:
 		return
 	if event.is_action_pressed("rotate_left"):
@@ -2578,6 +2661,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not guidance_enabled:
 			autopilot_enabled = false
 			thrust_key_down = false
+			rcs_rotation_input = 0.0
+			rcs_rotation_scale = 0.0
 	else:
 		match event.keycode:
 			KEY_HOME:
