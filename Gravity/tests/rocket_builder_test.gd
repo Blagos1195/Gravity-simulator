@@ -138,6 +138,7 @@ func _initialize() -> void:
 	group_builder._canvas._zoom_at(2.0, zoom_anchor)
 	var after_zoom := (zoom_anchor - group_builder._canvas.size * 0.5 - group_builder._canvas.view_offset) / group_builder._canvas.zoom
 	assert(before_zoom.is_equal_approx(after_zoom))
+	var pan_offset_before := group_builder._canvas.view_offset
 	var pan_start := InputEventMouseButton.new()
 	pan_start.button_index = MOUSE_BUTTON_MIDDLE
 	pan_start.pressed = true
@@ -146,7 +147,7 @@ func _initialize() -> void:
 	var pan_motion := InputEventMouseMotion.new()
 	pan_motion.position = Vector2(145.0, 130.0)
 	group_builder._canvas._gui_input(pan_motion)
-	assert(group_builder._canvas.view_offset.distance_to(Vector2(45.0, 30.0)) < 0.01)
+	assert(group_builder._canvas.view_offset.distance_to(pan_offset_before + Vector2(45.0, 30.0)) < 0.01)
 	var group_stage_before: Dictionary = group_builder.design.stages[0]
 	assert(group_stage_before.components.size() >= 2)
 	group_builder._on_components_position_changed([0, 1], [Vector2(-2.0, 0.0), Vector2(2.0, 0.0)])
