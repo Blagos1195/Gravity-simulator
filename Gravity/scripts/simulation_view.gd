@@ -42,8 +42,6 @@ var paused := false
 var sim_time := 0.0
 var launch_time := 0.0
 var time_warp := 1.0
-var time_jump_active := false
-var time_jump_target := -1.0
 var simulation_time_backlog := 0.0
 var ephemeris_cache_time := -INF
 var ephemeris_cache: Dictionary = {}
@@ -1141,44 +1139,19 @@ func _process(delta: float) -> void:
 		var altitude: float = maxf(0.0, float(current_body.distance) - float(current_body.radius))
 		var atmosphere_height: float = PlanetarySystem.planetary_atmosphere_height(str(current_body.get("name", "Earth")))
 		var near_atmosphere: bool = float(current_body.distance) < float(current_body.soi) and altitude < atmosphere_height
-		var effective_warp: float = 1000000.0 if time_jump_active else time_warp
-		if near_atmosphere:
-			effective_warp = minf(effective_warp, 100.0)
-		if time_jump_active:
-			simulation_time_backlog = minf(1000000.0, simulation_time_backlog + effective_warp * delta)
-		else:
-			simulation_time_backlog = effective_warp * delta
+		var effective_warp: float = minf(time_warp, 100.0) if near_atmosphere else time_warp
+		simulation_time_backlog = effective_warp * delta
 		var iterations := 0
 		var physics_budget_start_usec: int = Time.get_ticks_usec()
 		while simulation_time_backlog > 0.000001 and iterations < MAX_PHYSICS_STEPS_PER_FRAME and Time.get_ticks_usec() - physics_budget_start_usec < MAX_PHYSICS_BUDGET_USEC:
 			var step_delta: float = minf(simulation_time_backlog, _adaptive_step_size())
-			if time_jump_active:
-				var remaining_jump_time := time_jump_target - sim_time
-				if remaining_jump_time <= 0.001:
-					time_jump_active = false
-					time_jump_target = -1.0
-					time_warp = 1.0
-					simulation_time_backlog = 0.0
-					break
-				step_delta = minf(step_delta, remaining_jump_time)
 			if step_delta <= 0.000001:
 				break
 			_physics_step(step_delta)
 			simulation_time_backlog = maxf(0.0, simulation_time_backlog - step_delta)
 			iterations += 1
-			if time_jump_active and sim_time >= time_jump_target - 0.001:
-				time_jump_active = false
-				time_jump_target = -1.0
-				time_warp = 1.0
-				simulation_time_backlog = 0.0
-				break
-		if not time_jump_active:
-			simulation_time_backlog = 0.0
+		simulation_time_backlog = 0.0
 	else:
-		if time_jump_active:
-			time_warp = 1.0
-		time_jump_active = false
-		time_jump_target = -1.0
 		simulation_time_backlog = 0.0
 	if show_predicted_trajectory:
 		prediction_timer += delta
@@ -1193,15 +1166,6 @@ func _process(delta: float) -> void:
 			trail.pop_front()
 	queue_redraw()
 
-func begin_time_jump(target_time: float) -> bool:
-	if paused or crashed or target_time <= sim_time + 1.0:
-		return false
-	time_jump_target = target_time
-	time_jump_active = true
-	time_warp = 1000000.0
-	simulation_time_backlog = 0.0
-	return true
-
 func next_autopilot_event_time() -> float:
 	if autopilot_enabled:
 		match autopilot_phase:
@@ -1210,10 +1174,8 @@ func next_autopilot_event_time() -> float:
 			"ROUTE_COAST":
 				if autopilot_route_node_index < autopilot_route_nodes.size():
 					return float(autopilot_route_nodes[autopilot_route_node_index].get("time", -1.0))
-			"TRANSFER_COAST":
-				if autopilot_transfer_start_time >= 0.0 and autopilot_transfer_duration > 0.0:
-					var fraction := 0.4 if autopilot_transfer_corrections < 2 else 1.0
-					return autopilot_transfer_start_time + autopilot_transfer_duration * fraction
+			_:
+				return -1.0
 	var plan: Dictionary = manual_flight_plan
 	if not plan.is_empty() and bool(plan.get("active", false)) and str(plan.get("phase", "")) == "WAIT_DEPARTURE":
 		return float(plan.get("departure_time", -1.0))
