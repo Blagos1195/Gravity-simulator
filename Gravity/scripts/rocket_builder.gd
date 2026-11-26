@@ -157,6 +157,13 @@ class AssemblyCanvas extends Control:
 		var length := maxf(16.0, float(component.get("length_m", 2.0)) * _drawing_scale)
 		var width := maxf(14.0, float(component.get("collision_radius_m", 0.5)) * _drawing_width_scale * 2.0)
 		var target_position: Vector2 = target.position
+		var source_rect := Rect2(Vector2.ZERO, Vector2(width, length))
+		for source_node in _component_attachment_nodes(source_rect, component):
+			if str(source_node.get("type", "structural")) != str(target.get("node_type", "structural")):
+				continue
+			if Vector2(source_node.direction).dot(Vector2(target.get("direction", Vector2.UP))) > -0.95:
+				continue
+			return target_position - (Vector2(source_node.position) - source_rect.get_center())
 		match str(target.get("edge", "")):
 			"top":
 				return target_position + Vector2(0.0, -length * 0.5)
@@ -173,6 +180,13 @@ class AssemblyCanvas extends Control:
 				return target_position + Vector2(float(int(target.get("side", 1))) * width * 0.5, 0.0)
 		return at_position
 
+	func _has_matching_attachment_node(component: Dictionary, target_direction: Vector2, target_type: String) -> bool:
+		var probe_rect := Rect2(Vector2.ZERO, Vector2(1.0, 1.0))
+		for node in _component_attachment_nodes(probe_rect, component):
+			if str(node.get("type", "structural")) == target_type and Vector2(node.direction).dot(target_direction) <= -0.95:
+				return true
+		return false
+
 	func _find_attachment_target(position: Vector2) -> Dictionary:
 		var best_distance := 36.0
 		var best_target: Dictionary = {}
@@ -184,6 +198,9 @@ class AssemblyCanvas extends Control:
 				continue
 			var component: Dictionary = item.get("component", {})
 			for node in _component_attachment_nodes(item.rect, component):
+				var dragged_component: Dictionary = _drag_data.get("component", {})
+				if not dragged_component.is_empty() and not _has_matching_attachment_node(dragged_component, Vector2(node.direction), str(node.type)):
+					continue
 				var distance := position.distance_to(Vector2(node.position))
 				if distance >= best_distance:
 					continue
