@@ -80,6 +80,7 @@ func _initialize() -> void:
 	assert(is_equal_approx(first.sim_time, second.sim_time), "Docked module time was not synchronised after a jump")
 	main.docking_links.clear()
 	main._update_docked_masses()
+	main._sync_docked_vehicles()
 	main._switch_vehicle(0)
 	first.rocket_position = Vector2(1.0e9, 0.0)
 	second.landed = false
