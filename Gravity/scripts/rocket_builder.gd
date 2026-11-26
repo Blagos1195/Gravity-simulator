@@ -383,9 +383,11 @@ class AssemblyCanvas extends Control:
 			var target_position: Vector2 = target.position
 			match str(target.get("attachment", "")):
 				"stack":
+					preview_position.x = target_position.x
 					preview_position.y = target_position.y + (-length * 0.5 if int(target.get("insert_index", 0)) <= int(target.get("component_index", 0)) else length * 0.5)
 				"side":
 					preview_position.x = target_position.x + float(int(target.get("side", 1))) * width * 0.5
+					preview_position.y = target_position.y
 			draw_circle(target_position, 13.0, Color(0.12, 0.62, 0.9, 0.22))
 			draw_arc(target_position, 12.0, 0.0, TAU, 32, Color(0.35, 0.88, 1.0, 0.95), 2.5)
 			draw_line(preview_position, target_position, Color(0.35, 0.88, 1.0, 0.7), 1.5)
