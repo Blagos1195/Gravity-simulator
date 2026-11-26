@@ -1002,13 +1002,15 @@ func _fast_forward_to_time(target_time: float) -> bool:
 		return false
 	if is_instance_valid(active_route_planner):
 		var planner_nodes: Array = active_route_planner.get("nodes")
-		var planner_base_time := float(active_route_planner.get("node_reference_time"))
-		if int(active_route_planner.get("manual_guidance_node_index")) >= 0:
-			planner_base_time = float(active_route_planner.get("manual_guidance_start_time"))
+		var planner_reference_time := float(active_route_planner.get("node_reference_time"))
+		var guided_node_index := int(active_route_planner.get("manual_guidance_node_index"))
+		var guided_start_time := float(active_route_planner.get("manual_guidance_start_time"))
 		var next_planner_event_time := INF
-		for node_variant in planner_nodes:
+		for node_index in range(planner_nodes.size()):
+			var node_variant: Variant = planner_nodes[node_index]
 			if not node_variant is Dictionary:
 				continue
+			var planner_base_time := guided_start_time if node_index == guided_node_index else planner_reference_time
 			var node_time := planner_base_time + maxf(0.0, float(node_variant.get("time_offset", 0.0)))
 			if node_time > sim.sim_time + 1.0:
 				next_planner_event_time = minf(next_planner_event_time, node_time)
