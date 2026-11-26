@@ -334,7 +334,7 @@ static func total_delta_v(design: Dictionary) -> float:
 				if parent_index >= 0 and parent_index < components.size():
 					links.append([component_index, parent_index])
 			var visited: Dictionary = {}
-				var root_index := -1
+			var root_index := -1
 			for component_index in range(components.size()):
 				if str(components[component_index].get("attachment", "stack")) == "stack":
 					root_index = component_index
