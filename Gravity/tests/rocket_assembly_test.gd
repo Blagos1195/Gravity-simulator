@@ -22,6 +22,58 @@ func _initialize() -> void:
 	assert(is_equal_approx(RocketDesign.stage_total_thrust(assembled), original_thrust))
 	assert(is_equal_approx(RocketDesign.stage_total_thrust(assembled, true), original_vacuum_thrust))
 	assert(is_equal_approx(RocketDesign.stage_total_flow(assembled), original_flow))
+	var preset_options := RocketDesign.preset_options()
+	assert(preset_options.size() == 5, "All five rocket presets should remain available")
+	for preset_option in preset_options:
+		var preset_id := str(preset_option.get("id", ""))
+		var preset_design := RocketAssembly.add_preset_hardware(RocketDesign.create_preset(preset_id))
+		var preset_stages: Array = preset_design.get("stages", [])
+		assert(not preset_stages.is_empty(), "Preset %s should contain physical stages" % preset_id)
+		for preset_stage_index in range(preset_stages.size()):
+			var preset_stage: Dictionary = preset_stages[preset_stage_index]
+			var has_stage_rcs := false
+			var has_separator := false
+			var has_connector := false
+			var has_lower_interface := false
+			var has_upper_interface := false
+			for preset_component in preset_stage.get("components", []):
+				match str(preset_component.get("preset_hardware_role", "")):
+					"rcs":
+						has_stage_rcs = str(preset_component.get("kind", "")) == "rcs"
+					"separator":
+						has_separator = str(preset_component.get("id", "")) == "stack_decoupler"
+					"connector":
+						has_connector = str(preset_component.get("kind", "")) == "docking_port"
+					"payload_interface_lower":
+						has_lower_interface = str(preset_component.get("kind", "")) == "docking_port"
+					"payload_interface_upper":
+						has_upper_interface = str(preset_component.get("kind", "")) == "docking_port"
+			assert(has_stage_rcs and RocketDesign.stage_rcs_propellant_capacity(preset_stage) > 0.0, "Every preset stage needs independent RCS and propellant")
+			assert(has_separator == (preset_stage_index < preset_stages.size() - 1), "Each physical stage boundary needs one real decoupler")
+			assert(has_connector == (preset_stage_index == preset_stages.size() - 1), "The payload end needs its own docking connector")
+			assert(has_lower_interface == (preset_stage_index == preset_stages.size() - 2), "The launch stage needs a connector at the payload interface")
+			assert(has_upper_interface == (preset_stage_index == preset_stages.size() - 1), "The payload needs its matching interface connector")
+		var preset_boundaries := RocketAssembly.docking_module_boundaries(preset_stages)
+		assert(preset_boundaries.has(preset_stages.size() - 1), "The upper payload must be releasable as a dockable module")
+		var preset_plan := StagingSystem.create_plan([preset_design])
+		assert(preset_plan.size() == preset_stages.size() * 2 - 1, "Preset ignition and separation need distinct action stages")
+		for boundary_index in range(preset_stages.size() - 1):
+			var found_boundary_action := false
+			for action in preset_plan[boundary_index * 2 + 1].get("actions", []):
+				if boundary_index == preset_stages.size() - 2:
+					if str(action.get("action", "")) == "undock_module" and int(action.get("physical_stage_index", -1)) == boundary_index + 1:
+						found_boundary_action = true
+				elif str(action.get("action", "")) == "separate" and int(action.get("physical_stage_index", -1)) == boundary_index:
+					found_boundary_action = true
+			assert(found_boundary_action, "Each boundary needs the correct stage separation or payload release action")
+		var repeated_preset := RocketAssembly.add_preset_hardware(preset_design)
+		var connector_count := 0
+		for repeated_component in repeated_preset.stages[-1].components:
+			if str(repeated_component.get("preset_hardware_role", "")) == "connector":
+				connector_count += 1
+		assert(connector_count == 1, "Preset hardware should not duplicate when applied twice")
+	var independent_action_stages := StagingSystem.create_plan([{"staging_stage_count":1,"stages":[{}, {}, {}]}])
+	assert(independent_action_stages.size() == 1, "Action stages should be independent of physical stage count")
 	var with_tank := RocketAssembly.add_component(assembled, "medium_tank")
 	assert(not with_tank.is_empty())
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(with_tank), original_dry_mass + 6000.0))

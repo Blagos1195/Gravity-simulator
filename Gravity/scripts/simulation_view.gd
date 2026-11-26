@@ -213,7 +213,8 @@ func set_rocket_design(design: Dictionary) -> void:
 	staging_plan = StagingSystem.create_plan([{
 		"module_id": vehicle_name,
 		"stages": rocket_stages,
-		"staging_stage_count": int(design.get("staging_stage_count", 0))
+		"staging_stage_count": int(design.get("staging_stage_count", 0)),
+		"staging_stage_labels": design.get("staging_stage_labels", []).duplicate(true)
 	}])
 	staging_changed.emit()
 

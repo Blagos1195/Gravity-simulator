@@ -8,9 +8,10 @@ static func create_plan(modules: Array) -> Array:
 	var stage_count := 0
 	for module_variant in modules:
 		if module_variant is Dictionary:
-			stage_count = maxi(stage_count, (module_variant.get("stages", []) as Array).size())
-			stage_count = maxi(stage_count, int(module_variant.get("staging_stage_count", 0)))
-			for physical_stage in module_variant.get("stages", []):
+			var module_stages: Array = module_variant.get("stages", [])
+			var configured_stage_count := int(module_variant.get("staging_stage_count", 0))
+			stage_count = maxi(stage_count, configured_stage_count if configured_stage_count > 0 else module_stages.size())
+			for physical_stage in module_stages:
 				for component_variant in physical_stage.get("components", []):
 					if component_variant is Dictionary:
 						stage_count = maxi(stage_count, int(component_variant.get("staging_stage", 0)) + 1)
@@ -31,6 +32,8 @@ static func create_plan(modules: Array) -> Array:
 				var component: Dictionary = component_variant
 				var kind := str(component.get("kind", ""))
 				var part_id := str(component.get("part_uid", component.get("id", "")))
+				if bool(component.get("staging_action_disabled", false)):
+					continue
 				var action_name := str(component.get("staging_action", ""))
 				if kind == "docking_port":
 					if component_group_boundaries.has(part_id):
@@ -51,10 +54,23 @@ static func create_plan(modules: Array) -> Array:
 						action_name = "activate_rcs"
 					elif bool(component.get("deployable", false)):
 						action_name = "deploy"
-				if action_name.is_empty():
+				if action_name.is_empty() or action_name == "none":
 					continue
 				var assigned_stage := clampi(int(component.get("staging_stage", physical_stage_index)), 0, maxi(0, stages.size() - 1))
-				stages[assigned_stage].actions.append({"id":"%s:%s:%s" % [module_id, part_id, action_name], "module_id":module_id, "physical_stage_index":physical_stage_index, "part_id":part_id, "action":action_name, "completed":false, "reversible":action_name not in ["separate", "undock_module"]})
+				var action_order := int(component.get("staging_order", stages[assigned_stage].actions.size()))
+				stages[assigned_stage].actions.append({"id":"%s:%s:%s" % [module_id, part_id, action_name], "module_id":module_id, "physical_stage_index":physical_stage_index, "part_id":part_id, "action":action_name, "staging_order":action_order, "completed":false, "reversible":action_name not in ["separate", "undock_module"]})
+	for module_variant in modules:
+		if not module_variant is Dictionary:
+			continue
+		var labels: Array = module_variant.get("staging_stage_labels", [])
+		for index in range(mini(labels.size(), stages.size())):
+			var label := str(labels[index]).strip_edges()
+			if not label.is_empty():
+				stages[index]["label"] = label
+	for stage in stages:
+		stage.actions.sort_custom(func(first: Dictionary, second: Dictionary) -> bool:
+			return int(first.get("staging_order", 0)) < int(second.get("staging_order", 0))
+		)
 	return stages
 
 static func merge_plans(first_plan: Array, second_plan: Array) -> Array:
