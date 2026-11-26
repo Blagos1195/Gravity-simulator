@@ -2247,7 +2247,7 @@ func _update_guidance(dt: float) -> void:
 					var speed_pitch: float = lerpf(88.0, 4.0, ascent_speed_fraction)
 					pitch_above_horizon = minf(altitude_pitch, speed_pitch)
 					status_message = "AUTOPILOT  •  ASCENT  •  ALT %.0f KM  •  Vt %.2f KM/S  •  PITCH %.0f°" % [altitude / 1000.0, ascent_tangential_speed / 1000.0, pitch_above_horizon]
-					thrust_key_down = propellant_available
+						thrust_key_down = propellant_available
 			"COAST":
 				status_message = "AUTOPILOT  •  COASTING TO APOAPSIS"
 				thrust_key_down = false
@@ -2314,8 +2314,7 @@ func _update_guidance(dt: float) -> void:
 						autopilot_apsis_correction_angle = guidance_position.angle()
 						autopilot_phase = "COAST_TO_TARGET"
 					else:
-						var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-												thrust_key_down = propellant_available
+						thrust_key_down = propellant_available
 					if not propellant_available and stage_index >= rocket_stages.size() - 1:
 						_fail_autopilot("OUT OF PROPELLANT DURING CIRCULARISATION")
 			"CIRCULARISE":
@@ -2413,8 +2412,7 @@ func _update_guidance(dt: float) -> void:
 					autopilot_phase = "TRANSFER_BURN"
 			"MANEUVER_BURN":
 				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0f M/S" % autopilot_burn_remaining
-				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-								thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING MANOEUVRE")
 			"ROUTE_COAST":
@@ -2440,15 +2438,13 @@ func _update_guidance(dt: float) -> void:
 							autopilot_phase = "ROUTE_BURN"
 			"ROUTE_BURN":
 				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0f M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
-				var route_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-								thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ROUTE BURN")
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
 				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
-				var injection_rotation := injection_direction.angle() - Vector2.UP.angle()
-								thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING DEPARTURE BURN")
 			"TRANSFER_COAST":
@@ -2482,8 +2478,7 @@ func _update_guidance(dt: float) -> void:
 					_fail_autopilot("ARRIVAL CAPTURE WINDOW MISSED  •  SPACECRAFT IS MOVING AWAY FROM THE TARGET")
 			"ARRIVAL_CAPTURE_BURN":
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
-				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
-								thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
+				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ARRIVAL CAPTURE")
 			"LANDING_DESCENT":
