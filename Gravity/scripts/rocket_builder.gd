@@ -26,7 +26,7 @@ class AssemblyCanvas extends Control:
 	signal component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2, parent_uid: String, parent_node_id: String)
 	signal component_moved(from_index: int, to_index: int)
 	signal component_position_changed(index: int, position_m: Vector2)
-	signal component_repositioned(index: int, attachment: String, side: int, insert_index: int)
+	signal component_repositioned(index: int, attachment: String, side: int, insert_index: int, parent_uid: String, parent_node_id: String)
 	signal component_rotation_started(index: int)
 	signal component_rotated(index: int, rotation_deg: float)
 	signal component_selected(index: int)
@@ -1178,7 +1178,7 @@ func _on_component_position_changed(index: int, position_m: Vector2) -> void:
 	selected_component_index = index
 	_changed()
 
-func _on_component_repositioned(index: int, attachment: String, side: int, insert_index: int) -> void:
+func _on_component_repositioned(index: int, attachment: String, side: int, insert_index: int, parent_uid: String = "", parent_node_id: String = "") -> void:
 	var stage := _current_stage()
 	var components: Array = stage.get("components", []).duplicate(true)
 	if index < 0 or index >= components.size():
@@ -1208,6 +1208,12 @@ func _on_component_repositioned(index: int, attachment: String, side: int, inser
 	component.erase("side")
 	component.erase("mount_index")
 	component["attachment"] = attachment
+	if not parent_uid.is_empty():
+		component["structural_parent_uid"] = parent_uid
+		component["structural_parent_node_id"] = parent_node_id
+	else:
+		component.erase("structural_parent_uid")
+		component.erase("structural_parent_node_id")
 	if attachment == "stack":
 		var stack_indices: Array[int] = []
 		for candidate in range(components.size()):
