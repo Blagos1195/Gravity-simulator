@@ -31,6 +31,9 @@ class AssemblyCanvas extends Control:
 	signal component_rotated(index: int, rotation_deg: float)
 	signal component_selected(index: int)
 	signal component_group_position_changed(indices: Array, positions: Array)
+	signal component_stage_selected(stage_index: int, component_index: int)
+	signal component_group_rotation_started(indices: Array)
+	signal component_group_rotated(indices: Array, positions: Array, rotations: Array)
 
 	var stage: Dictionary = {}
 	var design: Dictionary = {}
@@ -49,6 +52,10 @@ class AssemblyCanvas extends Control:
 	var _rotation_center := Vector2.ZERO
 	var _rotation_start_angle := 0.0
 	var _rotation_start_degrees := 0.0
+	var _group_rotation_indices: Array[int] = []
+	var _group_rotation_centers: Array[Vector2] = []
+	var _group_rotation_degrees: Array[float] = []
+	var _group_rotation_stage_center_y := 0.0
 	var _drawing_scale := 1.0
 	var _drawing_width_scale := 1.0
 	var _drawing_stage_center_y := 0.0
@@ -68,11 +75,23 @@ class AssemblyCanvas extends Control:
 				return null
 		for item in _component_rects:
 			if not item.get("rotation_handle", false) and _rect_hit(item, at_position):
+				var item_stage := int(item.get("stage_index", selected_stage_index))
+				if item_stage != selected_stage_index:
+					selected_stage_index = item_stage
+					stage = (design.get("stages", []) as Array)[selected_stage_index]
+					selected_indices.clear()
+					selected_index = -1
+					component_stage_selected.emit(selected_stage_index, int(item.index))
 				var index := int(item.index)
 				if not selected_indices.has(index):
 					selected_indices = [index]
 				selected_index = index
 				component_selected.emit(selected_index)
+				var item_stage := int(item.get("stage_index", selected_stage_index))
+				if item_stage != selected_stage_index:
+					selected_stage_index = item_stage
+					stage = (design.get("stages", []) as Array)[selected_stage_index]
+					component_stage_selected.emit(selected_stage_index, index)
 				var components: Array = stage.get("components", [])
 				var dragged_indices: Array[int] = []
 				var start_rects: Array[Dictionary] = []
@@ -198,6 +217,8 @@ class AssemblyCanvas extends Control:
 			if item.get("rotation_handle", false):
 				continue
 			var index := int(item.index)
+			if int(item.get("stage_index", selected_stage_index)) != selected_stage_index:
+				continue
 			if str(_drag_data.get("source", "")) == "placed" and index in _drag_data.get("indices", [_drag_data.get("index", -1)]):
 				continue
 			var component: Dictionary = item.get("component", {})
@@ -301,7 +322,18 @@ class AssemblyCanvas extends Control:
 				rotation = snappedf(rotation, rotation_snap_degrees)
 			elif Input.is_key_pressed(KEY_SHIFT):
 				rotation = snappedf(rotation, 15.0)
-			component_rotated.emit(_rotating_index, rotation)
+			if _group_rotation_indices.size() > 1:
+				var group_positions: Array[Vector2] = []
+				var group_rotations: Array[float] = []
+				for group_index in range(_group_rotation_indices.size()):
+					var rotated_center := _rotate_point(_group_rotation_centers[group_index], _rotation_center, deg_to_rad(rotation - _rotation_start_degrees))
+					var scale_value := maxf(1.0, _drawing_scale)
+					var width_value := maxf(1.0, _drawing_width_scale)
+					group_positions.append(Vector2((rotated_center.x - size.x * 0.5 - view_offset.x) / width_value, (_group_rotation_stage_center_y - rotated_center.y) / scale_value))
+					group_rotations.append(wrapf(_group_rotation_degrees[group_index] + rotation - _rotation_start_degrees, -180.0, 180.0))
+				component_group_rotated.emit(_group_rotation_indices, group_positions, group_rotations)
+			else:
+				component_rotated.emit(_rotating_index, rotation)
 			accept_event()
 		elif event is InputEventMouseButton and event.pressed:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -387,7 +419,7 @@ class AssemblyCanvas extends Control:
 		for stage_index in range(stages.size() - 1, -1, -1):
 			var stage_data: Dictionary = stages[stage_index]
 			draw_string(ThemeDB.fallback_font, Vector2(12.0, current_y + 14.0), "STAGE %02d%s" % [stage_index + 1, "  EDITING" if stage_index == selected_stage_index else ""], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.48, 0.82, 1.0) if stage_index == selected_stage_index else Color(0.48, 0.58, 0.68))
-			current_y = _draw_stage(stage_data, stage_index, center_x, current_y, scale, width_scale, max_radius, stage_index == selected_stage_index)
+			current_y = _draw_stage(stage_data, stage_index, center_x, current_y, scale, width_scale, max_radius, true)
 			if stage_index > 0:
 				current_y += gap
 		_draw_drag_preview()
@@ -416,10 +448,10 @@ class AssemblyCanvas extends Control:
 			var height := maxf(12.0, float(component.get("length_m", 1.0)) * scale)
 			var half_width := clampf(float(component.get("collision_radius_m", 1.0)) * width_scale, 9.0, size.x * 0.2)
 			var rect := Rect2(Vector2(center_x - half_width, current_y), Vector2(half_width * 2.0, height))
-			_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if editable else 0.34)
+			_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if stage_index == selected_stage_index else 0.72)
 			axial_centers[index] = rect.get_center().y
 			if editable:
-				_register_component_rect(index, rect, "stack", component)
+				_register_component_rect(index, rect, "stack", component, stage_index, start_y + stage_extent * scale * 0.5)
 				draw_circle(Vector2(center_x, rect.position.y), 4.0, Color(0.35, 0.78, 1.0))
 				draw_circle(Vector2(center_x, rect.end.y), 4.0, Color(0.35, 0.78, 1.0))
 			current_y += height
@@ -446,7 +478,7 @@ class AssemblyCanvas extends Control:
 				var rect := Rect2(Vector2(center_x + float(direction) * offset - width * 0.5, y), Vector2(width, height))
 				_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if editable else 0.34)
 				if editable:
-					_register_component_rect(index, rect, "side", component)
+					_register_component_rect(index, rect, "side", component, stage_index, start_y + stage_extent * scale * 0.5)
 				draw_line(Vector2(center_x + float(direction) * mount_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		for index in range(components.size()):
 			var component: Dictionary = components[index]
@@ -464,7 +496,7 @@ class AssemblyCanvas extends Control:
 				var rect := Rect2(Vector2(center_x + float(direction) * offset - width * 0.5, y), Vector2(width, height))
 				_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if editable else 0.34)
 				if editable:
-					_register_component_rect(index, rect, "radial", component)
+					_register_component_rect(index, rect, "radial", component, stage_index, start_y + stage_extent * scale * 0.5)
 				draw_line(Vector2(center_x + float(direction) * max_radius * width_scale, y + height * 0.5), Vector2(center_x + float(direction) * (offset - width * 0.5), y + height * 0.5), Color(0.6, 0.72, 0.84, 1.0 if editable else 0.34), 2.0)
 		var stage_center_y := start_y + stage_extent * scale * 0.5
 		if editable:
@@ -484,7 +516,7 @@ class AssemblyCanvas extends Control:
 			var rect := Rect2(Vector2(center_x + position_m.x * width_scale - width * 0.5, stage_center_y - position_m.y * scale - height * 0.5), Vector2(width, height))
 			_draw_part(rect, component, editable and selected_indices.has(index), 1.0 if editable else 0.34)
 			if editable:
-				_register_component_rect(index, rect, "free", component)
+				_register_component_rect(index, rect, "free", component, stage_index, stage_center_y)
 		return start_y + stage_extent * scale
 
 	func _draw_drag_preview() -> void:
@@ -516,19 +548,19 @@ class AssemblyCanvas extends Control:
 		if snap_mode == "Attach" and target.is_empty():
 			draw_string(ThemeDB.fallback_font, _drag_position + Vector2(14.0, -14.0), "No attachment nearby", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.72, 0.4))
 
-	func _register_component_rect(index: int, rect: Rect2, attachment: String, component: Dictionary) -> void:
+	func _register_component_rect(index: int, rect: Rect2, attachment: String, component: Dictionary, stage_index: int, stage_center_y: float) -> void:
 		var center := rect.get_center()
 		var rotation := deg_to_rad(float(component.get("rotation_deg", 0.0)))
-		_component_rects.append({"index": index, "rect": rect, "attachment": attachment, "center": center, "rotation": rotation, "component": component.duplicate(true)})
+		_component_rects.append({"index": index, "rect": rect, "attachment": attachment, "center": center, "rotation": rotation, "component": component.duplicate(true), "stage_index": stage_index, "stage_center_y": stage_center_y})
 		if snap_mode == "Attach":
 			for node in _component_attachment_nodes(rect, component):
 				draw_circle(Vector2(node.position), 4.5, Color(0.35, 0.82, 1.0, 0.9))
-		if index == selected_index:
+		if stage_index == selected_stage_index and index == selected_index:
 			var handle_center := _rotate_point(Vector2(rect.get_center().x, rect.position.y - 20.0), center, rotation)
 			draw_line(_rotate_point(Vector2(rect.get_center().x, rect.position.y), center, rotation), handle_center, Color(0.45, 0.82, 1.0), 1.5)
 			draw_circle(handle_center, 7.0, Color(0.12, 0.22, 0.32))
 			draw_arc(handle_center, 6.0, 0.0, TAU, 24, Color(0.55, 0.88, 1.0), 2.0)
-			_component_rects.append({"index": index, "rect": Rect2(handle_center - Vector2(9.0, 9.0), Vector2(18.0, 18.0)), "rotation_handle": true, "center": center})
+			_component_rects.append({"index": index, "rect": Rect2(handle_center - Vector2(9.0, 9.0), Vector2(18.0, 18.0)), "rotation_handle": true, "center": center, "stage_index": stage_index})
 
 	func _rotate_point(point: Vector2, center: Vector2, angle: float) -> Vector2:
 		return center + (point - center).rotated(angle)
@@ -794,6 +826,9 @@ func _build_interface() -> void:
 	_canvas.component_rotated.connect(_on_component_rotated)
 	_canvas.component_selected.connect(_on_component_selected)
 	_canvas.component_group_position_changed.connect(_on_components_position_changed)
+	_canvas.component_stage_selected.connect(_on_canvas_stage_selected)
+	_canvas.component_group_rotation_started.connect(_on_component_group_rotation_started)
+	_canvas.component_group_rotated.connect(_on_components_group_rotated)
 	center_column.add_child(_canvas)
 	var view_tools := HBoxContainer.new()
 	view_tools.alignment = BoxContainer.ALIGNMENT_CENTER
