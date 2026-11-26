@@ -52,6 +52,7 @@ var vehicle_selector: OptionButton
 var telescope_button: Button
 var docking_links: Array[Dictionary] = []
 var docking_assists: Dictionary = {}
+var docking_assist_modes: Dictionary = {}
 var autosave_elapsed := 0.0
 var autosave_enabled := true
 var rebinding_action := ""
@@ -456,6 +457,86 @@ func _docking_avoidance_velocity(vehicle: SimulationView, target: SimulationView
 		adjusted_velocity += avoidance_direction * avoidance_speed
 	return adjusted_velocity
 
+func _vehicle_collision_circles(vehicle: SimulationView) -> Array[Dictionary]:
+	var circles: Array[Dictionary] = []
+	var total_length := 0.0
+	var geometries: Array[Dictionary] = []
+	for index in range(vehicle.stage_index, vehicle.rocket_stages.size()):
+		var geometry := RocketAssembly.stage_geometry(vehicle.rocket_stages[index])
+		geometries.append(geometry)
+		total_length += float(geometry.get("length", 1.0))
+	var cursor := -total_length * 0.5
+	for geometry in geometries:
+		var stage: Dictionary = geometry.get("stage", {})
+		var stage_center_y := cursor + float(geometry.get("length", 1.0)) * 0.5
+		var components: Array = stage.get("components", [])
+		var positions: Dictionary = geometry.get("component_positions", {})
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			var radius := maxf(float(component.get("collision_radius_m", 0.5)), float(component.get("length_m", 1.0)) * 0.55)
+			for local_position in positions.get(component_index, []):
+				var local_center: Vector2 = Vector2(local_position) + Vector2(0.0, stage_center_y)
+				circles.append({
+					"position": vehicle.rocket_position + local_center.rotated(vehicle.rotation_angle),
+					"radius": radius,
+					"part_uid": str(component.get("part_uid", ""))
+				})
+		cursor += float(geometry.get("length", 1.0))
+	return circles
+
+func _docking_path_clear(first: SimulationView, second: SimulationView, first_port: Dictionary, second_port: Dictionary) -> bool:
+	var start: Vector2 = Vector2(first_port.position)
+	var finish: Vector2 = Vector2(second_port.position)
+	var segment := finish - start
+	var segment_length_squared := segment.length_squared()
+	if segment_length_squared <= 0.000001:
+		return false
+	var ignored_uids := [str(first_port.get("part_uid", "")), str(second_port.get("part_uid", ""))]
+	for vehicle in [first, second]:
+		for circle in _vehicle_collision_circles(vehicle):
+			if str(circle.get("part_uid", "")) in ignored_uids:
+				continue
+			var center: Vector2 = Vector2(circle.position)
+			var along := clampf((center - start).dot(segment) / segment_length_squared, 0.0, 1.0)
+			if along <= 0.02 or along >= 0.98:
+				continue
+			var closest := start + segment * along
+			if center.distance_to(closest) < float(circle.radius) + 2.0:
+				return false
+	return true
+
+func _available_docking_port_pair(first: SimulationView, second: SimulationView, own_port_uid: String = "", target_port_uid: String = "") -> Dictionary:
+	var first_used: Dictionary = {}
+	var second_used: Dictionary = {}
+	for link in docking_links:
+		if str(link.get("parent_name", "")) == first.vehicle_name:
+			first_used[str(link.get("port_a", ""))] = true
+		elif str(link.get("child_name", "")) == first.vehicle_name:
+			first_used[str(link.get("port_b", ""))] = true
+		if str(link.get("parent_name", "")) == second.vehicle_name:
+			second_used[str(link.get("port_a", ""))] = true
+		elif str(link.get("child_name", "")) == second.vehicle_name:
+			second_used[str(link.get("port_b", ""))] = true
+	var best_pair: Dictionary = {}
+	var best_score := INF
+	for first_port in first.docking_port_world_states():
+		var first_uid := str(first_port.get("part_uid", ""))
+		if first_used.has(first_uid) or (not own_port_uid.is_empty() and first_uid != own_port_uid):
+			continue
+		for second_port in second.docking_port_world_states():
+			var second_uid := str(second_port.get("part_uid", ""))
+			if second_used.has(second_uid) or (not target_port_uid.is_empty() and second_uid != target_port_uid):
+				continue
+			if not _docking_path_clear(first, second, first_port, second_port):
+				continue
+			var alignment := clampf(Vector2(first_port.normal).dot(Vector2(second_port.normal)), -1.0, 1.0)
+			var distance := Vector2(first_port.position).distance_to(Vector2(second_port.position))
+			var score := distance + (1.0 + alignment) * 10000.0
+			if score < best_score:
+				best_score = score
+				best_pair = {"own": first_port, "target": second_port, "distance": distance, "alignment": alignment}
+	return best_pair
+
 func _apply_docking_assists(delta: float) -> void:
 	for vehicle_name_variant in docking_assists.keys():
 		var vehicle_name := str(vehicle_name_variant)
@@ -472,19 +553,52 @@ func _apply_docking_assists(delta: float) -> void:
 		var separation := relative_position.length()
 		if (separation > DOCKING_ASSIST_MAX_RANGE and not _docking_orbit_altitudes_compatible(vehicle, target)) or separation < 0.001:
 			docking_assists.erase(vehicle_name)
+			docking_assist_modes.erase(vehicle_name)
 			continue
-		if separation <= 1000.0 and _dock_vehicle(target_name):
+		var approach_only := str(docking_assist_modes.get(vehicle_name, "automatic")) == "approach_only"
+		var vehicle_radius := RocketDesign.vehicle_collision_radius_m({"stages": vehicle.rocket_stages}, vehicle.stage_index)
+		var target_radius := RocketDesign.vehicle_collision_radius_m({"stages": target.rocket_stages}, target.stage_index)
+		var safe_standoff := maxf(1000.0, vehicle_radius + target_radius + 500.0)
+		var relative_speed := (target.velocity - vehicle.velocity).length()
+		if approach_only and separation <= safe_standoff + 25.0 and relative_speed <= 0.5:
 			docking_assists.erase(vehicle_name)
+			docking_assist_modes.erase(vehicle_name)
+			vehicle.thrust_key_down = false
+			vehicle.status_message = "RENDEZVOUS COMPLETE  •  MANUAL DOCKING READY"
 			continue
 		var direction := relative_position / separation
 		var approach_distance := separation
+		var capture_distance := safe_standoff if approach_only else DOCKING_CAPTURE_DISTANCE
 		var reference_velocity: Vector2 = target.velocity
-		if separation > DOCKING_ASSIST_MAX_RANGE:
+		var selected_pair: Dictionary = {}
+		if not approach_only and separation <= 50000.0:
+			selected_pair = _available_docking_port_pair(vehicle, target)
+			if selected_pair.is_empty():
+				docking_assists.erase(vehicle_name)
+				vehicle.status_message = "DOCKING PAUSED  •  NO CLEAR PORT APPROACH"
+				continue
+			var own_port: Dictionary = selected_pair.own
+			var target_port: Dictionary = selected_pair.target
+			var port_delta: Vector2 = Vector2(target_port.position) - Vector2(own_port.position)
+			approach_distance = port_delta.length()
+			if approach_distance > 0.001:
+				direction = port_delta / approach_distance
+			var own_local_normal: Vector2 = Vector2(own_port.normal).rotated(-vehicle.rotation_angle)
+			var desired_normal: Vector2 = -Vector2(target_port.normal)
+			var target_rotation := desired_normal.angle() - own_local_normal.angle()
+			vehicle._autopilot_attitude_control(target_rotation, delta, false)
+			reference_velocity = target.velocity
+		elif separation > DOCKING_ASSIST_MAX_RANGE:
 			var orbital_approach := _docking_orbit_approach(vehicle, target)
 			direction = Vector2(orbital_approach.get("direction", direction))
 			approach_distance = float(orbital_approach.get("distance", separation))
 			reference_velocity = Vector2(orbital_approach.get("orbital_velocity", vehicle.velocity))
-		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, approach_distance - DOCKING_CAPTURE_DISTANCE)))
+		if not approach_only and not selected_pair.is_empty() and approach_distance <= 1000.0 and _dock_vehicle(target_name, str(selected_pair.own.get("part_uid", "")), str(selected_pair.target.get("part_uid", ""))):
+			docking_assists.erase(vehicle_name)
+			docking_assist_modes.erase(vehicle_name)
+			continue
+		var closing_limit := 3.0 if approach_only else DOCKING_ASSIST_MAX_CLOSING_SPEED
+		var desired_closing_speed := minf(closing_limit, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, approach_distance - capture_distance)))
 		var desired_velocity: Vector2 = reference_velocity + direction * desired_closing_speed
 		desired_velocity = _docking_avoidance_velocity(vehicle, target, desired_velocity)
 		var velocity_correction := (desired_velocity - vehicle.velocity).limit_length(DOCKING_ASSIST_ACCELERATION)
@@ -936,6 +1050,7 @@ func _build_menu() -> void:
 	fleet_time_backlog = 0.0
 	docking_links.clear()
 	docking_assists.clear()
+	docking_assist_modes.clear()
 	rebinding_action = ""
 	rebinding_button = null
 	for child in get_children():
@@ -2484,6 +2599,9 @@ func _rename_vehicle(vehicle_name: String, requested_name: String) -> bool:
 	if docking_assists.has(previous_name):
 		docking_assists[clean_name] = docking_assists[previous_name]
 		docking_assists.erase(previous_name)
+	if docking_assist_modes.has(previous_name):
+		docking_assist_modes[clean_name] = docking_assist_modes[previous_name]
+		docking_assist_modes.erase(previous_name)
 	for assist_vehicle in docking_assists.keys():
 		if str(docking_assists[assist_vehicle]) == previous_name:
 			docking_assists[assist_vehicle] = clean_name
@@ -2753,7 +2871,7 @@ func _current_module_graph() -> Dictionary:
 			graph = result.graph
 	return graph
 
-func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
+func _dock_vehicle(target_name: String, own_port_uid: String = "", target_port_uid: String = "") -> bool:
 	var target := _find_vehicle_by_name(target_name)
 	if target == null or sim == null or target == sim:
 		return false
@@ -2768,29 +2886,11 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 		return false
 	if not ModuleGraph.validate(graph).is_empty():
 		return false
-	var own_used_ports: Dictionary = {}
-	var target_used_ports: Dictionary = {}
-	for link in docking_links:
-		if str(link.get("parent_name", "")) == sim.vehicle_name:
-			own_used_ports[str(link.get("port_a", ""))] = true
-		elif str(link.get("child_name", "")) == sim.vehicle_name:
-			own_used_ports[str(link.get("port_b", ""))] = true
-		if str(link.get("parent_name", "")) == target.vehicle_name:
-			target_used_ports[str(link.get("port_a", ""))] = true
-		elif str(link.get("child_name", "")) == target.vehicle_name:
-			target_used_ports[str(link.get("port_b", ""))] = true
-	var own_port: Dictionary = {}
-	var target_port: Dictionary = {}
-	for port in sim.docking_port_world_states():
-		if (own_port_uid.is_empty() or str(port.get("part_uid", "")) == own_port_uid) and not own_used_ports.has(str(port.get("part_uid", ""))):
-			own_port = port
-			break
-	for port in target.docking_port_world_states():
-		if not target_used_ports.has(str(port.get("part_uid", ""))):
-			target_port = port
-			break
-	if own_port.is_empty() or target_port.is_empty():
+	var selected_pair := _available_docking_port_pair(sim, target, own_port_uid, target_port_uid)
+	if selected_pair.is_empty():
 		return false
+	var own_port: Dictionary = selected_pair.own
+	var target_port: Dictionary = selected_pair.target
 	var separation: float = Vector2(target_port.position).distance_to(Vector2(own_port.position))
 	var relative_speed: float = (target.velocity - sim.velocity).length()
 	var ports_aligned := Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
@@ -2839,6 +2939,8 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 		target.staging_plan = []
 	docking_assists.erase(sim.vehicle_name)
 	docking_assists.erase(target.vehicle_name)
+	docking_assist_modes.erase(sim.vehicle_name)
+	docking_assist_modes.erase(target.vehicle_name)
 	for assist_vehicle in docking_assists.keys():
 		if str(docking_assists[assist_vehicle]) == target.vehicle_name:
 			docking_assists.erase(assist_vehicle)
@@ -3989,7 +4091,7 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel_scroll.add_child(layout)
 	var intro := Label.new()
-	intro.text = "Rendezvous assist uses liquid engines for long-range orbital matching and RCS for the final approach. It docks automatically when the ports are aligned and relative speed is safe."
+	intro.text = "Rendezvous assist can dock automatically or stop outside the spacecraft so you can complete the final approach manually. Automatic mode selects an available, unobstructed port pair."
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(intro)
 	var parent_name: String = str(sim.vehicle_name)
@@ -4012,6 +4114,16 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 	dock_button.text = "DOCK"
 	dock_button.custom_minimum_size.y = 44
 	layout.add_child(dock_button)
+	var assist_mode_label := Label.new()
+	assist_mode_label.text = "RENDEZVOUS FINISH"
+	layout.add_child(assist_mode_label)
+	var assist_mode_selector := OptionButton.new()
+	assist_mode_selector.add_item("Automatic docking")
+	assist_mode_selector.set_item_id(0, 0)
+	assist_mode_selector.add_item("Stop short for manual docking")
+	assist_mode_selector.set_item_id(1, 1)
+	assist_mode_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.add_child(assist_mode_selector)
 	var assist_button := Button.new()
 	assist_button.text = "START RENDEZVOUS ASSIST"
 	assist_button.custom_minimum_size.y = 44
@@ -4105,6 +4217,8 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 				connector_connected = true
 				break
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
+		var assist_approach_only := str(docking_assist_modes.get(parent_name, "automatic")) == "approach_only"
+		assist_mode_selector.select(1 if assist_approach_only else 0)
 		var assembly_roots_available: bool = connected_assembly or (not _is_docked_child(parent_name) and not _is_docked_child(target_name))
 		var assembly_operational: bool = assembly_roots_available and not sim.landed and not sim.crashed and not target.landed and not target.crashed
 		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs_installed() and target.has_rcs_installed()
@@ -4124,8 +4238,10 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			status.text = "RENDEZVOUS PROPULSION UNAVAILABLE\nLiquid engine fuel or RCS propellant is required."
 		elif available_to_dock:
 			status.text = "DOCKING CONDITIONS MET\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
+		elif assist_active and assist_approach_only:
+			status.text = "APPROACH-ONLY ASSIST ACTIVE\nThe spacecraft will stop outside the collision boundary and return control to you for final port alignment."
 		elif assist_active:
-			status.text = "RENDEZVOUS ASSIST ACTIVE\nPort range: %.1f m  •  Relative speed: %.2f m/s\nEngines handle long-range rendezvous; RCS handles the final approach. Closing speed is limited to %.1f m/s." % [separation, relative_speed, DOCKING_ASSIST_MAX_CLOSING_SPEED]
+			status.text = "AUTOMATIC RENDEZVOUS ACTIVE\nPort range: %.1f m  •  Relative speed: %.2f m/s\nEngines handle long-range rendezvous; RCS handles the final approach and port alignment." % [separation, relative_speed]
 		elif not ports_aligned:
 			status.text = "ALIGN DOCKING PORTS\nTheir port faces must point towards each other.\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		else:
@@ -4133,6 +4249,7 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 		dock_button.disabled = not available_to_dock
 		assist_button.disabled = not available_to_assist and not assist_active
 		assist_button.text = "STOP RENDEZVOUS ASSIST" if assist_active else "START RENDEZVOUS ASSIST"
+		assist_mode_selector.disabled = assist_active
 		undock_button.disabled = not connector_connected
 		fuel_direction.disabled = not connected_assembly
 		transfer_button.disabled = not connected_assembly
@@ -4174,8 +4291,10 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
 		if str(docking_assists.get(parent_name, "")) == target_name:
 			docking_assists.erase(parent_name)
+			docking_assist_modes.erase(parent_name)
 		else:
 			docking_assists[parent_name] = target_name
+			docking_assist_modes[parent_name] = "approach_only" if assist_mode_selector.get_selected_id() == 1 else "automatic"
 		refresh_panel.call()
 	)
 	undock_button.pressed.connect(func():
@@ -4296,6 +4415,7 @@ func _save_game(automatic: bool) -> void:
 	data["active_vehicle_index"] = active_vehicle_index
 	data["docking_links"] = docking_links.duplicate(true)
 	data["docking_assists"] = docking_assists.duplicate(true)
+	data["docking_assist_modes"] = docking_assist_modes.duplicate(true)
 	data["realism"] = realism
 	data["world_scale"] = world_scale
 	data["career_enabled"] = career_enabled
@@ -4515,6 +4635,10 @@ func _load_game_from_path(path: String) -> void:
 	_update_docked_masses()
 	_sync_docked_vehicles()
 	docking_assists.clear()
+	docking_assist_modes.clear()
+	var saved_modes: Variant = parsed.get("docking_assist_modes", {})
+	if saved_modes is Dictionary:
+		docking_assist_modes = saved_modes.duplicate(true)
 	var saved_assists: Variant = parsed.get("docking_assists", {})
 	if saved_assists is Dictionary:
 		for vehicle_name_variant in saved_assists:
@@ -4524,6 +4648,8 @@ func _load_game_from_path(path: String) -> void:
 			var target := _find_vehicle_by_name(target_name)
 			if vehicle != null and target != null and not vehicle.landed and not vehicle.crashed and not target.landed and not target.crashed and not _is_vehicle_docked(vehicle_name) and not _is_vehicle_docked(target_name):
 				docking_assists[vehicle_name] = target_name
+				if not docking_assist_modes.has(vehicle_name):
+					docking_assist_modes[vehicle_name] = "automatic"
 	_switch_vehicle(active_vehicle_index)
 	infinite_weightless_fuel = sim.infinite_weightless_fuel
 	for vehicle in fleet_sims:
