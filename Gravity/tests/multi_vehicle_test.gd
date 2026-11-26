@@ -36,6 +36,7 @@ func _initialize() -> void:
 	first.passive_orbit_data.clear()
 	var planner := RoutePlanner.new()
 	planner.simulation = first
+	planner.node_reference_time = first.sim_time
 	planner.nodes = [{"time_offset": 120.0}]
 	planner.selected_node_index = 0
 	main.active_route_planner = planner
@@ -46,6 +47,8 @@ func _initialize() -> void:
 	assert(is_equal_approx(requested_jump_times[0], first.sim_time + 115.0), "Flight Computer jump did not stop five seconds before its node")
 	assert(not main._fast_forward_to_time(first.sim_time + 120.0), "Predictive jump passed a Flight Computer manoeuvre node")
 	assert(main._fast_forward_to_time(requested_jump_times[0]), "Flight Computer node jump was rejected")
+	planner._jump_to_selected_node()
+	assert(requested_jump_times.size() == 1, "Flight Computer allowed a repeated jump past the same manoeuvre node")
 	main.active_route_planner = null
 	planner.free()
 	main._add_new_vehicle()
