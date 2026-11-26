@@ -182,41 +182,6 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 					components.append(port)
 					stage = compile_stage(stage, components)
 		components = stage.get("components", []).duplicate(true)
-				var lower_port: Dictionary = components.pop_back()
-				lower_port["preset_hardware_role"] = "payload_interface_lower"
-				lower_port["port_facing"] = 1
-				components.insert(0, lower_port)
-				stage = compile_stage(stage, components)
-		if stage_index == stages.size() - 1:
-			if stages.size() > 1:
-				var has_upper_interface := false
-				for component in stage.get("components", []):
-					if str(component.get("preset_hardware_role", "")) == "payload_interface_upper":
-						has_upper_interface = true
-						break
-				if not has_upper_interface:
-					stage = add_component(stage, "standard_docking_port")
-					components = stage.get("components", []).duplicate(true)
-					var upper_port: Dictionary = components.back()
-					upper_port["preset_hardware_role"] = "payload_interface_upper"
-					upper_port["port_facing"] = -1
-					upper_port["staging_stage"] = payload_boundary_index * 2 + 1
-					components[components.size() - 1] = upper_port
-					stage = compile_stage(stage, components)
-			var has_connector := false
-			for component in stage.get("components", []):
-				if str(component.get("preset_hardware_role", "")) == "connector":
-					has_connector = true
-					break
-			if not has_connector:
-				stage = add_component(stage, "standard_docking_port")
-				components = stage.get("components", []).duplicate(true)
-				var connector: Dictionary = components.pop_back()
-				connector["preset_hardware_role"] = "connector"
-				connector["port_facing"] = 1
-				components.insert(0, connector)
-				stage = compile_stage(stage, components)
-		components = stage.get("components", []).duplicate(true)
 		var tank_mount_index := 0
 		for component_index in range(components.size()):
 			if str(components[component_index].get("kind", "")) == "tank":
