@@ -431,6 +431,44 @@ static func stage_docking_ports(stage: Dictionary, stage_center_y: float = 0.0) 
 			})
 	return ports
 
+static func docking_module_boundaries(stages: Array) -> Dictionary:
+	var geometries: Array[Dictionary] = []
+	var total_length := 0.0
+	for stage in stages:
+		var geometry := stage_geometry(stage)
+		geometries.append(geometry)
+		total_length += float(geometry.get("length", 1.0))
+	var centers: Array[float] = []
+	var cursor := -total_length * 0.5
+	for geometry in geometries:
+		var stage_length := float(geometry.get("length", 1.0))
+		centers.append(cursor + stage_length * 0.5)
+		cursor += stage_length
+	var boundaries: Dictionary = {}
+	for upper_index in range(1, stages.size()):
+		var lower_ports := stage_docking_ports(stages[upper_index - 1], centers[upper_index - 1])
+		var upper_ports := stage_docking_ports(stages[upper_index], centers[upper_index])
+		for lower_port in lower_ports:
+			for upper_port in upper_ports:
+				var lower_normal: Vector2 = lower_port.normal
+				var upper_normal: Vector2 = upper_port.normal
+				if lower_normal.dot(upper_normal) > -0.94:
+					continue
+				var lower_position: Vector2 = lower_port.position
+				var upper_position: Vector2 = upper_port.position
+				if lower_position.distance_to(upper_position) > 3.0:
+					continue
+				boundaries[upper_index] = {
+					"lower_part_uid": str(lower_port.get("part_uid", "")),
+					"upper_part_uid": str(upper_port.get("part_uid", "")),
+					"offset": lower_position - upper_position,
+					"separation_direction": -upper_normal.normalized()
+				}
+				break
+			if boundaries.has(upper_index):
+				break
+	return boundaries
+
 static func component_summary(stage: Dictionary) -> Dictionary:
 	var components: Array = stage.get("components", [])
 	var counts := {"tank": 0, "engine": 0, "decoupler": 0, "structure": 0, "rcs": 0, "docking_port": 0}
