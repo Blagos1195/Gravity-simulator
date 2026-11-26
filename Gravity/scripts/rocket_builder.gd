@@ -966,7 +966,13 @@ func _build_interface() -> void:
 	add_action_stage.text = "ADD ACTION STAGE"
 	add_action_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_action_stage.pressed.connect(func():
-		design["staging_stage_count"] = maxi(int(design.get("staging_stage_count", 0)), _action_stage_list.get_child_count()) + 1
+		_push_undo()
+		var labels: Array = design.get("staging_stage_labels", []).duplicate(true)
+		while labels.size() < _action_stage_list.get_child_count():
+			labels.append("Stage %d" % (labels.size() + 1))
+		labels.append("Stage %d" % (labels.size() + 1))
+		design["staging_stage_labels"] = labels
+		design["staging_stage_count"] = labels.size()
 		_changed()
 	)
 	action_header.add_child(add_action_stage)
@@ -1120,29 +1126,238 @@ func _refresh_action_stages() -> void:
 	var requested_count := maxi(plan.size(), int(design.get("staging_stage_count", 0)))
 	while plan.size() < requested_count:
 		plan.append({"id":"stage_%d" % plan.size(),"label":"Stage %d" % (plan.size() + 1),"actions":[]})
+	var labels: Array = design.get("staging_stage_labels", []).duplicate(true)
+	while labels.size() < plan.size():
+		labels.append("Stage %d" % (labels.size() + 1))
+	if labels.size() > plan.size():
+		labels.resize(plan.size())
+	design["staging_stage_labels"] = labels
+	design["staging_stage_count"] = plan.size()
 	for index in range(plan.size()):
 		var stage: Dictionary = plan[index]
 		var actions: Array = stage.get("actions", [])
 		var row := VBoxContainer.new()
-		var heading := Label.new()
-		heading.text = "STAGE %02d  •  %d ACTIONS" % [index + 1, actions.size()]
-		heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
-		row.add_child(heading)
+		var heading_row := HBoxContainer.new()
+		var heading := LineEdit.new()
+		heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		heading.placeholder_text = "Action stage name"
+		heading.text = str(labels[index])
+		heading.text_submitted.connect(func(value: String): _set_action_stage_label(index, value))
+		heading.focus_exited.connect(func():
+			if heading.text != str(design.get("staging_stage_labels", [])[index]):
+				_set_action_stage_label(index, heading.text)
+		)
+		heading_row.add_child(heading)
+		var move_up := Button.new()
+		move_up.text = "↑"
+		move_up.disabled = index == 0
+		move_up.pressed.connect(func(): _move_action_stage(index, -1))
+		heading_row.add_child(move_up)
+		var move_down := Button.new()
+		move_down.text = "↓"
+		move_down.disabled = index >= plan.size() - 1
+		move_down.pressed.connect(func(): _move_action_stage(index, 1))
+		heading_row.add_child(move_down)
+		var delete_stage := Button.new()
+		delete_stage.text = "×"
+		delete_stage.disabled = plan.size() <= 1
+		delete_stage.tooltip_text = "Remove action stage"
+		delete_stage.pressed.connect(func(): _delete_action_stage(index))
+		heading_row.add_child(delete_stage)
+		row.add_child(heading_row)
+		var add_action := Button.new()
+		add_action.text = "ADD SELECTED PART"
+		add_action.disabled = selected_component_index < 0 or selected_component_index >= _current_stage().get("components", []).size()
+		add_action.pressed.connect(func(): _add_action_for_selected_part(index))
+		row.add_child(add_action)
 		for action_variant in actions:
 			if not action_variant is Dictionary:
 				continue
 			var action: Dictionary = action_variant
+			var part_uid := str(action.get("part_id", ""))
+			var item_row := HBoxContainer.new()
 			var item := Label.new()
-			item.text = "%s  %s" % [str(action.get("action", "ACTION")).replace("_", " ").to_upper(), str(action.get("part_id", "PART"))]
+			item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			item.text = "%s  %s" % [str(action.get("action", "ACTION")).replace("_", " ").to_upper(), part_uid]
 			item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			item.add_theme_color_override("font_color", Color(0.68, 0.77, 0.86))
-			row.add_child(item)
+			item_row.add_child(item)
+			var assignment := OptionButton.new()
+			assignment.custom_minimum_size.x = 92.0
+			for target_index in range(plan.size()):
+				assignment.add_item(str(labels[target_index]))
+				assignment.set_item_metadata(target_index, target_index)
+			assignment.select(index)
+			assignment.item_selected.connect(func(option_index: int): _set_action_stage(part_uid, int(assignment.get_item_metadata(option_index))))
+			item_row.add_child(assignment)
+			var action_up := Button.new()
+			action_up.text = "↑"
+			action_up.disabled = actions.find(action_variant) == 0
+			action_up.pressed.connect(func(): _move_action(part_uid, index, -1))
+			item_row.add_child(action_up)
+			var action_down := Button.new()
+			action_down.text = "↓"
+			action_down.disabled = actions.find(action_variant) == actions.size() - 1
+			action_down.pressed.connect(func(): _move_action(part_uid, index, 1))
+			item_row.add_child(action_down)
+			var remove_action := Button.new()
+			remove_action.text = "×"
+			remove_action.tooltip_text = "Remove action"
+			remove_action.pressed.connect(func(): _remove_action(part_uid))
+			item_row.add_child(remove_action)
+			row.add_child(item_row)
 		if actions.is_empty():
 			var empty := Label.new()
 			empty.text = "No actions assigned"
 			empty.add_theme_color_override("font_color", Color(0.45, 0.52, 0.62))
 			row.add_child(empty)
 		_action_stage_list.add_child(row)
+
+func _set_action_stage_label(stage_index: int, value: String) -> void:
+	var labels: Array = design.get("staging_stage_labels", []).duplicate(true)
+	if stage_index < 0 or stage_index >= labels.size():
+		return
+	labels[stage_index] = value.strip_edges()
+	design["staging_stage_labels"] = labels
+	_changed()
+
+func _update_staging_component(part_uid: String, properties: Dictionary) -> void:
+	var stages: Array = design.get("stages", []).duplicate(true)
+	for stage_index in range(stages.size()):
+		var stage: Dictionary = stages[stage_index]
+		var components: Array = stage.get("components", []).duplicate(true)
+		var changed_component := false
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			if str(component.get("part_uid", "")) != part_uid:
+				continue
+			for key in properties:
+				component[key] = properties[key]
+			components[component_index] = component
+			changed_component = true
+			break
+		if changed_component:
+			stages[stage_index] = RocketAssembly.compile_stage(stage, components)
+			design["stages"] = stages
+			return
+
+func _set_action_stage(part_uid: String, target_stage: int) -> void:
+	var plan := StagingSystem.create_plan([design])
+	if target_stage < 0 or target_stage >= plan.size():
+		return
+	_push_undo()
+	_update_staging_component(part_uid, {"staging_stage": target_stage, "staging_order": plan[target_stage].actions.size()})
+	_changed()
+
+func _move_action(part_uid: String, stage_index: int, direction: int) -> void:
+	var plan := StagingSystem.create_plan([design])
+	if stage_index < 0 or stage_index >= plan.size():
+		return
+	var actions: Array = plan[stage_index].get("actions", [])
+	var current_index := -1
+	for index in range(actions.size()):
+		if str(actions[index].get("part_id", "")) == part_uid:
+			current_index = index
+			break
+	var destination := current_index + direction
+	if current_index < 0 or destination < 0 or destination >= actions.size():
+		return
+	_push_undo()
+	var ordered_uids: Array[String] = []
+	for action in actions:
+		ordered_uids.append(str(action.get("part_id", "")))
+	var moved_uid := ordered_uids.pop_at(current_index)
+	ordered_uids.insert(destination, moved_uid)
+	var order_by_uid: Dictionary = {}
+	for index in range(ordered_uids.size()):
+		order_by_uid[ordered_uids[index]] = index
+	var stages: Array = design.get("stages", []).duplicate(true)
+	for index in range(stages.size()):
+		var stage: Dictionary = stages[index]
+		var components: Array = stage.get("components", []).duplicate(true)
+		var changed_stage := false
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			var uid := str(component.get("part_uid", ""))
+			if order_by_uid.has(uid):
+				component["staging_order"] = int(order_by_uid[uid])
+				components[component_index] = component
+				changed_stage = true
+		if changed_stage:
+			stages[index] = RocketAssembly.compile_stage(stage, components)
+	design["stages"] = stages
+	_changed()
+
+func _remove_action(part_uid: String) -> void:
+	_push_undo()
+	_update_staging_component(part_uid, {"staging_action_disabled": true})
+	_changed()
+
+func _add_action_for_selected_part(stage_index: int) -> void:
+	var components: Array = _current_stage().get("components", [])
+	if selected_component_index < 0 or selected_component_index >= components.size():
+		return
+	var component: Dictionary = components[selected_component_index]
+	var part_uid := str(component.get("part_uid", ""))
+	if part_uid.is_empty():
+		return
+	_push_undo()
+	_update_staging_component(part_uid, {"staging_action_disabled": false, "staging_stage": stage_index})
+	_changed()
+
+func _move_action_stage(stage_index: int, direction: int) -> void:
+	var labels: Array = design.get("staging_stage_labels", []).duplicate(true)
+	var destination := stage_index + direction
+	if stage_index < 0 or stage_index >= labels.size() or destination < 0 or destination >= labels.size():
+		return
+	_push_undo()
+	var moved_label: Variant = labels.pop_at(stage_index)
+	labels.insert(destination, moved_label)
+	var stages: Array = design.get("stages", []).duplicate(true)
+	for index in range(stages.size()):
+		var stage: Dictionary = stages[index]
+		var components: Array = stage.get("components", []).duplicate(true)
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			var assigned := int(component.get("staging_stage", index))
+			if assigned == stage_index:
+				assigned = destination
+			elif stage_index < destination and assigned > stage_index and assigned <= destination:
+				assigned -= 1
+			elif destination < stage_index and assigned >= destination and assigned < stage_index:
+				assigned += 1
+			component["staging_stage"] = assigned
+			components[component_index] = component
+		stages[index] = RocketAssembly.compile_stage(stage, components)
+	design["stages"] = stages
+	design["staging_stage_labels"] = labels
+	design["staging_stage_count"] = labels.size()
+	_changed()
+
+func _delete_action_stage(stage_index: int) -> void:
+	var labels: Array = design.get("staging_stage_labels", []).duplicate(true)
+	if labels.size() <= 1 or stage_index < 0 or stage_index >= labels.size():
+		return
+	_push_undo()
+	labels.remove_at(stage_index)
+	var stages: Array = design.get("stages", []).duplicate(true)
+	for index in range(stages.size()):
+		var stage: Dictionary = stages[index]
+		var components: Array = stage.get("components", []).duplicate(true)
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			var assigned := int(component.get("staging_stage", index))
+			if assigned == stage_index:
+				assigned = maxi(0, stage_index - 1)
+			elif assigned > stage_index:
+				assigned -= 1
+			component["staging_stage"] = assigned
+			components[component_index] = component
+		stages[index] = RocketAssembly.compile_stage(stage, components)
+	design["stages"] = stages
+	design["staging_stage_labels"] = labels
+	design["staging_stage_count"] = labels.size()
+	_changed()
 
 func _refresh_parts() -> void:
 	if not is_instance_valid(_parts_list):
@@ -1668,13 +1883,15 @@ func _refresh_inspector() -> void:
 				action_options = [{"id":"deploy","label":"Deploy"},{"id":"retract","label":"Retract"}]
 			else:
 				action_options = [{"id":"activate","label":"Activate"},{"id":"deactivate","label":"Deactivate"}]
-	var default_action := "undock_module" if str(component.get("kind", "")) == "docking_port" else str(component.get("staging_action", action_options[0].id if not action_options.is_empty() else "activate"))
+	action_selector.add_item("No action")
+	action_selector.set_item_metadata(0, "none")
+	var default_action := "none" if bool(component.get("staging_action_disabled", false)) else ("undock_module" if str(component.get("kind", "")) == "docking_port" else str(component.get("staging_action", action_options[0].id if not action_options.is_empty() else "activate")))
 	for option in action_options:
 		action_selector.add_item(str(option.label))
 		action_selector.set_item_metadata(action_selector.item_count - 1, str(option.id))
 		if str(option.id) == default_action:
 			action_selector.select(action_selector.item_count - 1)
-	action_selector.item_selected.connect(func(index: int): _update_component_property("staging_action", str(action_selector.get_item_metadata(index))))
+	action_selector.item_selected.connect(func(index: int): _set_component_staging_action(str(action_selector.get_item_metadata(index))))
 	_inspector.add_child(action_selector)
 	var fields := [
 		{"key":"dry_mass","label":"Dry mass (kg)","max":100000000.0},
@@ -1717,6 +1934,20 @@ func _refresh_inspector() -> void:
 	actions.add_child(remove)
 	_inspector.add_child(actions)
 
+func _set_component_staging_action(value: String) -> void:
+	var stage := _current_stage()
+	var components: Array = stage.get("components", []).duplicate(true)
+	if selected_component_index < 0 or selected_component_index >= components.size():
+		return
+	_push_undo()
+	var component: Dictionary = components[selected_component_index]
+	component["staging_action_disabled"] = value == "none"
+	if value != "none":
+		component["staging_action"] = value
+	components[selected_component_index] = component
+	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(stage, components)
+	_changed()
+
 func _update_component_property(key: String, value: Variant) -> void:
 	var stage := _current_stage()
 	var components: Array = stage.get("components", []).duplicate(true)
@@ -1727,7 +1958,7 @@ func _update_component_property(key: String, value: Variant) -> void:
 	component[key] = value
 	components[selected_component_index] = component
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(stage, components)
-	_changed(false)
+	_changed() if key in ["staging_stage", "staging_action", "staging_order", "staging_action_disabled"] else _changed(false)
 
 func _duplicate_selected_component() -> void:
 	var components: Array = _current_stage().get("components", []).duplicate(true)
@@ -1921,6 +2152,7 @@ func _show_preset_dialog() -> void:
 		for index in range(stages.size()):
 			stages[index] = RocketAssembly.ensure_stage_components(stages[index])
 		design["stages"] = stages
+		design = RocketAssembly.add_preset_hardware(design)
 		_vehicle_name.text = str(design.get("name", "Custom Vehicle"))
 		_payload_mass_input.set_value_no_signal(float(design.get("payload_mass", 500.0)))
 		for index in range(_payload_selector.item_count):
