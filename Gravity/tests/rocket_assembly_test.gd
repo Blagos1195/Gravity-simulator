@@ -143,6 +143,14 @@ func _initialize() -> void:
 			if str(action.get("action", "")) == "undock_module" and int(action.get("physical_stage_index", -1)) == 1:
 				has_module_release_action = true
 	assert(has_module_release_action, "The upper connector should create a module-release staging action")
+	var unpaired_port_stage := RocketAssembly.add_component(RocketAssembly.ensure_stage_components({}), "standard_docking_port")
+	for component in unpaired_port_stage.components:
+		if str(component.get("kind", "")) == "docking_port":
+			component["staging_action"] = "separate"
+	var unpaired_port_plan := StagingSystem.create_plan([{"module_id":"unpaired_vehicle","stages":[unpaired_port_stage]}])
+	for plan_stage in unpaired_port_plan:
+		for action in plan_stage.get("actions", []):
+			assert(str(action.get("action", "")) != "separate" and str(action.get("action", "")) != "undock_module", "An unpaired docking port must not become a detachable part or module")
 	var release_simulation := SimulationView.new()
 	var release_design := RocketDesign.create_default()
 	release_design["stages"] = paired_stages
