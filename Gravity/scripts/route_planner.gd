@@ -1,5 +1,7 @@
 extends Window
 
+signal time_jump_requested(target_time: float)
+
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 
@@ -1032,8 +1034,7 @@ func _jump_to_selected_node() -> void:
 	if target_time <= float(simulation.get("sim_time")) + 1.0:
 		manual_guidance_report.text = "THE SELECTED NODE IS ALREADY WITHIN THE FIVE-SECOND APPROACH WINDOW."
 		return
-	if simulation.call("begin_time_jump", target_time):
-		manual_guidance_report.text = "TIME ADVANCE ACTIVE  •  ARRIVING FIVE SECONDS BEFORE NODE %d. TIME WARP WILL RETURN TO NORMAL AUTOMATICALLY." % (selected_node_index + 1)
+	time_jump_requested.emit(target_time)
 
 func _manual_node_state(node_time: float) -> Dictionary:
 	if node_time <= 0.0 or planned_path.size() < 3 or planned_path_times.size() != planned_path.size():
