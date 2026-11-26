@@ -528,14 +528,35 @@ func _available_docking_port_pair(first: SimulationView, second: SimulationView,
 			if second_used.has(second_uid) or (not target_port_uid.is_empty() and second_uid != target_port_uid):
 				continue
 			var distance := Vector2(first_port.position).distance_to(Vector2(second_port.position))
-			if require_clear_path and distance > DOCKING_CAPTURE_DISTANCE and not _docking_path_clear(first, second, first_port, second_port):
+			var clear_path := distance <= DOCKING_CAPTURE_DISTANCE or _docking_path_clear(first, second, first_port, second_port)
+			if require_clear_path and not clear_path:
 				continue
 			var alignment := clampf(Vector2(first_port.normal).dot(Vector2(second_port.normal)), -1.0, 1.0)
-			var score := distance + (1.0 + alignment) * 10000.0
+			var score := distance + (1.0 + alignment) * 10000.0 + (0.0 if clear_path else 1000000000.0)
 			if score < best_score:
 				best_score = score
-				best_pair = {"own": first_port, "target": second_port, "distance": distance, "alignment": alignment}
+				best_pair = {"own": first_port, "target": second_port, "distance": distance, "alignment": alignment, "clear_path": clear_path}
 	return best_pair
+
+func _docking_approach_waypoint(vehicle: SimulationView, target: SimulationView, own_port: Dictionary, target_port: Dictionary) -> Vector2:
+	var own_port_offset: Vector2 = Vector2(own_port.position) - vehicle.rocket_position
+	var target_normal: Vector2 = Vector2(target_port.normal).normalized()
+	var desired_center := Vector2(target_port.position) + target_normal * maxf(500.0, RocketDesign.vehicle_collision_radius_m({"stages": vehicle.rocket_stages}, vehicle.stage_index) + 250.0) - own_port_offset
+	var desired_radial := (desired_center - target.rocket_position).normalized()
+	var current_radial := (vehicle.rocket_position - target.rocket_position).normalized()
+	if desired_radial.length_squared() < 0.5 or current_radial.length_squared() < 0.5:
+		return desired_center
+	var angular_difference := angle_difference(current_radial.angle(), desired_radial.angle())
+	if absf(angular_difference) <= deg_to_rad(8.0):
+		return desired_center
+	var angular_step := signf(angular_difference) * minf(absf(angular_difference), deg_to_rad(12.0))
+	var clearance_radius := maxf(
+		desired_center.distance_to(target.rocket_position),
+		RocketDesign.vehicle_collision_radius_m({"stages": target.rocket_stages}, target.stage_index) + RocketDesign.vehicle_collision_radius_m({"stages": vehicle.rocket_stages}, vehicle.stage_index) + 500.0
+	)
+	var waypoint_angle := current_radial.angle() + angular_step
+	var waypoint_radius := clearance_radius / cos(absf(angular_step) * 0.5) + 50.0
+	return target.rocket_position + Vector2.from_angle(waypoint_angle) * waypoint_radius
 
 func _apply_docking_assists(delta: float) -> void:
 	for vehicle_name_variant in docking_assists.keys():
@@ -573,7 +594,7 @@ func _apply_docking_assists(delta: float) -> void:
 		var reference_velocity: Vector2 = target.velocity
 		var selected_pair: Dictionary = {}
 		if not approach_only and separation <= 50000.0:
-			selected_pair = _available_docking_port_pair(vehicle, target)
+			selected_pair = _available_docking_port_pair(vehicle, target, "", "", false)
 			if selected_pair.is_empty():
 				docking_assists.erase(vehicle_name)
 				docking_assist_modes.erase(vehicle_name)
@@ -583,8 +604,15 @@ func _apply_docking_assists(delta: float) -> void:
 			var target_port: Dictionary = selected_pair.target
 			var port_delta: Vector2 = Vector2(target_port.position) - Vector2(own_port.position)
 			approach_distance = port_delta.length()
-			if approach_distance > 0.001:
-				direction = port_delta / approach_distance
+			if bool(selected_pair.get("clear_path", false)):
+				if approach_distance > 0.001:
+					direction = port_delta / approach_distance
+			else:
+				var waypoint := _docking_approach_waypoint(vehicle, target, own_port, target_port)
+				var waypoint_delta := waypoint - vehicle.rocket_position
+				approach_distance = waypoint_delta.length()
+				if approach_distance > 0.001:
+					direction = waypoint_delta / approach_distance
 			var own_local_normal: Vector2 = Vector2(own_port.normal).rotated(-vehicle.rotation_angle)
 			var desired_normal: Vector2 = -Vector2(target_port.normal)
 			var target_rotation := desired_normal.angle() - own_local_normal.angle()
@@ -599,7 +627,7 @@ func _apply_docking_assists(delta: float) -> void:
 			direction = Vector2(orbital_approach.get("direction", direction))
 			approach_distance = float(orbital_approach.get("distance", separation))
 			reference_velocity = Vector2(orbital_approach.get("orbital_velocity", vehicle.velocity))
-		if not approach_only and not selected_pair.is_empty() and approach_distance <= 1000.0 and _dock_vehicle(target_name, str(selected_pair.own.get("part_uid", "")), str(selected_pair.target.get("part_uid", "")), true):
+		if not approach_only and not selected_pair.is_empty() and bool(selected_pair.get("clear_path", false)) and approach_distance <= 1000.0 and _dock_vehicle(target_name, str(selected_pair.own.get("part_uid", "")), str(selected_pair.target.get("part_uid", "")), true):
 			docking_assists.erase(vehicle_name)
 			docking_assist_modes.erase(vehicle_name)
 			continue
@@ -4187,11 +4215,11 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			return
-		var selected_pair := _available_docking_port_pair(sim, target, selected_port_uid)
+		var selected_pair := _available_docking_port_pair(sim, target, selected_port_uid, "", false)
 		var own_port: Dictionary = selected_pair.get("own", {})
 		var target_port: Dictionary = selected_pair.get("target", {})
 		var separation := float(selected_pair.get("distance", INF))
-		var ports_aligned := not selected_pair.is_empty() and float(selected_pair.get("alignment", 1.0)) <= -0.94
+		var ports_aligned := not selected_pair.is_empty() and bool(selected_pair.get("clear_path", false)) and float(selected_pair.get("alignment", 1.0)) <= -0.94
 		var relative_speed: float = (sim.velocity - target.velocity).length()
 		var connected_assembly: bool = _are_docked(parent_name, target_name)
 		var connector_connected := false
@@ -4225,7 +4253,9 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 		elif assist_active and assist_approach_only:
 			status.text = "APPROACH-ONLY ASSIST ACTIVE\nThe spacecraft will stop outside the collision boundary and return control to you for final port alignment."
 		elif selected_pair.is_empty():
-			status.text = "NO CLEAR PORT APPROACH\nMove the spacecraft or choose a different docking port arrangement."
+			status.text = "NO AVAILABLE DOCKING PORT PAIR\nCheck that both spacecraft have unused ports."
+		elif not bool(selected_pair.get("clear_path", false)):
+			status.text = "PORT ON FAR SIDE\nRendezvous assist will move around the spacecraft before approaching this port."
 		elif available_to_dock:
 			status.text = "DOCKING CONDITIONS MET\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		elif assist_active:
