@@ -48,6 +48,10 @@ func _initialize() -> void:
 			assert(has_stage_rcs and RocketDesign.stage_rcs_propellant_capacity(preset_stage) > 0.0, "Every preset stage needs independent RCS and propellant")
 			assert(has_separator == (preset_stage_index < preset_stages.size() - 1), "Each physical stage boundary needs one real decoupler")
 		assert(top_port_count == 2 and docking_port_count == 2, "Each preset must have exactly two docking ports at the top of its payload")
+		var top_ports := RocketAssembly.stage_docking_ports(preset_stages[-1])
+		assert(top_ports.size() == 2, "Preset top ports should both expose docking faces")
+		assert(Vector2(top_ports[0].normal).dot(Vector2(top_ports[1].normal)) < -0.99, "Preset top docking ports must face one another")
+		assert(Vector2(top_ports[0].position).distance_to(Vector2(top_ports[1].position)) < 0.01, "Preset top docking faces must meet")
 		var preset_plan := StagingSystem.create_plan([preset_design])
 		assert(preset_plan.size() == preset_stages.size() * 2 - 1, "Preset ignition and separation need distinct action stages")
 		for boundary_index in range(preset_stages.size() - 1):
