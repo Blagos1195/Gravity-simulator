@@ -4384,6 +4384,7 @@ func _load_game_from_path(path: String) -> void:
 		var root_name := vehicle.vehicle_name
 		for module_name in connected_modules:
 			normalized_modules[str(module_name)] = true
+		for module_name in connected_modules:
 			if not _is_docked_child(str(module_name)):
 				root_name = str(module_name)
 				break
