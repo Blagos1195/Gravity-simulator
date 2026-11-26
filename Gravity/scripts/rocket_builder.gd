@@ -71,13 +71,47 @@ class AssemblyCanvas extends Control:
 	func _drop_data(at_position: Vector2, data: Variant) -> void:
 		var position_m := _snap_position(_canvas_to_metres(at_position))
 		if str(data.get("source", "")) == "catalog":
-			component_dropped.emit(str(data.get("id", "")), "free", false, 1, -1, position_m)
+			var attachment := "free"
+			var mirrored := false
+			var side := 1
+			var insert_index := -1
+			if snap_mode == "Attach":
+				var target := _find_attachment_target(at_position)
+				if not target.is_empty():
+					attachment = str(target.attachment)
+					mirrored = bool(get_meta("mirror_enabled", false)) if attachment == "side" else false
+					side = int(target.get("side", 1))
+					insert_index = int(target.get("insert_index", -1))
+			component_dropped.emit(str(data.get("id", "")), attachment, mirrored, side, insert_index, position_m)
 		else:
 			var from_index := int(data.get("index", -1))
 			var components: Array = stage.get("components", [])
 			if from_index < 0 or from_index >= components.size():
 				return
 			component_position_changed.emit(from_index, position_m)
+
+	func _find_attachment_target(position: Vector2) -> Dictionary:
+		var best_distance := 58.0
+		var best_target: Dictionary = {}
+		for item in _component_rects:
+			if item.get("rotation_handle", false):
+				continue
+			var rect: Rect2 = item.rect
+			var index := int(item.index)
+			var nodes := [
+				{"position": Vector2(rect.get_center().x, rect.position.y), "attachment": "stack", "side": 1, "insert_index": index},
+				{"position": Vector2(rect.get_center().x, rect.end.y), "attachment": "stack", "side": 1, "insert_index": index + 1},
+				{"position": Vector2(rect.position.x, rect.get_center().y), "attachment": "side", "side": -1, "insert_index": index},
+				{"position": Vector2(rect.end.x, rect.get_center().y), "attachment": "side", "side": 1, "insert_index": index}
+			]
+			for node in nodes:
+				var distance := position.distance_to(Vector2(node.position))
+				if distance < best_distance:
+					best_distance = distance
+					best_target = node
+		if best_target.get("attachment", "") == "stack":
+			best_target["insert_index"] = clampi(int(best_target.insert_index), 0, (stage.get("components", []) as Array).size())
+		return best_target
 
 	func _canvas_to_metres(position: Vector2) -> Vector2:
 		var scale := maxf(1.0, _drawing_scale)
@@ -99,17 +133,6 @@ class AssemblyCanvas extends Control:
 				grid = 5.0
 			"Centreline":
 				position.x = 0.0
-			"Attachment points":
-				var geometry := RocketAssembly.stage_geometry(stage)
-				var nearest := position
-				var nearest_distance := 1.5
-				for index in geometry.component_positions:
-					for point in geometry.component_positions[index]:
-						var distance := position.distance_to(Vector2(point))
-						if distance < nearest_distance:
-							nearest_distance = distance
-							nearest = Vector2(point)
-				position = nearest
 		if grid > 0.0:
 			position.x = snappedf(position.x, grid)
 			position.y = snappedf(position.y, grid)
@@ -316,6 +339,12 @@ class AssemblyCanvas extends Control:
 
 	func _register_component_rect(index: int, rect: Rect2, attachment: String) -> void:
 		_component_rects.append({"index": index, "rect": rect, "attachment": attachment})
+		if snap_mode == "Attach":
+			var node_color := Color(0.35, 0.82, 1.0, 0.9)
+			draw_circle(Vector2(rect.get_center().x, rect.position.y), 4.5, node_color)
+			draw_circle(Vector2(rect.get_center().x, rect.end.y), 4.5, node_color)
+			draw_circle(Vector2(rect.position.x, rect.get_center().y), 4.5, node_color)
+			draw_circle(Vector2(rect.end.x, rect.get_center().y), 4.5, node_color)
 		if index == selected_index:
 			var handle_center := Vector2(rect.get_center().x, rect.position.y - 20.0)
 			draw_line(Vector2(rect.get_center().x, rect.position.y), handle_center, Color(0.45, 0.82, 1.0), 1.5)
@@ -520,8 +549,8 @@ func _build_interface() -> void:
 	snap_label.text = "Snap"
 	canvas_tools.add_child(snap_label)
 	_snap_selector = OptionButton.new()
-	_snap_selector.tooltip_text = "Grid snapping rounds the part position to this spacing. Off allows completely free placement."
-	for mode in ["Off", "0.25 m", "0.5 m", "1 m"]:
+	_snap_selector.tooltip_text = "Attach snaps a new part to a nearby top, bottom or side node. Off places it freely. Grid options place it freely on a measured grid."
+	for mode in ["Attach", "Off", "0.25 m", "0.5 m", "1 m"]:
 		_snap_selector.add_item(mode)
 	_snap_selector.select(0)
 	_snap_selector.item_selected.connect(func(index: int):
