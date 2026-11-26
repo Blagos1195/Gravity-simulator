@@ -261,6 +261,8 @@ class AssemblyCanvas extends Control:
 							selected_index = index
 						component_selected.emit(selected_index)
 						queue_redraw()
+						if event.double_click:
+							_frame_selected()
 						accept_event()
 						return
 			else:
@@ -280,9 +282,6 @@ class AssemblyCanvas extends Control:
 				accept_event()
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				_zoom_at(1.0 / 1.15, event.position)
-				accept_event()
-			elif event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
-				_frame_selected()
 				accept_event()
 
 	func _zoom_at(factor: float, anchor: Vector2) -> void:
