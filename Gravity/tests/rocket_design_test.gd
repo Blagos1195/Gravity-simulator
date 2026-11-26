@@ -1,6 +1,7 @@
 extends SceneTree
 
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const ContentCatalog = preload("res://scripts/content_catalog.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
@@ -162,6 +163,29 @@ func _initialize() -> void:
 	assert(is_equal_approx(float(high_engine_stage.fuel_capacity), 3000000.0))
 	assert(RocketDesign.engine_count_options().has(5) == false)
 	assert(RocketDesign.payload_options().size() >= 5)
+	var physical_payload_ids := ["scout_telescope_bus", "communications_satellite_bus", "survey_satellite_bus", "deep_space_telescope_bus", "science_probe_bus", "crew_capsule", "cargo_module", "heavy_cargo_module", "avionics_control_module"]
+	var available_component_ids: Array[String] = []
+	for option in RocketAssembly.component_options():
+		available_component_ids.append(str(option.get("id", "")))
+	for part_id in physical_payload_ids:
+		assert(available_component_ids.has(part_id), "Missing physical builder part: %s" % part_id)
+	var freeform_stage := RocketAssembly.ensure_stage_components(design.stages[0])
+	freeform_stage = RocketAssembly.add_component(freeform_stage, "survey_satellite_bus", "free")
+	var freeform_components: Array = freeform_stage.components
+	var survey_part: Dictionary = freeform_components.back()
+	survey_part["position_m"] = [4.0, 3.0]
+	freeform_components[freeform_components.size() - 1] = survey_part
+	freeform_stage = RocketAssembly.compile_stage(freeform_stage, freeform_components)
+	var freeform_geometry := RocketAssembly.stage_geometry(freeform_stage)
+	var survey_positions: Array = freeform_geometry.component_positions[freeform_components.size() - 1]
+	assert(survey_positions.size() == 1)
+	assert(Vector2(survey_positions[0]).is_equal_approx(Vector2(4.0, 3.0)))
+	var physical_satellite_profile := RocketAssembly.physical_payload_profile([freeform_stage])
+	assert(str(physical_satellite_profile.get("visual_type", "")) == "satellite")
+	assert(bool(physical_satellite_profile.get("physical_payload_component", false)))
+	assert(is_equal_approx(float(physical_satellite_profile.get("telescope_range_au", 0.0)), 3.5))
+	assert(is_equal_approx(float(physical_satellite_profile.get("revenue_per_day", 0.0)), 30000.0))
+	assert(is_equal_approx(float(freeform_stage.dry_mass), RocketAssembly.ensure_stage_components(design.stages[0]).dry_mass + 350.0))
 	assert(RocketDesign.tank_scale_options().size() >= 3)
 	var mod_overlay := {
 		"schema_version": 1,

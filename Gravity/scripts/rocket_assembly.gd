@@ -10,8 +10,8 @@ static func _catalog() -> Dictionary:
 
 static func component_options() -> Array:
 	var options: Array = []
-	for category in ["tanks", "engines", "decouplers", "structures", "rcs", "docking_ports", "power"]:
-		var component_kind: String = str({"rcs": "rcs", "docking_ports": "docking_port", "power": "power"}.get(category, category.trim_suffix("s")))
+	for category in ["tanks", "engines", "decouplers", "structures", "rcs", "docking_ports", "power", "payloads"]:
+		var component_kind: String = str({"rcs": "rcs", "docking_ports": "docking_port", "power": "power", "payloads": "payload"}.get(category, category.trim_suffix("s")))
 		for definition in _catalog().get(category, []):
 			var option: Dictionary = definition.duplicate(true)
 			option["kind"] = component_kind
@@ -29,6 +29,19 @@ static func component_definition(component_id: String) -> Dictionary:
 	for option in component_options():
 		if str(option.get("id", "")) == component_id:
 			return option
+	return {}
+
+static func physical_payload_profile(stages: Array) -> Dictionary:
+	var profile_keys := ["visual_type", "visual_width_factor", "visual_height_factor", "visual_color_rgb", "telescope_range_au", "satellite_role", "revenue_per_day", "operating_cost_per_day", "operational_lifetime_days"]
+	for stage in stages:
+		for component in stage.get("components", []):
+			if str(component.get("kind", "")) != "payload":
+				continue
+			var profile := {"part_id": str(component.get("id", "")), "physical_payload_component": true}
+			for key in profile_keys:
+				if component.has(key):
+					profile[key] = component[key].duplicate(true) if component[key] is Array or component[key] is Dictionary else component[key]
+			return profile
 	return {}
 
 static func ensure_stage_components(stage: Dictionary) -> Dictionary:
@@ -67,7 +80,7 @@ static func ensure_stage_components(stage: Dictionary) -> Dictionary:
 
 static func add_component(stage: Dictionary, component_id: String, attachment: String = "stack", mirrored: bool = true, side: int = 1, mount_index: int = -1) -> Dictionary:
 	var definition := component_definition(component_id)
-	if definition.is_empty() or not ["stack", "side", "radial"].has(attachment):
+	if definition.is_empty() or not ["stack", "side", "radial", "free"].has(attachment):
 		return {}
 	var configured := ensure_stage_components(stage)
 	var components: Array = configured.get("components", []).duplicate(true)
@@ -82,6 +95,8 @@ static func add_component(stage: Dictionary, component_id: String, attachment: S
 		definition["mirror"] = mirrored
 		definition["side"] = -1 if side < 0 else 1
 		definition["mount_index"] = mount_index
+	elif attachment == "free":
+		definition["position_m"] = [0.0, 0.0]
 	components.append(definition)
 	configured["components"] = components
 	return compile_stage(configured, components)
@@ -166,6 +181,11 @@ static func compile_stage(stage: Dictionary, components: Array) -> Dictionary:
 		elif attachment == "side":
 			var mount_index := int(component.get("mount_index", -1))
 			side_mount_radii[mount_index] = float(side_mount_radii.get(mount_index, 0.0)) + float(component.get("collision_radius_m", 0.1)) * 1.75
+		elif attachment == "free":
+			var free_position: Variant = component.get("position_m", [0.0, 0.0])
+			if free_position is Array and free_position.size() >= 2:
+				total_length = maxf(total_length, absf(float(free_position[1])) * 2.0 + float(component.get("length_m", 1.0)))
+				maximum_radius = maxf(maximum_radius, absf(float(free_position[0])) + float(component.get("collision_radius_m", 0.1)))
 		if str(component.get("kind", "")) == "tank":
 			tank_color = component.get("color_rgb", tank_color)
 	var widest_side_mount := 0.0
@@ -207,19 +227,26 @@ static func stage_geometry(stage: Dictionary) -> Dictionary:
 	var configured := ensure_stage_components(stage)
 	var components: Array = configured.get("components", [])
 	var stage_length := 0.0
+	var stack_length := 0.0
 	var core_radius := 0.5
 	for component_variant in components:
 		if not component_variant is Dictionary:
 			continue
 		var component: Dictionary = component_variant
 		var radius := maxf(0.1, float(component.get("collision_radius_m", 0.5)))
-		if str(component.get("attachment", "stack")) == "stack":
-			stage_length += maxf(0.1, float(component.get("length_m", 1.0)))
+		var attachment := str(component.get("attachment", "stack"))
+		if attachment == "stack":
+			stack_length += maxf(0.1, float(component.get("length_m", 1.0)))
 			core_radius = maxf(core_radius, radius)
+		elif attachment == "free":
+			var position_data: Variant = component.get("position_m", [0.0, 0.0])
+			if position_data is Array and position_data.size() >= 2:
+				stage_length = maxf(stage_length, absf(float(position_data[1])) * 2.0 + maxf(0.1, float(component.get("length_m", 1.0))))
+	stage_length = maxf(stage_length, stack_length)
 	if stage_length <= 0.0:
 		stage_length = maxf(1.0, float(configured.get("physical_length_m", 1.0)))
 	var mount_positions: Dictionary = {}
-	var cursor := stage_length * 0.5
+	var cursor := stack_length * 0.5
 	for index in range(components.size()):
 		var component: Dictionary = components[index]
 		if str(component.get("attachment", "stack")) != "stack":
@@ -244,6 +271,10 @@ static func stage_geometry(stage: Dictionary) -> Dictionary:
 			var sides: Array = [-1.0, 1.0] if bool(component.get("mirror", true)) else [float(component.get("side", 1))]
 			for direction in sides:
 				positions.append(Vector2(float(direction) * offset, y))
+		elif attachment == "free":
+			var position_data: Variant = component.get("position_m", [0.0, 0.0])
+			if position_data is Array and position_data.size() >= 2:
+				positions.append(Vector2(float(position_data[0]), float(position_data[1])))
 		component_positions[index] = positions
 	var booster_positions: Dictionary = {}
 	var booster_lanes: Dictionary = {}

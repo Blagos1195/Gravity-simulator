@@ -1691,6 +1691,11 @@ func _release_component_group(port_uid: String) -> bool:
 	var released_payload_mass := payload_mass if carries_payload else 0.001
 	var released_payload_type := payload_type if carries_payload else "debris"
 	var released_payload_visual := payload_visual.duplicate(true) if carries_payload else {}
+	var physical_payload_profile := RocketAssembly.physical_payload_profile(released_stages)
+	if not physical_payload_profile.is_empty():
+		released_payload_mass = 0.001
+		released_payload_type = str(physical_payload_profile.get("part_id", "physical_payload"))
+		released_payload_visual = physical_payload_profile
 	var released_mass := released_rcs_fuel + released_payload_mass
 	for index in range(released_stages.size()):
 		released_mass += RocketDesign.stage_total_dry_mass(released_stages[index]) + released_fuel[index]
@@ -1810,6 +1815,11 @@ func _release_upper_module(module_stage_index: int) -> bool:
 	var module_payload_mass := payload_mass
 	var module_payload_type := payload_type
 	var module_payload_visual := payload_visual.duplicate(true)
+	var physical_payload_profile := RocketAssembly.physical_payload_profile(module_stages)
+	if not physical_payload_profile.is_empty():
+		module_payload_mass = 0.001
+		module_payload_type = str(physical_payload_profile.get("part_id", "physical_payload"))
+		module_payload_visual = physical_payload_profile
 	var module_mass := module_payload_mass + module_rcs_fuel
 	for index in range(module_stages.size()):
 		module_mass += RocketDesign.stage_total_dry_mass(module_stages[index]) + module_fuel[index]
