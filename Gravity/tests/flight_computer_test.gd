@@ -500,7 +500,9 @@ func _initialize() -> void:
 	var planner_sim: Variant = SimulationView.new()
 	planner_sim.set_rocket_design(RocketDesign.create_default())
 	planner_sim.landed = false
+	planner_sim.discovered_body_names["Moon"] = true
 	planner_sim.discovered_body_names["Mars"] = true
+	planner_sim.visited_body_names.erase("Moon")
 	planner_sim.visited_body_names.erase("Mars")
 	planner_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
 	planner_sim.velocity = Vector2(manoeuvre_speed, 0.0)
