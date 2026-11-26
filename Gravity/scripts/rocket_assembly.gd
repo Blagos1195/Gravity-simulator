@@ -37,7 +37,7 @@ static func physical_payload_profile(stages: Array) -> Dictionary:
 		for component in stage.get("components", []):
 			if str(component.get("kind", "")) != "payload":
 				continue
-			var profile := {"part_id": str(component.get("id", ""))}
+			var profile := {"part_id": str(component.get("id", "")), "physical_payload_component": true}
 			for key in profile_keys:
 				if component.has(key):
 					profile[key] = component[key].duplicate(true) if component[key] is Array or component[key] is Dictionary else component[key]
