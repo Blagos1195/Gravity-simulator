@@ -35,7 +35,7 @@ class AssemblyCanvas extends Control:
 	var selected_stage_index := 0
 	var selected_index := -1
 	var zoom := 1.0
-	var snap_mode := "0.5 m"
+	var snap_mode := "Off"
 	var _component_rects: Array[Dictionary] = []
 	var _rotating_index := -1
 	var _rotation_center := Vector2.ZERO
@@ -113,7 +113,7 @@ class AssemblyCanvas extends Control:
 			component_position_changed.emit(from_index, position_m)
 
 	func _find_attachment_target(position: Vector2) -> Dictionary:
-		var best_distance := 38.0
+		var best_distance := 14.0
 		var best_target: Dictionary = {}
 		for item in _component_rects:
 			if item.get("rotation_handle", false):
@@ -595,7 +595,7 @@ func _build_interface() -> void:
 	_snap_selector.tooltip_text = "Attach snaps a new part to a nearby top, bottom or side node. Off places it freely. Grid options place it freely on a measured grid."
 	for mode in ["Attach", "Off", "0.25 m", "0.5 m", "1 m"]:
 		_snap_selector.add_item(mode)
-	_snap_selector.select(0)
+	_snap_selector.select(1)
 	_snap_selector.item_selected.connect(func(index: int):
 		_canvas.snap_mode = _snap_selector.get_item_text(index)
 	)
@@ -843,7 +843,7 @@ func _refresh() -> void:
 	_canvas.selected_stage_index = selected_stage_index
 	_canvas.selected_index = selected_component_index
 	_canvas.set_meta("mirror_enabled", mirror_enabled)
-	_canvas.snap_mode = _snap_selector.get_item_text(_snap_selector.selected) if is_instance_valid(_snap_selector) else "0.5 m"
+	_canvas.snap_mode = _snap_selector.get_item_text(_snap_selector.selected) if is_instance_valid(_snap_selector) else "Off"
 	_canvas.queue_redraw()
 	_refresh_parts()
 	_refresh_stages()
