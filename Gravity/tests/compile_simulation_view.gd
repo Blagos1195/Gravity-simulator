@@ -6,7 +6,7 @@ func _initialize() -> void:
 	var error: Error = script.reload()
 	print("SIMULATION VIEW RELOAD RESULT: ", error)
 	var route_script := GDScript.new()
-	route_script.source_code = "\\n".join(PackedStringArray([
+	route_script.source_code = "\n".join(PackedStringArray([
 		"extends SceneTree",
 		"const RoutePlanner = preload(\"res://scripts/route_planner.gd\")",
 		"func _initialize():",
