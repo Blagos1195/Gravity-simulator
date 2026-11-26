@@ -188,6 +188,7 @@ class AssemblyCanvas extends Control:
 			var side_mount_radii: Dictionary = {}
 			var stack_length := 0.0
 			var stage_extent := 0.0
+			var free_radius := 0.0
 			for component in stage_data.get("components", []):
 				var attachment := str(component.get("attachment", "stack"))
 				if attachment == "radial":
@@ -200,6 +201,7 @@ class AssemblyCanvas extends Control:
 					var position_data: Variant = component.get("position_m", [0.0, 0.0])
 					if position_data is Array and position_data.size() >= 2:
 						stage_extent = maxf(stage_extent, absf(float(position_data[1])) * 2.0 + float(component.get("length_m", 1.0)))
+						free_radius = maxf(free_radius, absf(float(position_data[0])) + float(component.get("collision_radius_m", 0.5)))
 				else:
 					stack_length += maxf(0.5, float(component.get("length_m", 1.0)))
 					core_radius = maxf(core_radius, float(component.get("collision_radius_m", 1.0)))
@@ -207,7 +209,7 @@ class AssemblyCanvas extends Control:
 			var widest_side_mount := 0.0
 			for mount_radius in side_mount_radii.values():
 				widest_side_mount = maxf(widest_side_mount, float(mount_radius))
-			max_radius = maxf(max_radius, core_radius + widest_side_mount)
+			max_radius = maxf(max_radius, maxf(core_radius + widest_side_mount, free_radius))
 		var gap := 16.0 * zoom
 		var scale := minf(zoom * 5.0, (size.y - 72.0 - gap * float(maxi(0, stages.size() - 1))) / maxf(1.0, total_length))
 		var total_height := total_length * scale + gap * float(maxi(0, stages.size() - 1))
@@ -599,7 +601,7 @@ func _build_interface() -> void:
 	center_column.add_theme_constant_override("separation", 6)
 	center_panel.add_child(center_column)
 	var canvas_heading := Label.new()
-	canvas_heading.text = "ASSEMBLY VIEW  •  STACK PARTS CENTRALLY OR MOUNT THEM BESIDE THE STACK"
+	canvas_heading.text = "ASSEMBLY VIEW  •  PLACE PARTS FREELY AND ROTATE THEM WITH THE HANDLE"
 	canvas_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	canvas_heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	canvas_heading.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
