@@ -92,9 +92,10 @@ class AssemblyCanvas extends Control:
 		queue_redraw()
 
 	func _drop_data(at_position: Vector2, data: Variant) -> void:
-		var position_m := _canvas_to_metres(at_position)
 		_drag_data = data.duplicate(true)
 		var target := _find_attachment_target(at_position) if snap_mode == "Attach" else {}
+		var preview_position := _preview_position_for_target(at_position, target, data)
+		var position_m := _canvas_to_metres(preview_position)
 		_clear_drag_preview()
 		if str(data.get("source", "")) == "catalog":
 			var attachment := "free"
@@ -112,10 +113,33 @@ class AssemblyCanvas extends Control:
 			var components: Array = stage.get("components", [])
 			if from_index < 0 or from_index >= components.size():
 				return
-			if not target.is_empty():
+			if not target.is_empty() and str(target.attachment) != "free":
 				component_repositioned.emit(from_index, str(target.attachment), int(target.get("side", 1)), int(target.get("insert_index", -1)))
 			else:
 				component_position_changed.emit(from_index, position_m)
+
+	func _preview_position_for_target(at_position: Vector2, target: Dictionary, data: Variant) -> Vector2:
+		if target.is_empty():
+			return at_position
+		var component: Dictionary = data.get("component", {})
+		var length := maxf(16.0, float(component.get("length_m", 2.0)) * _drawing_scale)
+		var width := maxf(14.0, float(component.get("collision_radius_m", 0.5)) * _drawing_width_scale * 2.0)
+		var target_position: Vector2 = target.position
+		match str(target.get("edge", "")):
+			"top":
+				return target_position + Vector2(0.0, -length * 0.5)
+			"bottom":
+				return target_position + Vector2(0.0, length * 0.5)
+			"left":
+				return target_position + Vector2(-width * 0.5, 0.0)
+			"right":
+				return target_position + Vector2(width * 0.5, 0.0)
+		match str(target.get("attachment", "")):
+			"stack":
+				return target_position + Vector2(0.0, -length * 0.5 if int(target.get("insert_index", 0)) <= int(target.get("component_index", 0)) else length * 0.5)
+			"side":
+				return target_position + Vector2(float(int(target.get("side", 1))) * width * 0.5, 0.0)
+		return at_position
 
 	func _find_attachment_target(position: Vector2) -> Dictionary:
 		var best_distance := 36.0
@@ -127,11 +151,12 @@ class AssemblyCanvas extends Control:
 			if str(_drag_data.get("source", "")) == "placed" and index == int(_drag_data.get("index", -1)):
 				continue
 			var rect: Rect2 = item.rect
+			var parent_attachment := str(item.get("attachment", "stack"))
 			var nodes := [
-				{"position": Vector2(rect.get_center().x, rect.position.y), "attachment": "stack", "side": 1, "insert_index": index, "component_index": index},
-				{"position": Vector2(rect.get_center().x, rect.end.y), "attachment": "stack", "side": 1, "insert_index": index + 1, "component_index": index},
-				{"position": Vector2(rect.position.x, rect.get_center().y), "attachment": "side", "side": -1, "insert_index": index, "component_index": index},
-				{"position": Vector2(rect.end.x, rect.get_center().y), "attachment": "side", "side": 1, "insert_index": index}
+				{"position": Vector2(rect.get_center().x, rect.position.y), "attachment": "stack" if parent_attachment != "free" else "free", "edge": "top", "side": 1, "insert_index": index, "component_index": index},
+				{"position": Vector2(rect.get_center().x, rect.end.y), "attachment": "stack" if parent_attachment != "free" else "free", "edge": "bottom", "side": 1, "insert_index": index + 1, "component_index": index},
+				{"position": Vector2(rect.position.x, rect.get_center().y), "attachment": "side" if parent_attachment != "free" else "free", "edge": "left", "side": -1, "insert_index": index, "component_index": index},
+				{"position": Vector2(rect.end.x, rect.get_center().y), "attachment": "side" if parent_attachment != "free" else "free", "edge": "right", "side": 1, "insert_index": index, "component_index": index}
 			]
 			for node in nodes:
 				var distance := position.distance_to(Vector2(node.position))
@@ -270,7 +295,6 @@ class AssemblyCanvas extends Control:
 			draw_string(ThemeDB.fallback_font, Vector2(12.0, current_y + 14.0), "STAGE %02d%s" % [stage_index + 1, "  EDITING" if stage_index == selected_stage_index else ""], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.48, 0.82, 1.0) if stage_index == selected_stage_index else Color(0.48, 0.58, 0.68))
 			current_y = _draw_stage(stage_data, stage_index, center_x, current_y, scale, width_scale, max_radius, stage_index == selected_stage_index)
 			if stage_index > 0:
-				draw_line(Vector2(center_x - max_radius * width_scale - 24.0, current_y + gap * 0.5), Vector2(center_x + max_radius * width_scale + 24.0, current_y + gap * 0.5), Color(0.85, 0.55, 0.28, 0.75), 1.5)
 				current_y += gap
 		_draw_drag_preview()
 		draw_string(ThemeDB.fallback_font, Vector2(12.0, 22.0), "PAYLOAD END", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.5, 0.72, 0.9))
@@ -377,17 +401,10 @@ class AssemblyCanvas extends Control:
 			return
 		var length := maxf(16.0, float(component.get("length_m", 2.0)) * _drawing_scale)
 		var width := maxf(14.0, float(component.get("collision_radius_m", 0.5)) * _drawing_width_scale * 2.0)
-		var preview_position := _drag_position
 		var target := _find_attachment_target(_drag_position) if snap_mode == "Attach" else {}
+		var preview_position := _preview_position_for_target(_drag_position, target, _drag_data)
 		if not target.is_empty():
 			var target_position: Vector2 = target.position
-			match str(target.get("attachment", "")):
-				"stack":
-					preview_position.x = target_position.x
-					preview_position.y = target_position.y + (-length * 0.5 if int(target.get("insert_index", 0)) <= int(target.get("component_index", 0)) else length * 0.5)
-				"side":
-					preview_position.x = target_position.x + float(int(target.get("side", 1))) * width * 0.5
-					preview_position.y = target_position.y
 			draw_circle(target_position, 13.0, Color(0.12, 0.62, 0.9, 0.22))
 			draw_arc(target_position, 12.0, 0.0, TAU, 32, Color(0.35, 0.88, 1.0, 0.95), 2.5)
 			draw_line(preview_position, target_position, Color(0.35, 0.88, 1.0, 0.7), 1.5)
