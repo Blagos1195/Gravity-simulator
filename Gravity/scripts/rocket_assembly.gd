@@ -31,6 +31,19 @@ static func component_definition(component_id: String) -> Dictionary:
 			return option
 	return {}
 
+static func physical_payload_profile(stages: Array) -> Dictionary:
+	var profile_keys := ["visual_type", "visual_width_factor", "visual_height_factor", "visual_color_rgb", "telescope_range_au", "satellite_role", "revenue_per_day", "operating_cost_per_day", "operational_lifetime_days"]
+	for stage in stages:
+		for component in stage.get("components", []):
+			if str(component.get("kind", "")) != "payload":
+				continue
+			var profile := {"part_id": str(component.get("id", ""))}
+			for key in profile_keys:
+				if component.has(key):
+					profile[key] = component[key].duplicate(true) if component[key] is Array or component[key] is Dictionary else component[key]
+			return profile
+	return {}
+
 static func ensure_stage_components(stage: Dictionary) -> Dictionary:
 	var configured := stage.duplicate(true)
 	var existing: Variant = configured.get("components", [])
