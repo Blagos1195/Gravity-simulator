@@ -1002,7 +1002,7 @@ func _fast_forward_to_time(target_time: float) -> bool:
 		return false
 	if is_instance_valid(active_route_planner):
 		var planner_nodes: Array = active_route_planner.get("nodes")
-		var planner_base_time := float(sim.sim_time)
+		var planner_base_time := float(active_route_planner.get("node_reference_time"))
 		if int(active_route_planner.get("manual_guidance_node_index")) >= 0:
 			planner_base_time = float(active_route_planner.get("manual_guidance_start_time"))
 		var next_planner_event_time := INF
