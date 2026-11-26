@@ -334,16 +334,17 @@ static func total_delta_v(design: Dictionary) -> float:
 				if parent_index >= 0 and parent_index < components.size():
 					links.append([component_index, parent_index])
 			var visited: Dictionary = {}
-			var root_index := 0
+				var root_index := -1
 			for component_index in range(components.size()):
 				if str(components[component_index].get("attachment", "stack")) == "stack":
 					root_index = component_index
 					break
-			var has_structural_root := false
-			for component in components:
-				if str(component.get("attachment", "stack")) == "stack":
-					has_structural_root = true
-					break
+			if root_index < 0:
+				for component_index in range(components.size()):
+					if bool(components[component_index].get("structural_root", false)):
+						root_index = component_index
+						break
+			var has_structural_root := root_index >= 0
 			if not has_structural_root:
 				errors.append("Stage %d has no structural root. Attach the assembly to a stack-mounted part." % (i + 1))
 			var pending: Array[int] = [root_index] if has_structural_root else []
