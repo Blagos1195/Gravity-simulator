@@ -3990,15 +3990,15 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			separation = Vector2(own_port.position).distance_to(Vector2(target_port.position))
 			ports_aligned = Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
 		var relative_speed: float = (sim.velocity - target.velocity).length()
-		var connected_assembly := _are_docked(parent_name, target_name)
+		var connected_assembly: bool = _are_docked(parent_name, target_name)
 		var connector_connected := false
 		for link in docking_links:
 			if ((str(link.get("parent_name", "")) == parent_name and str(link.get("child_name", "")) == target_name) or (str(link.get("parent_name", "")) == target_name and str(link.get("child_name", "")) == parent_name)) and selected_port_uid in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
 				connector_connected = true
 				break
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
-		var assembly_roots_available := connected_assembly or (not _is_docked_child(parent_name) and not _is_docked_child(target_name))
-		var assembly_operational := assembly_roots_available and not sim.landed and not sim.crashed and not target.landed and not target.crashed
+		var assembly_roots_available: bool = connected_assembly or (not _is_docked_child(parent_name) and not _is_docked_child(target_name))
+		var assembly_operational: bool = assembly_roots_available and not sim.landed and not sim.crashed and not target.landed and not target.crashed
 		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs_installed() and target.has_rcs_installed()
 		var rcs_assist_ready: bool = sim.has_rcs() and target.has_rcs()
 		var available_to_dock: bool = not connector_connected and assembly_operational and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
