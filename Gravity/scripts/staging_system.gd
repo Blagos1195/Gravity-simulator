@@ -21,6 +21,7 @@ static func create_plan(modules: Array) -> Array:
 			continue
 		var module: Dictionary = module_variant
 		var module_id := str(module.get("module_id", module.get("name", "module")))
+		var docking_boundaries := RocketAssembly.docking_module_boundaries(module.get("stages", []))
 		for physical_stage_index in range((module.get("stages", []) as Array).size()):
 			var physical_stage: Dictionary = module.stages[physical_stage_index]
 			for component_variant in physical_stage.get("components", []):
