@@ -96,6 +96,13 @@ func _initialize() -> void:
 	var rcs_stage := RocketAssembly.add_component(assembled, "rcs_thruster_block")
 	assert(is_equal_approx(RocketDesign.stage_rcs_propellant_capacity(rcs_stage), 250.0))
 	assert(is_equal_approx(float(rcs_stage.rcs_thrust), 1800.0))
+	var rcs_attitude_design := RocketDesign.create_default()
+	rcs_attitude_design["stages"][0] = rcs_stage
+	simulation.set_rocket_design(rcs_attitude_design)
+	simulation.rotation_angle = 0.0
+	simulation.angular_velocity = 0.00001
+	assert(simulation._autopilot_attitude_control(0.0, 0.5, false), "Autopilot should hold an aligned RCS-equipped spacecraft")
+	assert(simulation.rcs_rotation_input != 0.0 and simulation.rcs_rotation_scale > 0.0 and simulation.rcs_rotation_scale < 1.0, "Small attitude corrections should use proportionally scaled RCS thrust")
 	var port_stage := RocketAssembly.add_component(rcs_stage, "standard_docking_port")
 	assert(RocketAssembly.stage_docking_ports(port_stage).size() == 1)
 	var rcs_design := RocketDesign.create_default()
