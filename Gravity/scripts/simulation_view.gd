@@ -936,7 +936,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 			return false
 		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
 		angular_velocity = 0.0
-		return absf(angle_difference(rotation_angle, body_target_rotation)) <= deg_to_rad(1.0)
+		return true
 	if rcs_propellant_remaining <= 0.001:
 		rcs_rotation_input = 0.0
 		status_message = "AUTOPILOT  •  RCS PROPELLANT REQUIRED"
