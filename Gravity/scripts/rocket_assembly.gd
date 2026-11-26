@@ -107,7 +107,6 @@ static func add_component(stage: Dictionary, component_id: String, attachment: S
 static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 	var design := source_design.duplicate(true)
 	var stages: Array = design.get("stages", []).duplicate(true)
-	var payload_boundary_index := stages.size() - 2
 	for stage_index in range(stages.size()):
 		var stage := ensure_stage_components(stages[stage_index])
 		var components: Array = stage.get("components", []).duplicate(true)
@@ -117,8 +116,7 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 		stage = compile_stage(stage, components)
 		for component_index in range(components.size()):
 			var component: Dictionary = components[component_index]
-			if str(component.get("preset_hardware_role", "")) != "payload_interface_upper":
-				component["staging_stage"] = stage_index * 2
+			component["staging_stage"] = stage_index * 2
 			components[component_index] = component
 		stage = compile_stage(stage, components)
 		components = stage.get("components", []).duplicate(true)
@@ -203,7 +201,7 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 	for stage_index in range(stages.size()):
 		action_stage_labels.append("Stage %d: Ignite" % (stage_index + 1))
 		if stage_index < stages.size() - 1:
-			var boundary_label := "Release payload" if stage_index == payload_boundary_index else "Separate"
+			var boundary_label := "Separate"
 			action_stage_labels.append("Stage %d: %s" % [stage_index + 1, boundary_label])
 	design["staging_stage_labels"] = action_stage_labels
 	design["staging_stage_count"] = action_stage_labels.size()
