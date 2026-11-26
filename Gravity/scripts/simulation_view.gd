@@ -1563,6 +1563,8 @@ func _separate_stage() -> void:
 	thrust_key_down = false
 
 func _release_upper_module(module_stage_index: int) -> bool:
+	if resource_inventory_external or docked_mass > 0.001:
+		return false
 	if module_stage_index <= stage_index or module_stage_index >= rocket_stages.size():
 		return false
 	var boundaries := RocketAssembly.docking_module_boundaries(rocket_stages)
@@ -1616,7 +1618,6 @@ func _release_upper_module(module_stage_index: int) -> bool:
 	var parent_position := old_position - connector_offset * (module_mass / total_mass)
 	var module_velocity := old_velocity + separation_direction * separation_speed * (remaining_mass / total_mass)
 	var parent_velocity := old_velocity - separation_direction * separation_speed * (module_mass / total_mass)
-	var module_name := "Module %04d" % (Time.get_ticks_usec() % 10000)
 	rocket_stages = remaining_stages
 	stage_fuel_remaining = remaining_fuel
 	resource_tanks = remaining_tanks
