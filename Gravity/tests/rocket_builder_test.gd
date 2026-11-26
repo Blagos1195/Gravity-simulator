@@ -35,7 +35,7 @@ func _initialize() -> void:
 	var rotated_rect := Rect2(100.0, 100.0, 40.0, 100.0)
 	var rotated_item := {"index": 0, "rect": rotated_rect, "attachment": "stack", "center": rotated_rect.get_center(), "rotation": PI * 0.5}
 	assert(not builder._canvas._rect_hit(rotated_item, Vector2(100.0, 100.0)))
-	assert(builder._canvas._rect_hit(rotated_item, Vector2(150.0, 120.0)))
+	assert(builder._canvas._rect_hit(rotated_item, Vector2(120.0, 160.0)))
 	var custom_nodes := builder._canvas._component_attachment_nodes(rotated_rect, {"rotation_deg": 90.0, "attachment_nodes": [{"id": "left_mount", "position": [-0.5, 0.0], "direction": [-1.0, 0.0]}]})
 	assert(custom_nodes.size() == 1)
 	assert(Vector2(custom_nodes[0].direction).is_equal_approx(Vector2(0.0, -1.0)))
