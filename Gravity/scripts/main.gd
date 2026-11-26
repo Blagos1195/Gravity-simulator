@@ -2578,6 +2578,8 @@ func _update_docked_masses() -> void:
 	for vehicle in fleet_sims:
 		vehicle.docked_mass = 0.0
 	for mass_pass in range(maxi(1, fleet_sims.size())):
+		for vehicle in fleet_sims:
+			vehicle.docked_mass = 0.0
 		for index in range(docking_links.size() - 1, -1, -1):
 			var link: Dictionary = docking_links[index]
 			if not bool(link.get("structural", true)):
@@ -2585,7 +2587,7 @@ func _update_docked_masses() -> void:
 			var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
 			var child := _find_vehicle_by_name(str(link.get("child_name", "")))
 			if parent != null and child != null:
-				parent.docked_mass = maxf(parent.docked_mass, child._current_vehicle_mass())
+				parent.docked_mass += child._current_vehicle_mass()
 
 func _sync_docked_vehicles() -> void:
 	for vehicle in fleet_sims:
@@ -2623,8 +2625,10 @@ func _sync_docked_vehicles() -> void:
 			child.rotation_angle = parent.rotation_angle
 			child.angular_velocity = parent.angular_velocity
 			child.sim_time = parent.sim_time
-			child._sync_legacy_fuel_from_external_tanks(parent.resource_tanks)
-			child.rcs_propellant_remaining = float(parent.docked_rcs_propellant.get(child.vehicle_name, child.rcs_propellant_remaining))
+			var inventory_owner := _resource_inventory_owner(parent)
+			if inventory_owner != null:
+				child._sync_legacy_fuel_from_external_tanks(inventory_owner.resource_tanks)
+				child.rcs_propellant_remaining = float(inventory_owner.docked_rcs_propellant.get(child.vehicle_name, child.rcs_propellant_remaining))
 			child.landed = parent.landed
 			child.crashed = parent.crashed
 			child.landed_body_name = parent.landed_body_name
