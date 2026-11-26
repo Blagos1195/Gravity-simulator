@@ -13,6 +13,21 @@ func _find_label(node: Node, expected_text: String) -> bool:
 	return false
 
 func _initialize() -> void:
+	var blank_design := RocketDesign.create_blank()
+	assert(blank_design.stages.size() == 1)
+	assert(blank_design.stages[0].components.is_empty())
+	var blank_builder := RocketBuilder.new()
+	blank_builder.configure(blank_design, 0)
+	blank_builder._build_interface()
+	blank_builder._refresh()
+	blank_builder._add_component("crew_capsule", "free", false, 1, -1, Vector2.ZERO)
+	assert(blank_builder.design.stages[0].components.size() == 1)
+	assert(str(blank_builder.design.stages[0].components[0].id) == "crew_capsule")
+	blank_builder._add_component("medium_tank", "free", false, 1, -1, Vector2(2.0, 0.0))
+	assert(blank_builder.design.stages[0].components.size() == 2)
+	blank_builder._add_component("vacuum_engine", "free", false, 1, -1, Vector2(0.0, -2.0))
+	assert(blank_builder.design.stages[0].components.size() == 3)
+	blank_builder.free()
 	var design := RocketDesign.create_default()
 	var builder := RocketBuilder.new()
 	builder.configure(design, 0)
@@ -186,6 +201,22 @@ func _initialize() -> void:
 	group_builder._canvas._gui_input(pan_motion)
 	assert(group_builder._canvas.view_offset.distance_to(pan_offset_before + Vector2(45.0, 30.0)) < 0.01)
 	var group_stage_before: Dictionary = group_builder.design.stages[0]
+	group_builder._canvas.stage = {"components": group_stage_before.components}
+	group_builder._canvas.design = group_builder.design
+	group_builder._canvas.selected_stage_index = 0
+	group_builder._canvas.selected_indices = [0, 1]
+	group_builder._canvas._component_rects = [
+		{"index": 0, "rect": Rect2(20.0, 20.0, 30.0, 50.0), "center": Vector2(35.0, 45.0), "rotation": 0.0, "component": group_stage_before.components[0], "stage_index": 0},
+		{"index": 1, "rect": Rect2(60.0, 20.0, 30.0, 50.0), "center": Vector2(75.0, 45.0), "rotation": 0.0, "component": group_stage_before.components[1], "stage_index": 0}
+	]
+	var group_click := InputEventMouseButton.new()
+	group_click.button_index = MOUSE_BUTTON_LEFT
+	group_click.pressed = true
+	group_click.position = Vector2(35.0, 45.0)
+	group_builder._canvas._gui_input(group_click)
+	assert(group_builder._canvas.selected_indices == [0, 1])
+	var group_drag: Dictionary = group_builder._canvas._get_drag_data(Vector2(35.0, 45.0))
+	assert(group_drag.get("indices", []).size() == 2)
 	assert(group_stage_before.components.size() >= 2)
 	group_builder._on_components_position_changed([0, 1], [Vector2(-2.0, 0.0), Vector2(2.0, 0.0)])
 	var group_stage_after: Dictionary = group_builder.design.stages[0]

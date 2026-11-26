@@ -70,9 +70,28 @@ static func create_default() -> Dictionary:
 	return _design_from_catalog(_rocket_catalog().get("default_design", {}))
 
 static func create_blank() -> Dictionary:
-	var design := create_default()
-	design["name"] = "Custom Vehicle"
-	return design
+	return {
+		"name": "Custom Vehicle",
+		"payload_mass": 500.0,
+		"payload_type": "custom",
+		"stages": [create_empty_stage()]
+	}
+
+static func create_empty_stage() -> Dictionary:
+	return {
+		"part_id": "custom_stage",
+		"component_assembly": true,
+		"components": [],
+		"dry_mass": 0.0,
+		"fuel_capacity": 0.0,
+		"thrust": 0.0,
+		"vacuum_thrust": 0.0,
+		"flow": 0.0,
+		"physical_length_m": 1.0,
+		"collision_radius_m": 0.5,
+		"engine_count": 1,
+		"tank_scale": 1.0
+	}
 
 static func stage_part_options() -> Array:
 	var options: Array = []

@@ -47,6 +47,8 @@ static func physical_payload_profile(stages: Array) -> Dictionary:
 static func ensure_stage_components(stage: Dictionary) -> Dictionary:
 	var configured := stage.duplicate(true)
 	var existing: Variant = configured.get("components", [])
+	if bool(configured.get("component_assembly", false)):
+		return compile_stage(configured, existing if existing is Array else [])
 	if existing is Array and not existing.is_empty():
 		return compile_stage(configured, existing)
 	var length := maxf(6.0, float(configured.get("physical_length_m", 18.0)))

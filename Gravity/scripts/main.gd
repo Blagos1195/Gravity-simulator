@@ -1814,7 +1814,7 @@ func _begin_new_game() -> void:
 	total_operating_costs = 0.0
 	mission_state = MissionSystem.new_state()
 	orbited_body_names.clear()
-	rocket_design = RocketDesign.create_default()
+	rocket_design = RocketDesign.create_blank()
 	infinite_weightless_fuel = false
 	new_game_slot = 1
 	for slot in range(1, 9):

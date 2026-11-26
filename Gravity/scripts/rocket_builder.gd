@@ -338,7 +338,8 @@ class AssemblyCanvas extends Control:
 								selected_indices.append(index)
 							selected_index = selected_indices.back() if not selected_indices.is_empty() else -1
 						else:
-							selected_indices = [index]
+							if not selected_indices.has(index) or selected_indices.size() <= 1:
+								selected_indices = [index]
 							selected_index = index
 						component_selected.emit(selected_index)
 						queue_redraw()
@@ -895,7 +896,7 @@ func _build_interface() -> void:
 	)
 	view_tools.add_child(fit_button)
 	var navigation_hint := Label.new()
-	navigation_hint.text = "Ctrl/Shift+click: multi-select  •  Middle/right drag: pan"
+	navigation_hint.text = "Ctrl/Shift+click: select parts  •  Drag any selected part: move group  •  Middle/right drag: pan"
 	navigation_hint.add_theme_font_size_override("font_size", 10)
 	view_tools.add_child(navigation_hint)
 
@@ -924,27 +925,19 @@ func _build_interface() -> void:
 	_stage_list = VBoxContainer.new()
 	_stage_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage_scroll.add_child(_stage_list)
-	var stage_options := OptionButton.new()
-	stage_options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for option in RocketDesign.stage_part_options():
-		stage_options.add_item(str(option.get("label", "Stage")))
-		stage_options.set_item_metadata(stage_options.item_count - 1, str(option.get("id", "")))
 	var stage_tools := GridContainer.new()
 	stage_tools.columns = 2
 	staging_page.add_child(stage_tools)
-	stage_tools.add_child(stage_options)
 	var add_stage := Button.new()
-	add_stage.text = "ADD STAGE"
+	add_stage.text = "ADD EMPTY STAGE"
 	add_stage.pressed.connect(func():
-		var stage := RocketDesign.configure_stage(str(stage_options.get_selected_metadata()), 1, 1.0)
-		if not stage.is_empty():
-			_push_undo()
-			var stages: Array = design.get("stages", [])
-			stages.append(RocketAssembly.ensure_stage_components(stage))
-			design["stages"] = stages
-			selected_stage_index = stages.size() - 1
-			selected_component_index = -1
-			_changed()
+		_push_undo()
+		var stages: Array = design.get("stages", [])
+		stages.append(RocketDesign.create_empty_stage())
+		design["stages"] = stages
+		selected_stage_index = stages.size() - 1
+		selected_component_index = -1
+		_changed()
 	)
 	stage_tools.add_child(add_stage)
 	var duplicate_stage := Button.new()
