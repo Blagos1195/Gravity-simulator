@@ -1175,36 +1175,38 @@ func _refresh_action_stages() -> void:
 				continue
 			var action: Dictionary = action_variant
 			var part_uid := str(action.get("part_id", ""))
-			var item_row := HBoxContainer.new()
+			var item_row := VBoxContainer.new()
 			var item := Label.new()
 			item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			item.text = "%s  %s" % [str(action.get("action", "ACTION")).replace("_", " ").to_upper(), part_uid]
 			item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			item.add_theme_color_override("font_color", Color(0.68, 0.77, 0.86))
 			item_row.add_child(item)
+			var action_controls := HBoxContainer.new()
 			var assignment := OptionButton.new()
-			assignment.custom_minimum_size.x = 92.0
+			assignment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			for target_index in range(plan.size()):
 				assignment.add_item(str(labels[target_index]))
 				assignment.set_item_metadata(target_index, target_index)
 			assignment.select(index)
 			assignment.item_selected.connect(func(option_index: int): _set_action_stage(part_uid, int(assignment.get_item_metadata(option_index))))
-			item_row.add_child(assignment)
+			action_controls.add_child(assignment)
 			var action_up := Button.new()
 			action_up.text = "↑"
 			action_up.disabled = actions.find(action_variant) == 0
 			action_up.pressed.connect(func(): _move_action(part_uid, index, -1))
-			item_row.add_child(action_up)
+			action_controls.add_child(action_up)
 			var action_down := Button.new()
 			action_down.text = "↓"
 			action_down.disabled = actions.find(action_variant) == actions.size() - 1
 			action_down.pressed.connect(func(): _move_action(part_uid, index, 1))
-			item_row.add_child(action_down)
+			action_controls.add_child(action_down)
 			var remove_action := Button.new()
 			remove_action.text = "×"
 			remove_action.tooltip_text = "Remove action"
 			remove_action.pressed.connect(func(): _remove_action(part_uid))
-			item_row.add_child(remove_action)
+			action_controls.add_child(remove_action)
+			item_row.add_child(action_controls)
 			row.add_child(item_row)
 		if actions.is_empty():
 			var empty := Label.new()
