@@ -66,7 +66,7 @@ func _initialize() -> void:
 	assert(ModuleGraph.connection_between(graph, "a", "c").size() == 1)
 	var removed_module := ModuleGraph.remove_module(graph, "b")
 	assert(bool(removed_module.valid) and removed_module.removed_connections.size() == 2)
-	assert(removed_module.groups.size() == 2 and removed_module.graph.modules.size() == 2)
+	assert(removed_module.groups.size() == 1 and removed_module.graph.modules.size() == 2)
 	var invalid_graph := ModuleGraph.create(["a", "b"])
 	invalid_graph.connections = [{"id":"bad","a":"a","b":"missing","port_a":"same","port_b":"same"}]
 	assert(not ModuleGraph.validate(invalid_graph).is_empty(), "Invalid module and duplicated-port connections were accepted")
