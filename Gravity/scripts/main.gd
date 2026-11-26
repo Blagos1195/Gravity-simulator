@@ -589,7 +589,11 @@ func _apply_docking_assists(delta: float) -> void:
 			var desired_normal: Vector2 = -Vector2(target_port.normal)
 			var target_rotation := desired_normal.angle() - own_local_normal.angle()
 			vehicle._autopilot_attitude_control(target_rotation, delta, false)
-			reference_velocity = target.velocity
+			var own_port_offset: Vector2 = Vector2(own_port.position) - vehicle.rocket_position
+			var target_port_offset: Vector2 = Vector2(target_port.position) - target.rocket_position
+			var own_port_rotation_velocity := Vector2(-own_port_offset.y, own_port_offset.x) * vehicle.angular_velocity
+			var target_port_rotation_velocity := Vector2(-target_port_offset.y, target_port_offset.x) * target.angular_velocity
+			reference_velocity = target.velocity + target_port_rotation_velocity - own_port_rotation_velocity
 		elif separation > DOCKING_ASSIST_MAX_RANGE:
 			var orbital_approach := _docking_orbit_approach(vehicle, target)
 			direction = Vector2(orbital_approach.get("direction", direction))
