@@ -3193,7 +3193,10 @@ func _transfer_fuel(from_name: String, to_name: String) -> float:
 	var inventory_owner := _resource_inventory_owner(donor)
 	if inventory_owner == null or inventory_owner != _resource_inventory_owner(recipient):
 		return 0.0
-	inventory_owner._sync_legacy_fuel_from_tanks()
+	if not inventory_owner.resource_inventory_external:
+		inventory_owner._reconcile_legacy_fuel_inventory()
+	else:
+		inventory_owner._sync_legacy_fuel_from_tanks()
 	_sync_external_module_fuel(donor, inventory_owner)
 	_sync_external_module_fuel(recipient, inventory_owner)
 	var available := donor.total_propellant_remaining()
