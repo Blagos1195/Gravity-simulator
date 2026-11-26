@@ -25,6 +25,16 @@ func _initialize() -> void:
 	child.landed = false
 	second_child.landed = false
 	child.rotation_angle = PI
+	var orbit_radius := SimulationView.EARTH_RADIUS + 200000.0
+	var orbit_speed := sqrt(SimulationView.G * SimulationView.EARTH_MASS / orbit_radius)
+	parent.rocket_position = Vector2(orbit_radius, 0.0)
+	child.rocket_position = Vector2(-orbit_radius, 0.0)
+	parent.velocity = Vector2(0.0, orbit_speed)
+	child.velocity = Vector2(0.0, -orbit_speed)
+	assert(main._docking_orbit_altitudes_compatible(parent, child), "Spacecraft in the same orbital altitude band were not recognised")
+	assert(main._docking_assist_in_range(parent, child), "Same-altitude spacecraft outside the distance limit were not eligible for rendezvous")
+	var orbital_approach := main._docking_orbit_approach(parent, child)
+	assert(absf(Vector2(orbital_approach.direction).dot((child.rocket_position - parent.rocket_position).normalized())) < 0.01, "Distant orbital rendezvous attempted a direct path through the central body")
 	second_child.rotation_angle = PI
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
@@ -176,7 +186,18 @@ func _initialize() -> void:
 	main.docking_assists[loaded_parent.vehicle_name] = loaded_child.vehicle_name
 	main._save_game(false)
 	main._load_game_from_path(save_path)
+	loaded_parent = main.fleet_sims[0]
+	loaded_child = main.fleet_sims[1]
 	assert(str(main.docking_assists.get(loaded_parent.vehicle_name, "")) == loaded_child.vehicle_name, "Rendezvous assist state was not restored from save")
+	loaded_parent.rotation_angle = 0.0
+	loaded_child.rotation_angle = PI
+	loaded_parent.rocket_position = Vector2(1000000.0, 2000000.0)
+	loaded_child.rocket_position = loaded_parent.rocket_position + Vector2(25.0, 0.0)
+	loaded_parent.velocity = Vector2.ZERO
+	loaded_child.velocity = Vector2.ZERO
+	main._apply_docking_assists(1.0)
+	assert(main._are_docked(loaded_parent.vehicle_name, loaded_child.vehicle_name), "Rendezvous assist did not automatically dock aligned spacecraft")
+	assert(main.docking_assists.is_empty(), "Rendezvous assist remained active after automatic docking")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Docking and fuel transfer test passed.")
 	main.queue_free()

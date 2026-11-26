@@ -1033,6 +1033,29 @@ func docking_port_world_state(part_uid: String = "") -> Dictionary:
 			return port
 	return {}
 
+func has_docking_engine() -> bool:
+	if rocket_stages.is_empty() or stage_index < 0 or stage_index >= rocket_stages.size():
+		return false
+	var mass_properties := _vehicle_mass_properties()
+	var profile := _engine_force_profile(Vector2(mass_properties.center_of_mass), 0.0)
+	var flows: Dictionary = profile.get("resource_flows", {})
+	return Vector2(profile.get("force", Vector2.ZERO)).length() > 0.0 and float(flows.get("liquid_propellant", 0.0)) > 0.0 and float(flows.get("solid_propellant", 0.0)) <= 0.0 and (infinite_weightless_fuel or resource_amount("liquid_propellant") > 0.001)
+
+func apply_docking_engine_control(world_direction: Vector2, delta: float) -> bool:
+	if world_direction.length_squared() <= 0.000001 or delta <= 0.0 or not has_docking_engine():
+		thrust_key_down = false
+		return false
+	var mass_properties := _vehicle_mass_properties()
+	var profile := _engine_force_profile(Vector2(mass_properties.center_of_mass), 0.0)
+	var local_force: Vector2 = Vector2(profile.get("force", Vector2.ZERO))
+	if local_force.length_squared() <= 0.000001:
+		thrust_key_down = false
+		return false
+	var target_rotation := world_direction.angle() - local_force.angle()
+	var aligned := _autopilot_attitude_control(target_rotation, delta, true)
+	thrust_key_down = aligned
+	return true
+
 func apply_rcs_velocity_correction(velocity_correction: Vector2, delta: float) -> bool:
 	if not has_rcs() or delta <= 0.0:
 		return false

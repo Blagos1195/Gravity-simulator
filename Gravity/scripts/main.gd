@@ -382,13 +382,59 @@ func _resolve_spacecraft_collisions(positions_before: Dictionary) -> void:
 			first.status_message = "COLLISION WITH %s" % second.vehicle_name.to_upper()
 			second.status_message = "COLLISION WITH %s" % first.vehicle_name.to_upper()
 
+func _docking_orbit_altitudes_compatible(first: SimulationView, second: SimulationView) -> bool:
+	if first.landed or first.crashed or second.landed or second.crashed:
+		return false
+	var first_body: Dictionary = first._nearest_body_state(first.rocket_position, first.rocket_position_precise)
+	var second_body: Dictionary = second._nearest_body_state(second.rocket_position, second.rocket_position_precise)
+	var body_name := str(first_body.get("name", ""))
+	if body_name.is_empty() or body_name != str(second_body.get("name", "")):
+		return false
+	var body_radius := float(first_body.get("radius", 0.0))
+	var mu := FlightComputer.G * float(first_body.get("mass", 0.0))
+	if mu <= 0.0 or float(first_body.get("distance", INF)) > float(first_body.get("soi", 0.0)) or float(second_body.get("distance", INF)) > float(second_body.get("soi", 0.0)):
+		return false
+	var first_velocity: Vector2 = first.velocity - Vector2(first_body.get("velocity", Vector2.ZERO))
+	var second_velocity: Vector2 = second.velocity - Vector2(second_body.get("velocity", Vector2.ZERO))
+	var first_orbit := FlightComputer.orbital_state(Vector2(first_body.get("relative_position", Vector2.ZERO)), first_velocity, mu)
+	var second_orbit := FlightComputer.orbital_state(Vector2(second_body.get("relative_position", Vector2.ZERO)), second_velocity, mu)
+	if not bool(first_orbit.get("bound", false)) or not bool(second_orbit.get("bound", false)):
+		return false
+	var first_low := maxf(0.0, float(first_orbit.get("periapsis", 0.0)) - body_radius)
+	var first_high := maxf(first_low, float(first_orbit.get("apoapsis", 0.0)) - body_radius)
+	var second_low := maxf(0.0, float(second_orbit.get("periapsis", 0.0)) - body_radius)
+	var second_high := maxf(second_low, float(second_orbit.get("apoapsis", 0.0)) - body_radius)
+	var tolerance := maxf(5000.0, maxf(first_high, second_high) * 0.05)
+	return first_low <= second_high + tolerance and second_low <= first_high + tolerance
+
+func _docking_assist_in_range(first: SimulationView, second: SimulationView) -> bool:
+	return first.rocket_position.distance_to(second.rocket_position) <= DOCKING_ASSIST_MAX_RANGE or _docking_orbit_altitudes_compatible(first, second)
+
+func _docking_orbit_approach(first: SimulationView, second: SimulationView) -> Dictionary:
+	var body: Dictionary = first._nearest_body_state(first.rocket_position, first.rocket_position_precise)
+	var first_position: Vector2 = Vector2(body.get("relative_position", Vector2.ZERO))
+	var second_body: Dictionary = second._nearest_body_state(second.rocket_position, second.rocket_position_precise)
+	var second_position: Vector2 = Vector2(second_body.get("relative_position", Vector2.ZERO))
+	var relative_velocity: Vector2 = first.velocity - Vector2(body.get("velocity", Vector2.ZERO))
+	var orbit := FlightComputer.orbital_state(first_position, relative_velocity, FlightComputer.G * float(body.get("mass", 0.0)))
+	var orbit_direction := 1.0 if float(orbit.get("angular_momentum", 0.0)) >= 0.0 else -1.0
+	var phase_delta := wrapf((second_position.angle() - first_position.angle()) * orbit_direction, -PI, PI)
+	var tangent := Vector2(-first_position.normalized().y, first_position.normalized().x) * orbit_direction
+	var approach_direction := tangent * signf(phase_delta)
+	var arc_distance := absf(phase_delta) * (first_position.length() + second_position.length()) * 0.5
+	return {
+		"direction": approach_direction.normalized(),
+		"distance": arc_distance,
+		"orbital_velocity": relative_velocity + Vector2(body.get("velocity", Vector2.ZERO))
+	}
+
 func _apply_docking_assists(delta: float) -> void:
 	for vehicle_name_variant in docking_assists.keys():
 		var vehicle_name := str(vehicle_name_variant)
 		var target_name := str(docking_assists.get(vehicle_name, ""))
 		var vehicle := _find_vehicle_by_name(vehicle_name)
 		var target := _find_vehicle_by_name(target_name)
-		if vehicle == null or target == null or vehicle == target or vehicle.landed or vehicle.crashed or target.landed or target.crashed or _is_vehicle_docked(vehicle_name) or _is_vehicle_docked(target_name) or not vehicle.has_rcs() or not target.has_rcs() or not vehicle.has_docking_port() or not target.has_docking_port():
+		if vehicle == null or target == null or vehicle == target or vehicle.landed or vehicle.crashed or target.landed or target.crashed or _is_vehicle_docked(vehicle_name) or _is_vehicle_docked(target_name) or not vehicle.has_rcs_installed() or not target.has_rcs_installed() or vehicle.autopilot_enabled or not vehicle.has_docking_port() or not target.has_docking_port():
 			docking_assists.erase(vehicle_name)
 			continue
 		if vehicle.passive_orbit_active:
@@ -396,15 +442,31 @@ func _apply_docking_assists(delta: float) -> void:
 			vehicle.passive_orbit_data.clear()
 		var relative_position: Vector2 = target.rocket_position - vehicle.rocket_position
 		var separation := relative_position.length()
-		if separation > DOCKING_ASSIST_MAX_RANGE or separation < 0.001:
+		if (separation > DOCKING_ASSIST_MAX_RANGE and not _docking_orbit_altitudes_compatible(vehicle, target)) or separation < 0.001:
+			docking_assists.erase(vehicle_name)
+			continue
+		if separation <= 1000.0 and _dock_vehicle(target_name):
 			docking_assists.erase(vehicle_name)
 			continue
 		var direction := relative_position / separation
-		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, separation - DOCKING_CAPTURE_DISTANCE)))
-		var desired_velocity: Vector2 = target.velocity + direction * desired_closing_speed
+		var approach_distance := separation
+		var reference_velocity: Vector2 = target.velocity
+		if separation > DOCKING_ASSIST_MAX_RANGE:
+			var orbital_approach := _docking_orbit_approach(vehicle, target)
+			direction = Vector2(orbital_approach.get("direction", direction))
+			approach_distance = float(orbital_approach.get("distance", separation))
+			reference_velocity = Vector2(orbital_approach.get("orbital_velocity", vehicle.velocity))
+		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, approach_distance - DOCKING_CAPTURE_DISTANCE)))
+		var desired_velocity: Vector2 = reference_velocity + direction * desired_closing_speed
 		var velocity_correction := (desired_velocity - vehicle.velocity).limit_length(DOCKING_ASSIST_ACCELERATION)
-		if not vehicle.apply_rcs_velocity_correction(velocity_correction, delta):
-			docking_assists.erase(vehicle_name)
+		var engine_controlled := separation > 50000.0 and vehicle.has_docking_engine() and velocity_correction.length() > 0.05
+		if engine_controlled:
+			if not vehicle.apply_docking_engine_control(velocity_correction.normalized(), delta):
+				docking_assists.erase(vehicle_name)
+		else:
+			vehicle.thrust_key_down = false
+			if not vehicle.has_rcs() or not vehicle.apply_rcs_velocity_correction(velocity_correction, delta):
+				docking_assists.erase(vehicle_name)
 
 func _launch_cost_for_design(design: Dictionary) -> float:
 	return LAUNCH_BASE_COST + RocketDesign.total_initial_mass(design) * LAUNCH_COST_PER_KG
@@ -3898,7 +3960,7 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel_scroll.add_child(layout)
 	var intro := Label.new()
-	intro.text = "Use rendezvous assist to match the other spacecraft's velocity and close the gap. Docking still requires a slow, close approach."
+	intro.text = "Rendezvous assist uses liquid engines for long-range orbital matching and RCS for the final approach. It docks automatically when the ports are aligned and relative speed is safe."
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(intro)
 	var parent_name: String = str(sim.vehicle_name)
@@ -4017,9 +4079,10 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 		var assembly_roots_available: bool = connected_assembly or (not _is_docked_child(parent_name) and not _is_docked_child(target_name))
 		var assembly_operational: bool = assembly_roots_available and not sim.landed and not sim.crashed and not target.landed and not target.crashed
 		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs_installed() and target.has_rcs_installed()
-		var rcs_assist_ready: bool = sim.has_rcs() and target.has_rcs()
+		var rcs_assist_ready: bool = sim.has_rcs() and target.has_rcs_installed()
+		var engine_assist_ready: bool = sim.has_docking_engine()
 		var available_to_dock: bool = not connector_connected and assembly_operational and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
-		var available_to_assist: bool = not connected_assembly and assembly_operational and hardware_ready and rcs_assist_ready and separation <= DOCKING_ASSIST_MAX_RANGE
+		var available_to_assist: bool = not connected_assembly and assembly_operational and hardware_ready and (rcs_assist_ready or engine_assist_ready) and _docking_assist_in_range(sim, target)
 		if connector_connected:
 			status.text = "CONNECTED AT THIS PORT  •  %s\nUse UNDOCK to release this connector. Other connectors can keep the assembly joined." % target_name
 		elif connected_assembly:
@@ -4028,12 +4091,12 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			status.text = "DOCKING PORTS REQUIRED\nBoth spacecraft need a docking port. Only matching ports can connect."
 		elif not sim.has_rcs_installed() or not target.has_rcs_installed():
 			status.text = "RCS REQUIRED\nBoth spacecraft need RCS thruster hardware."
-		elif not rcs_assist_ready:
-			status.text = "RCS PROPELLANT EMPTY\nDocking can still be completed manually, but rendezvous assist is unavailable."
+		elif not rcs_assist_ready and not engine_assist_ready:
+			status.text = "RENDEZVOUS PROPULSION UNAVAILABLE\nLiquid engine fuel or RCS propellant is required."
 		elif available_to_dock:
 			status.text = "DOCKING CONDITIONS MET\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		elif assist_active:
-			status.text = "RENDEZVOUS ASSIST ACTIVE\nPort range: %.1f m  •  Relative speed: %.2f m/s\nRCS is matching velocity and closing at up to %.1f m/s." % [separation, relative_speed, DOCKING_ASSIST_MAX_CLOSING_SPEED]
+			status.text = "RENDEZVOUS ASSIST ACTIVE\nPort range: %.1f m  •  Relative speed: %.2f m/s\nEngines handle long-range rendezvous; RCS handles the final approach. Closing speed is limited to %.1f m/s." % [separation, relative_speed, DOCKING_ASSIST_MAX_CLOSING_SPEED]
 		elif not ports_aligned:
 			status.text = "ALIGN DOCKING PORTS\nTheir port faces must point towards each other.\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		else:
