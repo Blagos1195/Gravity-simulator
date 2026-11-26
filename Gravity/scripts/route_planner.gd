@@ -887,9 +887,9 @@ func _send_destination_to_autopilot() -> void:
 	if not navigation_plan_valid or not is_instance_valid(simulation) or bool(simulation.get("crashed")):
 		return
 	var visited_body_names: Dictionary = simulation.get("visited_body_names")
-	var target_name := FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))
-	if not visited_body_names.has(target_name):
-		navigation_report.text = "AUTOPILOT LOCKED  •  VISIT %s BEFORE ENABLING AUTOMATIC NAVIGATION. MANUAL FLIGHT-COMPUTER GUIDANCE REMAINS AVAILABLE." % target_name.to_upper()
+	var gate_target_name := FlightComputer.target_body_name(int(navigation_plan.get("target_id", -999)))
+	if not visited_body_names.has(gate_target_name):
+		navigation_report.text = "AUTOPILOT LOCKED  •  VISIT %s BEFORE ENABLING AUTOMATIC NAVIGATION. MANUAL FLIGHT-COMPUTER GUIDANCE REMAINS AVAILABLE." % gate_target_name.to_upper()
 		return
 	simulation.set("manual_flight_plan", {})
 	simulation.set("manual_burn_tracking_enabled", false)
