@@ -19,6 +19,9 @@ func _initialize() -> void:
 	builder._build_interface()
 	builder._refresh()
 	assert(_find_label(builder, "VEHICLE BUILDER"))
+	assert(builder._snap_selector.item_count == 4)
+	assert(builder._snap_selector.get_item_text(builder._snap_selector.selected) == "Off")
+	assert(builder._canvas.snap_mode == "Off")
 	assert(builder._parts_list.get_child_count() >= 14)
 	assert(builder._stage_list.get_child_count() == design.stages.size())
 	builder._payload_mass_input.value = 900.0
