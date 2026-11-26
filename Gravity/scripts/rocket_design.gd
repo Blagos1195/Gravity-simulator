@@ -251,6 +251,18 @@ static func vehicle_collision_radius_m(design: Dictionary, first_stage_index: in
 		radius = maxf(radius, stage_collision_radius_m(stages[index]))
 	return radius
 
+static func stage_rcs_propellant_capacity(stage: Dictionary) -> float:
+	if stage.has("rcs_propellant_capacity"):
+		return maxf(0.0, float(stage.get("rcs_propellant_capacity", 0.0)))
+	var capacity := 0.0
+	for component_variant in stage.get("components", []):
+		if not component_variant is Dictionary:
+			continue
+		var component: Dictionary = component_variant
+		var copies := 2.0 if str(component.get("attachment", "stack")) == "side" and bool(component.get("mirror", true)) else 1.0
+		capacity += maxf(0.0, float(component.get("rcs_propellant_capacity", 0.0))) * copies
+	return capacity
+
 static func stage_total_dry_mass(stage: Dictionary) -> float:
 	return float(stage.get("dry_mass", 0.0)) + float(stage_booster_stats(stage).dry_mass)
 
@@ -268,7 +280,7 @@ static func total_initial_mass(design: Dictionary) -> float:
 	var stages: Array = design.get("stages", [])
 	var mass := float(design.get("payload_mass", 0.0))
 	for stage in stages:
-		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage)
+		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage) + stage_rcs_propellant_capacity(stage)
 	return mass
 
 static func stage_ignition_mass(design: Dictionary, stage_index: int) -> float:
@@ -276,7 +288,7 @@ static func stage_ignition_mass(design: Dictionary, stage_index: int) -> float:
 	var mass := float(design.get("payload_mass", 0.0))
 	for i in range(stage_index, stages.size()):
 		var stage: Dictionary = stages[i]
-		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage)
+		mass += stage_total_dry_mass(stage) + stage_total_fuel_capacity(stage) + stage_rcs_propellant_capacity(stage)
 	return mass
 
 static func stage_specific_impulse(stage: Dictionary, vacuum: bool) -> float:

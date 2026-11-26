@@ -1,6 +1,9 @@
 extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const ModuleGraph = preload("res://scripts/module_graph.gd")
+const StagingSystem = preload("res://scripts/staging_system.gd")
+const ResourceNetwork = preload("res://scripts/resource_network.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const RocketBuilder = preload("res://scripts/rocket_builder.gd")
@@ -58,7 +61,8 @@ const CONTROL_BINDINGS := {
 	"throttle_cutoff": ["ENGINE CUTOFF", KEY_S],
 	"rotate_left": ["ROTATE LEFT", KEY_A],
 	"rotate_right": ["ROTATE RIGHT", KEY_D],
-	"pause_game": ["PAUSE", KEY_SPACE],
+	"pause_game": ["PAUSE", KEY_ESCAPE],
+	"stage_next": ["NEXT STAGE", KEY_SPACE],
 	"stage_separation": ["STAGE SEPARATION", KEY_X],
 	"guidance_toggle": ["GUIDANCE", KEY_H]
 }
@@ -76,6 +80,8 @@ var active_builder: Control
 var design_stats_label: Label
 var design_error_label: Label
 var design_preview: Control
+var stage_manager_picker: OptionButton
+var stage_manager_status: Label
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
@@ -91,6 +97,8 @@ func _configure_input_actions() -> void:
 			InputMap.add_action(action)
 		InputMap.action_erase_events(action)
 		var keycode := int(config.get_value("controls", action, CONTROL_BINDINGS[action][1]))
+		if action == "pause_game" and keycode == KEY_SPACE:
+			keycode = KEY_ESCAPE
 		var key_event := InputEventKey.new()
 		key_event.keycode = keycode
 		InputMap.action_add_event(action, key_event)
@@ -380,7 +388,7 @@ func _apply_docking_assists(delta: float) -> void:
 		var target_name := str(docking_assists.get(vehicle_name, ""))
 		var vehicle := _find_vehicle_by_name(vehicle_name)
 		var target := _find_vehicle_by_name(target_name)
-		if vehicle == null or target == null or vehicle == target or vehicle.landed or vehicle.crashed or target.landed or target.crashed or _is_vehicle_docked(vehicle_name) or _is_vehicle_docked(target_name):
+		if vehicle == null or target == null or vehicle == target or vehicle.landed or vehicle.crashed or target.landed or target.crashed or _is_vehicle_docked(vehicle_name) or _is_vehicle_docked(target_name) or not vehicle.has_rcs() or not target.has_rcs() or not vehicle.has_docking_port() or not target.has_docking_port():
 			docking_assists.erase(vehicle_name)
 			continue
 		if vehicle.passive_orbit_active:
@@ -395,7 +403,8 @@ func _apply_docking_assists(delta: float) -> void:
 		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, separation - DOCKING_CAPTURE_DISTANCE)))
 		var desired_velocity: Vector2 = target.velocity + direction * desired_closing_speed
 		var velocity_correction := (desired_velocity - vehicle.velocity).limit_length(DOCKING_ASSIST_ACCELERATION)
-		vehicle.velocity += velocity_correction * maxf(0.0, delta)
+		if not vehicle.apply_rcs_velocity_correction(velocity_correction, delta):
+			docking_assists.erase(vehicle_name)
 
 func _launch_cost_for_design(design: Dictionary) -> float:
 	return LAUNCH_BASE_COST + RocketDesign.total_initial_mass(design) * LAUNCH_COST_PER_KG
@@ -1788,24 +1797,48 @@ func _queue_discarded_stage(stage_data: Dictionary) -> void:
 	pending_debris.append(stage_data.duplicate(true))
 
 func _spawn_discarded_stage(stage_data: Dictionary) -> void:
-	var stage: Variant = stage_data.get("stage", {})
-	if not stage is Dictionary or stage.is_empty():
-		return
+	var stages: Array = stage_data.get("stages", [])
+	if stages.is_empty():
+		var stage: Variant = stage_data.get("stage", {})
+		if not stage is Dictionary or stage.is_empty():
+			return
+		stages = [stage.duplicate(true)]
 	debris_sequence += 1
-	var debris_name := "Debris %04d" % debris_sequence
+	var dockable_module := bool(stage_data.get("dockable_module", false))
+	var debris_name := ("Module " if dockable_module else "Debris ") + "%04d" % debris_sequence
+	var remaining_fuel := maxf(0.0, float(stage_data.get("fuel", 0.0)))
 	var design := {
 		"name": debris_name,
-		"payload_mass": 0.001,
-		"payload_type": "debris",
-		"stages": [stage.duplicate(true)]
+		"preserve_part_uids": true,
+		"payload_mass": maxf(0.001, float(stage_data.get("payload_mass", 0.001))),
+		"payload_type": str(stage_data.get("payload_type", "debris")),
+		"payload_visual": stage_data.get("payload_visual", {}).duplicate(true),
+		"stages": stages.duplicate(true)
 	}
 	var debris := _create_vehicle(design, debris_name)
 	if debris == null:
 		return
-	var remaining_fuel := maxf(0.0, float(stage_data.get("fuel", 0.0)))
-	debris.fuel = remaining_fuel
-	debris.infinite_fuel_stage_remaining = remaining_fuel
-	debris.stage_fuel_remaining[0] = remaining_fuel
+	var saved_stage_fuel: Variant = stage_data.get("stage_fuel_remaining", [])
+	if saved_stage_fuel is Array and saved_stage_fuel.size() == debris.stage_fuel_remaining.size():
+		debris.stage_fuel_remaining.clear()
+		for amount in saved_stage_fuel:
+			debris.stage_fuel_remaining.append(maxf(0.0, float(amount)))
+	elif not debris.stage_fuel_remaining.is_empty():
+		debris.stage_fuel_remaining[0] = minf(remaining_fuel, RocketDesign.stage_total_fuel_capacity(stages[0]))
+	debris.fuel = debris.stage_fuel_remaining[0] if not debris.stage_fuel_remaining.is_empty() else remaining_fuel
+	debris.rcs_propellant_remaining = clampf(float(stage_data.get("rcs_fuel", 0.0)), 0.0, debris._remaining_rcs_propellant_capacity())
+	var module_tanks: Variant = stage_data.get("resource_tanks", [])
+	if module_tanks is Array:
+		debris.resource_tanks = module_tanks.duplicate(true)
+		for tank_index in range(debris.resource_tanks.size()):
+			var tank: Dictionary = debris.resource_tanks[tank_index]
+			tank["stage_index"] = clampi(int(tank.get("stage_index", 0)), 0, maxi(0, debris.rocket_stages.size() - 1))
+			tank["module_id"] = debris_name
+			debris.resource_tanks[tank_index] = tank
+		debris._sync_legacy_fuel_from_tanks()
+		if not debris.stage_fuel_remaining.is_empty():
+			debris.fuel = debris.stage_fuel_remaining[0]
+	debris.infinite_fuel_stage_remaining = debris.fuel
 	var position_components: Variant = stage_data.get("position_components", PackedFloat64Array([0.0, 0.0]))
 	if position_components is PackedFloat64Array and position_components.size() >= 2:
 		debris._set_rocket_position_components(float(position_components[0]), float(position_components[1]))
@@ -1814,16 +1847,19 @@ func _spawn_discarded_stage(stage_data: Dictionary) -> void:
 	debris.velocity = stage_data.get("velocity", Vector2.ZERO)
 	debris.separation_parent_name = str(stage_data.get("parent_vehicle_name", ""))
 	debris.rotation_angle = float(stage_data.get("rotation_angle", 0.0))
+	debris.angular_velocity = float(stage_data.get("angular_velocity", 0.0))
 	debris.sim_time = float(stage_data.get("sim_time", sim.sim_time if is_instance_valid(sim) else 0.0))
 	debris.launch_time = float(stage_data.get("launch_time", debris.sim_time))
 	debris.time_warp = sim.time_warp if is_instance_valid(sim) else 1.0
-	debris.is_debris = true
-	debris.input_enabled = false
+	debris.is_debris = not dockable_module
+	debris.input_enabled = dockable_module
 	debris.infinite_weightless_fuel = false
 	debris.thrust_key_down = false
 	debris.guidance_enabled = false
 	debris.autopilot_enabled = false
 	debris.throttle = 0.0
+	if dockable_module:
+		debris.status_message = "DETACHED MODULE  •  RCS AND DOCKING READY"
 	debris.landed = false
 	debris.crashed = false
 	fleet_sims.append(debris)
@@ -2134,6 +2170,12 @@ func _switch_vehicle(index: int) -> void:
 		sim.visible = false
 	active_vehicle_index = index
 	sim = fleet_sims[index]
+	if not sim.staging_changed.is_connected(_refresh_stage_manager):
+		sim.staging_changed.connect(_refresh_stage_manager)
+	if not sim.staging_stage_requested.is_connected(_execute_fleet_staging_stage):
+		sim.staging_stage_requested.connect(_execute_fleet_staging_stage)
+	if not sim.part_selected.is_connected(_show_part_actions):
+		sim.part_selected.connect(_show_part_actions)
 	sim.discovered_body_names = SpaceDiscovery.spotted_names(discovery_state)
 	sim.visited_body_names = SpaceDiscovery.visited_names(discovery_state)
 	sim.input_enabled = not _is_docked_child(sim.vehicle_name) and not sim.crashed
@@ -2150,6 +2192,7 @@ func _switch_vehicle(index: int) -> void:
 	}
 	_refresh_vehicle_selector()
 	_refresh_telescope_control()
+	_refresh_stage_manager()
 	if status_label:
 		if _is_docked_child(sim.vehicle_name):
 			for link in docking_links:
@@ -2178,6 +2221,142 @@ func _refresh_vehicle_selector() -> void:
 		vehicle_selector.add_item("%02d  •  %s" % [index + 1, vehicle.vehicle_name])
 	vehicle_selector.select(active_vehicle_index)
 
+func _execute_actions_on_module(module: SimulationView, actions: Array) -> void:
+	if module == null:
+		return
+	var inventory_owner := _resource_inventory_owner(module)
+	if inventory_owner == null or inventory_owner == module:
+		module.execute_staging_actions(actions)
+		return
+	module.resource_tanks = ResourceNetwork.tank_states_for_module(inventory_owner.resource_tanks, module.vehicle_name)
+	inventory_owner.resource_tanks = ResourceNetwork.tank_states_without_module(inventory_owner.resource_tanks, module.vehicle_name)
+	module.resource_inventory_external = false
+	module._sync_legacy_fuel_from_tanks()
+	var previous_rcs := float(inventory_owner.docked_rcs_propellant.get(module.vehicle_name, module.rcs_propellant_remaining))
+	module.rcs_propellant_remaining = previous_rcs
+	module.execute_staging_actions(actions)
+	var remaining_rcs := module.rcs_propellant_remaining
+	inventory_owner.rcs_propellant_remaining = maxf(0.0, inventory_owner.rcs_propellant_remaining - previous_rcs + remaining_rcs)
+	inventory_owner.docked_rcs_propellant[module.vehicle_name] = remaining_rcs
+	inventory_owner.resource_tanks = ResourceNetwork.merge_tank_states(inventory_owner.resource_tanks, module.resource_tanks)
+	module.resource_tanks.clear()
+	module.resource_inventory_external = true
+	module.fuel = 0.0
+	module.rcs_propellant_remaining = remaining_rcs
+	module._sync_legacy_fuel_from_external_tanks(inventory_owner.resource_tanks)
+	inventory_owner._sync_legacy_fuel_from_tanks()
+
+func _prune_module_staging_actions(module: SimulationView) -> void:
+	if module == null or not is_instance_valid(sim):
+		return
+	var attached_parts: Dictionary = {}
+	for index in range(module.stage_index, module.rocket_stages.size()):
+		for component in module.rocket_stages[index].get("components", []):
+			attached_parts[str(component.get("part_uid", ""))] = true
+	for stage_index_value in range(sim.staging_plan.size()):
+		var stage: Dictionary = sim.staging_plan[stage_index_value]
+		var actions: Array = []
+		for action in stage.get("actions", []):
+			if not action is Dictionary:
+				continue
+			if str(action.get("module_id", sim.vehicle_name)) != module.vehicle_name or str(action.get("part_id", "")).is_empty() or attached_parts.has(str(action.get("part_id", ""))):
+				actions.append(action)
+		stage["actions"] = actions
+		sim.staging_plan[stage_index_value] = stage
+
+func _execute_fleet_staging_stage() -> void:
+	if not is_instance_valid(sim) or sim.action_stage_index < 0 or sim.action_stage_index >= sim.staging_plan.size():
+		return
+	var stage_index_value: int = int(sim.action_stage_index)
+	var stage: Dictionary = sim.staging_plan[stage_index_value]
+	var actions_by_module: Dictionary = {}
+	for action in stage.get("actions", []):
+		if not action is Dictionary or bool(action.get("completed", false)):
+			continue
+		var module_id := str(action.get("module_id", sim.vehicle_name))
+		if not actions_by_module.has(module_id):
+			actions_by_module[module_id] = []
+		(actions_by_module[module_id] as Array).append(action.duplicate(true))
+	var engine_action_seen := false
+	for module_id in actions_by_module:
+		var module := _find_vehicle_by_name(str(module_id))
+		if module == null:
+			continue
+		_execute_actions_on_module(module, actions_by_module[module_id])
+		_prune_module_staging_actions(module)
+		for action in actions_by_module[module_id]:
+			var action_name := str(action.get("action", ""))
+			if action_name in ["activate_engine", "deactivate_engine"]:
+				engine_action_seen = true
+			if action_name in ["enable_fuel_supply", "disable_fuel_supply"]:
+				var owner := _resource_inventory_owner(module)
+				if owner != null:
+					for tank_index in range(owner.resource_tanks.size()):
+						var tank: Dictionary = owner.resource_tanks[tank_index]
+						if str(tank.get("part_uid", "")) == str(action.get("part_id", "")):
+							tank["fuel_supply_enabled"] = action_name == "enable_fuel_supply"
+							owner.resource_tanks[tank_index] = tank
+					owner._sync_legacy_fuel_from_tanks()
+	if engine_action_seen:
+		var any_module_thrust := false
+		for module in fleet_sims:
+			if _resource_inventory_owner(module) == sim and module.thrust_key_down:
+				any_module_thrust = true
+		sim.thrust_key_down = any_module_thrust
+	_sync_docked_vehicles()
+	sim.staging_plan = StagingSystem.mark_stage_completed(sim.staging_plan, stage_index_value)
+	if stage_index_value + 1 < sim.staging_plan.size():
+		sim.action_stage_index += 1
+	for module_id in actions_by_module:
+		var module := _find_vehicle_by_name(str(module_id))
+		if module != null:
+			module.action_stage_index = sim.action_stage_index
+	sim.staging_changed.emit()
+
+func _rearm_fleet_action_stage() -> void:
+	if not is_instance_valid(sim) or sim.action_stage_index < 0 or sim.action_stage_index >= sim.staging_plan.size():
+		return
+	var stage: Dictionary = sim.staging_plan[sim.action_stage_index].duplicate(true)
+	var actions: Array = stage.get("actions", []).duplicate(true)
+	for index in range(actions.size()):
+		var action: Dictionary = actions[index]
+		var module_id := str(action.get("module_id", sim.vehicle_name))
+		var module := _find_vehicle_by_name(module_id)
+		if module == null:
+			continue
+		var result := StagingSystem.rearm_stage([{"actions":[action]}], 0, module._current_staging_part_states())
+		actions[index] = result[0].actions[0]
+	stage["actions"] = actions
+	sim.staging_plan[sim.action_stage_index] = stage
+	for module in fleet_sims:
+		if _resource_inventory_owner(module) == sim:
+			module.action_stage_index = sim.action_stage_index
+	sim.staging_changed.emit()
+
+func _refresh_stage_manager() -> void:
+	if not is_instance_valid(stage_manager_picker) or not is_instance_valid(stage_manager_status) or not is_instance_valid(sim):
+		return
+	stage_manager_picker.clear()
+	for index in range(sim.staging_plan.size()):
+		var stage: Dictionary = sim.staging_plan[index]
+		var actions: Array = stage.get("actions", [])
+		var completed_count := 0
+		for action in actions:
+			if action is Dictionary and bool(action.get("completed", false)):
+				completed_count += 1
+		stage_manager_picker.add_item("STAGE %02d  •  %d/%d" % [index + 1, completed_count, actions.size()])
+	if not sim.staging_plan.is_empty():
+		stage_manager_picker.select(clampi(sim.action_stage_index, 0, sim.staging_plan.size() - 1))
+		var stage: Dictionary = sim.staging_plan[sim.action_stage_index]
+		var action_names: PackedStringArray = []
+		for action in stage.get("actions", []):
+			if action is Dictionary:
+				var state := "DONE" if bool(action.get("completed", false)) else "READY"
+				action_names.append("%s  %s" % [state, str(action.get("action", "ACTION")).replace("_", " ").to_upper()])
+		stage_manager_status.text = "\n".join(action_names) if not action_names.is_empty() else "No actions assigned to this stage."
+	else:
+		stage_manager_status.text = "No staging actions configured."
+
 func _find_vehicle_by_name(vehicle_name: String) -> SimulationView:
 	for vehicle in fleet_sims:
 		if vehicle.vehicle_name == vehicle_name:
@@ -2194,6 +2373,23 @@ func _rename_vehicle(vehicle_name: String, requested_name: String) -> bool:
 			return false
 	var previous_name := vehicle.vehicle_name
 	vehicle.vehicle_name = clean_name
+	for owner in fleet_sims:
+		for tank_index in range(owner.resource_tanks.size()):
+			var tank: Dictionary = owner.resource_tanks[tank_index]
+			if str(tank.get("module_id", "")) == previous_name:
+				tank["module_id"] = clean_name
+				owner.resource_tanks[tank_index] = tank
+		if owner.docked_rcs_propellant.has(previous_name):
+			owner.docked_rcs_propellant[clean_name] = owner.docked_rcs_propellant[previous_name]
+			owner.docked_rcs_propellant.erase(previous_name)
+		for stage_index_value in range(owner.staging_plan.size()):
+			var stage: Dictionary = owner.staging_plan[stage_index_value]
+			var actions: Array = stage.get("actions", []).duplicate(true)
+			for action_index in range(actions.size()):
+				if str(actions[action_index].get("module_id", "")) == previous_name:
+					actions[action_index]["module_id"] = clean_name
+			stage["actions"] = actions
+			owner.staging_plan[stage_index_value] = stage
 	if docking_assists.has(previous_name):
 		docking_assists[clean_name] = docking_assists[previous_name]
 		docking_assists.erase(previous_name)
@@ -2399,9 +2595,14 @@ func _sync_docked_vehicles() -> void:
 			continue
 		var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
 		var world_offset := local_offset.rotated(parent.rotation_angle)
+		var child_mass_properties := child._vehicle_mass_properties()
 		parent.docked_visuals.append({
 			"name": child.vehicle_name,
 			"direction": world_offset.normalized(),
+			"offset": local_offset,
+			"mass": float(child_mass_properties.get("mass", child._current_vehicle_mass())),
+			"center_of_mass": child_mass_properties.get("center_of_mass", Vector2.ZERO),
+			"moment_of_inertia": float(child_mass_properties.get("moment_of_inertia", 0.0)),
 			"rotation": parent.rotation_angle,
 			"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "payload_visual": child.payload_visual.duplicate(true), "stages": child.rocket_stages},
 			"stage_index": child.stage_index
@@ -2409,7 +2610,10 @@ func _sync_docked_vehicles() -> void:
 		child.rocket_position = parent.rocket_position + world_offset
 		child.velocity = parent.velocity
 		child.rotation_angle = parent.rotation_angle
+		child.angular_velocity = parent.angular_velocity
 		child.sim_time = parent.sim_time
+		child._sync_legacy_fuel_from_external_tanks(parent.resource_tanks)
+		child.rcs_propellant_remaining = float(parent.docked_rcs_propellant.get(child.vehicle_name, child.rcs_propellant_remaining))
 		child.landed = parent.landed
 		child.crashed = parent.crashed
 		child.landed_body_name = parent.landed_body_name
@@ -2419,7 +2623,7 @@ func _sync_docked_vehicles() -> void:
 		child.thrust_key_down = false
 		child.docked_mass = 0.0
 
-func _dock_vehicle(target_name: String) -> bool:
+func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 	var target := _find_vehicle_by_name(target_name)
 	if target == null or sim == null or target == sim:
 		return false
@@ -2427,17 +2631,71 @@ func _dock_vehicle(target_name: String) -> bool:
 		return false
 	if _is_docked_child(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
 		return false
-	var separation: float = target.rocket_position.distance_to(sim.rocket_position)
+	if not sim.has_rcs_installed() or not target.has_rcs_installed() or not sim.has_docking_port() or not target.has_docking_port():
+		return false
+	var own_used_ports: Dictionary = {}
+	var target_used_ports: Dictionary = {}
+	for link in docking_links:
+		if str(link.get("parent_name", "")) == sim.vehicle_name:
+			own_used_ports[str(link.get("port_a", ""))] = true
+		elif str(link.get("child_name", "")) == sim.vehicle_name:
+			own_used_ports[str(link.get("port_b", ""))] = true
+		if str(link.get("parent_name", "")) == target.vehicle_name:
+			target_used_ports[str(link.get("port_a", ""))] = true
+		elif str(link.get("child_name", "")) == target.vehicle_name:
+			target_used_ports[str(link.get("port_b", ""))] = true
+	var own_port: Dictionary = {}
+	var target_port: Dictionary = {}
+	for port in sim.docking_port_world_states():
+		if (own_port_uid.is_empty() or str(port.get("part_uid", "")) == own_port_uid) and not own_used_ports.has(str(port.get("part_uid", ""))):
+			own_port = port
+			break
+	for port in target.docking_port_world_states():
+		if not target_used_ports.has(str(port.get("part_uid", ""))):
+			target_port = port
+			break
+	if own_port.is_empty() or target_port.is_empty():
+		return false
+	var separation: float = Vector2(target_port.position).distance_to(Vector2(own_port.position))
 	var relative_speed: float = (target.velocity - sim.velocity).length()
-	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED:
+	var ports_aligned := Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
+	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED or not ports_aligned:
 		return false
 	var local_offset: Vector2 = (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
+	var module_ids: Array = []
+	for vehicle in fleet_sims:
+		module_ids.append(vehicle.vehicle_name)
+	var graph := ModuleGraph.create(module_ids)
+	for existing_link in docking_links:
+		var graph_result := ModuleGraph.connect_modules(graph, str(existing_link.get("parent_name", "")), str(existing_link.get("child_name", "")), str(existing_link.get("port_a", "")), str(existing_link.get("port_b", "")))
+		if bool(graph_result.valid):
+			graph = graph_result.graph
+	if not ModuleGraph.can_connect(graph, sim.vehicle_name, target.vehicle_name, str(own_port.get("part_uid", "")), str(target_port.get("part_uid", ""))):
+		return false
+	var child_staging_plan := target.staging_plan.duplicate(true)
+	for tank_index in range(target.resource_tanks.size()):
+		var tank: Dictionary = target.resource_tanks[tank_index]
+		tank["module_id"] = target.vehicle_name
+		target.resource_tanks[tank_index] = tank
+	sim.resource_tanks = ResourceNetwork.merge_tank_states(sim.resource_tanks, target.resource_tanks)
+	sim._sync_legacy_fuel_from_tanks()
+	target.resource_tanks.clear()
+	target.resource_inventory_external = true
+	target.fuel = 0.0
+	sim.docked_rcs_propellant[target.vehicle_name] = target.rcs_propellant_remaining
+	sim.rcs_propellant_remaining += target.rcs_propellant_remaining
+	target.rcs_propellant_remaining = 0.0
 	docking_links.append({
 		"parent_name": sim.vehicle_name,
 		"child_name": target.vehicle_name,
 		"offset_x": local_offset.x,
-		"offset_y": local_offset.y
+		"offset_y": local_offset.y,
+		"port_a": str(own_port.get("part_uid", "")),
+		"port_b": str(target_port.get("part_uid", "")),
+		"child_staging_plan": child_staging_plan
 	})
+	sim.staging_plan = StagingSystem.merge_plans(sim.staging_plan, child_staging_plan)
+	target.staging_plan = []
 	docking_assists.erase(sim.vehicle_name)
 	docking_assists.erase(target.vehicle_name)
 	for assist_vehicle in docking_assists.keys():
@@ -2451,13 +2709,30 @@ func _dock_vehicle(target_name: String) -> bool:
 	_sync_docked_vehicles()
 	return true
 
-func _undock_vehicle(target_name: String) -> bool:
+func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 	for index in range(docking_links.size()):
 		var link: Dictionary = docking_links[index]
 		if not ((str(link.parent_name) == sim.vehicle_name and str(link.child_name) == target_name) or (str(link.parent_name) == target_name and str(link.child_name) == sim.vehicle_name)):
 			continue
+		if not port_uid.is_empty() and port_uid not in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
+			continue
+		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
 		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
 		docking_links.remove_at(index)
+		if parent != null and child != null:
+			child.resource_tanks = ResourceNetwork.tank_states_for_module(parent.resource_tanks, child.vehicle_name)
+			parent.resource_tanks = ResourceNetwork.tank_states_without_module(parent.resource_tanks, child.vehicle_name)
+			child.resource_inventory_external = false
+			child._sync_legacy_fuel_from_tanks()
+			var child_rcs_fuel := float(parent.docked_rcs_propellant.get(child.vehicle_name, 0.0))
+			child.rcs_propellant_remaining = child_rcs_fuel
+			parent.rcs_propellant_remaining = maxf(0.0, parent.rcs_propellant_remaining - child_rcs_fuel)
+			parent.docked_rcs_propellant.erase(child.vehicle_name)
+			parent._sync_legacy_fuel_from_tanks()
+			child.staging_plan = StagingSystem.filter_module_plan(parent.staging_plan, child.vehicle_name)
+			parent.staging_plan = StagingSystem.remove_module_plan(parent.staging_plan, child.vehicle_name)
+			child.action_stage_index = clampi(child.action_stage_index, 0, maxi(0, child.staging_plan.size() - 1))
+			parent.staging_changed.emit()
 		if child != null:
 			child.input_enabled = child == sim
 			child.docked_mass = 0.0
@@ -2466,25 +2741,361 @@ func _undock_vehicle(target_name: String) -> bool:
 		return true
 	return false
 
+func _resource_inventory_owner(vehicle: SimulationView) -> SimulationView:
+	if vehicle == null:
+		return null
+	for link in docking_links:
+		if str(link.get("child_name", "")) == vehicle.vehicle_name:
+			return _find_vehicle_by_name(str(link.get("parent_name", "")))
+	return vehicle
+
+func _transfer_between_tanks(source_vehicle_name: String, source_part_id: String, destination_vehicle_name: String, destination_part_id: String, resource: String, amount: float) -> float:
+	var source_vehicle := _find_vehicle_by_name(source_vehicle_name)
+	var destination_vehicle := _find_vehicle_by_name(destination_vehicle_name)
+	if source_vehicle == null or destination_vehicle == null:
+		return 0.0
+	var connected := source_vehicle == destination_vehicle or _are_docked(source_vehicle_name, destination_vehicle_name)
+	if not connected:
+		return 0.0
+	var inventory_owner := _resource_inventory_owner(source_vehicle)
+	if inventory_owner == null or inventory_owner != _resource_inventory_owner(destination_vehicle):
+		return 0.0
+	for source_index in range(inventory_owner.resource_tanks.size()):
+		if str(inventory_owner.resource_tanks[source_index].get("part_uid", "")) != source_part_id:
+			continue
+		for destination_index in range(inventory_owner.resource_tanks.size()):
+			if str(inventory_owner.resource_tanks[destination_index].get("part_uid", "")) != destination_part_id:
+				continue
+			var source: Dictionary = inventory_owner.resource_tanks[source_index].duplicate(true)
+			var destination: Dictionary = inventory_owner.resource_tanks[destination_index].duplicate(true)
+			var transferred := ResourceNetwork.transfer_between_tanks(source, destination, resource, amount, true)
+			inventory_owner.resource_tanks[source_index] = source
+			inventory_owner.resource_tanks[destination_index] = destination
+			inventory_owner._sync_legacy_fuel_from_tanks()
+			if transferred > 0.0:
+				_update_docked_masses()
+				_sync_docked_vehicles()
+			return transferred
+	return 0.0
+
+func _set_vehicle_component_state(vehicle: SimulationView, part_uid: String, property: String, value: Variant) -> void:
+	if vehicle == null:
+		return
+	vehicle.set_component_state(part_uid, property, value)
+	var owner := _resource_inventory_owner(vehicle)
+	if property == "fuel_supply_enabled" and owner != null:
+		for tank_index in range(owner.resource_tanks.size()):
+			var tank: Dictionary = owner.resource_tanks[tank_index]
+			if str(tank.get("part_uid", "")) == part_uid:
+				tank["fuel_supply_enabled"] = bool(value)
+				owner.resource_tanks[tank_index] = tank
+		owner._sync_legacy_fuel_from_tanks()
+	_sync_docked_vehicles()
+
+func _show_part_actions(part_uid: String) -> void:
+	if not is_instance_valid(sim):
+		return
+	var selected_component: Dictionary = {}
+	var part_owner: SimulationView = sim
+	for vehicle in fleet_sims:
+		for stage in vehicle.rocket_stages:
+			for component in stage.get("components", []):
+				if str(component.get("part_uid", "")) == part_uid:
+					selected_component = component
+					part_owner = vehicle
+					break
+			if not selected_component.is_empty():
+				break
+		if not selected_component.is_empty():
+			break
+	if selected_component.is_empty():
+		return
+	var kind := str(selected_component.get("kind", ""))
+	var window := Window.new()
+	window.title = str(selected_component.get("label", selected_component.get("id", "SPACECRAFT PART"))).to_upper()
+	window.size = Vector2i(340, 260)
+	window.min_size = Vector2i(300, 220)
+	window.transient = true
+	window.exclusive = true
+	add_child(window)
+	window.close_requested.connect(window.queue_free)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 8)
+	layout.add_theme_constant_override("margin_left", 12)
+	layout.add_theme_constant_override("margin_right", 12)
+	layout.add_theme_constant_override("margin_top", 12)
+	layout.add_theme_constant_override("margin_bottom", 12)
+	window.add_child(layout)
+	var detail := Label.new()
+	detail.text = "%s  •  %.0f kg" % [kind.replace("_", " ").to_upper(), float(selected_component.get("dry_mass", 0.0))]
+	layout.add_child(detail)
+	if bool(selected_component.get("deployable", false)):
+		var deploy_button := Button.new()
+		deploy_button.text = "RETRACT" if bool(selected_component.get("deployed", false)) else "DEPLOY"
+		deploy_button.pressed.connect(func():
+			_set_vehicle_component_state(part_owner, part_uid, "deployed", not bool(selected_component.get("deployed", false)))
+			window.queue_free()
+		)
+		layout.add_child(deploy_button)
+	if kind in ["engine", "radial"]:
+		var engine_button := Button.new()
+		engine_button.text = "REMOVE FROM ACTIVE PARTS" if bool(selected_component.get("engine_enabled", true)) else "ADD TO ACTIVE PARTS"
+		engine_button.pressed.connect(func():
+			_set_vehicle_component_state(part_owner, part_uid, "engine_enabled", not bool(selected_component.get("engine_enabled", true)))
+			window.queue_free()
+		)
+		layout.add_child(engine_button)
+	elif kind == "rcs":
+		var rcs_button := Button.new()
+		rcs_button.text = "DISABLE RCS" if bool(selected_component.get("rcs_enabled", true)) else "ENABLE RCS"
+		rcs_button.pressed.connect(func():
+			_set_vehicle_component_state(part_owner, part_uid, "rcs_enabled", not bool(selected_component.get("rcs_enabled", true)))
+			window.queue_free()
+		)
+		layout.add_child(rcs_button)
+	elif kind == "tank":
+		var fuel_button := Button.new()
+		fuel_button.text = "DISABLE FUEL SUPPLY" if bool(selected_component.get("fuel_supply_enabled", true)) else "ENABLE FUEL SUPPLY"
+		fuel_button.pressed.connect(func():
+			_set_vehicle_component_state(part_owner, part_uid, "fuel_supply_enabled", not bool(selected_component.get("fuel_supply_enabled", true)))
+			window.queue_free()
+		)
+		layout.add_child(fuel_button)
+	if kind == "docking_port":
+		var docking_button := Button.new()
+		docking_button.text = "DOCK / UNDOCK AT THIS CONNECTOR"
+		docking_button.pressed.connect(func():
+			window.queue_free()
+			_show_docking_panel(part_uid)
+		)
+		layout.add_child(docking_button)
+	window.popup_centered()
+
+func _show_tank_transfer_panel() -> void:
+	var window := Window.new()
+	window.title = "INDIVIDUAL TANK TRANSFER"
+	window.size = Vector2i(460, 520)
+	window.min_size = Vector2i(400, 440)
+	window.transient = true
+	window.exclusive = true
+	add_child(window)
+	window.close_requested.connect(window.queue_free)
+	var layout := VBoxContainer.new()
+	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.add_theme_constant_override("separation", 10)
+	layout.add_theme_constant_override("margin_left", 14)
+	layout.add_theme_constant_override("margin_right", 14)
+	layout.add_theme_constant_override("margin_top", 14)
+	layout.add_theme_constant_override("margin_bottom", 14)
+	window.add_child(layout)
+	var source_label := Label.new()
+	source_label.text = "SOURCE SPACECRAFT / TANK"
+	layout.add_child(source_label)
+	var source_vehicle := OptionButton.new()
+	layout.add_child(source_vehicle)
+	var source_tank := OptionButton.new()
+	layout.add_child(source_tank)
+	var destination_label := Label.new()
+	destination_label.text = "DESTINATION SPACECRAFT / TANK"
+	layout.add_child(destination_label)
+	var destination_vehicle := OptionButton.new()
+	layout.add_child(destination_vehicle)
+	var destination_tank := OptionButton.new()
+	layout.add_child(destination_tank)
+	var resource_selector := OptionButton.new()
+	layout.add_child(resource_selector)
+	var amount_input := SpinBox.new()
+	amount_input.min_value = 0.001
+	amount_input.max_value = 100000000000.0
+	amount_input.step = 1.0
+	amount_input.value = 100.0
+	amount_input.suffix = " units"
+	layout.add_child(amount_input)
+	var status := Label.new()
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.custom_minimum_size.y = 48
+	layout.add_child(status)
+	var transfer_button := Button.new()
+	transfer_button.text = "TRANSFER BETWEEN TANKS"
+	transfer_button.custom_minimum_size.y = 42
+	layout.add_child(transfer_button)
+	for vehicle in fleet_sims:
+		source_vehicle.add_item(vehicle.vehicle_name)
+		destination_vehicle.add_item(vehicle.vehicle_name)
+		if vehicle == sim:
+			source_vehicle.select(source_vehicle.item_count - 1)
+			destination_vehicle.select(destination_vehicle.item_count - 1)
+	var refresh_tanks := func(vehicle_picker: OptionButton, tank_picker: OptionButton) -> void:
+		tank_picker.clear()
+		if vehicle_picker.item_count == 0:
+			return
+		var vehicle := _find_vehicle_by_name(vehicle_picker.get_item_text(vehicle_picker.selected))
+		if vehicle == null:
+			return
+		var inventory_owner := _resource_inventory_owner(vehicle)
+		if inventory_owner == null:
+			return
+		for tank in inventory_owner.resource_tanks:
+			if str(tank.get("module_id", vehicle.vehicle_name)) != vehicle.vehicle_name:
+				continue
+			var capacities: Dictionary = tank.get("resource_capacities", {})
+			var resources: Dictionary = tank.get("resources", {})
+			var resource_names: PackedStringArray = []
+			for resource in capacities:
+				if float(capacities[resource]) > 0.0:
+					resource_names.append(str(resource))
+			if resource_names.is_empty():
+				continue
+			tank_picker.add_item("%s  [%s]" % [str(tank.get("part_uid", "Tank")), ", ".join(resource_names)])
+			tank_picker.set_item_metadata(tank_picker.item_count - 1, str(tank.get("part_uid", "")))
+	var refresh_resources := func() -> void:
+		resource_selector.clear()
+		if source_tank.item_count == 0 or destination_tank.item_count == 0:
+			return
+		var source_vehicle_value := _find_vehicle_by_name(source_vehicle.get_item_text(source_vehicle.selected))
+		var destination_vehicle_value := _find_vehicle_by_name(destination_vehicle.get_item_text(destination_vehicle.selected))
+		if source_vehicle_value == null or destination_vehicle_value == null:
+			return
+		var source_owner := _resource_inventory_owner(source_vehicle_value)
+		var destination_owner := _resource_inventory_owner(destination_vehicle_value)
+		if source_owner == null or destination_owner != source_owner:
+			return
+		var source_state: Dictionary = {}
+		var destination_state: Dictionary = {}
+		for tank in source_owner.resource_tanks:
+			if str(tank.get("part_uid", "")) == str(source_tank.get_item_metadata(source_tank.selected)):
+				source_state = tank
+		for tank in source_owner.resource_tanks:
+			if str(tank.get("part_uid", "")) == str(destination_tank.get_item_metadata(destination_tank.selected)):
+				destination_state = tank
+		var source_caps: Dictionary = source_state.get("resource_capacities", {})
+		var destination_caps: Dictionary = destination_state.get("resource_capacities", {})
+		for resource in source_caps:
+			if destination_caps.has(resource) and str(resource) != "solid_propellant":
+				resource_selector.add_item(str(resource).replace("_", " ").to_upper())
+				resource_selector.set_item_metadata(resource_selector.item_count - 1, str(resource))
+		var connected := source_vehicle_value == destination_vehicle_value or _are_docked(source_vehicle_value.vehicle_name, destination_vehicle_value.vehicle_name)
+		transfer_button.disabled = not connected or resource_selector.item_count == 0
+		status.text = "Tanks must belong to the same spacecraft or docked spacecraft. Solid motor propellant cannot be transferred." if not connected else "Select a shared resource type and amount."
+	var refresh := func() -> void:
+		refresh_tanks.call(source_vehicle, source_tank)
+		refresh_tanks.call(destination_vehicle, destination_tank)
+		refresh_resources.call()
+	source_vehicle.item_selected.connect(func(_index: int): refresh.call())
+	destination_vehicle.item_selected.connect(func(_index: int): refresh.call())
+	source_tank.item_selected.connect(func(_index: int): refresh_resources.call())
+	destination_tank.item_selected.connect(func(_index: int): refresh_resources.call())
+	transfer_button.pressed.connect(func():
+		if source_tank.item_count == 0 or destination_tank.item_count == 0 or resource_selector.item_count == 0:
+			return
+		var source_name := source_vehicle.get_item_text(source_vehicle.selected)
+		var destination_name := destination_vehicle.get_item_text(destination_vehicle.selected)
+		var amount := _transfer_between_tanks(source_name, str(source_tank.get_item_metadata(source_tank.selected)), destination_name, str(destination_tank.get_item_metadata(destination_tank.selected)), str(resource_selector.get_item_metadata(resource_selector.selected)), amount_input.value)
+		status.text = "Transferred %.3f units." % amount if amount > 0.0 else "No transfer possible. Check supply, transfer valves and tank capacity."
+		refresh_resources.call()
+	)
+	refresh.call()
+	window.popup_centered()
+
+func _sync_external_module_fuel(module: SimulationView, inventory_owner: SimulationView) -> void:
+	if module == null or inventory_owner == null or not module.resource_inventory_external:
+		return
+	for stage_index_value in range(module.stage_fuel_remaining.size()):
+		var tank_indices: Array[int] = []
+		var capacity_total := 0.0
+		for index in range(inventory_owner.resource_tanks.size()):
+			var tank: Dictionary = inventory_owner.resource_tanks[index]
+			if str(tank.get("module_id", "")) != module.vehicle_name or int(tank.get("stage_index", -1)) != stage_index_value:
+				continue
+			var capacity := float(tank.get("resource_capacities", {}).get("liquid_propellant", 0.0))
+			if capacity > 0.0:
+				tank_indices.append(index)
+				capacity_total += capacity
+		if capacity_total <= 0.0:
+			continue
+		var desired := clampf(float(module.stage_fuel_remaining[stage_index_value]), 0.0, capacity_total)
+		for index in tank_indices:
+			var tank: Dictionary = inventory_owner.resource_tanks[index]
+			var resources: Dictionary = tank.get("resources", {}).duplicate(true)
+			var capacity := float(tank.get("resource_capacities", {}).get("liquid_propellant", 0.0))
+			resources["liquid_propellant"] = desired * capacity / capacity_total
+			tank["resources"] = resources
+			inventory_owner.resource_tanks[index] = tank
+
 func _transfer_fuel(from_name: String, to_name: String) -> float:
 	if not _are_docked(from_name, to_name):
 		return 0.0
 	var donor := _find_vehicle_by_name(from_name)
 	var recipient := _find_vehicle_by_name(to_name)
-	if donor == null or recipient == null or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel:
+	if donor == null or recipient == null:
 		return 0.0
-	var available_space := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
-	var amount := minf(donor.total_propellant_remaining(), available_space)
-	if amount <= 0.0:
-		return 0.0
-	var removed := donor.remove_propellant(amount)
-	var added := recipient.add_propellant(removed)
-	if added < removed:
-		donor.add_propellant(removed - added)
-	amount = added
-	_update_docked_masses()
-	_sync_docked_vehicles()
-	return amount
+	var transferred := 0.0
+	var donor_owner := _resource_inventory_owner(donor)
+	var recipient_owner := _resource_inventory_owner(recipient)
+	if donor_owner != null and donor_owner == recipient_owner and (donor.resource_inventory_external or recipient.resource_inventory_external):
+		_sync_external_module_fuel(donor, donor_owner)
+		_sync_external_module_fuel(recipient, recipient_owner)
+		if not recipient.resource_inventory_external:
+			recipient._reconcile_legacy_fuel_inventory()
+		var available := 0.0
+		for value in donor.stage_fuel_remaining:
+			available += maxf(0.0, float(value))
+		var recipient_remaining := 0.0
+		for value in recipient.stage_fuel_remaining:
+			recipient_remaining += maxf(0.0, float(value))
+		var room := maxf(0.0, recipient.total_propellant_capacity() - recipient_remaining)
+		var remaining := minf(available, room)
+		for source_index in range(donor_owner.resource_tanks.size()):
+			var source: Dictionary = donor_owner.resource_tanks[source_index]
+			if str(source.get("module_id", "")) != donor.vehicle_name:
+				continue
+			for destination_index in range(donor_owner.resource_tanks.size()):
+				var destination: Dictionary = donor_owner.resource_tanks[destination_index]
+				if str(destination.get("module_id", "")) != recipient.vehicle_name:
+					continue
+				var moved := ResourceNetwork.transfer_between_tanks(source, destination, "liquid_propellant", remaining, true)
+				donor_owner.resource_tanks[source_index] = source
+				donor_owner.resource_tanks[destination_index] = destination
+				transferred += moved
+				remaining -= moved
+				if remaining <= 0.000001:
+					break
+			if remaining <= 0.000001:
+				break
+		donor_owner._sync_legacy_fuel_from_tanks()
+		_sync_docked_vehicles()
+	else:
+		if not donor.infinite_weightless_fuel and not recipient.infinite_weightless_fuel:
+			var available_space := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
+			var amount := minf(donor.total_propellant_remaining(), available_space)
+			if amount > 0.0:
+				var removed := donor.remove_propellant(amount)
+				var added := recipient.add_propellant(removed)
+				if added < removed:
+					donor.add_propellant(removed - added)
+				transferred += added
+	
+	for resource in ["xenon", "electricity"]:
+		for source_index in range(donor.resource_tanks.size()):
+			var source: Dictionary = donor.resource_tanks[source_index]
+			if float(source.get("resources", {}).get(resource, 0.0)) <= 0.0:
+				continue
+			for destination_index in range(recipient.resource_tanks.size()):
+				var destination: Dictionary = recipient.resource_tanks[destination_index]
+				if float(destination.get("resource_capacities", {}).get(resource, 0.0)) <= float(destination.get("resources", {}).get(resource, 0.0)):
+					continue
+				var moved := ResourceNetwork.transfer_between_tanks(source, destination, resource, INF, true)
+				donor.resource_tanks[source_index] = source
+				recipient.resource_tanks[destination_index] = destination
+				transferred += moved
+				break
+	if transferred > 0.0:
+		donor._sync_legacy_fuel_from_tanks()
+		recipient._sync_legacy_fuel_from_tanks()
+		_sync_docked_vehicles()
+		_update_docked_masses()
+	return transferred
 
 func _build_flight_hud() -> void:
 	mode = "flight"
@@ -2553,10 +3164,65 @@ func _build_flight_hud() -> void:
 	vehicle_selector.item_selected.connect(_switch_vehicle)
 	right.add_child(vehicle_selector)
 	_refresh_vehicle_selector()
+	var stage_manager_heading := Label.new()
+	stage_manager_heading.text = "STAGE MANAGER"
+	stage_manager_heading.add_theme_color_override("font_color", Color(0.45, 0.78, 1))
+	right.add_child(stage_manager_heading)
+	stage_manager_picker = OptionButton.new()
+	stage_manager_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stage_manager_picker.item_selected.connect(func(index: int):
+		if is_instance_valid(sim):
+			var previous_index: int = int(sim.action_stage_index)
+			sim.select_action_stage(index)
+			if index < previous_index:
+				_rearm_fleet_action_stage()
+			for module in fleet_sims:
+				if _resource_inventory_owner(module) == sim:
+					module.action_stage_index = index
+			_refresh_stage_manager()
+	)
+	right.add_child(stage_manager_picker)
+	stage_manager_status = Label.new()
+	stage_manager_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	right.add_child(stage_manager_status)
+	var stage_manager_actions := HBoxContainer.new()
+	right.add_child(stage_manager_actions)
+	var execute_stage_button := Button.new()
+	execute_stage_button.text = "EXECUTE"
+	execute_stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	execute_stage_button.pressed.connect(func():
+		if is_instance_valid(sim):
+			_execute_fleet_staging_stage()
+			_refresh_stage_manager()
+	)
+	stage_manager_actions.add_child(execute_stage_button)
+	var skip_stage_button := Button.new()
+	skip_stage_button.text = "SKIP"
+	skip_stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skip_stage_button.pressed.connect(func():
+		if is_instance_valid(sim):
+			sim.select_action_stage(sim.action_stage_index + 1)
+			for module in fleet_sims:
+				if _resource_inventory_owner(module) == sim:
+					module.action_stage_index = sim.action_stage_index
+			_refresh_stage_manager()
+	)
+	stage_manager_actions.add_child(skip_stage_button)
+	var rearm_stage_button := Button.new()
+	rearm_stage_button.text = "RE-ARM"
+	rearm_stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rearm_stage_button.pressed.connect(func():
+		if is_instance_valid(sim):
+			_rearm_fleet_action_stage()
+			_refresh_stage_manager()
+	)
+	stage_manager_actions.add_child(rearm_stage_button)
+	_refresh_stage_manager()
 	_add_button(right, "TOGGLE FULL SIMULATION", _set_selected_vehicle_full_simulation)
 	_add_button(right, "BUILD / LAUNCH VEHICLE", _show_new_vehicle_dialog)
 	_add_button(right, "FLEET MANAGER", _show_fleet_management_panel)
 	_add_button(right, "DOCKING & FUEL", _show_docking_panel)
+	_add_button(right, "INDIVIDUAL TANK TRANSFER", _show_tank_transfer_panel)
 	telescope_button = Button.new()
 	telescope_button.text = "ACTIVATE TELESCOPE  [T]"
 	telescope_button.disabled = true
@@ -2593,7 +3259,7 @@ func _build_flight_hud() -> void:
 	bottom.offset_top = -58
 	bottom.offset_bottom = -8
 	bottom.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bottom.text = "W ENGINE ON/OFF     S CUTOFF     X STAGE     Q / E GIMBAL     A / D ROTATE\nH GUIDANCE     T TELESCOPE ON/OFF     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     SPACE PAUSE     +/- WARP     J FAST FORWARD     F5 SAVE     F9 LOAD  •  REMAP IN SETTINGS"
+	bottom.text = "W ENGINE ON/OFF     S CUTOFF     SPACE NEXT STAGE     X SEPARATE MODULE     ARROWS RCS TRANSLATION     A / D RCS ROTATION\nESC PAUSE     Q / E GIMBAL     H GUIDANCE     T TELESCOPE     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     +/- WARP     J FAST FORWARD     F5 SAVE     F9 LOAD"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
 	hud_root.add_child(bottom)
@@ -3060,7 +3726,7 @@ func _show_flight_computer() -> void:
 	planner.position = Vector2i(maxi(20, screen_size.x - planner.size.x - 24), 40)
 	planner.popup()
 
-func _show_docking_panel() -> void:
+func _show_docking_panel(selected_port_uid: String = "") -> void:
 	var window := Window.new()
 	window.title = "DOCKING AND FUEL TRANSFER"
 	window.size = Vector2i(500, 580)
@@ -3160,21 +3826,43 @@ func _show_docking_panel() -> void:
 			undock_button.disabled = true
 			transfer_button.disabled = true
 			return
-		var separation: float = sim.rocket_position.distance_to(target.rocket_position)
+		var own_port: Dictionary = sim.docking_port_world_state(selected_port_uid)
+		var target_port: Dictionary = target.docking_port_world_state()
+		var separation := INF
+		var ports_aligned := false
+		if not own_port.is_empty() and not target_port.is_empty():
+			separation = Vector2(own_port.position).distance_to(Vector2(target_port.position))
+			ports_aligned = Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
 		var relative_speed: float = (sim.velocity - target.velocity).length()
 		var docked := _are_docked(parent_name, target_name)
+		if docked and not selected_port_uid.is_empty():
+			docked = false
+			for link in docking_links:
+				if ((str(link.get("parent_name", "")) == parent_name and str(link.get("child_name", "")) == target_name) or (str(link.get("parent_name", "")) == target_name and str(link.get("child_name", "")) == parent_name)) and selected_port_uid in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
+					docked = true
+					break
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
 		var free_flying: bool = not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
-		var available_to_dock: bool = not docked and free_flying and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
-		var available_to_assist: bool = not docked and free_flying and separation <= DOCKING_ASSIST_MAX_RANGE
+		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs_installed() and target.has_rcs_installed()
+		var rcs_assist_ready: bool = sim.has_rcs() and target.has_rcs()
+		var available_to_dock: bool = not docked and free_flying and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
+		var available_to_assist: bool = not docked and free_flying and hardware_ready and rcs_assist_ready and separation <= DOCKING_ASSIST_MAX_RANGE
 		if docked:
 			status.text = "DOCKED  •  %s\nCombined mass is included in the parent spacecraft's flight dynamics." % target_name
+		elif not sim.has_docking_port() or not target.has_docking_port():
+			status.text = "DOCKING PORTS REQUIRED\nBoth spacecraft need a docking port. Only matching ports can connect."
+		elif not sim.has_rcs_installed() or not target.has_rcs_installed():
+			status.text = "RCS REQUIRED\nBoth spacecraft need RCS thruster hardware."
+		elif not rcs_assist_ready:
+			status.text = "RCS PROPELLANT EMPTY\nDocking can still be completed manually, but rendezvous assist is unavailable."
 		elif available_to_dock:
-			status.text = "DOCKING CONDITIONS MET\nRange: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
+			status.text = "DOCKING CONDITIONS MET\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		elif assist_active:
-			status.text = "RENDEZVOUS ASSIST ACTIVE\nRange: %.1f m  •  Relative speed: %.2f m/s\nGuidance is matching velocity and closing at up to %.1f m/s." % [separation, relative_speed, DOCKING_ASSIST_MAX_CLOSING_SPEED]
+			status.text = "RENDEZVOUS ASSIST ACTIVE\nPort range: %.1f m  •  Relative speed: %.2f m/s\nRCS is matching velocity and closing at up to %.1f m/s." % [separation, relative_speed, DOCKING_ASSIST_MAX_CLOSING_SPEED]
+		elif not ports_aligned:
+			status.text = "ALIGN DOCKING PORTS\nTheir port faces must point towards each other.\nPort range: %.1f m  •  Relative speed: %.2f m/s" % [separation, relative_speed]
 		else:
-			status.text = "Range: %.1f m / %.0f m\nRelative speed: %.2f / %.2f m/s\nRendezvous assist works within %.0f km." % [separation, DOCKING_CAPTURE_DISTANCE, relative_speed, DOCKING_CAPTURE_SPEED, DOCKING_ASSIST_MAX_RANGE / 1000.0]
+			status.text = "Port range: %.1f m / %.0f m\nRelative speed: %.2f / %.2f m/s\nRCS rendezvous assist works within %.0f km." % [separation, DOCKING_CAPTURE_DISTANCE, relative_speed, DOCKING_CAPTURE_SPEED, DOCKING_ASSIST_MAX_RANGE / 1000.0]
 		dock_button.disabled = not available_to_dock
 		assist_button.disabled = not available_to_assist and not assist_active
 		assist_button.text = "STOP RENDEZVOUS ASSIST" if assist_active else "START RENDEZVOUS ASSIST"
@@ -3208,7 +3896,7 @@ func _show_docking_panel() -> void:
 			refresh_panel.call()
 			return
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
-		if _dock_vehicle(target_name):
+		if _dock_vehicle(target_name, selected_port_uid):
 			fuel_status.text = "Docking complete."
 		refresh_panel.call()
 	)
@@ -3228,7 +3916,7 @@ func _show_docking_panel() -> void:
 			refresh_panel.call()
 			return
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
-		if _undock_vehicle(target_name):
+		if _undock_vehicle(target_name, selected_port_uid):
 			fuel_status.text = "Spacecraft undocked."
 		refresh_panel.call()
 	)

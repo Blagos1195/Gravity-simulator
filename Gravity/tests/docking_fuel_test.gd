@@ -2,12 +2,17 @@ extends SceneTree
 
 const Main = preload("res://scripts/main.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
 	root.add_child(main)
-	main.rocket_design = RocketDesign.create_default()
+	var docking_design := RocketDesign.create_default()
+	var docking_stage := RocketAssembly.add_component(docking_design.stages[0], "rcs_thruster_block")
+	docking_stage = RocketAssembly.add_component(docking_stage, "standard_docking_port")
+	docking_design["stages"][0] = docking_stage
+	main.rocket_design = docking_design
 	main._start_flight()
 	main._add_new_vehicle()
 	main._add_new_vehicle()
@@ -18,6 +23,8 @@ func _initialize() -> void:
 	parent.landed = false
 	child.landed = false
 	second_child.landed = false
+	child.rotation_angle = PI
+	second_child.rotation_angle = PI
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
 	parent.velocity = Vector2(12.0, 0.0)
@@ -27,12 +34,43 @@ func _initialize() -> void:
 	main._apply_docking_assists(1.0)
 	assert(parent.velocity.x < 12.0 and parent.velocity.x > 0.0, "Rendezvous assist did not brake relative closing speed")
 	parent.velocity = Vector2.ZERO
+	var expected_assist_delta_v := minf(0.15, 1800.0 / parent._current_vehicle_mass())
+	var rcs_fuel_before_assist := parent.rcs_propellant_remaining
 	main._apply_docking_assists(1.0)
-	assert(is_equal_approx(parent.velocity.x, 0.15), "Rendezvous assist did not accelerate towards its target within its thrust limit")
+	assert(is_equal_approx(parent.velocity.x, expected_assist_delta_v), "Rendezvous assist did not use the available RCS thrust")
+	assert(parent.rcs_propellant_remaining < rcs_fuel_before_assist, "Rendezvous assist did not consume RCS propellant")
 	main.docking_assists.clear()
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
 	parent.velocity = Vector2(0.0, 1000.0)
+	child.velocity = Vector2(0.0, 1003.0)
+	var child_stage_with_port: Dictionary = child.rocket_stages[0].duplicate(true)
+	var port_component_index := -1
+	for index in range(child_stage_with_port.components.size()):
+		if str(child_stage_with_port.components[index].get("kind", "")) == "docking_port":
+			port_component_index = index
+	assert(port_component_index >= 0)
+	var rcs_component_index := -1
+	for index in range(child_stage_with_port.components.size()):
+		if str(child_stage_with_port.components[index].get("kind", "")) == "rcs":
+			rcs_component_index = index
+	assert(rcs_component_index >= 0)
+	child.rocket_stages[0] = RocketAssembly.remove_component(child_stage_with_port, rcs_component_index)
+	assert(not main._dock_vehicle(child.vehicle_name), "A spacecraft without RCS hardware connected")
+	child.rocket_stages[0] = child_stage_with_port
+	child.rocket_stages[0] = RocketAssembly.remove_component(child_stage_with_port, port_component_index)
+	assert(not main._dock_vehicle(child.vehicle_name), "A spacecraft without a docking port connected")
+	child.rocket_stages[0] = child_stage_with_port
+	child.rotation_angle = 0.0
+	assert(not main._dock_vehicle(child.vehicle_name), "Misaligned docking ports connected")
+	child.rotation_angle = PI
+	child.rcs_propellant_remaining = 0.0
+	assert(not child.has_rcs() and child.has_rcs_installed())
+	child.velocity = Vector2(0.0, 1001.0)
+	assert(main._dock_vehicle(child.vehicle_name), "An RCS-equipped spacecraft could not dock manually with empty propellant")
+	assert(main._undock_vehicle(child.vehicle_name))
+	child.rotation_angle = PI
+	child.rcs_propellant_remaining = child._remaining_rcs_propellant_capacity()
 	child.velocity = Vector2(0.0, 1003.0)
 	assert(not main._dock_vehicle(child.vehicle_name))
 	child.velocity = Vector2(0.0, 1001.0)
@@ -41,20 +79,26 @@ func _initialize() -> void:
 	assert(main.docking_assists.is_empty(), "Docking did not stop rendezvous assist")
 	assert(not child.input_enabled)
 	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass()))
-	second_child.rocket_position = parent.rocket_position + Vector2(-25.0, 0.0)
+	parent.rocket_stages[0] = RocketAssembly.add_component(parent.rocket_stages[0], "standard_docking_port")
+	var second_parent_port: Dictionary = parent.docking_port_world_states()[1]
+	var second_child_port: Dictionary = second_child.docking_port_world_state()
+	second_child.rocket_position = Vector2(second_parent_port.position) - (Vector2(second_child_port.position) - second_child.rocket_position)
 	second_child.velocity = Vector2(0.0, 1001.0)
 	assert(main._dock_vehicle(second_child.vehicle_name))
 	assert(main.docking_links.size() == 2)
 	assert(not second_child.input_enabled)
-	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass() + second_child._current_vehicle_mass()))
+	var expected_docked_mass := child._current_vehicle_mass() + second_child._current_vehicle_mass()
+	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
 	assert(main._are_docked("Orbital Tug", child.vehicle_name))
 	var parent_capacity := float(parent._active_stage_data().get("fuel_capacity", 0.0))
+	parent.rcs_propellant_remaining = parent._remaining_rcs_propellant_capacity()
 	parent.fuel = parent_capacity - 10000.0
 	parent.stage_fuel_remaining[0] = parent.fuel
 	child.fuel = 0.0
 	child.stage_fuel_remaining[0] = 0.0
 	child.stage_fuel_remaining[1] = 10000.0
+	main._sync_external_module_fuel(child, parent)
 	main._update_docked_masses()
 	var combined_mass_before := parent._current_vehicle_mass()
 	var transferred := main._transfer_fuel(child.vehicle_name, parent.vehicle_name)
@@ -63,6 +107,13 @@ func _initialize() -> void:
 	assert(is_zero_approx(child.stage_fuel_remaining[1]))
 	assert(is_zero_approx(child.total_propellant_remaining()))
 	assert(is_equal_approx(parent._current_vehicle_mass(), combined_mass_before))
+	var parent_rcs_capacity := parent._remaining_rcs_propellant_capacity()
+	assert(is_equal_approx(parent.rcs_propellant_remaining, parent_rcs_capacity))
+	var combined_mass_before_rcs_transfer := parent._current_vehicle_mass()
+	var rcs_transferred := main._transfer_fuel(child.vehicle_name, parent.vehicle_name)
+	assert(is_zero_approx(rcs_transferred))
+	assert(is_equal_approx(parent.rcs_propellant_remaining, parent_rcs_capacity))
+	assert(is_equal_approx(parent._current_vehicle_mass(), combined_mass_before_rcs_transfer))
 	main.save_slot = 8
 	main._save_game(false)
 	var save_path := "user://saves/slot_08.json"
@@ -77,6 +128,7 @@ func _initialize() -> void:
 	assert(not loaded_second_child.input_enabled)
 	assert(is_equal_approx(loaded_parent.docked_mass, loaded_child._current_vehicle_mass() + loaded_second_child._current_vehicle_mass()))
 	assert(is_zero_approx(loaded_child.stage_fuel_remaining[1]))
+	assert(is_equal_approx(loaded_parent.rcs_propellant_remaining, parent_rcs_capacity))
 	assert(is_equal_approx(loaded_parent.stage_fuel_remaining[0], float(loaded_parent._active_stage_data().get("fuel_capacity", 0.0))))
 	assert(main._undock_vehicle(loaded_child.vehicle_name))
 	assert(main._undock_vehicle(loaded_second_child.vehicle_name))

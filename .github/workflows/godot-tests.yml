@@ -28,6 +28,11 @@ jobs:
           include-templates: false
       - name: Import and parse project
         run: |
+          output="$(godot --headless --path Gravity --script res://tests/compile_simulation_view.gd --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
+            exit 1
+          fi
           output="$(godot --headless --path Gravity --editor --quit 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
@@ -51,9 +56,12 @@ jobs:
           if echo "$changed_files" | grep -Eq 'rocket_design|content_catalog'; then
             run_check rocket_design_test
           fi
-          if echo "$changed_files" | grep -Eq 'rocket_assembly|rocket_builder|main.gd|content_catalog'; then
+          if echo "$changed_files" | grep -Eq 'rocket_assembly|rocket_builder|main.gd|content_catalog|resource_network|staging_system'; then
             run_check rocket_assembly_test
             run_check rocket_builder_test
+          fi
+          if echo "$changed_files" | grep -Eq 'resource_network|staging_system|rocket_assembly|rocket_builder'; then
+            run_check spacecraft_systems_test
           fi
           if echo "$changed_files" | grep -Eq 'main.gd'; then
             run_check rocket_builder_ui_test
@@ -111,6 +119,7 @@ jobs:
           run_check rocket_design_test
           run_check rocket_assembly_test
           run_check rocket_builder_test
+          run_check spacecraft_systems_test
           run_check rocket_builder_ui_test
           run_check booster_physics_test
           run_check rocket_visual_scale_test

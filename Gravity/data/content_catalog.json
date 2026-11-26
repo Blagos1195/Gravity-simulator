@@ -1468,6 +1468,22 @@
             0.48,
             0.65
           ]
+        },
+        {
+          "id": "xenon_tank",
+          "label": "Xenon propellant tank",
+          "dry_mass": 120,
+          "fuel_capacity": 0,
+          "resource_capacities": {
+            "xenon": 500
+          },
+          "length_m": 2.2,
+          "collision_radius_m": 0.65,
+          "color_rgb": [
+            0.42,
+            0.58,
+            0.78
+          ]
         }
       ],
       "engines": [
@@ -1530,6 +1546,42 @@
             0.68,
             0.73
           ]
+        },
+        {
+          "id": "ion_engine",
+          "label": "Electric ion engine",
+          "dry_mass": 250,
+          "thrust": 1,
+          "vacuum_thrust": 1,
+          "flow": 0.000034,
+          "fuel_type": "xenon",
+          "electric_draw_w": 25000,
+          "length_m": 2.8,
+          "collision_radius_m": 0.8,
+          "color_rgb": [
+            0.45,
+            0.72,
+            0.9
+          ]
+        },
+        {
+          "id": "solid_fuel_motor",
+          "label": "Solid rocket motor",
+          "dry_mass": 900,
+          "thrust": 800000,
+          "vacuum_thrust": 900000,
+          "flow": 260,
+          "fuel_type": "solid_propellant",
+          "solid_propellant_capacity": 12000,
+          "solid_motor": true,
+          "ignited": false,
+          "length_m": 5.5,
+          "collision_radius_m": 1.5,
+          "color_rgb": [
+            0.62,
+            0.48,
+            0.36
+          ]
         }
       ],
       "decouplers": [
@@ -1581,6 +1633,68 @@
             0.78,
             0.82,
             0.88
+          ]
+        }
+      ],
+      "rcs": [
+        {
+          "id": "rcs_thruster_block",
+          "label": "RCS thruster block",
+          "dry_mass": 180,
+          "rcs_propellant_capacity": 250,
+          "rcs_thrust": 1800,
+          "rcs_flow": 0.83,
+          "rcs_torque": 1800,
+          "length_m": 1.8,
+          "collision_radius_m": 0.65,
+          "color_rgb": [
+            0.72,
+            0.76,
+            0.82
+          ]
+        }
+      ],
+      "docking_ports": [
+        {
+          "id": "standard_docking_port",
+          "label": "Standard docking port",
+          "dry_mass": 220,
+          "length_m": 1.4,
+          "collision_radius_m": 0.85,
+          "port_facing": 1,
+          "color_rgb": [
+            0.78,
+            0.72,
+            0.48
+          ]
+        }
+      ],
+      "power": [
+        {
+          "id": "battery_pack",
+          "label": "Battery pack",
+          "dry_mass": 300,
+          "electric_capacity": 270000000,
+          "length_m": 2.2,
+          "collision_radius_m": 0.7,
+          "color_rgb": [
+            0.36,
+            0.62,
+            0.45
+          ]
+        },
+        {
+          "id": "solar_array",
+          "label": "Deployable solar array",
+          "dry_mass": 180,
+          "power_generation_w": 5000,
+          "deployable": true,
+          "length_m": 4,
+          "collision_radius_m": 0.15,
+          "color_rgb": [
+            0.25,
+            0.42,
+            0.72
           ]
         }
       ]

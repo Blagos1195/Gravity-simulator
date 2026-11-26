@@ -1,10 +1,16 @@
 extends Control
 
 signal stage_separated(stage_data: Dictionary)
+signal staging_changed
+signal staging_stage_requested
+signal part_selected(part_uid: String)
 
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
+const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const RocketVisual = preload("res://scripts/rocket_visual.gd")
+const StagingSystem = preload("res://scripts/staging_system.gd")
+const ResourceNetwork = preload("res://scripts/resource_network.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 static var G := PlanetarySystem.G
 static var EARTH_MASS := PlanetarySystem.EARTH_MASS
@@ -50,9 +56,18 @@ var rocket_position: Vector2:
 		rocket_position_precise = PackedFloat64Array([value.x, value.y])
 var velocity := Vector2(EARTH_RADIUS * EARTH_ROTATION_RATE, 0.0)
 var rotation_angle := 0.0
+var angular_velocity := 0.0
 var fuel := 300000.0
+var rcs_propellant_remaining := 0.0
+var rcs_rotation_input := 0.0
 var infinite_fuel_stage_remaining := 300000.0
 var stage_index := 0
+var staging_plan: Array = []
+var action_stage_index := 0
+var staging_part_states: Dictionary = {}
+var resource_tanks: Array = []
+var resource_inventory_external := false
+var docked_rcs_propellant: Dictionary = {}
 var discarded_stage_mass := 0.0
 var discarded_propellant_mass := 0.0
 var throttle := 0.0
@@ -152,16 +167,406 @@ func set_rocket_design(design: Dictionary) -> void:
 	rocket_stages = (design.get("stages", []) as Array).duplicate(true)
 	if rocket_stages.is_empty():
 		rocket_stages = RocketDesign.create_default()["stages"].duplicate(true)
+	for stage_index_value in range(rocket_stages.size()):
+		var stage: Dictionary = RocketAssembly.ensure_stage_components(rocket_stages[stage_index_value])
+		var components: Array = stage.get("components", []).duplicate(true)
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			var part_uid := str(component.get("part_uid", ""))
+			if part_uid.is_empty():
+				part_uid = "part_%d_%d_%s" % [stage_index_value, component_index, str(component.get("id", "part"))]
+			if not bool(design.get("preserve_part_uids", false)) and not part_uid.begins_with(vehicle_name + "::"):
+				part_uid = vehicle_name + "::" + part_uid
+			component["part_uid"] = part_uid
+			components[component_index] = component
+		rocket_stages[stage_index_value] = RocketAssembly.compile_stage(stage, components)
 	payload_mass = float(design.get("payload_mass", 500.0))
 	payload_type = str(design.get("payload_type", "probe"))
 	var visual_data: Variant = design.get("payload_visual", {})
 	payload_visual = visual_data.duplicate(true) if visual_data is Dictionary else {}
 	stage_index = 0
+	action_stage_index = 0
 	stage_fuel_remaining.clear()
 	for stage in rocket_stages:
 		stage_fuel_remaining.append(RocketDesign.stage_total_fuel_capacity(stage))
 	fuel = stage_fuel_remaining[0]
+	resource_tanks.clear()
+	for physical_stage_index in range(rocket_stages.size()):
+		var tank_states := ResourceNetwork.create_tank_states(rocket_stages[physical_stage_index].get("components", []))
+		for tank_state in tank_states:
+			var resources: Dictionary = tank_state.get("resources", {}).duplicate(true)
+			resources.erase("rcs_propellant")
+			tank_state["resources"] = resources
+			var capacities: Dictionary = tank_state.get("resource_capacities", {}).duplicate(true)
+			capacities.erase("rcs_propellant")
+			tank_state["resource_capacities"] = capacities
+			tank_state["stage_index"] = physical_stage_index
+			tank_state["module_id"] = vehicle_name
+			if not resources.is_empty():
+				resource_tanks.append(tank_state)
+	rcs_propellant_remaining = _remaining_rcs_propellant_capacity()
 	infinite_fuel_stage_remaining = fuel
+	staging_part_states.clear()
+	staging_plan = StagingSystem.create_plan([{
+		"module_id": vehicle_name,
+		"stages": rocket_stages,
+		"staging_stage_count": int(design.get("staging_stage_count", 0))
+	}])
+	staging_changed.emit()
+
+func _sync_legacy_fuel_from_external_tanks(shared_tanks: Array) -> void:
+	for index in range(stage_fuel_remaining.size()):
+		var total := 0.0
+		for tank in shared_tanks:
+			if str(tank.get("module_id", "")) == vehicle_name and int(tank.get("stage_index", -1)) == index:
+				total += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
+		stage_fuel_remaining[index] = total
+	fuel = 0.0
+	rcs_propellant_remaining = 0.0
+
+func resource_amount(resource: String, supply_only: bool = true) -> float:
+	return ResourceNetwork.resource_total(resource_tanks, resource, supply_only)
+
+func _consume_resource(resource: String, amount: float, physical_stage_index: int = -1) -> float:
+	var remaining := maxf(0.0, amount)
+	var consumed := 0.0
+	for index in range(resource_tanks.size()):
+		var tank: Dictionary = resource_tanks[index]
+		if physical_stage_index >= 0 and int(tank.get("stage_index", -1)) != physical_stage_index:
+			continue
+		if not bool(tank.get("fuel_supply_enabled", true)):
+			continue
+		var resources: Dictionary = tank.get("resources", {}).duplicate(true)
+		var available := maxf(0.0, float(resources.get(resource, 0.0)))
+		var taken := minf(available, remaining)
+		if taken <= 0.0:
+			continue
+		resources[resource] = available - taken
+		tank["resources"] = resources
+		resource_tanks[index] = tank
+		consumed += taken
+		remaining -= taken
+		if remaining <= 0.0000001:
+			break
+	return consumed
+
+func _fill_resource_tanks(resource: String, amount: float, physical_stage_index: int = -1) -> float:
+	var remaining := maxf(0.0, amount)
+	var added := 0.0
+	for index in range(resource_tanks.size()):
+		var tank: Dictionary = resource_tanks[index]
+		if physical_stage_index >= 0 and int(tank.get("stage_index", -1)) != physical_stage_index:
+			continue
+		var resources: Dictionary = tank.get("resources", {}).duplicate(true)
+		var capacities: Dictionary = tank.get("resource_capacities", {})
+		var current := maxf(0.0, float(resources.get(resource, 0.0)))
+		var capacity := maxf(0.0, float(capacities.get(resource, 0.0)))
+		var transferred := minf(remaining, maxf(0.0, capacity - current))
+		if transferred <= 0.0:
+			continue
+		resources[resource] = current + transferred
+		tank["resources"] = resources
+		resource_tanks[index] = tank
+		added += transferred
+		remaining -= transferred
+		if remaining <= 0.0000001:
+			break
+	return added
+
+func transfer_between_tanks(source_part_id: String, destination_part_id: String, resource: String, amount: float, connected: bool = true) -> float:
+	if not connected:
+		return 0.0
+	for source_index in range(resource_tanks.size()):
+		if str(resource_tanks[source_index].get("part_uid", "")) != source_part_id:
+			continue
+		for destination_index in range(resource_tanks.size()):
+			if str(resource_tanks[destination_index].get("part_uid", "")) != destination_part_id:
+				continue
+			var source: Dictionary = resource_tanks[source_index].duplicate(true)
+			var destination: Dictionary = resource_tanks[destination_index].duplicate(true)
+			var transferred := ResourceNetwork.transfer_between_tanks(source, destination, resource, amount, true)
+			resource_tanks[source_index] = source
+			resource_tanks[destination_index] = destination
+			_sync_legacy_fuel_from_tanks()
+			return transferred
+	return 0.0
+
+func _sync_legacy_fuel_from_tanks() -> void:
+	for index in range(stage_fuel_remaining.size()):
+		var total := 0.0
+		for tank in resource_tanks:
+			if str(tank.get("module_id", vehicle_name)) == vehicle_name and int(tank.get("stage_index", -1)) == index:
+				total += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
+		stage_fuel_remaining[index] = total
+	var external_fuel := 0.0
+	for tank in resource_tanks:
+		if str(tank.get("module_id", vehicle_name)) != vehicle_name and bool(tank.get("fuel_supply_enabled", true)):
+			external_fuel += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
+	if stage_index < stage_fuel_remaining.size():
+		fuel = stage_fuel_remaining[stage_index]
+
+func _has_ignited_solid_motor() -> bool:
+	for index in range(stage_index, rocket_stages.size()):
+		for component in rocket_stages[index].get("components", []):
+			if bool(component.get("solid_motor", false)) and bool(component.get("ignited", false)):
+				return true
+	return false
+
+func _solar_generation_rate() -> float:
+	var generation := 0.0
+	for index in range(stage_index, rocket_stages.size()):
+		for component in rocket_stages[index].get("components", []):
+			if str(component.get("kind", "")) == "power" and bool(component.get("deployed", false)):
+				generation += maxf(0.0, float(component.get("power_generation_w", 0.0)))
+	for docked_visual in docked_visuals:
+		var design: Dictionary = docked_visual.get("design", {})
+		var stages: Array = design.get("stages", [])
+		for index in range(int(docked_visual.get("stage_index", 0)), stages.size()):
+			for component in stages[index].get("components", []):
+				if str(component.get("kind", "")) == "power" and bool(component.get("deployed", false)):
+					generation += maxf(0.0, float(component.get("power_generation_w", 0.0)))
+	var solar_distance := maxf(0.1 * PlanetarySystem.ASTRONOMICAL_UNIT, rocket_position.length())
+	return generation * pow(PlanetarySystem.ASTRONOMICAL_UNIT / solar_distance, 2.0)
+
+func _current_staging_part_states() -> Dictionary:
+	var states: Dictionary = {}
+	for stage in rocket_stages:
+		for component in stage.get("components", []):
+			if not component is Dictionary:
+				continue
+			var part_id := str(component.get("part_uid", ""))
+			if part_id.is_empty():
+				continue
+			states[part_id] = {
+				"engine_enabled": bool(component.get("engine_enabled", true)),
+				"ignited": bool(component.get("ignited", false)),
+				"fuel_supply_enabled": bool(component.get("fuel_supply_enabled", true)),
+				"rcs_enabled": bool(component.get("rcs_enabled", true)),
+				"deployed": bool(component.get("deployed", false)),
+				"attached": bool(component.get("attached", true)),
+				"can_repeat": bool(component.get("attached", true))
+			}
+	return states
+
+func _prune_staging_plan_to_attached_parts() -> void:
+	var attached_parts: Dictionary = {}
+	for stage_index_value in range(stage_index, rocket_stages.size()):
+		for component in rocket_stages[stage_index_value].get("components", []):
+			if component is Dictionary:
+				attached_parts[str(component.get("part_uid", ""))] = true
+	for plan_index in range(staging_plan.size()):
+		var stage: Dictionary = staging_plan[plan_index]
+		var actions: Array = []
+		for action in stage.get("actions", []):
+			if action is Dictionary and attached_parts.has(str(action.get("part_id", ""))):
+				actions.append(action)
+		stage["actions"] = actions
+		staging_plan[plan_index] = stage
+	while not staging_plan.is_empty() and (staging_plan.back().get("actions", []) as Array).is_empty():
+		staging_plan.pop_back()
+	action_stage_index = clampi(action_stage_index, 0, maxi(0, staging_plan.size() - 1))
+
+func _apply_staging_part_states() -> void:
+	for stage_index_value in range(rocket_stages.size()):
+		var stage: Dictionary = rocket_stages[stage_index_value]
+		var components: Array = stage.get("components", []).duplicate(true)
+		var changed := false
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			var part_id := str(component.get("part_uid", ""))
+			if not staging_part_states.has(part_id):
+				continue
+			var state: Dictionary = staging_part_states[part_id]
+			for key in ["engine_enabled", "ignited", "fuel_supply_enabled", "rcs_enabled", "deployed", "attached"]:
+				if state.has(key) and component.get(key, null) != state[key]:
+					component[key] = state[key]
+					changed = true
+			components[component_index] = component
+		if changed:
+			rocket_stages[stage_index_value] = RocketAssembly.compile_stage(stage, components)
+	for tank_index in range(resource_tanks.size()):
+		var tank: Dictionary = resource_tanks[tank_index]
+		var part_state: Dictionary = staging_part_states.get(str(tank.get("part_uid", "")), {})
+		if part_state.has("fuel_supply_enabled"):
+			tank["fuel_supply_enabled"] = bool(part_state.fuel_supply_enabled)
+		resource_tanks[tank_index] = tank
+
+func select_action_stage(requested_index: int) -> void:
+	if staging_plan.is_empty():
+		action_stage_index = 0
+		return
+	var selected := clampi(requested_index, 0, staging_plan.size() - 1)
+	if selected < action_stage_index:
+		staging_part_states = _current_staging_part_states()
+		for index in range(selected, staging_plan.size()):
+			staging_plan = StagingSystem.rearm_stage(staging_plan, index, staging_part_states)
+	action_stage_index = selected
+	staging_changed.emit()
+
+func rearm_action_stage() -> void:
+	staging_part_states = _current_staging_part_states()
+	if action_stage_index >= 0 and action_stage_index < staging_plan.size():
+		staging_plan = StagingSystem.rearm_stage(staging_plan, action_stage_index, staging_part_states)
+	staging_changed.emit()
+
+func set_component_state(part_uid: String, property: String, value: Variant) -> bool:
+	for stage_index_value in range(stage_index, rocket_stages.size()):
+		var stage: Dictionary = rocket_stages[stage_index_value]
+		var components: Array = stage.get("components", []).duplicate(true)
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			if str(component.get("part_uid", "")) != part_uid:
+				continue
+			component[property] = value
+			components[component_index] = component
+			rocket_stages[stage_index_value] = RocketAssembly.compile_stage(stage, components)
+			staging_part_states[part_uid] = _current_staging_part_states().get(part_uid, {})
+			if property == "fuel_supply_enabled":
+				for tank_index in range(resource_tanks.size()):
+					if str(resource_tanks[tank_index].get("part_uid", "")) == part_uid:
+						var tank: Dictionary = resource_tanks[tank_index]
+						tank["fuel_supply_enabled"] = bool(value)
+						resource_tanks[tank_index] = tank
+			_sync_legacy_fuel_from_tanks()
+			staging_changed.emit()
+			return true
+	return false
+
+func _part_at_screen_position(screen_position: Vector2) -> String:
+	if show_solar_system or camera_zoom <= 0.0000000002:
+		return ""
+	var object_scale := RocketVisual.camera_scale(camera_zoom, _visual_scale())
+	if object_scale < 0.025:
+		return ""
+	var local_click := (screen_position - get_viewport_rect().size * 0.5).rotated(-rotation_angle) / object_scale
+	var total_length := 0.0
+	var geometries: Array[Dictionary] = []
+	for index in range(stage_index, rocket_stages.size()):
+		var geometry := RocketAssembly.stage_geometry(rocket_stages[index])
+		geometries.append(geometry)
+		total_length += float(geometry.get("length", 1.0))
+	var cursor := -total_length * 0.5
+	for offset in range(geometries.size()):
+		var geometry: Dictionary = geometries[offset]
+		var stage_center_y := cursor + float(geometry.get("length", 1.0)) * 0.5
+		var stage: Dictionary = geometry.get("stage", {})
+		var components: Array = stage.get("components", [])
+		var positions: Dictionary = geometry.get("component_positions", {})
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			for position in positions.get(component_index, []):
+				var center: Vector2 = Vector2(position) + Vector2(0.0, stage_center_y)
+				var hit_radius := maxf(6.0 / object_scale, maxf(float(component.get("collision_radius_m", 0.5)), float(component.get("length_m", 1.0)) * 0.55))
+				if local_click.distance_to(center) <= hit_radius:
+					return str(component.get("part_uid", ""))
+		cursor += float(geometry.get("length", 1.0))
+	for docked_visual in docked_visuals:
+		var design: Dictionary = docked_visual.get("design", {})
+		var stages: Array = design.get("stages", [])
+		var attached_stage_index := int(docked_visual.get("stage_index", 0))
+		var attached_length := 0.0
+		var attached_geometries: Array[Dictionary] = []
+		for index in range(attached_stage_index, stages.size()):
+			var geometry := RocketAssembly.stage_geometry(stages[index])
+			attached_geometries.append(geometry)
+			attached_length += float(geometry.get("length", 1.0))
+		var attached_cursor := -attached_length * 0.5
+		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		for geometry in attached_geometries:
+			var stage: Dictionary = geometry.get("stage", {})
+			var stage_center_y := attached_cursor + float(geometry.get("length", 1.0)) * 0.5
+			var components: Array = stage.get("components", [])
+			var positions: Dictionary = geometry.get("component_positions", {})
+			for component_index in range(components.size()):
+				var component: Dictionary = components[component_index]
+				for position in positions.get(component_index, []):
+					var center: Vector2 = Vector2(position) + Vector2(0.0, stage_center_y) + attached_offset
+					var hit_radius := maxf(6.0 / object_scale, maxf(float(component.get("collision_radius_m", 0.5)), float(component.get("length_m", 1.0)) * 0.55))
+					if local_click.distance_to(center) <= hit_radius:
+						return str(component.get("part_uid", ""))
+			attached_cursor += float(geometry.get("length", 1.0))
+	return ""
+
+func execute_staging_actions(actions: Array) -> bool:
+	if actions.is_empty():
+		return false
+	staging_part_states = _current_staging_part_states()
+	var result := StagingSystem.execute_stage([{"actions": actions.duplicate(true)}], 0, staging_part_states)
+	if not bool(result.get("valid", false)):
+		return false
+	staging_part_states = result.part_states
+	_apply_staging_part_states()
+	var should_ignite := false
+	var should_cutoff := false
+	var should_separate := false
+	var module_release_index := -1
+	for action in actions:
+		if not action is Dictionary:
+			continue
+		match str(action.get("action", "")):
+			"activate_engine", "ignite_solid_motor":
+				should_ignite = true
+			"deactivate_engine":
+				should_cutoff = true
+			"separate":
+				if int(action.get("physical_stage_index", -1)) == stage_index:
+					should_separate = true
+			"undock_module":
+				module_release_index = int(action.get("physical_stage_index", -1))
+	if should_cutoff:
+		thrust_key_down = false
+	if should_ignite:
+		thrust_key_down = true
+	if should_separate:
+		_separate_stage()
+	elif module_release_index > stage_index:
+		_release_upper_module(module_release_index)
+	return true
+
+func activate_current_action_stage() -> bool:
+	if action_stage_index < 0 or action_stage_index >= staging_plan.size():
+		return false
+	staging_part_states = _current_staging_part_states()
+	var executed_stage: Dictionary = staging_plan[action_stage_index]
+	var actions: Array = executed_stage.get("actions", [])
+	if actions.is_empty():
+		return false
+	var result := StagingSystem.execute_stage(staging_plan, action_stage_index, staging_part_states)
+	if not bool(result.get("valid", false)):
+		return false
+	staging_plan = result.plan
+	staging_part_states = result.part_states
+	var should_ignite := false
+	var should_cutoff := false
+	var should_separate := false
+	var module_release_index := -1
+	for action in actions:
+		if not action is Dictionary or bool(action.get("completed", false)):
+			continue
+		match str(action.get("action", "")):
+			"activate_engine":
+				should_ignite = true
+			"deactivate_engine":
+				should_cutoff = true
+			"separate":
+				if int(action.get("physical_stage_index", -1)) == stage_index:
+					should_separate = true
+			"undock_module":
+				module_release_index = int(action.get("physical_stage_index", -1))
+	_apply_staging_part_states()
+	if should_cutoff:
+		thrust_key_down = false
+	if should_ignite:
+		thrust_key_down = true
+	if should_separate and stage_index < rocket_stages.size() - 1:
+		_separate_stage()
+		_prune_staging_plan_to_attached_parts()
+	elif module_release_index > stage_index and _release_upper_module(module_release_index):
+		_prune_staging_plan_to_attached_parts()
+	if action_stage_index + 1 < staging_plan.size():
+		action_stage_index += 1
+	staging_changed.emit()
+	return true
 
 func _active_stage_data() -> Dictionary:
 	var stage: Dictionary = rocket_stages[clampi(stage_index, 0, rocket_stages.size() - 1)].duplicate(true)
@@ -179,13 +584,17 @@ func _remaining_stack_mass() -> float:
 	for i in range(stage_index + 1, rocket_stages.size()):
 		var stage: Dictionary = rocket_stages[i]
 		mass += RocketDesign.stage_total_dry_mass(stage)
-		mass += stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(stage)
+		if not resource_inventory_external:
+			mass += stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(stage)
 	return mass
 
 func total_propellant_remaining() -> float:
 	var total := 0.0
 	for i in range(stage_index, rocket_stages.size()):
 		total += fuel if i == stage_index else (stage_fuel_remaining[i] if i < stage_fuel_remaining.size() else RocketDesign.stage_total_fuel_capacity(rocket_stages[i]))
+	for tank in resource_tanks:
+		if str(tank.get("module_id", vehicle_name)) != vehicle_name:
+			total += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
 	return total
 
 func total_propellant_capacity() -> float:
@@ -194,44 +603,377 @@ func total_propellant_capacity() -> float:
 		total += RocketDesign.stage_total_fuel_capacity(rocket_stages[i])
 	return total
 
+func _reconcile_legacy_fuel_inventory() -> void:
+	for stage_index_value in range(stage_fuel_remaining.size()):
+		var stage_tanks: Array[int] = []
+		var capacity_total := 0.0
+		for tank_index in range(resource_tanks.size()):
+			var tank: Dictionary = resource_tanks[tank_index]
+			if str(tank.get("module_id", vehicle_name)) != vehicle_name or int(tank.get("stage_index", -1)) != stage_index_value:
+				continue
+			var capacity := float(tank.get("resource_capacities", {}).get("liquid_propellant", 0.0))
+			if capacity > 0.0:
+				stage_tanks.append(tank_index)
+				capacity_total += capacity
+		if capacity_total <= 0.0:
+			continue
+		var desired := clampf(float(stage_fuel_remaining[stage_index_value]), 0.0, capacity_total)
+		var inventory_total := 0.0
+		for tank_index in stage_tanks:
+			inventory_total += float(resource_tanks[tank_index].get("resources", {}).get("liquid_propellant", 0.0))
+		if absf(inventory_total - desired) <= 0.001:
+			continue
+		for tank_index in stage_tanks:
+			var tank: Dictionary = resource_tanks[tank_index]
+			var resources: Dictionary = tank.get("resources", {}).duplicate(true)
+			var capacity := float(tank.get("resource_capacities", {}).get("liquid_propellant", 0.0))
+			resources["liquid_propellant"] = desired * capacity / capacity_total
+			tank["resources"] = resources
+			resource_tanks[tank_index] = tank
+
 func remove_propellant(amount: float) -> float:
+	_reconcile_legacy_fuel_inventory()
 	var remaining := maxf(0.0, amount)
 	var requested := remaining
-	for i in range(stage_index, rocket_stages.size()):
-		var available := fuel if i == stage_index else stage_fuel_remaining[i]
-		var taken := minf(available, remaining)
-		if i == stage_index:
-			fuel = maxf(0.0, fuel - taken)
-			stage_fuel_remaining[i] = fuel
-		else:
-			stage_fuel_remaining[i] = maxf(0.0, stage_fuel_remaining[i] - taken)
+	for index in range(stage_index, rocket_stages.size()):
+		var taken := _consume_resource("liquid_propellant", remaining)
 		remaining -= taken
 		if remaining <= 0.000001:
 			break
+	_sync_legacy_fuel_from_tanks()
 	return requested - remaining
 
 func add_propellant(amount: float) -> float:
+	_reconcile_legacy_fuel_inventory()
 	var remaining := maxf(0.0, amount)
 	var requested := remaining
-	for i in range(stage_index, rocket_stages.size()):
-		var capacity := RocketDesign.stage_total_fuel_capacity(rocket_stages[i])
-		var current := fuel if i == stage_index else stage_fuel_remaining[i]
-		var added := minf(maxf(0.0, capacity - current), remaining)
-		if i == stage_index:
-			fuel += added
-			stage_fuel_remaining[i] = fuel
-		else:
-			stage_fuel_remaining[i] += added
+	for index in range(stage_index, rocket_stages.size()):
+		var added := _fill_resource_tanks("liquid_propellant", remaining)
 		remaining -= added
 		if remaining <= 0.000001:
 			break
+	_sync_legacy_fuel_from_tanks()
 	return requested - remaining
+
+func _vehicle_mass_properties(active_fuel_amount: float = -1.0, active_rcs_fuel_amount: float = -1.0) -> Dictionary:
+	var stage_lengths: Array[float] = []
+	var total_length := 0.0
+	for index in range(stage_index, rocket_stages.size()):
+		var geometry: Dictionary = RocketAssembly.stage_geometry(rocket_stages[index])
+		var stage_length := float(geometry.get("length", 1.0))
+		stage_lengths.append(stage_length)
+		total_length += stage_length
+	var elements: Array[Dictionary] = []
+	var total_rcs_capacity := _own_rcs_propellant_capacity()
+	var rcs_fuel_amount := active_rcs_fuel_amount if active_rcs_fuel_amount >= 0.0 else maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
+	var rcs_fuel_fraction := clampf(rcs_fuel_amount / total_rcs_capacity, 0.0, 1.0) if total_rcs_capacity > 0.0 else 0.0
+	var cursor := -total_length * 0.5
+	for offset in range(stage_lengths.size()):
+		var index := stage_index + offset
+		var stage: Dictionary = rocket_stages[index]
+		var stage_length := stage_lengths[offset]
+		var stage_center_y := cursor + stage_length * 0.5
+		var stage_fuel := 0.0
+		if resource_inventory_external:
+			stage_fuel = 0.0
+		elif offset == 0:
+			stage_fuel = active_fuel_amount if active_fuel_amount >= 0.0 else (infinite_fuel_stage_remaining if infinite_weightless_fuel else fuel)
+		elif index < stage_fuel_remaining.size():
+			stage_fuel = stage_fuel_remaining[index]
+		else:
+			stage_fuel = RocketDesign.stage_total_fuel_capacity(stage)
+		elements.append_array(RocketAssembly.stage_mass_elements(stage, stage_fuel, stage_center_y, rcs_fuel_fraction))
+		cursor += stage_length
+	var payload_length := maxf(1.0, sqrt(maxf(1.0, payload_mass)) * 0.5)
+	var payload_radius := maxf(0.5, sqrt(maxf(1.0, payload_mass)) * 0.12)
+	var payload_position := Vector2(0.0, total_length * 0.5 + payload_length * 0.5)
+	elements.append({
+		"mass": payload_mass,
+		"position": payload_position,
+		"intrinsic_inertia": payload_mass * (payload_length * payload_length / 12.0 + payload_radius * payload_radius / 4.0)
+	})
+	var represented_docked_mass := 0.0
+	for docked_visual in docked_visuals:
+		var attached_mass := maxf(0.0, float(docked_visual.get("mass", 0.0)))
+		if attached_mass <= 0.0:
+			continue
+		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		var attached_center: Vector2 = Vector2(docked_visual.get("center_of_mass", Vector2.ZERO))
+		elements.append({
+			"mass": attached_mass,
+			"position": attached_offset + attached_center,
+			"intrinsic_inertia": maxf(0.0, float(docked_visual.get("moment_of_inertia", attached_mass * 25.0)))
+		})
+		represented_docked_mass += attached_mass
+	var unrepresented_docked_mass := maxf(0.0, docked_mass - represented_docked_mass)
+	if unrepresented_docked_mass > 0.0:
+		elements.append({
+			"mass": unrepresented_docked_mass,
+			"position": Vector2.ZERO,
+			"intrinsic_inertia": unrepresented_docked_mass * 25.0
+		})
+	var total_mass := 0.0
+	var weighted_position := Vector2.ZERO
+	for element in elements:
+		var mass := maxf(0.0, float(element.get("mass", 0.0)))
+		total_mass += mass
+		weighted_position += Vector2(element.get("position", Vector2.ZERO)) * mass
+	var center_of_mass := weighted_position / total_mass if total_mass > 0.0 else Vector2.ZERO
+	var moment_of_inertia := 0.0
+	for element in elements:
+		var mass := maxf(0.0, float(element.get("mass", 0.0)))
+		var offset: Vector2 = Vector2(element.get("position", Vector2.ZERO)) - center_of_mass
+		moment_of_inertia += float(element.get("intrinsic_inertia", 0.0)) + mass * offset.length_squared()
+	return {
+		"mass": total_mass,
+		"center_of_mass": center_of_mass,
+		"moment_of_inertia": maxf(1.0, moment_of_inertia)
+	}
+
+func _remaining_engine_elements(pressure_ratio: float, active_center_y: float) -> Array[Dictionary]:
+	var engines: Array[Dictionary] = RocketAssembly.stage_engine_elements(rocket_stages[stage_index], pressure_ratio, active_center_y)
+	for docked_visual in docked_visuals:
+		var design: Dictionary = docked_visual.get("design", {})
+		var stages: Array = design.get("stages", [])
+		var attached_stage_index := int(docked_visual.get("stage_index", 0))
+		if attached_stage_index < 0 or attached_stage_index >= stages.size():
+			continue
+		var total_length := 0.0
+		var geometries: Array[Dictionary] = []
+		for index in range(attached_stage_index, stages.size()):
+			var geometry := RocketAssembly.stage_geometry(stages[index])
+			geometries.append(geometry)
+			total_length += float(geometry.get("length", 1.0))
+		var child_active_center := -total_length * 0.5 + float(geometries[0].get("length", 1.0)) * 0.5
+		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		for engine in RocketAssembly.stage_engine_elements(stages[attached_stage_index], pressure_ratio, child_active_center):
+			var attached_engine: Dictionary = engine.duplicate(true)
+			attached_engine["position"] = Vector2(attached_engine.get("position", Vector2.ZERO)) + attached_offset
+			engines.append(attached_engine)
+	return engines
+
+func _engine_force_profile(center_of_mass: Vector2, pressure_ratio: float, thrust_scale: float = 1.0) -> Dictionary:
+	var total_length := 0.0
+	var active_geometry := RocketAssembly.stage_geometry(rocket_stages[stage_index])
+	for index in range(stage_index, rocket_stages.size()):
+		total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
+	var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
+	var force_total := Vector2.ZERO
+	var torque_total := 0.0
+	var engines := _remaining_engine_elements(pressure_ratio, active_center_y)
+	var resource_flows: Dictionary = {}
+	var electric_draw := 0.0
+	for engine in engines:
+		var fuel_type := str(engine.get("fuel_type", "liquid_propellant"))
+		if not (fuel_type == "liquid_propellant" and infinite_weightless_fuel) and resource_amount(fuel_type) <= 0.0000001:
+			continue
+		var engine_power := maxf(0.0, float(engine.get("electric_draw_w", 0.0)))
+		if engine_power > 0.0 and resource_amount("electricity") <= 0.0:
+			continue
+		resource_flows[fuel_type] = float(resource_flows.get(fuel_type, 0.0)) + float(engine.get("flow", 0.0))
+		electric_draw += engine_power
+		var engine_direction: Vector2 = Vector2(engine.get("direction", Vector2.UP))
+		if bool(engine.get("gimballed", false)):
+			engine_direction = engine_direction.rotated(gimbal_angle)
+		var engine_force := engine_direction.normalized() * float(engine.get("thrust", 0.0)) * thrust_scale
+		var engine_position: Vector2 = engine.get("position", Vector2.ZERO)
+		force_total += engine_force
+		torque_total += (engine_position - center_of_mass).cross(engine_force)
+	return {"force": force_total, "torque": torque_total, "resource_flows": resource_flows, "electric_draw_w": electric_draw}
+
+func _external_rcs_propellant_total() -> float:
+	var total := 0.0
+	for amount in docked_rcs_propellant.values():
+		total += maxf(0.0, float(amount))
+	return total
+
+func _consume_rcs_propellant(amount: float) -> float:
+	var remaining := maxf(0.0, amount)
+	var consumed := 0.0
+	var own_amount := maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
+	var own_used := minf(own_amount, remaining)
+	consumed += own_used
+	remaining -= own_used
+	for module_id in docked_rcs_propellant.keys():
+		if remaining <= 0.0000001:
+			break
+		var available := maxf(0.0, float(docked_rcs_propellant[module_id]))
+		var used := minf(available, remaining)
+		docked_rcs_propellant[module_id] = available - used
+		consumed += used
+		remaining -= used
+	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - consumed)
+	return consumed
+
+func _own_rcs_propellant_capacity() -> float:
+	var capacity := 0.0
+	for index in range(stage_index, rocket_stages.size()):
+		capacity += RocketDesign.stage_rcs_propellant_capacity(rocket_stages[index])
+	return capacity
+
+func _remaining_rcs_propellant_capacity() -> float:
+	var capacity := 0.0
+	for index in range(stage_index, rocket_stages.size()):
+		capacity += RocketDesign.stage_rcs_propellant_capacity(rocket_stages[index])
+	for docked_visual in docked_visuals:
+		var design: Dictionary = docked_visual.get("design", {})
+		var stages: Array = design.get("stages", [])
+		for index in range(int(docked_visual.get("stage_index", 0)), stages.size()):
+			capacity += RocketDesign.stage_rcs_propellant_capacity(stages[index])
+	return capacity
+
+func _remaining_rcs_system() -> Dictionary:
+	var system: Dictionary = {"thrust": 0.0, "flow": 0.0, "torque": 0.0}
+	for jet in _remaining_rcs_elements():
+		var force: Vector2 = Vector2(jet.get("direction", Vector2.UP)) * float(jet.get("thrust", 0.0))
+		system.thrust = float(system.thrust) + force.length()
+		system.flow = float(system.flow) + float(jet.get("flow", 0.0))
+		system.torque = float(system.torque) + Vector2(jet.get("position", Vector2.ZERO)).cross(force)
+	return system
+
+func _remaining_rcs_elements() -> Array[Dictionary]:
+	var elements: Array[Dictionary] = []
+	var total_length := 0.0
+	var geometries: Array[Dictionary] = []
+	for index in range(stage_index, rocket_stages.size()):
+		var geometry := RocketAssembly.stage_geometry(rocket_stages[index])
+		geometries.append(geometry)
+		total_length += float(geometry.get("length", 1.0))
+	var cursor := -total_length * 0.5
+	for geometry in geometries:
+		var stage: Dictionary = geometry.stage
+		var stage_length := float(geometry.get("length", 1.0))
+		elements.append_array(RocketAssembly.stage_rcs_elements(stage, cursor + stage_length * 0.5))
+		cursor += stage_length
+	for docked_visual in docked_visuals:
+		var design: Dictionary = docked_visual.get("design", {})
+		var stages: Array = design.get("stages", [])
+		var attached_stage_index := int(docked_visual.get("stage_index", 0))
+		var attached_length := 0.0
+		var attached_geometries: Array[Dictionary] = []
+		for index in range(attached_stage_index, stages.size()):
+			var geometry := RocketAssembly.stage_geometry(stages[index])
+			attached_geometries.append(geometry)
+			attached_length += float(geometry.get("length", 1.0))
+		var attached_cursor := -attached_length * 0.5
+		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		for geometry in attached_geometries:
+			var stage_length := float(geometry.get("length", 1.0))
+			for jet in RocketAssembly.stage_rcs_elements(geometry.stage, attached_cursor + stage_length * 0.5):
+				var attached_jet: Dictionary = jet.duplicate(true)
+				attached_jet["position"] = Vector2(attached_jet.get("position", Vector2.ZERO)) + attached_offset
+				elements.append(attached_jet)
+			attached_cursor += stage_length
+	return elements
+
+func _rcs_force_profile(translation_input: Vector2, rotation_input: float, center_of_mass: Vector2) -> Dictionary:
+	var force_total := Vector2.ZERO
+	var torque_total := 0.0
+	var flow_total := 0.0
+	var selected_jets := 0
+	var translation_direction := translation_input.normalized()
+	for jet in _remaining_rcs_elements():
+		var direction: Vector2 = Vector2(jet.get("direction", Vector2.UP)).normalized()
+		var force := direction * float(jet.get("thrust", 0.0))
+		var position: Vector2 = Vector2(jet.get("position", Vector2.ZERO))
+		var jet_torque := (position - center_of_mass).cross(force)
+		var selected_for_translation := translation_input.length_squared() > 0.000001 and direction.dot(translation_direction) > 0.65
+		var selected_for_rotation := absf(rotation_input) > 0.001 and jet_torque * rotation_input > 0.0
+		if not selected_for_translation and not selected_for_rotation:
+			continue
+		force_total += force
+		torque_total += jet_torque
+		flow_total += float(jet.get("flow", 0.0))
+		selected_jets += 1
+	return {"force": force_total, "torque": torque_total, "flow": flow_total, "jet_count": selected_jets}
+
+func has_rcs_installed() -> bool:
+	var system := _remaining_rcs_system()
+	return float(system.thrust) > 0.0 and float(system.flow) > 0.0
+
+func has_rcs() -> bool:
+	return has_rcs_installed() and rcs_propellant_remaining > 0.001
+
+func stage_has_rcs(stage: Dictionary) -> bool:
+	var configured := RocketAssembly.ensure_stage_components(stage)
+	return float(configured.get("rcs_thrust", 0.0)) > 0.0 and float(configured.get("rcs_flow", 0.0)) > 0.0
+
+func stage_separation_is_dockable_module() -> bool:
+	if stage_index >= rocket_stages.size() - 1:
+		return false
+	return not RocketAssembly.stage_docking_ports(rocket_stages[stage_index]).is_empty() and not RocketAssembly.stage_docking_ports(rocket_stages[stage_index + 1]).is_empty() and stage_has_rcs(rocket_stages[stage_index]) and stage_has_rcs(rocket_stages[stage_index + 1])
+
+func has_docking_port() -> bool:
+	for index in range(stage_index, rocket_stages.size()):
+		if not RocketAssembly.stage_docking_ports(rocket_stages[index]).is_empty():
+			return true
+	return false
+
+func docking_port_world_states() -> Array:
+	var result: Array = []
+	var total_length := 0.0
+	var geometries: Array[Dictionary] = []
+	for index in range(stage_index, rocket_stages.size()):
+		var geometry := RocketAssembly.stage_geometry(rocket_stages[index])
+		geometries.append(geometry)
+		total_length += float(geometry.get("length", 1.0))
+	var cursor := -total_length * 0.5
+	for geometry in geometries:
+		var stage_center_y := cursor + float(geometry.get("length", 1.0)) * 0.5
+		var stage: Dictionary = geometry.get("stage", {})
+		for port in RocketAssembly.stage_docking_ports(stage, stage_center_y):
+			var local_position: Vector2 = port.position
+			var local_normal: Vector2 = port.normal
+			result.append({
+				"position": rocket_position + local_position.rotated(rotation_angle),
+				"normal": local_normal.rotated(rotation_angle).normalized(),
+				"part_uid": str(port.get("part_uid", ""))
+			})
+		cursor += float(geometry.get("length", 1.0))
+	return result
+
+func docking_port_world_state(part_uid: String = "") -> Dictionary:
+	for port in docking_port_world_states():
+		if part_uid.is_empty() or str(port.get("part_uid", "")) == part_uid:
+			return port
+	return {}
+
+func apply_rcs_velocity_correction(velocity_correction: Vector2, delta: float) -> bool:
+	if not has_rcs() or delta <= 0.0:
+		return false
+	var mass_properties := _vehicle_mass_properties()
+	var mass := maxf(1.0, float(mass_properties.mass))
+	var local_request := velocity_correction.rotated(-rotation_angle)
+	if local_request.length_squared() <= 0.00000001:
+		return true
+	var profile := _rcs_force_profile(local_request, 0.0, Vector2(mass_properties.center_of_mass))
+	var force: Vector2 = Vector2(profile.force)
+	var flow := float(profile.flow)
+	if force.length_squared() <= 0.00000001 or flow <= 0.0 or force.normalized().dot(local_request.normalized()) < 0.8:
+		return false
+	var maximum_delta_v := force.length() / mass * delta
+	var requested_delta_v := minf(local_request.length(), maximum_delta_v)
+	var requested_fraction := clampf(requested_delta_v / maxf(0.000001, maximum_delta_v), 0.0, 1.0)
+	var requested_propellant := flow * delta * requested_fraction
+	var used := minf(rcs_propellant_remaining, requested_propellant)
+	if used <= 0.0:
+		return false
+	var applied_delta_v := maximum_delta_v * used / maxf(0.000001, flow * delta)
+	var world_impulse_direction := force.normalized().rotated(rotation_angle)
+	velocity += world_impulse_direction * applied_delta_v
+	_consume_rcs_propellant(used)
+	return true
 
 func _current_vehicle_mass(fuel_amount: float = -1.0) -> float:
 	var active := _active_stage_data()
 	var mass := float(active.get("dry_mass", 0.0)) + _remaining_stack_mass()
 	mass += fuel if fuel_amount < 0.0 else fuel_amount
-	mass += docked_mass
+	var attached_liquid_mass := 0.0
+	for tank in resource_tanks:
+		if str(tank.get("module_id", vehicle_name)) != vehicle_name:
+			attached_liquid_mass += maxf(0.0, float(tank.get("resources", {}).get("liquid_propellant", 0.0)))
+	var rcs_mass := 0.0 if resource_inventory_external else rcs_propellant_remaining
+	mass += docked_mass + rcs_mass + attached_liquid_mass + resource_amount("xenon", false) + resource_amount("solid_propellant", false)
 	return mass
 
 func _ready() -> void:
@@ -314,6 +1056,7 @@ func _physics_step(dt: float) -> void:
 			var surface_state := _surface_body_state(landed_body_name)
 			var normal := landed_surface_normal.normalized()
 			rotation_angle = normal.angle() - Vector2.UP.angle()
+			angular_velocity = 0.0
 			_set_rocket_position_relative_to_body(surface_state, normal * (float(surface_state.radius) + 5.0))
 			velocity = surface_state.velocity + Vector2(-normal.y, normal.x) * float(surface_state.radius) * float(surface_state.rotation_rate)
 			landed = false
@@ -335,28 +1078,78 @@ func _physics_step(dt: float) -> void:
 		thrust_key_down = false
 	var active := _active_stage_data()
 	var total_flow := float(active.get("flow", 0.0)) * float(active.get("engine_count", 1))
-	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0)
-	throttle = autopilot_throttle if not crashed and autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if not crashed and thrust_key_down and propellant_available else 0.0)
-	var fuel_used := minf(infinite_fuel_stage_remaining, total_flow * throttle * dt) if infinite_weightless_fuel and total_flow > 0.0 else (minf(fuel, total_flow * throttle * dt) if total_flow > 0.0 else 0.0)
+	var rcs_translation_input: Vector2 = Vector2.ZERO
+	if has_rcs() and input_enabled and get_viewport().gui_get_focus_owner() == null:
+		rcs_translation_input = Vector2(
+			float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT)),
+			float(Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_UP))
+		).limit_length(1.0)
+	var initial_rcs_mass_properties := _vehicle_mass_properties()
+	var rcs_profile := _rcs_force_profile(rcs_translation_input, rcs_rotation_input, Vector2(initial_rcs_mass_properties.center_of_mass))
+	var rcs_flow_rate := float(rcs_profile.flow)
+	var rcs_fuel_used := minf(resource_amount("rcs_propellant"), rcs_flow_rate * dt) if not crashed else 0.0
+	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0 or resource_amount("xenon") > 0.0 or resource_amount("solid_propellant") > 0.0)
+	var solid_motor_burning := _has_ignited_solid_motor() and resource_amount("solid_propellant") > 0.0
+	throttle = 1.0 if solid_motor_burning else (autopilot_throttle if not crashed and autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if not crashed and thrust_key_down and propellant_available else 0.0))
+	var available_liquid := resource_amount("liquid_propellant")
+	var fuel_used := minf(infinite_fuel_stage_remaining, total_flow * throttle * dt) if infinite_weightless_fuel and total_flow > 0.0 else (minf(available_liquid, total_flow * throttle * dt) if total_flow > 0.0 else 0.0)
 	var effective_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else -1.0
 	var mass_before := maxf(1.0, _current_vehicle_mass(effective_fuel))
-	var mass_after := maxf(1.0, mass_before - fuel_used)
+	var mass_after := maxf(1.0, mass_before - fuel_used - rcs_fuel_used)
+	var engine_mass_after: float = maxf(1.0, mass_before - fuel_used)
 	var mass_mid := (mass_before + mass_after) * 0.5
 	var initial_atmosphere: Dictionary = {}
 	if realism != "Arcade" or throttle > 0.0:
 		initial_atmosphere = _atmosphere_at(rocket_position, velocity, start_time, rocket_position_precise)
-	var thrust_force: float = _engine_thrust(maxf(0.0, altitude), initial_atmosphere) * throttle if throttle > 0.0 else 0.0
+	var thrust_force_vector_local := Vector2.ZERO
+	var angular_acceleration := 0.0
+	var initial_rotation_angle := rotation_angle
+	var initial_angular_velocity := angular_velocity
+	var thrust_force := 0.0
+	var engine_profile: Dictionary = {"force": Vector2.ZERO, "torque": 0.0, "resource_flows": {}, "electric_draw_w": 0.0}
+	if throttle > 0.0:
+		var pressure_ratio := float(initial_atmosphere.get("density", 0.0)) * float(initial_atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(initial_atmosphere.get("temperature", 250.0)) / 101325.0
+		var midpoint_fuel := maxf(0.0, (effective_fuel if infinite_weightless_fuel else fuel) - fuel_used * 0.5)
+		var midpoint_rcs_fuel := maxf(0.0, rcs_propellant_remaining - rcs_fuel_used * 0.5)
+		var mass_properties := _vehicle_mass_properties(midpoint_fuel, midpoint_rcs_fuel)
+		engine_profile = _engine_force_profile(Vector2(mass_properties.center_of_mass), pressure_ratio, throttle)
+		thrust_force_vector_local = Vector2(engine_profile.force)
+		thrust_force = thrust_force_vector_local.length()
+		angular_acceleration = float(engine_profile.torque) / float(mass_properties.moment_of_inertia)
+	var additional_propellant_used := 0.0
+	for resource in engine_profile.get("resource_flows", {}):
+		if str(resource) != "liquid_propellant":
+			additional_propellant_used += _consume_resource(str(resource), float(engine_profile.resource_flows[resource]) * throttle * dt)
+	_consume_resource("electricity", float(engine_profile.get("electric_draw_w", 0.0)) * throttle * dt)
+	_fill_resource_tanks("electricity", _solar_generation_rate() * dt)
+	mass_after = maxf(1.0, mass_before - fuel_used - rcs_fuel_used - additional_propellant_used)
+	mass_mid = (mass_before + mass_after) * 0.5
+	var rcs_impulse_local: Vector2 = Vector2.ZERO
+	if rcs_fuel_used > 0.0 and rcs_flow_rate > 0.0:
+		var rcs_power_scale := rcs_fuel_used / maxf(0.000001, rcs_flow_rate * dt)
+		var rcs_force: Vector2 = Vector2(rcs_profile.force) * rcs_power_scale
+		rcs_impulse_local = rcs_force / mass_mid * dt
+		var current_inertia: float = float(_vehicle_mass_properties(-1.0, maxf(0.0, rcs_propellant_remaining - rcs_fuel_used * 0.5)).get("moment_of_inertia", 1.0))
+		angular_acceleration += float(rcs_profile.torque) * rcs_power_scale / maxf(1.0, current_inertia)
+	angular_velocity = initial_angular_velocity + angular_acceleration * dt
+	rotation_angle = wrapf(initial_rotation_angle + initial_angular_velocity * dt + 0.5 * angular_acceleration * dt * dt, -PI, PI)
 	var thrust_delta_v := 0.0
 	if fuel_used > 0.0 and total_flow > 0.0 and thrust_force > 0.0:
-		thrust_delta_v = thrust_force / total_flow * log(mass_before / mass_after)
-	elif infinite_weightless_fuel and throttle > 0.0 and thrust_force > 0.0:
-		thrust_delta_v = thrust_force / mass_before * dt
+		thrust_delta_v = thrust_force / total_flow * log(mass_before / engine_mass_after)
+	elif throttle > 0.0 and thrust_force > 0.0:
+		thrust_delta_v = thrust_force / mass_mid * dt
 	if infinite_weightless_fuel:
 		infinite_fuel_stage_remaining = maxf(0.0, infinite_fuel_stage_remaining - fuel_used)
-	var thrust_direction := Vector2.UP.rotated(rotation_angle + gimbal_angle)
-	var thrust_impulse := thrust_direction * thrust_delta_v
+	else:
+		_consume_resource("liquid_propellant", fuel_used)
+		_sync_legacy_fuel_from_tanks()
+	_consume_rcs_propellant(rcs_fuel_used)
+	var average_rotation_angle := initial_rotation_angle + initial_angular_velocity * dt * 0.5 + angular_acceleration * dt * dt / 6.0
+	var engine_impulse := thrust_force_vector_local.normalized() * thrust_delta_v if thrust_force_vector_local.length_squared() > 0.0 else Vector2.ZERO
+	var thrust_impulse := (engine_impulse + rcs_impulse_local).rotated(average_rotation_angle)
+	engine_impulse = engine_impulse.rotated(average_rotation_angle)
 	if manual_burn_tracking_enabled and not autopilot_enabled and thrust_delta_v > 0.0:
-		manual_burn_accumulated_vector += thrust_impulse
+		manual_burn_accumulated_vector += engine_impulse
 	if autopilot_enabled and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and thrust_delta_v > 0.0:
 		autopilot_burn_remaining = maxf(0.0, autopilot_burn_remaining - thrust_delta_v)
 		if autopilot_burn_remaining <= FlightComputer.BURN_COMPLETION_TOLERANCE:
@@ -421,7 +1214,7 @@ func _physics_step(dt: float) -> void:
 	if not crashed:
 		if infinite_weightless_fuel and infinite_fuel_stage_remaining <= 0.0001 and stage_index < rocket_stages.size() - 1:
 			_separate_stage()
-		elif not infinite_weightless_fuel and fuel <= 0.0001 and stage_index < rocket_stages.size() - 1:
+		elif not infinite_weightless_fuel and fuel <= 0.0001 and resource_amount("xenon") <= 0.0001 and resource_amount("solid_propellant") <= 0.0001 and stage_index < rocket_stages.size() - 1:
 			_separate_stage()
 	_handle_body_contact()
 	if simulate_belt_collisions and not crashed and not landed:
@@ -561,6 +1354,27 @@ func _adaptive_step_size() -> float:
 		var time_until_node: float = maxf(0.0, float(next_node.get("time", sim_time)) - sim_time)
 		if time_until_node > 0.0:
 			step_limit = minf(step_limit, time_until_node)
+	var rotation_throttle := 1.0 if thrust_key_down else (autopilot_throttle if autopilot_enabled and autopilot_phase == "LANDING_DESCENT" else 0.0)
+	if rotation_throttle > 0.0 and not crashed:
+		var rotation_atmosphere := _atmosphere_at(rocket_position, velocity)
+		var rotation_pressure_ratio := float(rotation_atmosphere.get("density", 0.0)) * float(rotation_atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(rotation_atmosphere.get("temperature", 250.0)) / 101325.0
+		var rotation_fuel := infinite_fuel_stage_remaining if infinite_weightless_fuel else fuel
+		var rotation_mass := _vehicle_mass_properties(rotation_fuel)
+		var rotation_profile := _engine_force_profile(Vector2(rotation_mass.center_of_mass), rotation_pressure_ratio, rotation_throttle)
+		var rotation_acceleration := absf(float(rotation_profile.torque) / float(rotation_mass.moment_of_inertia))
+		if rotation_acceleration > 0.000001:
+			step_limit = minf(step_limit, sqrt(0.08 / rotation_acceleration))
+	if absf(angular_velocity) > 0.000001:
+		step_limit = minf(step_limit, 0.08 / absf(angular_velocity))
+	if has_rcs() and (rcs_rotation_input != 0.0 or Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN)):
+		var rcs_system := _remaining_rcs_system()
+		var rcs_mass := maxf(1.0, _current_vehicle_mass())
+		var rcs_linear_acceleration := float(rcs_system.thrust) / rcs_mass
+		var rcs_angular_acceleration := float(rcs_system.torque) / maxf(1.0, float(_vehicle_mass_properties().moment_of_inertia))
+		if rcs_linear_acceleration > 0.001:
+			step_limit = minf(step_limit, sqrt(0.08 / rcs_linear_acceleration))
+		if rcs_angular_acceleration > 0.000001:
+			step_limit = minf(step_limit, sqrt(0.08 / rcs_angular_acceleration))
 	if autopilot_enabled and autopilot_phase in ["TRANSFER_COAST", "ARRIVAL_APPROACH"]:
 		var destination_state := _autopilot_target_state()
 		var relative_distance := _relative_position_to_body(destination_state).length()
@@ -692,10 +1506,27 @@ func _update_heating(dt: float, atmosphere: Dictionary) -> void:
 func _separate_stage() -> void:
 	if stage_index >= rocket_stages.size() - 1:
 		return
+	if stage_index < stage_fuel_remaining.size():
+		stage_fuel_remaining[stage_index] = fuel
+	_reconcile_legacy_fuel_inventory()
 	var separated_stage: Dictionary = rocket_stages[stage_index].duplicate(true)
 	var separated_fuel := fuel
+	var separated_rcs_capacity := RocketDesign.stage_rcs_propellant_capacity(separated_stage)
+	var total_rcs_capacity := _own_rcs_propellant_capacity()
+	var own_rcs_remaining := maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
+	var separated_rcs_fuel := own_rcs_remaining * separated_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
+	var separated_resource_tanks: Array = []
+	var remaining_resource_tanks: Array = []
+	var separated_resource_mass := 0.0
+	for tank in resource_tanks:
+		if str(tank.get("module_id", vehicle_name)) == vehicle_name and int(tank.get("stage_index", -1)) == stage_index:
+			separated_resource_tanks.append(tank.duplicate(true))
+			separated_resource_mass += float(tank.get("resources", {}).get("xenon", 0.0)) + float(tank.get("resources", {}).get("solid_propellant", 0.0))
+		else:
+			remaining_resource_tanks.append(tank.duplicate(true))
+	var dockable_module := stage_separation_is_dockable_module()
 	var separated_dry_mass := RocketDesign.stage_total_dry_mass(separated_stage)
-	var separated_mass := separated_dry_mass + separated_fuel
+	var separated_mass := separated_dry_mass + separated_fuel + separated_rcs_fuel + separated_resource_mass
 	var vehicle_mass_before := _current_vehicle_mass()
 	var upper_stack_mass := maxf(0.001, vehicle_mass_before - separated_mass)
 	var total_separated_mass := maxf(0.001, separated_mass + upper_stack_mass)
@@ -707,9 +1538,13 @@ func _separate_stage() -> void:
 	stage_separated.emit({
 		"stage": separated_stage,
 		"fuel": separated_fuel,
+		"rcs_fuel": separated_rcs_fuel,
+		"resource_tanks": separated_resource_tanks,
+		"dockable_module": dockable_module,
 		"position_components": rocket_position_precise.duplicate(),
 		"velocity": debris_velocity,
 		"rotation_angle": rotation_angle,
+		"angular_velocity": angular_velocity,
 		"sim_time": sim_time,
 		"launch_time": launch_time,
 		"parent_vehicle_name": vehicle_name,
@@ -719,11 +1554,118 @@ func _separate_stage() -> void:
 	discarded_propellant_mass += separated_fuel
 	if stage_index < stage_fuel_remaining.size():
 		stage_fuel_remaining[stage_index] = 0.0
+	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - separated_rcs_fuel)
+	resource_tanks = remaining_resource_tanks
 	velocity = upper_stack_velocity
 	stage_index += 1
-	fuel = stage_fuel_remaining[stage_index]
+	_sync_legacy_fuel_from_tanks()
 	infinite_fuel_stage_remaining = fuel
 	thrust_key_down = false
+
+func _release_upper_module(module_stage_index: int) -> bool:
+	if resource_inventory_external or docked_mass > 0.001:
+		return false
+	if module_stage_index <= stage_index or module_stage_index >= rocket_stages.size():
+		return false
+	var boundaries := RocketAssembly.docking_module_boundaries(rocket_stages)
+	if not boundaries.has(module_stage_index):
+		return false
+	var boundary: Dictionary = boundaries[module_stage_index]
+	var module_stages: Array = rocket_stages.slice(module_stage_index)
+	var remaining_stages: Array = rocket_stages.slice(0, module_stage_index)
+	var module_fuel: Array[float] = []
+	var remaining_fuel: Array[float] = []
+	for index in range(stage_fuel_remaining.size()):
+		if index >= module_stage_index:
+			module_fuel.append(stage_fuel_remaining[index])
+		else:
+			remaining_fuel.append(stage_fuel_remaining[index])
+	var module_tanks: Array = []
+	var remaining_tanks: Array = []
+	for tank_variant in resource_tanks:
+		if not tank_variant is Dictionary:
+			continue
+		var tank: Dictionary = tank_variant.duplicate(true)
+		if str(tank.get("module_id", vehicle_name)) == vehicle_name and int(tank.get("stage_index", -1)) >= module_stage_index:
+			tank["stage_index"] = int(tank.get("stage_index", module_stage_index)) - module_stage_index
+			module_tanks.append(tank)
+		else:
+			remaining_tanks.append(tank)
+	var module_rcs_capacity := 0.0
+	var total_rcs_capacity := _own_rcs_propellant_capacity()
+	for module_stage in module_stages:
+		module_rcs_capacity += RocketDesign.stage_rcs_propellant_capacity(module_stage)
+	var own_rcs_remaining := maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
+	var module_rcs_fuel := own_rcs_remaining * module_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
+	var module_payload_mass := payload_mass
+	var module_payload_type := payload_type
+	var module_payload_visual := payload_visual.duplicate(true)
+	var module_mass := module_payload_mass + module_rcs_fuel
+	for index in range(module_stages.size()):
+		module_mass += RocketDesign.stage_total_dry_mass(module_stages[index]) + module_fuel[index]
+	for tank in module_tanks:
+		var resources: Dictionary = tank.get("resources", {})
+		module_mass += float(resources.get("xenon", 0.0)) + float(resources.get("solid_propellant", 0.0))
+	var total_mass := maxf(0.001, _current_vehicle_mass())
+	module_mass = clampf(module_mass, 0.001, total_mass - 0.001)
+	var remaining_mass := total_mass - module_mass
+	var connector_offset: Vector2 = Vector2(boundary.get("offset", Vector2.ZERO)).rotated(rotation_angle)
+	var separation_direction: Vector2 = Vector2(boundary.get("separation_direction", Vector2.UP)).rotated(rotation_angle).normalized()
+	var old_position := rocket_position
+	var old_velocity := velocity
+	var separation_speed := 2.0
+	var module_position := old_position + connector_offset * (remaining_mass / total_mass)
+	var parent_position := old_position - connector_offset * (module_mass / total_mass)
+	var module_velocity := old_velocity + separation_direction * separation_speed * (remaining_mass / total_mass)
+	var parent_velocity := old_velocity - separation_direction * separation_speed * (module_mass / total_mass)
+	rocket_stages = remaining_stages
+	stage_fuel_remaining = remaining_fuel
+	resource_tanks = remaining_tanks
+	payload_mass = 0.001
+	payload_type = "debris"
+	payload_visual.clear()
+	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - module_rcs_fuel)
+	_set_rocket_position_components(parent_position.x, parent_position.y)
+	velocity = parent_velocity
+	if stage_index < stage_fuel_remaining.size():
+		fuel = stage_fuel_remaining[stage_index]
+	_sync_legacy_fuel_from_tanks()
+	infinite_fuel_stage_remaining = fuel
+	var attached_parts: Dictionary = {}
+	for stage in rocket_stages:
+		for component in stage.get("components", []):
+			attached_parts[str(component.get("part_uid", ""))] = true
+	for plan_index in range(staging_plan.size()):
+		var plan_stage: Dictionary = staging_plan[plan_index].duplicate(true)
+		var retained_actions: Array = []
+		for action in plan_stage.get("actions", []):
+			if action is Dictionary and attached_parts.has(str(action.get("part_id", ""))):
+				retained_actions.append(action)
+		plan_stage["actions"] = retained_actions
+		staging_plan[plan_index] = plan_stage
+	staging_part_states = _current_staging_part_states()
+	action_stage_index = clampi(action_stage_index, 0, maxi(0, staging_plan.size() - 1))
+	staging_changed.emit()
+	stage_separated.emit({
+		"stages": module_stages,
+		"stage_fuel_remaining": module_fuel,
+		"payload_mass": module_payload_mass,
+		"payload_type": module_payload_type,
+		"payload_visual": module_payload_visual,
+		"fuel": module_fuel[0] if not module_fuel.is_empty() else 0.0,
+		"rcs_fuel": module_rcs_fuel,
+		"resource_tanks": module_tanks,
+		"dockable_module": true,
+		"position_components": PackedFloat64Array([module_position.x, module_position.y]),
+		"velocity": module_velocity,
+		"rotation_angle": rotation_angle,
+		"angular_velocity": angular_velocity,
+		"sim_time": sim_time,
+		"launch_time": launch_time,
+		"parent_vehicle_name": vehicle_name,
+		"separation_speed": separation_speed
+	})
+	return true
 
 func _autopilot_target_body_name() -> String:
 	return FlightComputer.target_body_name(autopilot_planet_index)
@@ -939,6 +1881,7 @@ func _handle_body_contact() -> void:
 			status_message = "LOST IN %s  •  ATMOSPHERIC LIMIT REACHED" % str(body.name).to_upper()
 		elif relative_speed <= 35.0:
 			landed = true
+			angular_velocity = 0.0
 			crashed = false
 			landed_body_name = str(body.name)
 			landed_surface_normal = normal
@@ -1089,6 +2032,7 @@ func _update_guidance(dt: float) -> void:
 					else:
 						var circular_burn_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 						rotation_angle = lerp_angle(rotation_angle, circular_burn_rotation, clampf(dt * 1.5, 0.0, 1.0))
+						angular_velocity = 0.0
 						thrust_key_down = propellant_available and absf(angle_difference(rotation_angle, circular_burn_rotation)) < deg_to_rad(1.0)
 					if not propellant_available and stage_index >= rocket_stages.size() - 1:
 						_fail_autopilot("OUT OF PROPELLANT DURING CIRCULARISATION")
@@ -1189,6 +2133,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  PLANNED MANOEUVRE  %.0f M/S" % autopilot_burn_remaining
 				var manoeuvre_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, manoeuvre_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				angular_velocity = 0.0
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, manoeuvre_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING MANOEUVRE")
@@ -1217,6 +2162,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  EXECUTING NODE %d  •  %.0f M/S" % [autopilot_route_node_index + 1, autopilot_burn_remaining]
 				var route_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, route_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				angular_velocity = 0.0
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, route_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ROUTE BURN")
@@ -1225,6 +2171,7 @@ func _update_guidance(dt: float) -> void:
 				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 				var injection_rotation := injection_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, injection_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				angular_velocity = 0.0
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, injection_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING DEPARTURE BURN")
@@ -1261,6 +2208,7 @@ func _update_guidance(dt: float) -> void:
 				status_message = "AUTOPILOT  •  CAPTURING AT %s  •  %.0f M/S" % [_autopilot_target_body_name().to_upper(), autopilot_burn_remaining]
 				var capture_rotation := autopilot_burn_direction.angle() - Vector2.UP.angle()
 				rotation_angle = lerp_angle(rotation_angle, capture_rotation, clampf(dt * 1.5, 0.0, 1.0))
+				angular_velocity = 0.0
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE and absf(angle_difference(rotation_angle, capture_rotation)) < deg_to_rad(1.0)
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING ARRIVAL CAPTURE")
@@ -1319,15 +2267,19 @@ func _update_guidance(dt: float) -> void:
 			autopilot_direction = landing_direction_vector.normalized() if landing_direction_vector.length_squared() > 0.001 else landing_direction_up
 		var autopilot_target_rotation := autopilot_direction.angle() - Vector2.UP.angle()
 		rotation_angle = lerp_angle(rotation_angle, autopilot_target_rotation, clampf(dt * 1.2, 0.0, 1.0))
+		angular_velocity = 0.0
 		return
 	elif guidance_velocity.length() > 1500.0:
 		pitch_above_horizon = minf(pitch_above_horizon, 12.0)
 	var manual_target_direction := radial * sin(deg_to_rad(pitch_above_horizon)) + tangent * cos(deg_to_rad(pitch_above_horizon))
 	var manual_target_rotation := manual_target_direction.angle() - Vector2.UP.angle()
 	rotation_angle = lerp_angle(rotation_angle, manual_target_rotation, clampf(dt * 0.08, 0.0, 1.0))
+	angular_velocity = 0.0
 
 func _input(event: InputEvent) -> void:
 	if not input_enabled or not event is InputEventKey or not event.pressed or event.echo:
+		return
+	if get_viewport().gui_get_focus_owner() != null:
 		return
 	var ignite_pressed: bool = event.is_action_pressed("engine_toggle") or event.keycode == KEY_W or event.physical_keycode == KEY_W
 	var cutoff_pressed: bool = event.is_action_pressed("throttle_cutoff") or event.keycode == KEY_S or event.physical_keycode == KEY_S
@@ -1354,50 +2306,19 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		thrust_key_down = false
 		throttle_cutoff_key_down = false
+		rcs_rotation_input = 0.0
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not input_enabled:
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.is_action_pressed("rotate_left"):
-			rotation_angle -= 0.12
-		elif event.is_action_pressed("rotate_right"):
-			rotation_angle += 0.12
-		elif event.is_action_pressed("pause_game"):
-			paused = not paused
-		elif event.is_action_pressed("stage_separation"):
-			_separate_stage()
-		elif event.is_action_pressed("guidance_toggle"):
-			guidance_enabled = not guidance_enabled
-			if not guidance_enabled:
-				autopilot_enabled = false
-				thrust_key_down = false
-		else:
-			match event.keycode:
-				KEY_HOME:
-					camera_zoom = 0.000045
-					solar_map_zoom = 1.0
-				KEY_EQUAL, KEY_KP_ADD:
-					time_warp = minf(1000000.0, time_warp * 2.0)
-				KEY_MINUS, KEY_KP_SUBTRACT:
-					time_warp = maxf(0.25, time_warp / 2.0)
-				KEY_O:
-					show_orbit = not show_orbit
-				KEY_P:
-					show_predicted_trajectory = not show_predicted_trajectory
-					if show_predicted_trajectory:
-						_calculate_predicted_trajectory()
-				KEY_M:
-					show_solar_system = not show_solar_system
-				KEY_G:
-					show_grid = not show_grid
-				KEY_V:
-					show_vectors = not show_vectors
-				KEY_Q:
-					gimbal_angle = clampf(gimbal_angle - deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
-				KEY_E:
-					gimbal_angle = clampf(gimbal_angle + deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
-	elif event is InputEventMouseButton and event.pressed:
+	if event is InputEventKey and get_viewport().gui_get_focus_owner() != null:
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			var selected_part := _part_at_screen_position(event.position)
+			if not selected_part.is_empty():
+				part_selected.emit(selected_part)
+			return
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			if show_solar_system:
 				solar_map_zoom = minf(8.0, solar_map_zoom * 1.2)
@@ -1408,6 +2329,60 @@ func _unhandled_input(event: InputEvent) -> void:
 				solar_map_zoom = maxf(0.25, solar_map_zoom / 1.2)
 			else:
 				camera_zoom = maxf(0.00000000002, camera_zoom / 1.2)
+		return
+	if not event is InputEventKey:
+		return
+	if has_rcs_installed():
+		if event.is_action_pressed("rotate_left"):
+			rcs_rotation_input = -1.0
+		elif event.is_action_pressed("rotate_right"):
+			rcs_rotation_input = 1.0
+		elif event.is_action_released("rotate_left") or event.is_action_released("rotate_right"):
+			rcs_rotation_input = 0.0
+	if not event.pressed or event.echo:
+		return
+	if event.is_action_pressed("rotate_left"):
+		if not has_rcs_installed():
+			rcs_rotation_input = 0.0
+	elif event.is_action_pressed("rotate_right"):
+		if not has_rcs_installed():
+			rcs_rotation_input = 0.0
+	elif event.is_action_pressed("stage_next"):
+		staging_stage_requested.emit()
+	elif event.is_action_pressed("pause_game"):
+		paused = not paused
+	elif event.is_action_pressed("stage_separation"):
+		_separate_stage()
+	elif event.is_action_pressed("guidance_toggle"):
+		guidance_enabled = not guidance_enabled
+		if not guidance_enabled:
+			autopilot_enabled = false
+			thrust_key_down = false
+	else:
+		match event.keycode:
+			KEY_HOME:
+				camera_zoom = 0.000045
+				solar_map_zoom = 1.0
+			KEY_EQUAL, KEY_KP_ADD:
+				time_warp = minf(1000000.0, time_warp * 2.0)
+			KEY_MINUS, KEY_KP_SUBTRACT:
+				time_warp = maxf(0.25, time_warp / 2.0)
+			KEY_O:
+				show_orbit = not show_orbit
+			KEY_P:
+				show_predicted_trajectory = not show_predicted_trajectory
+				if show_predicted_trajectory:
+					_calculate_predicted_trajectory()
+			KEY_M:
+				show_solar_system = not show_solar_system
+			KEY_G:
+				show_grid = not show_grid
+			KEY_V:
+				show_vectors = not show_vectors
+			KEY_Q:
+				gimbal_angle = clampf(gimbal_angle - deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
+			KEY_E:
+				gimbal_angle = clampf(gimbal_angle + deg_to_rad(1.0), deg_to_rad(-8.0), deg_to_rad(8.0))
 
 func _launch_pad_surface_normal() -> Vector2:
 	return launch_pad_normal.rotated(EARTH_ROTATION_RATE * (sim_time - launch_pad_reference_time)).normalized()
@@ -2112,6 +3087,10 @@ func _draw_hud() -> void:
 		"INERTIAL SPEED %s" % _format_speed(orbital_speed),
 		"VERTICAL SPEED %s" % _format_speed(local_velocity.dot(local_position.normalized())),
 		"FUEL           %s" % ("INFINITE • MASS RETAINED" if infinite_weightless_fuel else "%d%%" % roundi(100.0 * fuel / maxf(1.0, active_fuel_capacity))),
+		"RCS PROP       %s" % ("NOT FITTED" if _remaining_rcs_propellant_capacity() <= 0.0 else "%d%%" % roundi(100.0 * rcs_propellant_remaining / maxf(1.0, _remaining_rcs_propellant_capacity()))),
+		"XENON          %.1f kg" % resource_amount("xenon"),
+		"SOLID PROP.    %.1f kg" % resource_amount("solid_propellant"),
+		"ELECTRICITY    %.1f kWh" % (resource_amount("electricity") / 3600000.0),
 		"THROTTLE       %s%%" % str(roundi(throttle * 100.0)),
 		"THRUST / WEIGHT %.2f" % thrust_to_weight,
 		"IDEAL ΔV EST.  %s" % ("UNLIMITED" if infinite_weightless_fuel else "%.2f km/s" % (remaining_delta_v / 1000.0)),
@@ -2245,6 +3224,18 @@ func _saved_manual_flight_plan() -> Dictionary:
 	plan["planned_velocity_y"] = planned_velocity.y
 	return plan
 
+func _saved_resource_tanks() -> Array:
+	var saved: Array = []
+	for tank in resource_tanks:
+		var physical_index := int(tank.get("stage_index", 0))
+		if str(tank.get("module_id", vehicle_name)) == vehicle_name and physical_index < stage_index:
+			continue
+		var entry: Dictionary = tank.duplicate(true)
+		if str(entry.get("module_id", vehicle_name)) == vehicle_name:
+			entry["stage_index"] = physical_index - stage_index
+		saved.append(entry)
+	return saved
+
 func get_save_data() -> Dictionary:
 	var remaining_stages: Array = rocket_stages.slice(stage_index)
 	var remaining_stage_fuel: Array[float] = stage_fuel_remaining.slice(stage_index)
@@ -2255,10 +3246,17 @@ func get_save_data() -> Dictionary:
 		"position_precise": [rocket_position_precise[0], rocket_position_precise[1]],
 		"velocity": [velocity.x, velocity.y],
 		"rotation_angle": rotation_angle,
+		"angular_velocity": angular_velocity,
 		"fuel": fuel,
+		"rcs_propellant_remaining": rcs_propellant_remaining,
+		"docked_rcs_propellant": docked_rcs_propellant.duplicate(true),
+		"resource_tanks": _saved_resource_tanks(),
 		"stage_fuel_remaining": remaining_stage_fuel,
 		"infinite_fuel_stage_remaining": infinite_fuel_stage_remaining,
 		"stage_index": 0,
+		"staging_plan": staging_plan.duplicate(true),
+		"action_stage_index": action_stage_index,
+		"staging_part_states": staging_part_states.duplicate(true),
 		"discarded_stage_mass": discarded_stage_mass,
 		"discarded_propellant_mass": discarded_propellant_mass,
 		"gimbal_angle": gimbal_angle,
@@ -2307,7 +3305,7 @@ func get_save_data() -> Dictionary:
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
-		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": remaining_stages},
+		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": remaining_stages, "staging_stage_count": staging_plan.size(), "preserve_part_uids": true},
 		"vehicle_name": vehicle_name,
 		"is_debris": is_debris,
 		"passive_orbit_active": passive_orbit_active,
@@ -2356,7 +3354,7 @@ func load_save_data(data: Dictionary) -> bool:
 	if not is_finite(velocity_x) or not is_finite(velocity_y):
 		push_error("Save contains a non-finite velocity.")
 		return false
-	for key in ["sim_time", "rotation_angle", "fuel", "gimbal_angle", "autopilot_burn_remaining", "heat_shield_temperature", "peak_heat_flux_mw", "max_dynamic_pressure_pa"]:
+	for key in ["sim_time", "rotation_angle", "angular_velocity", "fuel", "rcs_propellant_remaining", "gimbal_angle", "autopilot_burn_remaining", "heat_shield_temperature", "peak_heat_flux_mw", "max_dynamic_pressure_pa"]:
 		var value: Variant = data.get(key, 0.0)
 		if not (value is float or value is int) or not is_finite(float(value)):
 			push_error("Save contains an invalid or non-finite %s value." % key)
@@ -2376,6 +3374,13 @@ func load_save_data(data: Dictionary) -> bool:
 		push_error("Save stage index is outside the vehicle.")
 		return false
 	var saved_fuel: float = float(data.get("fuel", 0.0))
+	var rcs_capacity := 0.0
+	for saved_stage in saved_stages:
+		rcs_capacity += RocketDesign.stage_rcs_propellant_capacity(saved_stage)
+	var saved_rcs_propellant: float = float(data.get("rcs_propellant_remaining", rcs_capacity))
+	if saved_rcs_propellant < 0.0 or saved_rcs_propellant > rcs_capacity:
+		push_error("Save RCS propellant is outside the vehicle capacity.")
+		return false
 	var active_fuel_capacity: float = RocketDesign.stage_total_fuel_capacity(saved_stages[stage_index])
 	if saved_fuel < 0.0 or saved_fuel > active_fuel_capacity:
 		push_error("Save fuel amount is outside the active stage capacity.")
@@ -2405,6 +3410,19 @@ func load_save_data(data: Dictionary) -> bool:
 			else:
 				validated_stage_fuel.append(RocketDesign.stage_total_fuel_capacity(saved_stages[i]))
 	set_rocket_design(saved_design)
+	saved_design["preserve_part_uids"] = true
+	var saved_docked_rcs: Variant = data.get("docked_rcs_propellant", {})
+	docked_rcs_propellant = saved_docked_rcs.duplicate(true) if saved_docked_rcs is Dictionary else {}
+	var saved_resource_tanks: Variant = data.get("resource_tanks", null)
+	if saved_resource_tanks is Array:
+		resource_tanks = saved_resource_tanks.duplicate(true)
+		_sync_legacy_fuel_from_tanks()
+	var saved_staging_plan: Variant = data.get("staging_plan", null)
+	if saved_staging_plan is Array and not saved_staging_plan.is_empty():
+		staging_plan = saved_staging_plan.duplicate(true)
+	action_stage_index = clampi(int(data.get("action_stage_index", 0)), 0, maxi(0, staging_plan.size() - 1))
+	var saved_part_states: Variant = data.get("staging_part_states", {})
+	staging_part_states = saved_part_states.duplicate(true) if saved_part_states is Dictionary else {}
 	vehicle_name = str(data.get("vehicle_name", vehicle_name))
 	is_debris = bool(data.get("is_debris", false))
 	passive_orbit_active = bool(data.get("passive_orbit_active", false))
@@ -2425,7 +3443,9 @@ func load_save_data(data: Dictionary) -> bool:
 	_set_rocket_position_components(float(precise_position[0]), float(precise_position[1]))
 	velocity = Vector2(float(v[0]), float(v[1]))
 	rotation_angle = float(data.get("rotation_angle", 0.0))
+	angular_velocity = float(data.get("angular_velocity", 0.0))
 	fuel = float(data.get("fuel", _active_stage_data().get("fuel_capacity", 0.0)))
+	rcs_propellant_remaining = clampf(float(data.get("rcs_propellant_remaining", _remaining_rcs_propellant_capacity())), 0.0, _remaining_rcs_propellant_capacity())
 	stage_fuel_remaining = validated_stage_fuel
 	infinite_fuel_stage_remaining = clampf(float(data.get("infinite_fuel_stage_remaining", fuel)), 0.0, float(_active_stage_data().get("fuel_capacity", 0.0)))
 	discarded_stage_mass = float(data.get("discarded_stage_mass", 0.0))
