@@ -145,8 +145,12 @@ class AssemblyCanvas extends Control:
 				for start_rect in data.get("start_rects", []):
 					positions.append(_canvas_to_metres(start_rect.rect.get_center() + delta))
 				component_group_position_changed.emit(dragged_indices, positions)
-			elif not target.is_empty() and str(target.attachment) != "free":
-				component_repositioned.emit(from_index, str(target.attachment), int(target.get("side", 1)), int(target.get("insert_index", -1)))
+			elif not target.is_empty():
+				var target_uid := ""
+				var target_index := int(target.get("component_index", -1))
+				if target_index >= 0 and target_index < components.size():
+					target_uid = str(components[target_index].get("part_uid", ""))
+				component_repositioned.emit(from_index, str(target.attachment), int(target.get("side", 1)), int(target.get("insert_index", -1)), target_uid, str(target.get("node_id", "")), position_m)
 			else:
 				component_position_changed.emit(from_index, position_m)
 
