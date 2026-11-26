@@ -534,6 +534,10 @@ func _build_interface() -> void:
 	guide_button.text = "ARM / DISARM SELECTED BURN"
 	guide_button.pressed.connect(_arm_manual_guidance)
 	node_actions.add_child(guide_button)
+	var jump_button := Button.new()
+	jump_button.text = "JUMP TO NODE"
+	jump_button.pressed.connect(_jump_to_selected_node)
+	node_actions.add_child(jump_button)
 	var remove_button := Button.new()
 	remove_button.text = "REMOVE SELECTED NODE"
 	remove_button.pressed.connect(_remove_node)
@@ -1018,6 +1022,18 @@ func _arm_manual_guidance() -> void:
 	simulation.set("manual_burn_accumulated_vector", Vector2.ZERO)
 	simulation.set("thrust_key_down", false)
 	_update_manual_guidance()
+
+func _jump_to_selected_node() -> void:
+	if not is_instance_valid(simulation) or selected_node_index < 0 or selected_node_index >= nodes.size():
+		return
+	var node_time := maxf(0.0, float(nodes[selected_node_index].get("time_offset", 0.0)))
+	var base_time := manual_guidance_start_time if manual_guidance_node_index == selected_node_index else float(simulation.get("sim_time"))
+	var target_time := base_time + node_time - 5.0
+	if target_time <= float(simulation.get("sim_time")) + 1.0:
+		manual_guidance_report.text = "THE SELECTED NODE IS ALREADY WITHIN THE FIVE-SECOND APPROACH WINDOW."
+		return
+	if simulation.call("begin_time_jump", target_time):
+		manual_guidance_report.text = "TIME ADVANCE ACTIVE  •  ARRIVING FIVE SECONDS BEFORE NODE %d. TIME WARP WILL RETURN TO NORMAL AUTOMATICALLY." % (selected_node_index + 1)
 
 func _manual_node_state(node_time: float) -> Dictionary:
 	if node_time <= 0.0 or planned_path.size() < 3 or planned_path_times.size() != planned_path.size():
