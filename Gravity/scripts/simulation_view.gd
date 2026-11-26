@@ -759,9 +759,11 @@ func _remaining_engine_elements(pressure_ratio: float, active_center_y: float) -
 			total_length += float(geometry.get("length", 1.0))
 		var child_active_center := -total_length * 0.5 + float(geometries[0].get("length", 1.0)) * 0.5
 		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		var attached_rotation := float(docked_visual.get("rotation", rotation_angle)) - rotation_angle
 		for engine in RocketAssembly.stage_engine_elements(stages[attached_stage_index], pressure_ratio, child_active_center):
 			var attached_engine: Dictionary = engine.duplicate(true)
-			attached_engine["position"] = Vector2(attached_engine.get("position", Vector2.ZERO)) + attached_offset
+			attached_engine["position"] = Vector2(attached_engine.get("position", Vector2.ZERO)).rotated(attached_rotation) + attached_offset
+			attached_engine["direction"] = Vector2(attached_engine.get("direction", Vector2.UP)).rotated(attached_rotation)
 			engines.append(attached_engine)
 	return engines
 
@@ -870,11 +872,13 @@ func _remaining_rcs_elements() -> Array[Dictionary]:
 			attached_length += float(geometry.get("length", 1.0))
 		var attached_cursor := -attached_length * 0.5
 		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		var attached_rotation := float(docked_visual.get("rotation", rotation_angle)) - rotation_angle
 		for geometry in attached_geometries:
 			var stage_length := float(geometry.get("length", 1.0))
 			for jet in RocketAssembly.stage_rcs_elements(geometry.stage, attached_cursor + stage_length * 0.5):
 				var attached_jet: Dictionary = jet.duplicate(true)
-				attached_jet["position"] = Vector2(attached_jet.get("position", Vector2.ZERO)) + attached_offset
+				attached_jet["position"] = Vector2(attached_jet.get("position", Vector2.ZERO)).rotated(attached_rotation) + attached_offset
+				attached_jet["direction"] = Vector2(attached_jet.get("direction", Vector2.UP)).rotated(attached_rotation)
 				elements.append(attached_jet)
 			attached_cursor += stage_length
 	return elements
