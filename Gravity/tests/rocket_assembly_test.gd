@@ -43,7 +43,7 @@ func _initialize() -> void:
 						has_stage_rcs = str(preset_component.get("kind", "")) == "rcs"
 					"separator":
 						has_separator = str(preset_component.get("id", "")) == "stack_decoupler"
-					"top_docking_port_left", "top_docking_port_right":
+					"top_docking_port_upper", "top_docking_port_lower":
 						top_port_count += 1
 			assert(has_stage_rcs and RocketDesign.stage_rcs_propellant_capacity(preset_stage) > 0.0, "Every preset stage needs independent RCS and propellant")
 			assert(has_separator == (preset_stage_index < preset_stages.size() - 1), "Each physical stage boundary needs one real decoupler")
