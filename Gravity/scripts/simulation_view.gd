@@ -1632,6 +1632,12 @@ func _release_component_group(port_uid: String) -> bool:
 	var retained_tanks: Array = []
 	var released_fuel_by_old_stage: Dictionary = {}
 	var retained_fuel_by_old_stage: Dictionary = {}
+	var released_stage_map: Dictionary = {}
+	var retained_stage_map: Dictionary = {}
+	for index in range(released_old_indices.size()):
+		released_stage_map[released_old_indices[index]] = index
+	for index in range(retained_old_indices.size()):
+		retained_stage_map[retained_old_indices[index]] = index
 	for tank_variant in resource_tanks:
 		if not tank_variant is Dictionary:
 			continue
@@ -1640,10 +1646,12 @@ func _release_component_group(port_uid: String) -> bool:
 			retained_tanks.append(tank)
 			continue
 		var old_stage := int(tank.get("stage_index", 0))
-		if group_parts.has(str(tank.get("part_uid", ""))):
+		if group_parts.has(str(tank.get("part_uid", ""))) and released_stage_map.has(old_stage):
+			tank["stage_index"] = int(released_stage_map[old_stage])
 			released_tanks.append(tank)
 			released_fuel_by_old_stage[old_stage] = float(released_fuel_by_old_stage.get(old_stage, 0.0)) + float(tank.get("resources", {}).get("liquid_propellant", 0.0))
-		else:
+		elif retained_stage_map.has(old_stage):
+			tank["stage_index"] = int(retained_stage_map[old_stage])
 			retained_tanks.append(tank)
 			retained_fuel_by_old_stage[old_stage] = float(retained_fuel_by_old_stage.get(old_stage, 0.0)) + float(tank.get("resources", {}).get("liquid_propellant", 0.0))
 	var released_fuel: Array[float] = []
