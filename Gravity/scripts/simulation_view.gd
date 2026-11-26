@@ -925,7 +925,8 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, 1.0).get("torque", 0.0))
 	else:
 		gimbal_angle = 0.0
-	var angle_error := angle_difference(rotation_angle, target_rotation)
+	var body_target_rotation := target_rotation - gimbal_angle
+	var angle_error := angle_difference(rotation_angle, body_target_rotation)
 	var aligned := absf(angle_error) <= deg_to_rad(1.0) and absf(angular_velocity) <= deg_to_rad(0.5)
 	var engine_torque := potential_engine_torque if burn_expected and aligned else 0.0
 	if not has_rcs_installed():
@@ -933,9 +934,9 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		if burn_expected and absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01)):
 			status_message = "AUTOPILOT  •  THRUST TORQUE NEEDS RCS"
 			return false
-		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 1.5, 0.0, 1.0))
+		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
 		angular_velocity = 0.0
-		return absf(angle_difference(rotation_angle, target_rotation)) <= deg_to_rad(1.0)
+		return absf(angle_difference(rotation_angle, body_target_rotation)) <= deg_to_rad(1.0)
 	if rcs_propellant_remaining <= 0.001:
 		rcs_rotation_input = 0.0
 		status_message = "AUTOPILOT  •  RCS PROPELLANT REQUIRED"
