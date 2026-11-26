@@ -4380,8 +4380,8 @@ func _load_game_from_path(path: String) -> void:
 	for vehicle in fleet_sims:
 		if normalized_modules.has(vehicle.vehicle_name):
 			continue
-		var connected_modules := ModuleGraph.connected_to(normalized_graph, vehicle.vehicle_name)
-		var root_name := vehicle.vehicle_name
+		var connected_modules: Array = ModuleGraph.connected_to(normalized_graph, vehicle.vehicle_name)
+		var root_name: String = str(vehicle.vehicle_name)
 		for module_name in connected_modules:
 			normalized_modules[str(module_name)] = true
 		for module_name in connected_modules:
