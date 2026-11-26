@@ -25,6 +25,14 @@ func _initialize() -> void:
 	child.landed = false
 	second_child.landed = false
 	child.rotation_angle = PI
+	var orbit_radius := SimulationView.EARTH_RADIUS + 200000.0
+	var orbit_speed := sqrt(SimulationView.G * SimulationView.EARTH_MASS / orbit_radius)
+	parent.rocket_position = Vector2(orbit_radius, 0.0)
+	child.rocket_position = Vector2(-orbit_radius, 0.0)
+	parent.velocity = Vector2(0.0, orbit_speed)
+	child.velocity = Vector2(0.0, -orbit_speed)
+	assert(main._docking_orbit_altitudes_compatible(parent, child), "Spacecraft in the same orbital altitude band were not recognised")
+	assert(main._docking_assist_in_range(parent, child), "Same-altitude spacecraft outside the distance limit were not eligible for rendezvous")
 	second_child.rotation_angle = PI
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
