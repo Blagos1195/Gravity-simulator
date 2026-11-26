@@ -1069,9 +1069,9 @@ func _fast_forward_to_time(target_time: float) -> bool:
 			_scan_active_telescopes()
 	fleet_time_backlog = 0.0
 	for vehicle in fleet_sims:
+		vehicle.simulation_time_backlog = 0.0
 		if _is_docked_child(vehicle.vehicle_name):
 			continue
-		vehicle.simulation_time_backlog = 0.0
 		vehicle.ephemeris_cache_time = -INF
 		vehicle.ephemeris_output_cache_time = -INF
 		if vehicle.crashed:
