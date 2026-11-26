@@ -1797,36 +1797,48 @@ func _queue_discarded_stage(stage_data: Dictionary) -> void:
 	pending_debris.append(stage_data.duplicate(true))
 
 func _spawn_discarded_stage(stage_data: Dictionary) -> void:
-	var stage: Variant = stage_data.get("stage", {})
-	if not stage is Dictionary or stage.is_empty():
-		return
+	var stages: Array = stage_data.get("stages", [])
+	if stages.is_empty():
+		var stage: Variant = stage_data.get("stage", {})
+		if not stage is Dictionary or stage.is_empty():
+			return
+		stages = [stage.duplicate(true)]
 	debris_sequence += 1
 	var dockable_module := bool(stage_data.get("dockable_module", false))
 	var debris_name := ("Module " if dockable_module else "Debris ") + "%04d" % debris_sequence
+	var remaining_fuel := maxf(0.0, float(stage_data.get("fuel", 0.0)))
 	var design := {
 		"name": debris_name,
 		"preserve_part_uids": true,
-		"payload_mass": 0.001,
-		"payload_type": "debris",
-		"stages": [stage.duplicate(true)]
+		"payload_mass": maxf(0.001, float(stage_data.get("payload_mass", 0.001))),
+		"payload_type": str(stage_data.get("payload_type", "debris")),
+		"payload_visual": stage_data.get("payload_visual", {}).duplicate(true),
+		"stages": stages.duplicate(true)
 	}
 	var debris := _create_vehicle(design, debris_name)
 	if debris == null:
 		return
-	var remaining_fuel := maxf(0.0, float(stage_data.get("fuel", 0.0)))
-	debris.fuel = remaining_fuel
+	var saved_stage_fuel: Variant = stage_data.get("stage_fuel_remaining", [])
+	if saved_stage_fuel is Array and saved_stage_fuel.size() == debris.stage_fuel_remaining.size():
+		debris.stage_fuel_remaining.clear()
+		for amount in saved_stage_fuel:
+			debris.stage_fuel_remaining.append(maxf(0.0, float(amount)))
+	elif not debris.stage_fuel_remaining.is_empty():
+		debris.stage_fuel_remaining[0] = minf(remaining_fuel, RocketDesign.stage_total_fuel_capacity(stages[0]))
+	debris.fuel = debris.stage_fuel_remaining[0] if not debris.stage_fuel_remaining.is_empty() else remaining_fuel
 	debris.rcs_propellant_remaining = clampf(float(stage_data.get("rcs_fuel", 0.0)), 0.0, debris._remaining_rcs_propellant_capacity())
 	var module_tanks: Variant = stage_data.get("resource_tanks", [])
 	if module_tanks is Array:
 		debris.resource_tanks = module_tanks.duplicate(true)
 		for tank_index in range(debris.resource_tanks.size()):
 			var tank: Dictionary = debris.resource_tanks[tank_index]
-			tank["stage_index"] = 0
+			tank["stage_index"] = clampi(int(tank.get("stage_index", 0)), 0, maxi(0, debris.rocket_stages.size() - 1))
 			tank["module_id"] = debris_name
 			debris.resource_tanks[tank_index] = tank
 		debris._sync_legacy_fuel_from_tanks()
-	debris.infinite_fuel_stage_remaining = remaining_fuel
-	debris.stage_fuel_remaining[0] = remaining_fuel
+		if not debris.stage_fuel_remaining.is_empty():
+			debris.fuel = debris.stage_fuel_remaining[0]
+	debris.infinite_fuel_stage_remaining = debris.fuel
 	var position_components: Variant = stage_data.get("position_components", PackedFloat64Array([0.0, 0.0]))
 	if position_components is PackedFloat64Array and position_components.size() >= 2:
 		debris._set_rocket_position_components(float(position_components[0]), float(position_components[1]))
