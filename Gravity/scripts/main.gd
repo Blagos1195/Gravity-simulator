@@ -427,6 +427,9 @@ func _apply_docking_assists(delta: float) -> void:
 		if (separation > DOCKING_ASSIST_MAX_RANGE and not _docking_orbit_altitudes_compatible(vehicle, target)) or separation < 0.001:
 			docking_assists.erase(vehicle_name)
 			continue
+		if separation <= 1000.0 and _dock_vehicle(target_name):
+			docking_assists.erase(vehicle_name)
+			continue
 		var direction := relative_position / separation
 		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, separation - DOCKING_CAPTURE_DISTANCE)))
 		var desired_velocity: Vector2 = target.velocity + direction * desired_closing_speed
@@ -3932,7 +3935,7 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel_scroll.add_child(layout)
 	var intro := Label.new()
-	intro.text = "Use rendezvous assist to match the other spacecraft's velocity and close the gap. Docking still requires a slow, close approach."
+	intro.text = "Rendezvous assist uses liquid engines for long-range orbital matching and RCS for the final approach. It docks automatically when the ports are aligned and relative speed is safe."
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(intro)
 	var parent_name: String = str(sim.vehicle_name)
