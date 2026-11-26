@@ -204,9 +204,21 @@ func _initialize() -> void:
 	loaded_child.rocket_position = loaded_parent.rocket_position + Vector2(25.0, 0.0)
 	loaded_parent.velocity = Vector2.ZERO
 	loaded_child.velocity = Vector2.ZERO
+	var selected_pair := main._available_docking_port_pair(loaded_parent, loaded_child)
+	assert(not selected_pair.is_empty(), "Automatic docking could not find an unobstructed port pair")
 	main._apply_docking_assists(1.0)
 	assert(main._are_docked(loaded_parent.vehicle_name, loaded_child.vehicle_name), "Rendezvous assist did not automatically dock aligned spacecraft")
 	assert(main.docking_assists.is_empty(), "Rendezvous assist remained active after automatic docking")
+	assert(main._undock_vehicle(loaded_child.vehicle_name), "Docking test could not separate spacecraft for approach-only check")
+	var safe_standoff := maxf(1000.0, RocketDesign.vehicle_collision_radius_m({"stages": loaded_parent.rocket_stages}, loaded_parent.stage_index) + RocketDesign.vehicle_collision_radius_m({"stages": loaded_child.rocket_stages}, loaded_child.stage_index) + 500.0)
+	loaded_child.rocket_position = loaded_parent.rocket_position + Vector2(safe_standoff + 10.0, 0.0)
+	loaded_parent.velocity = Vector2.ZERO
+	loaded_child.velocity = Vector2.ZERO
+	main.docking_assists[loaded_parent.vehicle_name] = loaded_child.vehicle_name
+	main.docking_assist_modes[loaded_parent.vehicle_name] = "approach_only"
+	main._apply_docking_assists(1.0)
+	assert(main.docking_assists.is_empty(), "Approach-only assist did not hand control back at its safe standoff distance")
+	assert(not main._are_docked(loaded_parent.vehicle_name, loaded_child.vehicle_name), "Approach-only assist docked without user input")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 	print("Docking and fuel transfer test passed.")
 	main.queue_free()
