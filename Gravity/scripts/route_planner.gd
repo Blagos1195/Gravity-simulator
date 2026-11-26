@@ -586,7 +586,8 @@ func _rebuild_navigation_moons(parent_target_index: int) -> void:
 	navigation_moon_dropdown.add_item("Planet only", parent_target_index)
 	if parent_target_index == -2:
 		if discovered_body_names.has("Moon"):
-			navigation_moon_dropdown.add_item("Moon", -1)
+			navigation_moon_dropdown.add_item("Moon")
+			navigation_moon_dropdown.set_item_id(navigation_moon_dropdown.item_count - 1, -1)
 	else:
 		var parent_name := FlightComputer.target_body_name(parent_target_index)
 		for satellite in FlightComputer.satellite_targets_for_host(parent_name):
