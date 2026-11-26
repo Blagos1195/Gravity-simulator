@@ -1123,9 +1123,9 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 		components[components.size() - 1] = added_component
 		updated = RocketAssembly.compile_stage(updated, components)
 	if attachment == "free" and not components.is_empty():
-		var added_component: Dictionary = components.back()
-		added_component["position_m"] = [position_m.x, position_m.y]
-		components[components.size() - 1] = added_component
+		var free_component: Dictionary = components.back()
+		free_component["position_m"] = [position_m.x, position_m.y]
+		components[components.size() - 1] = free_component
 		updated = RocketAssembly.compile_stage(updated, components)
 	if attachment == "stack" and insert_index < 0 and str(components.back().get("kind", "")) != "engine":
 		insert_index = components.size() - 1
@@ -1176,6 +1176,7 @@ func _on_component_position_changed(index: int, position_m: Vector2) -> void:
 	component.erase("mount_index")
 	component.erase("structural_parent_uid")
 	component.erase("structural_parent_node_id")
+	component.erase("structural_root")
 	component["position_m"] = [position_m.x, position_m.y]
 	components[index] = component
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(_current_stage(), components)
@@ -1215,9 +1216,12 @@ func _on_component_repositioned(index: int, attachment: String, side: int, inser
 	if not parent_uid.is_empty():
 		component["structural_parent_uid"] = parent_uid
 		component["structural_parent_node_id"] = parent_node_id
+		component.erase("structural_root")
 	else:
 		component.erase("structural_parent_uid")
 		component.erase("structural_parent_node_id")
+		if attachment != "free":
+			component.erase("structural_root")
 	if attachment == "stack":
 		var stack_indices: Array[int] = []
 		for candidate in range(components.size()):
