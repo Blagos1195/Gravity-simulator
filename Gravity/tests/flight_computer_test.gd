@@ -515,6 +515,16 @@ func _initialize() -> void:
 			mars_option = option_index
 	assert(mars_option >= 0, "Telescope-spotted Mars should appear in the Flight Computer")
 	assert(not route_planner_window.navigation_planet_dropdown.is_item_disabled(mars_option), "Telescope-spotted Mars should be selectable before visiting")
+	route_planner_window.navigation_plan_valid = true
+	route_planner_window.navigation_plan = {"target_id": FlightComputer.PLANET_TARGETS.find_custom(func(body: Dictionary): return str(body.get("name", "")) == "Mars"), "target_name": "Mars"}
+	route_planner_window._refresh_navigation_state()
+	assert(route_planner_window.navigation_engage_button.disabled, "Autopilot must remain locked until Mars has been visited")
+	planner_sim.visited_body_names["Mars"] = true
+	route_planner_window._refresh_navigation_state()
+	assert(not route_planner_window.navigation_engage_button.disabled, "Autopilot should unlock after physically visiting Mars")
+	planner_sim.visited_body_names.erase("Mars")
+	route_planner_window.navigation_plan_valid = false
+	route_planner_window.navigation_plan.clear()
 	assert(route_planner_window.interface_scroll is ScrollContainer)
 	assert(route_planner_window.target_x_input is SpinBox)
 	assert(route_planner_window.target_y_input is SpinBox)
