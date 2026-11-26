@@ -115,6 +115,46 @@ func _initialize() -> void:
 	side_stage = side_builder.design.stages[0]
 	assert(str(side_stage.components.back().attachment) == "side")
 	assert(int(side_stage.components.back().mount_index) >= 0)
+	var group_builder := RocketBuilder.new()
+	group_builder.configure(RocketDesign.create_default(), 0)
+	group_builder._build_interface()
+	group_builder._refresh()
+	group_builder._canvas.size = Vector2(800.0, 600.0)
+	group_builder._canvas.selected_indices = [0]
+	group_builder._canvas.selected_index = 0
+	group_builder._canvas._component_rects = [
+		{"index": 0, "rect": Rect2(100.0, 100.0, 40.0, 80.0), "attachment": "stack"},
+		{"index": 1, "rect": Rect2(160.0, 100.0, 40.0, 80.0), "attachment": "stack"}
+	]
+	var multi_select_event := InputEventMouseButton.new()
+	multi_select_event.button_index = MOUSE_BUTTON_LEFT
+	multi_select_event.pressed = true
+	multi_select_event.ctrl_pressed = true
+	multi_select_event.position = Vector2(180.0, 140.0)
+	group_builder._canvas._gui_input(multi_select_event)
+	assert(group_builder._canvas.selected_indices.size() == 2)
+	var before_zoom := (Vector2(180.0, 240.0) - group_builder._canvas.size * 0.5 - group_builder._canvas.view_offset) / group_builder._canvas.zoom
+	group_builder._canvas._zoom_at(2.0, Vector2(180.0, 240.0))
+	var after_zoom := (Vector2(180.0, 240.0) - group_builder._canvas.size * 0.5 - group_builder._canvas.view_offset) / group_builder._canvas.zoom
+	assert(before_zoom.is_equal_approx(after_zoom))
+	var pan_start := InputEventMouseButton.new()
+	pan_start.button_index = MOUSE_BUTTON_MIDDLE
+	pan_start.pressed = true
+	pan_start.position = Vector2(100.0, 100.0)
+	group_builder._canvas._gui_input(pan_start)
+	var pan_motion := InputEventMouseMotion.new()
+	pan_motion.position = Vector2(145.0, 130.0)
+	group_builder._canvas._gui_input(pan_motion)
+	assert(group_builder._canvas.view_offset.distance_to(Vector2(45.0, 30.0)) < 0.01)
+	var group_stage_before: Dictionary = group_builder.design.stages[0]
+	assert(group_stage_before.components.size() >= 2)
+	group_builder._on_components_position_changed([0, 1], [Vector2(-2.0, 0.0), Vector2(2.0, 0.0)])
+	var group_stage_after: Dictionary = group_builder.design.stages[0]
+	assert(str(group_stage_after.components[0].attachment) == "free")
+	assert(str(group_stage_after.components[1].attachment) == "free")
+	assert(group_stage_after.components[0].position_m == [-2.0, 0.0])
+	assert(group_stage_after.components[1].position_m == [2.0, 0.0])
+	group_builder.free()
 	side_builder.free()
 	builder.free()
 	print("KSP-style vehicle assembly builder tests passed.")
