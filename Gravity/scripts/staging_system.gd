@@ -31,7 +31,9 @@ static func create_plan(modules: Array) -> Array:
 				var kind := str(component.get("kind", ""))
 				var part_id := str(component.get("part_uid", component.get("id", "")))
 				var action_name := str(component.get("staging_action", ""))
-				if action_name.is_empty():
+				if kind == "docking_port":
+					action_name = "undock_module" if docking_boundaries.has(physical_stage_index) and str(docking_boundaries[physical_stage_index].get("upper_part_uid", "")) == part_id else ""
+				elif action_name.is_empty():
 					if kind in ["engine", "radial"]:
 						if bool(component.get("solid_motor", false)):
 							action_name = "ignite_solid_motor"
@@ -39,8 +41,6 @@ static func create_plan(modules: Array) -> Array:
 							action_name = "activate_engine"
 					elif kind == "decoupler":
 						action_name = "separate"
-					elif kind == "docking_port" and docking_boundaries.has(physical_stage_index) and str(docking_boundaries[physical_stage_index].get("upper_part_uid", "")) == part_id:
-						action_name = "undock_module"
 					elif kind == "tank":
 						action_name = "enable_fuel_supply"
 					elif kind == "rcs":
