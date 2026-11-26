@@ -43,8 +43,13 @@ func _initialize() -> void:
 	assert(bool(connected.valid))
 	graph = connected.graph
 	assert(ModuleGraph.connected_to(graph, "a").size() == 3)
-	var disconnected := ModuleGraph.disconnect_connection(graph, "port_c|port_d")
-	assert(bool(disconnected.valid) and disconnected.groups.size() == 2)
+	connected = ModuleGraph.connect_modules(graph, "c", "a", "port_e", "port_f")
+	assert(bool(connected.valid), "A docking graph must allow a loop through separate unused ports")
+	graph = connected.graph
+	var loop_cut := ModuleGraph.disconnect_connection(graph, "port_a|port_b")
+	assert(bool(loop_cut.valid) and loop_cut.groups.size() == 1, "Removing one connector in a loop must not split the spacecraft")
+	var disconnected := ModuleGraph.disconnect_connection(loop_cut.graph, "port_e|port_f")
+	assert(bool(disconnected.valid) and disconnected.groups.size() == 2, "Removing a connector that separates the graph must produce two spacecraft groups")
 	var plan_a: Array = [{"id":"stage_0","actions":[{"id":"a:engine","part_id":"engine","action":"activate_engine","completed":true,"reversible":true}]}]
 	var plan_b: Array = [{"id":"stage_0","actions":[{"id":"b:deploy","part_id":"panel","action":"deploy","completed":false,"reversible":true}]}]
 	var plan_modules := [{"name":"tug","staging_stage_count":3,"stages":[{"components":[{"id":"engine","kind":"engine","part_uid":"engine","staging_stage":2},{"id":"tank","kind":"tank","part_uid":"tank","staging_stage":1}]}]}]
@@ -94,6 +99,7 @@ func _initialize() -> void:
 	assert(is_zero_approx(float(rcs_stage.rcs_thrust)))
 	assert(RocketAssembly.stage_rcs_elements(rcs_stage).is_empty())
 	var sim := SimulationView.new()
+	assert(not sim.has_method("detach_component"), "Individual spacecraft parts must not be detachable")
 	sim.vehicle_name = "Stage Test"
 	sim.set_rocket_design(RocketDesign.create_default())
 	assert(not sim.staging_plan.is_empty())
