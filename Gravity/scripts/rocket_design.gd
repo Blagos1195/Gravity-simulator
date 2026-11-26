@@ -409,7 +409,7 @@ static func validation_errors(design: Dictionary) -> PackedStringArray:
 			var has_structural_root := root_index >= 0
 			if not has_structural_root:
 				errors.append("Stage %d has no structural root. Attach the assembly to a stack-mounted part." % (i + 1))
-			var pending: Array[int] = [root_index] if has_structural_root else []
+			var pending: Array = [root_index] if has_structural_root else []
 			while not pending.is_empty():
 				var current: int = pending.pop_back()
 				if visited.has(current):
