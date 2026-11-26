@@ -426,7 +426,7 @@ func _build_interface() -> void:
 	toolbar.add_theme_constant_override("separation", 8)
 	root.add_child(toolbar)
 	var title := Label.new()
-	title.text = "VEHICLE ASSEMBLY"
+	title.text = "VEHICLE BUILDER"
 	title.add_theme_font_size_override("font_size", 19)
 	title.add_theme_color_override("font_color", Color(0.62, 0.84, 1.0))
 	toolbar.add_child(title)
@@ -1382,6 +1382,42 @@ func _show_preset_dialog() -> void:
 	)
 	buttons.add_child(load_button)
 	window.popup_centered()
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not event is InputEventKey or not event.pressed or event.echo:
+		return
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is SpinBox or focus is TextEdit:
+		return
+	if event.ctrl_pressed and event.keycode == KEY_Z:
+		_undo_change()
+		get_viewport().set_input_as_handled()
+		return
+	if event.ctrl_pressed and event.keycode == KEY_Y:
+		_redo_change()
+		get_viewport().set_input_as_handled()
+		return
+	if event.ctrl_pressed and event.keycode == KEY_D:
+		_duplicate_selected_component()
+		get_viewport().set_input_as_handled()
+		return
+	if event.keycode == KEY_DELETE or event.keycode == KEY_BACKSPACE:
+		_remove_selected_component()
+		get_viewport().set_input_as_handled()
+		return
+	if selected_component_index < 0:
+		return
+	var components: Array = _current_stage().get("components", [])
+	if selected_component_index >= components.size():
+		return
+	var rotation := float(components[selected_component_index].get("rotation_deg", 0.0))
+	if event.keycode == KEY_Q:
+		_update_component_property("rotation_deg", rotation - 15.0)
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_E:
+		_update_component_property("rotation_deg", rotation + 15.0)
+		get_viewport().set_input_as_handled()
+
 
 func _finish() -> void:
 	_emit_design()
