@@ -26,6 +26,7 @@ class AssemblyCanvas extends Control:
 	signal component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2)
 	signal component_moved(from_index: int, to_index: int)
 	signal component_position_changed(index: int, position_m: Vector2)
+	signal component_rotation_started(index: int)
 	signal component_rotated(index: int, rotation_deg: float)
 	signal component_selected(index: int)
 
@@ -76,12 +77,7 @@ class AssemblyCanvas extends Control:
 			var components: Array = stage.get("components", [])
 			if from_index < 0 or from_index >= components.size():
 				return
-			if str(components[from_index].get("attachment", "stack")) == "free":
-				component_position_changed.emit(from_index, position_m)
-			else:
-				var to_index := _insert_index(at_position.y)
-				if to_index >= 0 and from_index != to_index:
-					component_moved.emit(from_index, to_index)
+			component_position_changed.emit(from_index, position_m)
 
 	func _canvas_to_metres(position: Vector2) -> Vector2:
 		var stack_length := 0.0
@@ -140,6 +136,7 @@ class AssemblyCanvas extends Control:
 						var component: Dictionary = (stage.get("components", []) as Array)[_rotating_index]
 						_rotation_start_degrees = float(component.get("rotation_deg", 0.0))
 						_rotation_start_angle = (event.position - _rotation_center).angle()
+						component_rotation_started.emit(_rotating_index)
 						accept_event()
 						return
 					if item.rect.has_point(event.position):
@@ -594,6 +591,7 @@ func _build_interface() -> void:
 	_canvas.component_dropped.connect(_on_component_dropped)
 	_canvas.component_moved.connect(_on_component_moved)
 	_canvas.component_position_changed.connect(_on_component_position_changed)
+	_canvas.component_rotation_started.connect(_on_component_rotation_started)
 	_canvas.component_rotated.connect(_on_component_rotated)
 	_canvas.component_selected.connect(_on_component_selected)
 	_snap_selector = OptionButton.new()
@@ -853,7 +851,9 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 		return
 	var components: Array = updated.get("components", [])
 	if attachment == "free" and not components.is_empty():
-		components.back()["position_m"] = [position_m.x, position_m.y]
+		var added_component: Dictionary = components.back()
+		added_component["position_m"] = [position_m.x, position_m.y]
+		components[components.size() - 1] = added_component
 		updated = RocketAssembly.compile_stage(updated, components)
 	if attachment == "stack" and insert_index < 0 and str(components.back().get("kind", "")) != "engine":
 		insert_index = components.size() - 1
@@ -899,10 +899,18 @@ func _on_component_position_changed(index: int, position_m: Vector2) -> void:
 	_push_undo()
 	var component: Dictionary = components[index]
 	component["position_m"] = [position_m.x, position_m.y]
+	component["attachment"] = "free"
+	component.erase("mirror")
+	component.erase("side")
+	component.erase("mount_index")
+	component["position_m"] = [position_m.x, position_m.y]
 	components[index] = component
 	design["stages"][selected_stage_index] = RocketAssembly.compile_stage(_current_stage(), components)
 	selected_component_index = index
 	_changed()
+
+func _on_component_rotation_started(_index: int) -> void:
+	_push_undo()
 
 func _on_component_rotated(index: int, rotation_deg: float) -> void:
 	if index < 0 or index >= _current_stage().get("components", []).size():
