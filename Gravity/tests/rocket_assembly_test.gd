@@ -147,10 +147,12 @@ func _initialize() -> void:
 	var release_design := RocketDesign.create_default()
 	release_design["stages"] = paired_stages
 	release_simulation.set_rocket_design(release_design)
-	var released_module: Dictionary = {}
-	release_simulation.stage_separated.connect(func(stage_data: Dictionary): released_module = stage_data)
+	var released_modules: Array[Dictionary] = []
+	release_simulation.stage_separated.connect(func(stage_data: Dictionary): released_modules.append(stage_data))
 	assert(release_simulation._release_upper_module(1), "A paired docking connector should release the upper module")
 	assert(release_simulation.rocket_stages.size() == 1, "The launch vehicle should retain its lower stage after module release")
+	assert(released_modules.size() == 1, "The docking release should create exactly one independent module")
+	var released_module: Dictionary = released_modules[0]
 	assert((released_module.get("stages", []) as Array).size() == 1, "The released module should retain its complete upper stack")
 	assert(is_equal_approx(float(released_module.get("payload_mass", 0.0)), float(release_design.get("payload_mass", 0.0))))
 	release_simulation.free()
