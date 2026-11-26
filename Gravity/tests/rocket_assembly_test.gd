@@ -52,7 +52,13 @@ func _initialize() -> void:
 					found_separator_action = true
 			assert(found_separator_action, "The next action stage must release the preceding physical stage")
 		var repeated_preset := RocketAssembly.add_preset_hardware(preset_design)
-		assert(repeated_preset.stages[-1].components.filter(func(part: Dictionary) -> bool: return str(part.get("preset_hardware_role", "")) == "connector").size() == 1, "Preset hardware should not duplicate when applied twice")
+		var connector_count := 0
+		for repeated_component in repeated_preset.stages[-1].components:
+			if str(repeated_component.get("preset_hardware_role", "")) == "connector":
+				connector_count += 1
+		assert(connector_count == 1, "Preset hardware should not duplicate when applied twice")
+	var independent_action_stages := StagingSystem.create_plan([{"staging_stage_count":1,"stages":[{}, {}, {}]}])
+	assert(independent_action_stages.size() == 1, "Action stages should be independent of physical stage count")
 	var with_tank := RocketAssembly.add_component(assembled, "medium_tank")
 	assert(not with_tank.is_empty())
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(with_tank), original_dry_mass + 6000.0))
