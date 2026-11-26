@@ -25,6 +25,13 @@ func _initialize() -> void:
 	assert(builder._snap_selector.get_item_text(builder._snap_selector.selected) == "Free")
 	assert(builder._canvas.snap_mode == "Off")
 	assert(is_equal_approx(builder._canvas.rotation_snap_degrees, 15.0))
+	var tank_nodes := builder._canvas._component_attachment_nodes(Rect2(0.0, 0.0, 100.0, 200.0), RocketAssembly.component_definition("heavy_tank"))
+	var engine_nodes := builder._canvas._component_attachment_nodes(Rect2(0.0, 0.0, 100.0, 200.0), RocketAssembly.component_definition("heavy_engine"))
+	assert(tank_nodes.size() == 6)
+	assert(engine_nodes.size() == 1)
+	assert(builder._canvas._has_matching_attachment_node(RocketAssembly.component_definition("heavy_engine"), Vector2.DOWN, "structural"))
+	assert(not builder._canvas._has_matching_attachment_node(RocketAssembly.component_definition("heavy_engine"), Vector2.UP, "structural"))
+
 	assert(builder._canvas._snap_position(Vector2(0.62, 0.62)) == Vector2(0.62, 0.62))
 	assert(builder._parts_list.get_child_count() >= 14)
 	builder._canvas.stage = {"components": [{}]}
