@@ -3750,14 +3750,17 @@ func _show_autopilot_panel() -> void:
 	description.text = "Choose a destination, configure automatic guidance and monitor fuel margins. Manual route design is available in the Flight Computer."
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(description)
+	var jump_status := Label.new()
+	jump_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(jump_status)
 	var jump_button := Button.new()
 	jump_button.text = "JUMP TO NEXT AUTOPILOT EVENT"
 	jump_button.pressed.connect(func():
 		var event_time := float(sim.call("next_autopilot_event_time"))
 		if event_time <= sim.sim_time + 1.0:
-			report.text += "\\n\\nNO FUTURE COAST OR MANOEUVRE EVENT IS AVAILABLE TO JUMP TO."
+			jump_status.text = "NO FUTURE COAST OR MANOEUVRE EVENT IS AVAILABLE TO JUMP TO."
 		elif sim.call("begin_time_jump", event_time - 5.0):
-			report.text += "\\n\\nTIME ADVANCE ACTIVE  •  ARRIVING FIVE SECONDS BEFORE THE NEXT AUTOPILOT EVENT."
+			jump_status.text = "TIME ADVANCE ACTIVE  •  ARRIVING FIVE SECONDS BEFORE THE NEXT AUTOPILOT EVENT."
 	)
 	root.add_child(jump_button)
 	var calculate_simulated_transfer := false
