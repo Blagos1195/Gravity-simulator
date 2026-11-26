@@ -1428,6 +1428,80 @@
             0.62,
             0.72,
             0.8
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_upper",
+              "position": [
+                -0.5,
+                -0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_lower",
+              "position": [
+                -0.5,
+                0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_upper",
+              "position": [
+                0.5,
+                -0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_lower",
+              "position": [
+                0.5,
+                0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1441,6 +1515,80 @@
             0.45,
             0.62,
             0.76
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_upper",
+              "position": [
+                -0.5,
+                -0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_lower",
+              "position": [
+                -0.5,
+                0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_upper",
+              "position": [
+                0.5,
+                -0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_lower",
+              "position": [
+                0.5,
+                0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1454,6 +1602,80 @@
             0.35,
             0.55,
             0.7
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_upper",
+              "position": [
+                -0.5,
+                -0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_lower",
+              "position": [
+                -0.5,
+                0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_upper",
+              "position": [
+                0.5,
+                -0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_lower",
+              "position": [
+                0.5,
+                0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1467,6 +1689,80 @@
             0.3,
             0.48,
             0.65
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_upper",
+              "position": [
+                -0.5,
+                -0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_lower",
+              "position": [
+                -0.5,
+                0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_upper",
+              "position": [
+                0.5,
+                -0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_lower",
+              "position": [
+                0.5,
+                0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1483,6 +1779,80 @@
             0.42,
             0.58,
             0.78
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_upper",
+              "position": [
+                -0.5,
+                -0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left_lower",
+              "position": [
+                -0.5,
+                0.28
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_upper",
+              "position": [
+                0.5,
+                -0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right_lower",
+              "position": [
+                0.5,
+                0.28
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            }
           ]
         }
       ],
@@ -1500,6 +1870,20 @@
             0.58,
             0.62,
             0.68
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1515,6 +1899,20 @@
             0.62,
             0.66,
             0.72
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1530,6 +1928,20 @@
             0.52,
             0.58,
             0.66
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1545,6 +1957,20 @@
             0.65,
             0.68,
             0.73
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1562,6 +1988,20 @@
             0.45,
             0.72,
             0.9
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1581,6 +2021,20 @@
             0.62,
             0.48,
             0.36
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            }
           ]
         }
       ],
@@ -1595,6 +2049,32 @@
             0.72,
             0.75,
             0.8
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1607,6 +2087,32 @@
             0.58,
             0.64,
             0.72
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            }
           ]
         }
       ],
@@ -1621,6 +2127,56 @@
             0.46,
             0.55,
             0.65
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1633,6 +2189,104 @@
             0.78,
             0.82,
             0.88
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bay_roof_left",
+              "position": [
+                -0.25,
+                -0.28
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "bay_roof_right",
+              "position": [
+                0.25,
+                -0.28
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "bay_floor_left",
+              "position": [
+                -0.25,
+                0.28
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "bay_floor_right",
+              "position": [
+                0.25,
+                0.28
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
           ]
         }
       ],
@@ -1651,6 +2305,44 @@
             0.72,
             0.76,
             0.82
+          ],
+          "attachment_nodes": [
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            }
           ]
         }
       ],
@@ -1666,6 +2358,32 @@
             0.78,
             0.72,
             0.48
+          ],
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            }
           ]
         }
       ],
@@ -1681,6 +2399,44 @@
             0.36,
             0.62,
             0.45
+          ],
+          "attachment_nodes": [
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            }
           ]
         },
         {
@@ -1695,6 +2451,44 @@
             0.25,
             0.42,
             0.72
+          ],
+          "attachment_nodes": [
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            }
           ]
         }
       ],
@@ -1716,7 +2510,81 @@
           "satellite_role": "observation",
           "revenue_per_day": 15000,
           "operating_cost_per_day": 4000,
-          "operational_lifetime_days": 3650
+          "operational_lifetime_days": 3650,
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "internal_top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "internal_bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
+          ]
         },
         {
           "id": "communications_satellite_bus",
@@ -1734,7 +2602,81 @@
           "satellite_role": "communications",
           "revenue_per_day": 45000,
           "operating_cost_per_day": 9000,
-          "operational_lifetime_days": 3650
+          "operational_lifetime_days": 3650,
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "internal_top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "internal_bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
+          ]
         },
         {
           "id": "survey_satellite_bus",
@@ -1753,7 +2695,81 @@
           "satellite_role": "science",
           "revenue_per_day": 30000,
           "operating_cost_per_day": 10000,
-          "operational_lifetime_days": 2920
+          "operational_lifetime_days": 2920,
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "internal_top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "internal_bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
+          ]
         },
         {
           "id": "deep_space_telescope_bus",
@@ -1772,7 +2788,81 @@
           "satellite_role": "navigation",
           "revenue_per_day": 50000,
           "operating_cost_per_day": 20000,
-          "operational_lifetime_days": 1825
+          "operational_lifetime_days": 1825,
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "internal_top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "internal_bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
+          ]
         },
         {
           "id": "science_probe_bus",
@@ -1786,7 +2876,81 @@
             0.87,
             0.93
           ],
-          "visual_type": "probe"
+          "visual_type": "probe",
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "internal_top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "internal_bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
+          ]
         },
         {
           "id": "crew_capsule",
@@ -1800,7 +2964,81 @@
             0.88,
             0.94
           ],
-          "visual_type": "crew"
+          "visual_type": "crew",
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "internal_top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "internal_bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
+          ]
         },
         {
           "id": "cargo_module",
@@ -1814,7 +3052,81 @@
             0.68,
             0.76
           ],
-          "visual_type": "cargo"
+          "visual_type": "cargo",
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "internal_top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "internal_bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
+          ]
         },
         {
           "id": "heavy_cargo_module",
@@ -1828,7 +3140,81 @@
             0.58,
             0.68
           ],
-          "visual_type": "cargo"
+          "visual_type": "cargo",
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "internal_top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "internal_bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
+          ]
         },
         {
           "id": "avionics_control_module",
@@ -1842,7 +3228,81 @@
             0.62,
             0.68
           ],
-          "visual_type": "avionics"
+          "visual_type": "avionics",
+          "attachment_nodes": [
+            {
+              "id": "top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "left",
+              "position": [
+                -0.5,
+                0
+              ],
+              "direction": [
+                -1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "right",
+              "position": [
+                0.5,
+                0
+              ],
+              "direction": [
+                1,
+                0
+              ],
+              "type": "structural"
+            },
+            {
+              "id": "internal_top",
+              "position": [
+                0,
+                -0.5
+              ],
+              "direction": [
+                0,
+                -1
+              ],
+              "type": "internal"
+            },
+            {
+              "id": "internal_bottom",
+              "position": [
+                0,
+                0.5
+              ],
+              "direction": [
+                0,
+                1
+              ],
+              "type": "internal"
+            }
+          ]
         }
       ]
     }

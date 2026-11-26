@@ -25,6 +25,13 @@ func _initialize() -> void:
 	assert(builder._snap_selector.get_item_text(builder._snap_selector.selected) == "Free")
 	assert(builder._canvas.snap_mode == "Off")
 	assert(is_equal_approx(builder._canvas.rotation_snap_degrees, 15.0))
+	var tank_nodes := builder._canvas._component_attachment_nodes(Rect2(0.0, 0.0, 100.0, 200.0), RocketAssembly.component_definition("heavy_tank"))
+	var engine_nodes := builder._canvas._component_attachment_nodes(Rect2(0.0, 0.0, 100.0, 200.0), RocketAssembly.component_definition("heavy_engine"))
+	assert(tank_nodes.size() == 6)
+	assert(engine_nodes.size() == 1)
+	assert(builder._canvas._has_matching_attachment_node(RocketAssembly.component_definition("heavy_engine"), Vector2.DOWN, "structural"))
+	assert(not builder._canvas._has_matching_attachment_node(RocketAssembly.component_definition("heavy_engine"), Vector2.UP, "structural"))
+
 	assert(builder._canvas._snap_position(Vector2(0.62, 0.62)) == Vector2(0.62, 0.62))
 	assert(builder._parts_list.get_child_count() >= 14)
 	builder._canvas.stage = {"components": [{}]}
@@ -32,6 +39,13 @@ func _initialize() -> void:
 	var top_node: Dictionary = builder._canvas._find_attachment_target(Vector2(125.0, 101.0))
 	assert(str(top_node.get("attachment", "")) == "stack")
 	assert(int(top_node.get("insert_index", -1)) == 0)
+	var rotated_rect := Rect2(100.0, 100.0, 40.0, 100.0)
+	var rotated_item := {"index": 0, "rect": rotated_rect, "attachment": "stack", "center": rotated_rect.get_center(), "rotation": PI * 0.5}
+	assert(not builder._canvas._rect_hit(rotated_item, Vector2(100.0, 100.0)))
+	assert(builder._canvas._rect_hit(rotated_item, Vector2(120.0, 160.0)))
+	var custom_nodes := builder._canvas._component_attachment_nodes(rotated_rect, {"rotation_deg": 90.0, "attachment_nodes": [{"id": "left_mount", "position": [-0.5, 0.0], "direction": [-1.0, 0.0]}]})
+	assert(custom_nodes.size() == 1)
+	assert(Vector2(custom_nodes[0].direction).is_equal_approx(Vector2(0.0, -1.0)))
 	var side_node: Dictionary = builder._canvas._find_attachment_target(Vector2(101.0, 150.0))
 	assert(str(side_node.get("attachment", "")) == "side")
 	assert(int(side_node.get("side", 0)) == -1)
@@ -89,6 +103,29 @@ func _initialize() -> void:
 	var part_count: int = builder.design.stages[0].components.size()
 	builder._duplicate_selected_component()
 	assert(builder.design.stages[0].components.size() == part_count + 1)
+	var connected_design := RocketDesign.create_default()
+	var connected_stage: Dictionary = RocketAssembly.ensure_stage_components(connected_design.stages[0])
+	connected_design.stages[0] = connected_stage
+	var connected_components: Array = connected_stage.components
+	var parent_uid := str(connected_components[0].get("part_uid", ""))
+	var graph_builder := RocketBuilder.new()
+	graph_builder.configure(connected_design, 0)
+	graph_builder._build_interface()
+	graph_builder._refresh()
+	graph_builder._add_component("battery_pack", "free", false, 1, -1, Vector2(0.0, 0.0), parent_uid, "right")
+	var linked_component: Dictionary = graph_builder.design.stages[0].components.back()
+	assert(str(linked_component.get("structural_parent_uid", "")) == parent_uid)
+	assert(not str(RocketDesign.validation_errors(graph_builder.design)).contains("disconnected part"))
+	var loose_design := RocketDesign.create_default()
+	var loose_builder := RocketBuilder.new()
+	loose_builder.configure(loose_design, 0)
+	loose_builder._build_interface()
+	loose_builder._refresh()
+	loose_builder._add_component("battery_pack", "free", false, 1, -1, Vector2(0.0, 0.0))
+	var loose_errors := RocketDesign.validation_errors(loose_builder.design)
+	assert(str(loose_errors).contains("disconnected part"))
+	graph_builder.free()
+	loose_builder.free()
 	var emitted_designs: Array[Dictionary] = []
 	builder.design_changed.connect(func(updated: Dictionary): emitted_designs.append(updated))
 	builder._emit_design()
@@ -115,6 +152,58 @@ func _initialize() -> void:
 	side_stage = side_builder.design.stages[0]
 	assert(str(side_stage.components.back().attachment) == "side")
 	assert(int(side_stage.components.back().mount_index) >= 0)
+	var group_builder := RocketBuilder.new()
+	group_builder.configure(RocketDesign.create_default(), 0)
+	group_builder._build_interface()
+	group_builder._refresh()
+	group_builder._canvas.size = Vector2(800.0, 600.0)
+	group_builder._canvas.selected_indices = [0]
+	group_builder._canvas.selected_index = 0
+	group_builder._canvas._component_rects = [
+		{"index": 0, "rect": Rect2(100.0, 100.0, 40.0, 80.0), "attachment": "stack"},
+		{"index": 1, "rect": Rect2(160.0, 100.0, 40.0, 80.0), "attachment": "stack"}
+	]
+	var multi_select_event := InputEventMouseButton.new()
+	multi_select_event.button_index = MOUSE_BUTTON_LEFT
+	multi_select_event.pressed = true
+	multi_select_event.ctrl_pressed = true
+	multi_select_event.position = Vector2(180.0, 140.0)
+	group_builder._canvas._gui_input(multi_select_event)
+	assert(group_builder._canvas.selected_indices.size() == 2)
+	var zoom_anchor := Vector2(180.0, 240.0)
+	var before_zoom := (zoom_anchor - group_builder._canvas.size * 0.5 - group_builder._canvas.view_offset) / group_builder._canvas.zoom
+	group_builder._canvas._zoom_at(2.0, zoom_anchor)
+	var after_zoom := (zoom_anchor - group_builder._canvas.size * 0.5 - group_builder._canvas.view_offset) / group_builder._canvas.zoom
+	assert(before_zoom.is_equal_approx(after_zoom))
+	var pan_offset_before := group_builder._canvas.view_offset
+	var pan_start := InputEventMouseButton.new()
+	pan_start.button_index = MOUSE_BUTTON_MIDDLE
+	pan_start.pressed = true
+	pan_start.position = Vector2(100.0, 100.0)
+	group_builder._canvas._gui_input(pan_start)
+	var pan_motion := InputEventMouseMotion.new()
+	pan_motion.position = Vector2(145.0, 130.0)
+	group_builder._canvas._gui_input(pan_motion)
+	assert(group_builder._canvas.view_offset.distance_to(pan_offset_before + Vector2(45.0, 30.0)) < 0.01)
+	var group_stage_before: Dictionary = group_builder.design.stages[0]
+	assert(group_stage_before.components.size() >= 2)
+	group_builder._on_components_position_changed([0, 1], [Vector2(-2.0, 0.0), Vector2(2.0, 0.0)])
+	var group_stage_after: Dictionary = group_builder.design.stages[0]
+	assert(str(group_stage_after.components[0].attachment) == "free")
+	assert(str(group_stage_after.components[1].attachment) == "free")
+	assert(group_stage_after.components[0].position_m == [-2.0, 0.0])
+	assert(group_stage_after.components[1].position_m == [2.0, 0.0])
+	group_builder._on_components_group_rotated([0, 1], [Vector2(-3.0, 1.0), Vector2(3.0, -1.0)], [90.0, 90.0])
+	var rotated_group_stage: Dictionary = group_builder.design.stages[0]
+	assert(rotated_group_stage.components[0].position_m == [-3.0, 1.0])
+	assert(rotated_group_stage.components[1].position_m == [3.0, -1.0])
+	assert(is_equal_approx(float(rotated_group_stage.components[0].rotation_deg), 90.0))
+	assert(is_equal_approx(float(rotated_group_stage.components[1].rotation_deg), 90.0))
+	group_builder._duplicate_selected_stage()
+	group_builder._on_canvas_stage_selected(1, 0)
+	assert(group_builder.selected_stage_index == 1)
+	assert(group_builder.selected_component_index == 0)
+	group_builder.free()
 	side_builder.free()
 	builder.free()
 	print("KSP-style vehicle assembly builder tests passed.")
