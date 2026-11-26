@@ -146,7 +146,8 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 				separator["staging_action"] = "separate"
 				separator["staging_stage"] = stage_index * 2 + 1
 				separator["staging_action_disabled"] = stage_index == payload_boundary_index
-				components[components.size() - 1] = separator
+				components.pop_back()
+				components.insert(0, separator)
 				stage = compile_stage(stage, components)
 		if stage_index == payload_boundary_index:
 			var has_lower_interface := false
@@ -159,7 +160,7 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 				components = stage.get("components", []).duplicate(true)
 				var lower_port: Dictionary = components.pop_back()
 				lower_port["preset_hardware_role"] = "payload_interface_lower"
-				lower_port["port_facing"] = -1
+				lower_port["port_facing"] = 1
 				components.insert(0, lower_port)
 				stage = compile_stage(stage, components)
 		if stage_index == stages.size() - 1:
@@ -174,7 +175,7 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 					components = stage.get("components", []).duplicate(true)
 					var upper_port: Dictionary = components.back()
 					upper_port["preset_hardware_role"] = "payload_interface_upper"
-					upper_port["port_facing"] = 1
+					upper_port["port_facing"] = -1
 					upper_port["staging_stage"] = payload_boundary_index * 2 + 1
 					components[components.size() - 1] = upper_port
 					stage = compile_stage(stage, components)
@@ -188,9 +189,25 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 				components = stage.get("components", []).duplicate(true)
 				var connector: Dictionary = components.pop_back()
 				connector["preset_hardware_role"] = "connector"
-				connector["port_facing"] = -1
+				connector["port_facing"] = 1
 				components.insert(0, connector)
 				stage = compile_stage(stage, components)
+		components = stage.get("components", []).duplicate(true)
+		var tank_mount_index := 0
+		for component_index in range(components.size()):
+			if str(components[component_index].get("kind", "")) == "tank":
+				tank_mount_index = component_index
+				break
+		var updated_mounts := false
+		for component_index in range(components.size()):
+			var component: Dictionary = components[component_index]
+			if str(component.get("preset_hardware_role", "")) != "rcs":
+				continue
+			component["mount_index"] = tank_mount_index
+			components[component_index] = component
+			updated_mounts = true
+		if updated_mounts:
+			stage = compile_stage(stage, components)
 		stages[stage_index] = stage
 	design["stages"] = stages
 	var action_stage_labels: Array = []
