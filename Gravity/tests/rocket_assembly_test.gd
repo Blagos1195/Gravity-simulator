@@ -259,6 +259,38 @@ func _initialize() -> void:
 	}]
 	var docked_mass_properties := simulation._vehicle_mass_properties()
 	assert(Vector2(docked_mass_properties.center_of_mass).x > 0.0, "An offset docked spacecraft should shift the vehicle centre of mass")
+	var rotated_docked_stage := RocketAssembly.add_component(assembled, "vacuum_engine")
+	rotated_docked_stage = RocketAssembly.add_component(rotated_docked_stage, "rcs_thruster_block")
+	var docked_engine_uid := ""
+	var docked_rcs_uid := ""
+	for component in rotated_docked_stage.components:
+		if str(component.get("id", "")) == "vacuum_engine":
+			docked_engine_uid = str(component.get("part_uid", ""))
+		elif str(component.get("id", "")) == "rcs_thruster_block":
+			docked_rcs_uid = str(component.get("part_uid", ""))
+	simulation.set_rocket_design(RocketDesign.create_default())
+	simulation.rotation_angle = 0.0
+	simulation.docked_visuals = [{
+		"mass": 10000.0,
+		"offset": Vector2(20.0, 0.0),
+		"center_of_mass": Vector2.ZERO,
+		"moment_of_inertia": 100000.0,
+		"rotation": PI * 0.5,
+		"design": {"stages": [rotated_docked_stage]},
+		"stage_index": 0
+	}]
+	var rotated_docked_engines := simulation._remaining_engine_elements(1.0, 0.0)
+	var rotated_docked_engine_found := false
+	for engine in rotated_docked_engines:
+		if str(engine.get("part_uid", "")) == docked_engine_uid:
+			rotated_docked_engine_found = Vector2(engine.get("direction", Vector2.ZERO)).dot(Vector2.RIGHT) > 0.99
+	assert(rotated_docked_engine_found, "Docked engine thrust direction should follow the attached module rotation")
+	var rotated_docked_jets := simulation._remaining_rcs_elements()
+	var rotated_docked_jet_found := false
+	for jet in rotated_docked_jets:
+		if str(jet.get("part_uid", "")) == docked_rcs_uid and int(jet.get("jet_index", -1)) == 0:
+			rotated_docked_jet_found = Vector2(jet.get("direction", Vector2.ZERO)).dot(Vector2.DOWN) > 0.99
+	assert(rotated_docked_jet_found, "Docked RCS directions should follow the attached module rotation")
 	simulation.free()
 	var with_engine := RocketAssembly.add_component(with_tank, "vacuum_engine")
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(with_engine), original_dry_mass + 6900.0))
