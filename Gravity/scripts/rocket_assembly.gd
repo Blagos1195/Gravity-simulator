@@ -113,7 +113,8 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 		var components: Array = stage.get("components", []).duplicate(true)
 		for component_index in range(components.size()):
 			var component: Dictionary = components[component_index]
-			component["staging_stage"] = stage_index * 2
+			if str(component.get("preset_hardware_role", "")) != "payload_interface_upper":
+				component["staging_stage"] = stage_index * 2
 			components[component_index] = component
 		stage = compile_stage(stage, components)
 		components = stage.get("components", []).duplicate(true)
