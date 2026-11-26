@@ -184,6 +184,8 @@ func _initialize() -> void:
 	main.docking_assists[loaded_parent.vehicle_name] = loaded_child.vehicle_name
 	main._save_game(false)
 	main._load_game_from_path(save_path)
+	loaded_parent = main.fleet_sims[0]
+	loaded_child = main.fleet_sims[1]
 	assert(str(main.docking_assists.get(loaded_parent.vehicle_name, "")) == loaded_child.vehicle_name, "Rendezvous assist state was not restored from save")
 	loaded_parent.rotation_angle = 0.0
 	loaded_child.rotation_angle = PI
