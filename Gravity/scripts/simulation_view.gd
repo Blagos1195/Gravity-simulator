@@ -500,6 +500,7 @@ func execute_staging_actions(actions: Array) -> bool:
 	var should_cutoff := false
 	var should_separate := false
 	var module_release_index := -1
+	var component_group_release_uid := ""
 	for action in actions:
 		if not action is Dictionary:
 			continue
@@ -513,12 +514,16 @@ func execute_staging_actions(actions: Array) -> bool:
 					should_separate = true
 			"undock_module":
 				module_release_index = int(action.get("physical_stage_index", -1))
+			"undock_component_group":
+				component_group_release_uid = str(action.get("part_id", ""))
 	if should_cutoff:
 		thrust_key_down = false
 	if should_ignite:
 		thrust_key_down = true
 	if should_separate:
 		_separate_stage()
+	elif not component_group_release_uid.is_empty():
+		_release_component_group(component_group_release_uid)
 	elif module_release_index > stage_index:
 		_release_upper_module(module_release_index)
 	return true
@@ -540,6 +545,7 @@ func activate_current_action_stage() -> bool:
 	var should_cutoff := false
 	var should_separate := false
 	var module_release_index := -1
+	var component_group_release_uid := ""
 	for action in actions:
 		if not action is Dictionary or bool(action.get("completed", false)):
 			continue
@@ -553,6 +559,8 @@ func activate_current_action_stage() -> bool:
 					should_separate = true
 			"undock_module":
 				module_release_index = int(action.get("physical_stage_index", -1))
+			"undock_component_group":
+				component_group_release_uid = str(action.get("part_id", ""))
 	_apply_staging_part_states()
 	if should_cutoff:
 		thrust_key_down = false
@@ -560,6 +568,8 @@ func activate_current_action_stage() -> bool:
 		thrust_key_down = true
 	if should_separate and stage_index < rocket_stages.size() - 1:
 		_separate_stage()
+		_prune_staging_plan_to_attached_parts()
+	elif not component_group_release_uid.is_empty() and _release_component_group(component_group_release_uid):
 		_prune_staging_plan_to_attached_parts()
 	elif module_release_index > stage_index and _release_upper_module(module_release_index):
 		_prune_staging_plan_to_attached_parts()
@@ -1561,6 +1571,170 @@ func _separate_stage() -> void:
 	_sync_legacy_fuel_from_tanks()
 	infinite_fuel_stage_remaining = fuel
 	thrust_key_down = false
+
+
+func _release_component_group(port_uid: String) -> bool:
+	if resource_inventory_external or docked_mass > 0.001:
+		return false
+	var group_id := ""
+	var port_stage_index := -1
+	var port_offset := Vector2.ZERO
+	var separation_direction := Vector2.UP
+	var total_length := 0.0
+	var geometries: Array[Dictionary] = []
+	for stage in rocket_stages:
+		var geometry := RocketAssembly.stage_geometry(stage)
+		geometries.append(geometry)
+		total_length += float(geometry.get("length", 1.0))
+	var cursor := -total_length * 0.5
+	for stage_index_value in range(rocket_stages.size()):
+		var stage: Dictionary = rocket_stages[stage_index_value]
+		var stage_center := cursor + float(geometries[stage_index_value].get("length", 1.0)) * 0.5
+		for port in RocketAssembly.stage_docking_ports(stage, stage_center):
+			if str(port.get("part_uid", "")) == port_uid:
+				var components: Array = stage.get("components", [])
+				var component: Dictionary = components[int(port.get("component_index", -1))]
+				group_id = RocketAssembly.component_group_id(component)
+				port_stage_index = stage_index_value
+				port_offset = Vector2(port.position)
+				separation_direction = -Vector2(port.normal).normalized()
+				break
+		if not group_id.is_empty():
+			break
+		cursor += float(geometries[stage_index_value].get("length", 1.0))
+	if group_id.is_empty() or port_stage_index < stage_index:
+		return false
+	var released_stages: Array = []
+	var retained_stages: Array = []
+	var released_old_indices: Array[int] = []
+	var retained_old_indices: Array[int] = []
+	for old_index in range(rocket_stages.size()):
+		var split := RocketAssembly.split_stage_by_group(rocket_stages[old_index], group_id)
+		if split.is_empty():
+			retained_stages.append(rocket_stages[old_index].duplicate(true))
+			retained_old_indices.append(old_index)
+		else:
+			released_stages.append(split.released)
+			released_old_indices.append(old_index)
+			retained_stages.append(split.retained)
+			retained_old_indices.append(old_index)
+	if released_stages.is_empty() or retained_stages.is_empty() or not retained_old_indices.has(stage_index):
+		return false
+	var group_parts: Dictionary = {}
+	for stage in released_stages:
+		for component in stage.get("components", []):
+			group_parts[str(component.get("part_uid", ""))] = true
+	var retained_parts: Dictionary = {}
+	for stage in retained_stages:
+		for component in stage.get("components", []):
+			retained_parts[str(component.get("part_uid", ""))] = true
+	var released_tanks: Array = []
+	var retained_tanks: Array = []
+	var released_fuel_by_old_stage: Dictionary = {}
+	var retained_fuel_by_old_stage: Dictionary = {}
+	for tank_variant in resource_tanks:
+		if not tank_variant is Dictionary:
+			continue
+		var tank: Dictionary = tank_variant.duplicate(true)
+		if str(tank.get("module_id", vehicle_name)) != vehicle_name:
+			retained_tanks.append(tank)
+			continue
+		var old_stage := int(tank.get("stage_index", 0))
+		if group_parts.has(str(tank.get("part_uid", ""))):
+			released_tanks.append(tank)
+			released_fuel_by_old_stage[old_stage] = float(released_fuel_by_old_stage.get(old_stage, 0.0)) + float(tank.get("resources", {}).get("liquid_propellant", 0.0))
+		else:
+			retained_tanks.append(tank)
+			retained_fuel_by_old_stage[old_stage] = float(retained_fuel_by_old_stage.get(old_stage, 0.0)) + float(tank.get("resources", {}).get("liquid_propellant", 0.0))
+	var released_fuel: Array[float] = []
+	var retained_fuel: Array[float] = []
+	for index in range(released_stages.size()):
+		var old_index := released_old_indices[index]
+		released_fuel.append(float(released_fuel_by_old_stage.get(old_index, 0.0)))
+	for index in range(retained_stages.size()):
+		var old_index := retained_old_indices[index]
+		retained_fuel.append(float(retained_fuel_by_old_stage.get(old_index, 0.0)))
+	var released_rcs_capacity := 0.0
+	var total_rcs_capacity := _own_rcs_propellant_capacity()
+	for stage in released_stages:
+		released_rcs_capacity += RocketDesign.stage_rcs_propellant_capacity(stage)
+	var own_rcs_remaining := maxf(0.0, rcs_propellant_remaining - _external_rcs_propellant_total())
+	var released_rcs_fuel := own_rcs_remaining * released_rcs_capacity / total_rcs_capacity if total_rcs_capacity > 0.0 else 0.0
+	var released_mass := released_rcs_fuel
+	for index in range(released_stages.size()):
+		released_mass += RocketDesign.stage_total_dry_mass(released_stages[index]) + released_fuel[index]
+	for tank in released_tanks:
+		var resources: Dictionary = tank.get("resources", {})
+		released_mass += float(resources.get("xenon", 0.0)) + float(resources.get("solid_propellant", 0.0))
+	var total_mass := maxf(0.001, _current_vehicle_mass())
+	released_mass = clampf(released_mass, 0.001, total_mass - 0.001)
+	var retained_mass := total_mass - released_mass
+	var world_offset := port_offset.rotated(rotation_angle)
+	var world_direction := separation_direction.rotated(rotation_angle).normalized()
+	var separation_speed := 1.0
+	var old_position := rocket_position
+	var old_velocity := velocity
+	var released_position := old_position + world_offset * (retained_mass / total_mass)
+	var retained_position := old_position - world_offset * (released_mass / total_mass)
+	var released_velocity := old_velocity + world_direction * separation_speed * (retained_mass / total_mass)
+	var retained_velocity := old_velocity - world_direction * separation_speed * (released_mass / total_mass)
+	var retained_stage_index := retained_old_indices.find(stage_index)
+	if retained_stage_index < 0:
+		return false
+	var released_stage_index := released_old_indices.find(stage_index)
+	if released_stage_index < 0:
+		return false
+	rocket_stages = retained_stages
+	stage_fuel_remaining = retained_fuel
+	resource_tanks = retained_tanks
+	stage_index = retained_stage_index
+	rcs_propellant_remaining = maxf(0.0, rcs_propellant_remaining - released_rcs_fuel)
+	_set_rocket_position_components(retained_position.x, retained_position.y)
+	velocity = retained_velocity
+	fuel = stage_fuel_remaining[stage_index] if stage_index < stage_fuel_remaining.size() else 0.0
+	_sync_legacy_fuel_from_tanks()
+	infinite_fuel_stage_remaining = fuel
+	var released_plan: Array = []
+	var retained_plan: Array = []
+	for plan_stage in staging_plan:
+		var released_actions: Array = []
+		var retained_actions: Array = []
+		for action in plan_stage.get("actions", []):
+			if not action is Dictionary:
+				continue
+			var part_id := str(action.get("part_id", ""))
+			if group_parts.has(part_id):
+				released_actions.append(action.duplicate(true))
+			elif retained_parts.has(part_id):
+				retained_actions.append(action.duplicate(true))
+		released_plan.append({"id":str(plan_stage.get("id", "")), "label":str(plan_stage.get("label", "")), "actions":released_actions})
+		retained_plan.append({"id":str(plan_stage.get("id", "")), "label":str(plan_stage.get("label", "")), "actions":retained_actions})
+	staging_plan = retained_plan
+	staging_part_states = _current_staging_part_states()
+	action_stage_index = clampi(action_stage_index, 0, maxi(0, staging_plan.size() - 1))
+	staging_changed.emit()
+	stage_separated.emit({
+		"stages": released_stages,
+		"stage_fuel_remaining": released_fuel,
+		"payload_mass": 0.001,
+		"payload_type": "debris",
+		"payload_visual": {},
+		"fuel": released_fuel[released_stage_index],
+		"rcs_fuel": released_rcs_fuel,
+		"resource_tanks": released_tanks,
+		"dockable_module": true,
+		"position_components": PackedFloat64Array([released_position.x, released_position.y]),
+		"velocity": released_velocity,
+		"rotation_angle": rotation_angle,
+		"angular_velocity": angular_velocity,
+		"sim_time": sim_time,
+		"launch_time": launch_time,
+		"parent_vehicle_name": vehicle_name,
+		"separation_speed": separation_speed,
+		"staging_plan": released_plan
+	})
+	return true
+
 
 func _release_upper_module(module_stage_index: int) -> bool:
 	if resource_inventory_external or docked_mass > 0.001:
