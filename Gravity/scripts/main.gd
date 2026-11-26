@@ -2253,7 +2253,7 @@ func _show_new_vehicle_dialog() -> void:
 	})
 	for preset in RocketDesign.preset_options():
 		var preset_id := str(preset.get("id", ""))
-		var preset_design := RocketDesign.create_preset(preset_id)
+		var preset_design := RocketAssembly.add_preset_hardware(RocketDesign.create_preset(preset_id))
 		if RocketDesign.validation_errors(preset_design).is_empty():
 			options.append({
 				"id": preset_id,
