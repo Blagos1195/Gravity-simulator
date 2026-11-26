@@ -35,6 +35,15 @@ func _initialize() -> void:
 	assert(main._docking_assist_in_range(parent, child), "Same-altitude spacecraft outside the distance limit were not eligible for rendezvous")
 	var orbital_approach := main._docking_orbit_approach(parent, child)
 	assert(absf(Vector2(orbital_approach.direction).dot((child.rocket_position - parent.rocket_position).normalized())) < 0.01, "Distant orbital rendezvous attempted a direct path through the central body")
+	parent.rocket_position = Vector2.ZERO
+	child.rocket_position = Vector2(100000.0, 0.0)
+	second_child.rocket_position = Vector2(5000.0, 0.0)
+	parent.velocity = Vector2.ZERO
+	child.velocity = Vector2.ZERO
+	second_child.velocity = Vector2.ZERO
+	var avoidance_velocity := main._docking_avoidance_velocity(parent, child, Vector2(100.0, 0.0))
+	assert(avoidance_velocity.distance_to(Vector2(100.0, 0.0)) > 1.0, "Docking rendezvous did not steer around a spacecraft crossing its approach path")
+	assert(absf((avoidance_velocity - Vector2(100.0, 0.0)).dot(Vector2.RIGHT)) < 0.01, "Docking traffic avoidance did not choose a lateral path")
 	second_child.rotation_angle = PI
 	parent.rocket_position = Vector2(1000000.0, 2000000.0)
 	child.rocket_position = parent.rocket_position + Vector2(25.0, 0.0)
