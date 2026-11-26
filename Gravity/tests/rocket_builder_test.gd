@@ -103,6 +103,14 @@ func _initialize() -> void:
 	assert(int(side_part.mount_index) == 0)
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(side_stage), RocketDesign.stage_total_dry_mass(side_base) + 12000.0))
 	assert(is_equal_approx(RocketDesign.stage_total_fuel_capacity(side_stage), RocketDesign.stage_total_fuel_capacity(side_base) + 160000.0))
+	side_builder._on_component_repositioned(2, "stack", 1, 0)
+	side_stage = side_builder.design.stages[0]
+	assert(str(side_stage.components[0].id) == "medium_tank")
+	assert(str(side_stage.components[0].attachment) == "stack")
+	side_builder._on_component_repositioned(0, "side", -1, 0)
+	side_stage = side_builder.design.stages[0]
+	assert(str(side_stage.components.back().attachment) == "side")
+	assert(int(side_stage.components.back().mount_index) >= 0)
 	side_builder.free()
 	builder.free()
 	print("KSP-style vehicle assembly builder tests passed.")
