@@ -157,17 +157,7 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 				if str(component.get("preset_hardware_role", "")).begins_with("top_docking_port_"):
 					has_top_ports += 1
 			if has_top_ports == 0:
-				var stack_length := 0.0
-				var parent_uid := ""
-				for component in stage.get("components", []):
-					if str(component.get("attachment", "stack")) != "stack":
-						continue
-					stack_length += maxf(0.1, float(component.get("length_m", 1.0)))
-					if parent_uid.is_empty():
-						parent_uid = str(component.get("part_uid", ""))
 				var port_definition := component_definition("standard_docking_port")
-				var port_length := float(port_definition.get("length_m", 1.4))
-				var port_radius := float(port_definition.get("collision_radius_m", 0.85))
 				for port_index in range(2):
 					var port := port_definition.duplicate(true)
 					port["attachment"] = "stack"
