@@ -40,12 +40,13 @@ func _initialize() -> void:
 	planner.selected_node_index = 0
 	planner.manual_guidance_report = Label.new()
 	main.active_route_planner = planner
-	var requested_jump_time := -1.0
-	planner.time_jump_requested.connect(func(target_time: float): requested_jump_time = target_time)
+	var requested_jump_times: Array[float] = []
+	planner.time_jump_requested.connect(func(target_time: float): requested_jump_times.append(target_time))
 	planner._jump_to_selected_node()
-	assert(is_equal_approx(requested_jump_time, first.sim_time + 115.0), "Flight Computer did not request a predictive jump to five seconds before its node")
+	assert(requested_jump_times.size() == 1, "Flight Computer did not request a predictive jump")
+	assert(is_equal_approx(requested_jump_times[0], first.sim_time + 115.0), "Flight Computer jump did not stop five seconds before its node")
 	assert(not main._fast_forward_to_time(first.sim_time + 120.0), "Predictive jump passed a Flight Computer manoeuvre node")
-	assert(main._fast_forward_to_time(requested_jump_time), "Flight Computer node jump was rejected")
+	assert(main._fast_forward_to_time(requested_jump_times[0]), "Flight Computer node jump was rejected")
 	main.active_route_planner = null
 	planner.free()
 	main._add_new_vehicle()
