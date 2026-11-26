@@ -2864,10 +2864,10 @@ func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 		child.input_enabled = child == sim
 		var separation_axis := Vector2(float(link.get("offset_x", 1.0)), float(link.get("offset_y", 0.0))).rotated(parent.rotation_angle).normalized()
 		if separation_axis.length_squared() > 0.0:
-			var parent_mass := maxf(1.0, parent._current_vehicle_mass())
+			var parent_mass := maxf(1.0, inventory_owner._current_vehicle_mass())
 			var child_mass := maxf(1.0, child._current_vehicle_mass())
 			var separation_speed := 0.5
-			parent.velocity -= separation_axis * separation_speed * child_mass / (parent_mass + child_mass)
+			inventory_owner.velocity -= separation_axis * separation_speed * child_mass / (parent_mass + child_mass)
 			child.velocity += separation_axis * separation_speed * parent_mass / (parent_mass + child_mass)
 		_update_docked_masses()
 		_sync_docked_vehicles()
@@ -4363,6 +4363,7 @@ func _load_game_from_path(path: String) -> void:
 			if not bool(connection_result.get("valid", false)):
 				continue
 			loaded_graph = connection_result.graph
+			var saved_child_plan: Variant = saved_link.get("child_staging_plan", [])
 			docking_links.append({
 				"parent_name": parent_name,
 				"child_name": child_name,
@@ -4370,7 +4371,7 @@ func _load_game_from_path(path: String) -> void:
 				"offset_y": float(offset_y),
 				"port_a": port_a,
 				"port_b": port_b,
-				"child_staging_plan": saved_link.get("child_staging_plan", []).duplicate(true),
+				"child_staging_plan": saved_child_plan.duplicate(true) if saved_child_plan is Array else [],
 				"structural": bool(saved_link.get("structural", true))
 			})
 
