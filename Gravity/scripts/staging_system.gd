@@ -8,9 +8,10 @@ static func create_plan(modules: Array) -> Array:
 	var stage_count := 0
 	for module_variant in modules:
 		if module_variant is Dictionary:
-			stage_count = maxi(stage_count, (module_variant.get("stages", []) as Array).size())
-			stage_count = maxi(stage_count, int(module_variant.get("staging_stage_count", 0)))
-			for physical_stage in module_variant.get("stages", []):
+			var module_stages: Array = module_variant.get("stages", [])
+			var configured_stage_count := int(module_variant.get("staging_stage_count", 0))
+			stage_count = maxi(stage_count, configured_stage_count if configured_stage_count > 0 else module_stages.size())
+			for physical_stage in module_stages:
 				for component_variant in physical_stage.get("components", []):
 					if component_variant is Dictionary:
 						stage_count = maxi(stage_count, int(component_variant.get("staging_stage", 0)) + 1)
