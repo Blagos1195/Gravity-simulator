@@ -1175,6 +1175,8 @@ func _process(delta: float) -> void:
 		if not time_jump_active:
 			simulation_time_backlog = 0.0
 	else:
+		if time_jump_active:
+			time_warp = 1.0
 		time_jump_active = false
 		time_jump_target = -1.0
 		simulation_time_backlog = 0.0
