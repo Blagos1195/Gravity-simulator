@@ -2602,24 +2602,6 @@ func _sync_docked_vehicles() -> void:
 				continue
 			var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
 			var world_offset := local_offset.rotated(parent.rotation_angle)
-			var visual_exists := false
-			for existing_visual in parent.docked_visuals:
-				if str(existing_visual.get("name", "")) == child.vehicle_name:
-					visual_exists = true
-					break
-			if not visual_exists:
-				var child_mass_properties := child._vehicle_mass_properties()
-				parent.docked_visuals.append({
-					"name": child.vehicle_name,
-					"direction": world_offset.normalized(),
-					"offset": local_offset,
-					"mass": float(child_mass_properties.get("mass", child._current_vehicle_mass())),
-					"center_of_mass": Vector2(child_mass_properties.get("center_of_mass", Vector2.ZERO)).rotated(float(link.get("rotation_offset", 0.0))),
-					"moment_of_inertia": float(child_mass_properties.get("moment_of_inertia", 0.0)),
-					"rotation": parent.rotation_angle + float(link.get("rotation_offset", 0.0)),
-					"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "payload_visual": child.payload_visual.duplicate(true), "stages": child.rocket_stages},
-					"stage_index": child.stage_index
-				})
 			child.rocket_position = parent.rocket_position + world_offset
 			child.velocity = parent.velocity
 			child.rotation_angle = parent.rotation_angle + float(link.get("rotation_offset", 0.0))
@@ -2637,6 +2619,37 @@ func _sync_docked_vehicles() -> void:
 			child.guidance_enabled = false
 			child.thrust_key_down = false
 			child.docked_mass = 0.0
+	var visited: Dictionary = {}
+	for vehicle in fleet_sims:
+		if not _is_docked_child(vehicle.vehicle_name):
+			_build_docked_visuals_recursive(vehicle, visited)
+
+func _build_docked_visuals_recursive(parent: SimulationView, visited: Dictionary) -> void:
+	if parent == null or visited.has(parent.vehicle_name):
+		return
+	visited[parent.vehicle_name] = true
+	for link in docking_links:
+		if not bool(link.get("structural", true)) or str(link.get("parent_name", "")) != parent.vehicle_name:
+			continue
+		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		if child == null:
+			continue
+		_build_docked_visuals_recursive(child, visited)
+		var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
+		var world_offset := local_offset.rotated(parent.rotation_angle)
+		var child_mass_properties := child._vehicle_mass_properties()
+		var relative_rotation := float(link.get("rotation_offset", 0.0))
+		parent.docked_visuals.append({
+			"name": child.vehicle_name,
+			"direction": world_offset.normalized(),
+			"offset": local_offset,
+			"mass": float(child_mass_properties.get("mass", child._current_vehicle_mass())),
+			"center_of_mass": Vector2(child_mass_properties.get("center_of_mass", Vector2.ZERO)).rotated(relative_rotation),
+			"moment_of_inertia": float(child_mass_properties.get("moment_of_inertia", 0.0)),
+			"rotation": parent.rotation_angle + relative_rotation,
+			"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "payload_visual": child.payload_visual.duplicate(true), "stages": child.rocket_stages},
+			"stage_index": child.stage_index
+		})
 
 func _current_module_graph() -> Dictionary:
 	var module_ids: Array = []
