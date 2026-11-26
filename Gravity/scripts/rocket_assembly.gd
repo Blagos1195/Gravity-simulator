@@ -168,20 +168,16 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 				var port_definition := component_definition("standard_docking_port")
 				var port_length := float(port_definition.get("length_m", 1.4))
 				var port_radius := float(port_definition.get("collision_radius_m", 0.85))
-				var port_y := stack_length * 0.5 + port_radius
 				for port_index in range(2):
 					var port := port_definition.duplicate(true)
-					port["attachment"] = "free"
+					port["attachment"] = "stack"
 					port["part_uid"] = "preset_top_port_%d_%d" % [stage_index, port_index]
-					port["position_m"] = [-port_length * 0.5 if port_index == 0 else port_length * 0.5, port_y]
-					port["rotation_deg"] = 90.0 if port_index == 0 else -90.0
-					port["structural_parent_uid"] = parent_uid
-					port["structural_parent_node_id"] = "top"
-					port["preset_hardware_role"] = "top_docking_port_left" if port_index == 0 else "top_docking_port_right"
+					port["rotation_deg"] = 0.0 if port_index == 0 else 180.0
+					port["preset_hardware_role"] = "top_docking_port_upper" if port_index == 0 else "top_docking_port_lower"
 					port["port_facing"] = 1
 					port["staging_stage"] = (stages.size() - 1) * 2
 					components = stage.get("components", []).duplicate(true)
-					components.append(port)
+					components.insert(port_index, port)
 					stage = compile_stage(stage, components)
 		components = stage.get("components", []).duplicate(true)
 		var tank_mount_index := 0
