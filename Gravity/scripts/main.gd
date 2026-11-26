@@ -35,6 +35,7 @@ var simulate_belt_collisions := false
 var save_slot := 1
 var new_game_slot := 1
 var sim
+var active_route_planner: Window
 var fleet_sims: Array = []
 var pending_debris: Array[Dictionary] = []
 var debris_sequence := 0
@@ -999,6 +1000,20 @@ func _fast_forward_to_time(target_time: float) -> bool:
 		return false
 	if not docking_assists.is_empty():
 		return false
+	if is_instance_valid(active_route_planner):
+		var planner_nodes: Array = active_route_planner.get("nodes")
+		var planner_base_time := float(sim.sim_time)
+		if int(active_route_planner.get("manual_guidance_node_index")) >= 0:
+			planner_base_time = float(active_route_planner.get("manual_guidance_start_time"))
+		var next_planner_event_time := INF
+		for node_variant in planner_nodes:
+			if not node_variant is Dictionary:
+				continue
+			var node_time := planner_base_time + maxf(0.0, float(node_variant.get("time_offset", 0.0)))
+			if node_time > sim.sim_time + 1.0:
+				next_planner_event_time = minf(next_planner_event_time, node_time)
+		if next_planner_event_time < INF and target_time > next_planner_event_time - 5.0:
+			return false
 	var orbit_data: Dictionary = {}
 	for vehicle in fleet_sims:
 		if vehicle.crashed or _is_docked_child(vehicle.vehicle_name):
@@ -4161,6 +4176,11 @@ func _show_autopilot_panel() -> void:
 func _show_flight_computer() -> void:
 	var planner = RoutePlanner.new()
 	add_child(planner)
+	active_route_planner = planner
+	planner.tree_exited.connect(func():
+		if active_route_planner == planner:
+			active_route_planner = null
+	)
 	planner.configure(sim, rocket_design)
 	planner.time_jump_requested.connect(_on_flight_computer_jump_requested.bind(planner))
 	var screen_size := DisplayServer.screen_get_size()
