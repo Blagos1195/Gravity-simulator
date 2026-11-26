@@ -22,6 +22,37 @@ func _initialize() -> void:
 	assert(is_equal_approx(RocketDesign.stage_total_thrust(assembled), original_thrust))
 	assert(is_equal_approx(RocketDesign.stage_total_thrust(assembled, true), original_vacuum_thrust))
 	assert(is_equal_approx(RocketDesign.stage_total_flow(assembled), original_flow))
+	var preset_options := RocketDesign.preset_options()
+	assert(preset_options.size() == 5, "All five rocket presets should remain available")
+	for preset_option in preset_options:
+		var preset_id := str(preset_option.get("id", ""))
+		var preset_design := RocketAssembly.add_preset_hardware(RocketDesign.create_preset(preset_id))
+		var preset_stages: Array = preset_design.get("stages", [])
+		assert(not preset_stages.is_empty(), "Preset %s should contain physical stages" % preset_id)
+		for preset_stage_index in range(preset_stages.size()):
+			var preset_stage: Dictionary = preset_stages[preset_stage_index]
+			var has_stage_rcs := false
+			var has_separator := false
+			var has_connector := false
+			for preset_component in preset_stage.get("components", []):
+				if str(preset_component.get("preset_hardware_role", "")) == "rcs":
+					has_stage_rcs = str(preset_component.get("kind", "")) == "rcs"
+				elif str(preset_component.get("preset_hardware_role", "")) == "separator":
+					has_separator = str(preset_component.get("id", "")) == "stack_decoupler"
+				elif str(preset_component.get("preset_hardware_role", "")) == "connector":
+					has_connector = str(preset_component.get("kind", "")) == "docking_port"
+			assert(has_stage_rcs and RocketDesign.stage_rcs_propellant_capacity(preset_stage) > 0.0, "Every preset stage needs independent RCS and propellant")
+			assert(has_separator == (preset_stage_index < preset_stages.size() - 1), "Each physical stage boundary needs one real decoupler")
+			assert(has_connector == (preset_stage_index == preset_stages.size() - 1), "The payload end needs its own docking connector")
+		var preset_plan := StagingSystem.create_plan([preset_design])
+		for boundary_index in range(preset_stages.size() - 1):
+			var found_separator_action := false
+			for action in preset_plan[boundary_index + 1].get("actions", []):
+				if str(action.get("action", "")) == "separate" and int(action.get("physical_stage_index", -1)) == boundary_index:
+					found_separator_action = true
+			assert(found_separator_action, "The next action stage must release the preceding physical stage")
+		var repeated_preset := RocketAssembly.add_preset_hardware(preset_design)
+		assert(repeated_preset.stages[-1].components.filter(func(part: Dictionary) -> bool: return str(part.get("preset_hardware_role", "")) == "connector").size() == 1, "Preset hardware should not duplicate when applied twice")
 	var with_tank := RocketAssembly.add_component(assembled, "medium_tank")
 	assert(not with_tank.is_empty())
 	assert(is_equal_approx(RocketDesign.stage_total_dry_mass(with_tank), original_dry_mass + 6000.0))
