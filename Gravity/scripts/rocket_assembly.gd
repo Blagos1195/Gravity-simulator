@@ -111,6 +111,10 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 	for stage_index in range(stages.size()):
 		var stage := ensure_stage_components(stages[stage_index])
 		var components: Array = stage.get("components", []).duplicate(true)
+		components = components.filter(func(component: Dictionary) -> bool:
+			return not ["connector", "payload_interface_lower", "payload_interface_upper"].has(str(component.get("preset_hardware_role", "")))
+		)
+		stage = compile_stage(stage, components)
 		for component_index in range(components.size()):
 			var component: Dictionary = components[component_index]
 			if str(component.get("preset_hardware_role", "")) != "payload_interface_upper":
