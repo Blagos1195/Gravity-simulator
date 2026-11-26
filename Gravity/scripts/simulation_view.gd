@@ -907,6 +907,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var center_of_mass: Vector2 = Vector2(mass_properties.center_of_mass)
 	var inertia := maxf(1.0, float(mass_properties.moment_of_inertia))
 	var pressure_ratio := 0.0
+	var expected_throttle := autopilot_throttle if autopilot_phase == "LANDING_DESCENT" else 1.0
 	var potential_engine_torque := 0.0
 	if burn_expected:
 		var atmosphere := _atmosphere_at(rocket_position, velocity, sim_time, rocket_position_precise)
@@ -916,7 +917,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		for step in range(-16, 17):
 			var candidate_gimbal := deg_to_rad(float(step) * 0.5)
 			gimbal_angle = candidate_gimbal
-			var candidate_profile := _engine_force_profile(center_of_mass, pressure_ratio, 1.0)
+			var candidate_profile := _engine_force_profile(center_of_mass, pressure_ratio, expected_throttle)
 			var candidate_torque := absf(float(candidate_profile.get("torque", 0.0)))
 			if candidate_torque < lowest_torque:
 				lowest_torque = candidate_torque
@@ -2443,7 +2444,6 @@ func _update_guidance(dt: float) -> void:
 					_fail_autopilot("OUT OF PROPELLANT DURING ROUTE BURN")
 			"TRANSFER_BURN":
 				status_message = "AUTOPILOT  •  INTERPLANETARY INJECTION  %.0f M/S" % autopilot_burn_remaining
-				var injection_direction := autopilot_burn_direction if autopilot_burn_direction.length_squared() > 0.5 else tangent * autopilot_transfer_direction
 				thrust_key_down = propellant_available and autopilot_burn_remaining > FlightComputer.BURN_COMPLETION_TOLERANCE
 				if not propellant_available and stage_index >= rocket_stages.size() - 1:
 					_fail_autopilot("OUT OF PROPELLANT DURING DEPARTURE BURN")
