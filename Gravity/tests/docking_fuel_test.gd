@@ -4,6 +4,7 @@ const Main = preload("res://scripts/main.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const ModuleGraph = preload("res://scripts/module_graph.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -102,6 +103,21 @@ func _initialize() -> void:
 	assert(main._dock_vehicle(second_child.vehicle_name))
 	assert(main.docking_links.size() == 2)
 	assert(not second_child.input_enabled)
+	second_child.rocket_stages[0] = RocketAssembly.add_component(second_child.rocket_stages[0], "standard_docking_port")
+	var child_loop_port: Dictionary = child.docking_port_world_states()[1]
+	var second_loop_stage: Dictionary = second_child.rocket_stages[0].duplicate(true)
+	var second_loop_port_uid := str(second_loop_stage.components[second_loop_stage.components.size() - 1].get("part_uid", ""))
+	second_loop_stage.components[second_loop_stage.components.size() - 1]["rotation_deg"] = 180.0
+	second_child.rocket_stages[0] = RocketAssembly.compile_stage(second_loop_stage, second_loop_stage.components)
+	var second_loop_port: Dictionary = second_child.docking_port_world_states()[1]
+	second_child.rocket_position = Vector2(child_loop_port.position) - (Vector2(second_loop_port.position) - second_child.rocket_position)
+	main.sim = child
+	assert(main._dock_vehicle(second_child.vehicle_name, str(child_loop_port.get("part_uid", ""))), "A loop between modules in one connected assembly could not be created")
+	assert(main.docking_links.size() == 3)
+	assert(ModuleGraph.connection_between(main._current_module_graph(), child.vehicle_name, second_child.vehicle_name).size() == 1)
+	assert(main._undock_vehicle(second_child.vehicle_name, str(child_loop_port.get("part_uid", ""))), "An additional assembly loop could not be released")
+	assert(main.docking_links.size() == 2 and main._are_docked(parent.vehicle_name, second_child.vehicle_name))
+	main.sim = parent
 	var expected_docked_mass := child._current_vehicle_mass() + second_child._current_vehicle_mass()
 	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
