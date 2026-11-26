@@ -145,19 +145,39 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 				separator["preset_hardware_role"] = "separator"
 				separator["staging_action"] = "separate"
 				separator["staging_stage"] = stage_index * 2 + 1
-				separator["staging_action_disabled"] = stage_index == payload_boundary_index
+				separator["staging_action_disabled"] = false
 				components.pop_back()
 				components.insert(0, separator)
 				stage = compile_stage(stage, components)
-		if stage_index == payload_boundary_index:
-			var has_lower_interface := false
+		if stage_index == stages.size() - 1:
+			var has_top_ports := 0
 			for component in stage.get("components", []):
-				if str(component.get("preset_hardware_role", "")) == "payload_interface_lower":
-					has_lower_interface = true
-					break
-			if not has_lower_interface:
-				stage = add_component(stage, "standard_docking_port")
-				components = stage.get("components", []).duplicate(true)
+				if str(component.get("preset_hardware_role", "")).begins_with("top_docking_port_"):
+					has_top_ports += 1
+			if has_top_ports == 0:
+				var stack_length := 0.0
+				var parent_uid := ""
+				for component in stage.get("components", []):
+					if str(component.get("attachment", "stack")) != "stack":
+						continue
+					stack_length += maxf(0.1, float(component.get("length_m", 1.0)))
+					if parent_uid.is_empty():
+						parent_uid = str(component.get("part_uid", ""))
+				var port_y := stack_length * 0.5 + 0.7
+				for port_index in range(2):
+					var port := component_definition("standard_docking_port")
+					port["attachment"] = "free"
+					port["part_uid"] = "preset_top_port_%d_%d" % [stage_index, port_index]
+					port["position_m"] = [-0.85 if port_index == 0 else 0.85, port_y]
+					port["structural_parent_uid"] = parent_uid
+					port["structural_parent_node_id"] = "top"
+					port["preset_hardware_role"] = "top_docking_port_left" if port_index == 0 else "top_docking_port_right"
+					port["port_facing"] = 1
+					port["staging_stage"] = (stages.size() - 1) * 2
+					components = stage.get("components", []).duplicate(true)
+					components.append(port)
+					stage = compile_stage(stage, components)
+		components = stage.get("components", []).duplicate(true)
 				var lower_port: Dictionary = components.pop_back()
 				lower_port["preset_hardware_role"] = "payload_interface_lower"
 				lower_port["port_facing"] = 1
