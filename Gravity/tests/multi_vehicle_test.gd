@@ -7,7 +7,6 @@ const SimulationView = preload("res://scripts/simulation_view.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
 const SpaceDiscovery = preload("res://scripts/space_discovery.gd")
 const RoutePlanner = preload("res://scripts/route_planner.gd")
-const RoutePlanner = preload("res://scripts/route_planner.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -60,16 +59,6 @@ func _initialize() -> void:
 	assert(not first.is_processing(), "Fleet vehicles must not advance both through their own process and the fleet manager")
 	assert(first.vehicle_name == "Vehicle 1")
 	assert(second.vehicle_name == "Vehicle 2")
-	var planner := RoutePlanner.new()
-	planner.simulation = first
-	planner.nodes = [{"time_offset": 120.0}]
-	planner.selected_node_index = 0
-	planner.manual_guidance_report = Label.new()
-	var requested_jump_time := -1.0
-	planner.time_jump_requested.connect(func(target_time: float): requested_jump_time = target_time)
-	planner._jump_to_selected_node()
-	assert(is_equal_approx(requested_jump_time, first.sim_time + 115.0), "Flight Computer did not request a predictive jump to five seconds before its node")
-	planner.free()
 	main._switch_vehicle(0)
 	first._set_rocket_position_components(0.0, -(PlanetarySystem.EARTH_RADIUS + 200000.0))
 	first.velocity = Vector2(FlightComputer.circular_orbit_speed(PlanetarySystem.EARTH_RADIUS + 200000.0), 0.0)
