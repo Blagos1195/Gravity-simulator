@@ -214,19 +214,26 @@ static func stage_geometry(stage: Dictionary) -> Dictionary:
 	var configured := ensure_stage_components(stage)
 	var components: Array = configured.get("components", [])
 	var stage_length := 0.0
+	var stack_length := 0.0
 	var core_radius := 0.5
 	for component_variant in components:
 		if not component_variant is Dictionary:
 			continue
 		var component: Dictionary = component_variant
 		var radius := maxf(0.1, float(component.get("collision_radius_m", 0.5)))
-		if str(component.get("attachment", "stack")) == "stack":
-			stage_length += maxf(0.1, float(component.get("length_m", 1.0)))
+		var attachment := str(component.get("attachment", "stack"))
+		if attachment == "stack":
+			stack_length += maxf(0.1, float(component.get("length_m", 1.0)))
 			core_radius = maxf(core_radius, radius)
+		elif attachment == "free":
+			var position_data: Variant = component.get("position_m", [0.0, 0.0])
+			if position_data is Array and position_data.size() >= 2:
+				stage_length = maxf(stage_length, absf(float(position_data[1])) * 2.0 + maxf(0.1, float(component.get("length_m", 1.0))))
+	stage_length = maxf(stage_length, stack_length)
 	if stage_length <= 0.0:
 		stage_length = maxf(1.0, float(configured.get("physical_length_m", 1.0)))
 	var mount_positions: Dictionary = {}
-	var cursor := stage_length * 0.5
+	var cursor := stack_length * 0.5
 	for index in range(components.size()):
 		var component: Dictionary = components[index]
 		if str(component.get("attachment", "stack")) != "stack":
