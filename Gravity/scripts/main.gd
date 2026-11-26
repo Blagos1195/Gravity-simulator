@@ -505,7 +505,7 @@ func _docking_path_clear(first: SimulationView, second: SimulationView, first_po
 				return false
 	return true
 
-func _available_docking_port_pair(first: SimulationView, second: SimulationView, own_port_uid: String = "", target_port_uid: String = "") -> Dictionary:
+func _available_docking_port_pair(first: SimulationView, second: SimulationView, own_port_uid: String = "", target_port_uid: String = "", require_clear_path: bool = true) -> Dictionary:
 	var first_used: Dictionary = {}
 	var second_used: Dictionary = {}
 	for link in docking_links:
@@ -527,10 +527,10 @@ func _available_docking_port_pair(first: SimulationView, second: SimulationView,
 			var second_uid := str(second_port.get("part_uid", ""))
 			if second_used.has(second_uid) or (not target_port_uid.is_empty() and second_uid != target_port_uid):
 				continue
-			if not _docking_path_clear(first, second, first_port, second_port):
+			var distance := Vector2(first_port.position).distance_to(Vector2(second_port.position))
+			if require_clear_path and distance > DOCKING_CAPTURE_DISTANCE and not _docking_path_clear(first, second, first_port, second_port):
 				continue
 			var alignment := clampf(Vector2(first_port.normal).dot(Vector2(second_port.normal)), -1.0, 1.0)
-			var distance := Vector2(first_port.position).distance_to(Vector2(second_port.position))
 			var score := distance + (1.0 + alignment) * 10000.0
 			if score < best_score:
 				best_score = score
@@ -595,7 +595,7 @@ func _apply_docking_assists(delta: float) -> void:
 			direction = Vector2(orbital_approach.get("direction", direction))
 			approach_distance = float(orbital_approach.get("distance", separation))
 			reference_velocity = Vector2(orbital_approach.get("orbital_velocity", vehicle.velocity))
-		if not approach_only and not selected_pair.is_empty() and approach_distance <= 1000.0 and _dock_vehicle(target_name, str(selected_pair.own.get("part_uid", "")), str(selected_pair.target.get("part_uid", ""))):
+		if not approach_only and not selected_pair.is_empty() and approach_distance <= 1000.0 and _dock_vehicle(target_name, str(selected_pair.own.get("part_uid", "")), str(selected_pair.target.get("part_uid", "")), true):
 			docking_assists.erase(vehicle_name)
 			docking_assist_modes.erase(vehicle_name)
 			continue
@@ -2875,7 +2875,7 @@ func _current_module_graph() -> Dictionary:
 			graph = result.graph
 	return graph
 
-func _dock_vehicle(target_name: String, own_port_uid: String = "", target_port_uid: String = "") -> bool:
+func _dock_vehicle(target_name: String, own_port_uid: String = "", target_port_uid: String = "", require_clear_path: bool = false) -> bool:
 	var target := _find_vehicle_by_name(target_name)
 	if target == null or sim == null or target == sim:
 		return false
@@ -2890,7 +2890,7 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "", target_port_u
 		return false
 	if not ModuleGraph.validate(graph).is_empty():
 		return false
-	var selected_pair := _available_docking_port_pair(sim, target, own_port_uid, target_port_uid)
+	var selected_pair := _available_docking_port_pair(sim, target, own_port_uid, target_port_uid, require_clear_path)
 	if selected_pair.is_empty():
 		return false
 	var own_port: Dictionary = selected_pair.own
