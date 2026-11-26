@@ -1001,7 +1001,7 @@ func _fast_forward_to_time(target_time: float) -> bool:
 		return false
 	var orbit_data: Dictionary = {}
 	for vehicle in fleet_sims:
-		if vehicle.crashed:
+		if vehicle.crashed or _is_docked_child(vehicle.vehicle_name):
 			continue
 		if vehicle.thrust_key_down or vehicle.throttle > 0.001 or vehicle.manual_burn_tracking_enabled or vehicle.guidance_enabled:
 			return false
@@ -1039,25 +1039,38 @@ func _fast_forward_to_time(target_time: float) -> bool:
 			return false
 		orbit_data[vehicle] = {"host_body_name": str(body.get("name", "")), "elements": elements}
 	for first_index in range(fleet_sims.size()):
+		if _is_docked_child(fleet_sims[first_index].vehicle_name):
+			continue
 		for second_index in range(first_index + 1, fleet_sims.size()):
+			if _is_docked_child(fleet_sims[second_index].vehicle_name) or _are_docked(fleet_sims[first_index].vehicle_name, fleet_sims[second_index].vehicle_name):
+				continue
 			if fleet_sims[first_index].rocket_position.distance_to(fleet_sims[second_index].rocket_position) < 20000000.0:
 				return false
 	var start_time: float = float(sim.sim_time)
 	var seconds := target_time - start_time
-	var scan_samples := mini(25000, maxi(1, ceili(seconds / 7200.0)))
-	var scan_step := seconds / float(scan_samples)
-	for sample_index in range(1, scan_samples + 1):
-		var sample_time: float = start_time + scan_step * float(sample_index)
-		sim.sim_time = sample_time
-		for vehicle in fleet_sims:
-			if not vehicle.telescope_active or vehicle.crashed or vehicle.landed or not orbit_data.has(vehicle):
-				continue
-			vehicle.passive_orbit_data = orbit_data[vehicle]
-			vehicle.passive_orbit_active = true
-			_advance_passive_vehicle(vehicle, sample_time)
-		_scan_active_telescopes()
+	var has_active_telescope := false
+	for vehicle in fleet_sims:
+		if vehicle.telescope_active and not vehicle.crashed and not vehicle.landed:
+			has_active_telescope = true
+			break
+	if has_active_telescope:
+		var scan_samples := mini(25000, maxi(1, ceili(seconds / 7200.0)))
+		var scan_step := seconds / float(scan_samples)
+		for sample_index in range(1, scan_samples + 1):
+			var sample_time: float = start_time + scan_step * float(sample_index)
+			sim.sim_time = sample_time
+			for vehicle in fleet_sims:
+				if _is_docked_child(vehicle.vehicle_name) or vehicle.crashed or vehicle.landed or not orbit_data.has(vehicle):
+					continue
+				vehicle.passive_orbit_data = orbit_data[vehicle]
+				vehicle.passive_orbit_active = true
+				_advance_passive_vehicle(vehicle, sample_time)
+			_sync_docked_vehicles()
+			_scan_active_telescopes()
 	fleet_time_backlog = 0.0
 	for vehicle in fleet_sims:
+		if _is_docked_child(vehicle.vehicle_name):
+			continue
 		vehicle.simulation_time_backlog = 0.0
 		vehicle.ephemeris_cache_time = -INF
 		vehicle.ephemeris_output_cache_time = -INF
@@ -1074,6 +1087,7 @@ func _fast_forward_to_time(target_time: float) -> bool:
 		vehicle.ephemeris_output_cache_time = -INF
 	sim.sim_time = target_time
 	_update_docked_masses()
+	_sync_docked_vehicles()
 	_scan_active_telescopes()
 	_update_discovery_state()
 	_update_economy()
