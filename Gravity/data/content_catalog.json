@@ -1697,6 +1697,153 @@
             0.72
           ]
         }
+      ],
+      "payloads": [
+        {
+          "id": "scout_telescope_bus",
+          "label": "Scout telescope satellite bus",
+          "dry_mass": 150,
+          "fuel_capacity": 0,
+          "length_m": 1.8,
+          "collision_radius_m": 0.65,
+          "color_rgb": [
+            0.78,
+            0.7,
+            0.42
+          ],
+          "visual_type": "satellite",
+          "telescope_range_au": 1.2,
+          "satellite_role": "observation",
+          "revenue_per_day": 15000,
+          "operating_cost_per_day": 4000,
+          "operational_lifetime_days": 3650
+        },
+        {
+          "id": "communications_satellite_bus",
+          "label": "Communications satellite bus",
+          "dry_mass": 450,
+          "fuel_capacity": 0,
+          "length_m": 2.4,
+          "collision_radius_m": 0.8,
+          "color_rgb": [
+            0.55,
+            0.82,
+            0.72
+          ],
+          "visual_type": "satellite",
+          "satellite_role": "communications",
+          "revenue_per_day": 45000,
+          "operating_cost_per_day": 9000,
+          "operational_lifetime_days": 3650
+        },
+        {
+          "id": "survey_satellite_bus",
+          "label": "Survey telescope satellite bus",
+          "dry_mass": 350,
+          "fuel_capacity": 0,
+          "length_m": 2.2,
+          "collision_radius_m": 0.8,
+          "color_rgb": [
+            0.68,
+            0.78,
+            0.9
+          ],
+          "visual_type": "satellite",
+          "telescope_range_au": 3.5,
+          "satellite_role": "science",
+          "revenue_per_day": 30000,
+          "operating_cost_per_day": 10000,
+          "operational_lifetime_days": 2920
+        },
+        {
+          "id": "deep_space_telescope_bus",
+          "label": "Deep-space telescope bus",
+          "dry_mass": 1800,
+          "fuel_capacity": 0,
+          "length_m": 3.8,
+          "collision_radius_m": 1.1,
+          "color_rgb": [
+            0.88,
+            0.72,
+            0.42
+          ],
+          "visual_type": "satellite",
+          "telescope_range_au": 10.5,
+          "satellite_role": "navigation",
+          "revenue_per_day": 50000,
+          "operating_cost_per_day": 20000,
+          "operational_lifetime_days": 1825
+        },
+        {
+          "id": "science_probe_bus",
+          "label": "Science probe bus",
+          "dry_mass": 1800,
+          "fuel_capacity": 0,
+          "length_m": 3,
+          "collision_radius_m": 1,
+          "color_rgb": [
+            0.82,
+            0.87,
+            0.93
+          ],
+          "visual_type": "probe"
+        },
+        {
+          "id": "crew_capsule",
+          "label": "Crew capsule",
+          "dry_mass": 6500,
+          "fuel_capacity": 0,
+          "length_m": 4.5,
+          "collision_radius_m": 1.5,
+          "color_rgb": [
+            0.84,
+            0.88,
+            0.94
+          ],
+          "visual_type": "crew"
+        },
+        {
+          "id": "cargo_module",
+          "label": "Cargo module",
+          "dry_mass": 8000,
+          "fuel_capacity": 0,
+          "length_m": 5,
+          "collision_radius_m": 1.7,
+          "color_rgb": [
+            0.62,
+            0.68,
+            0.76
+          ],
+          "visual_type": "cargo"
+        },
+        {
+          "id": "heavy_cargo_module",
+          "label": "Heavy cargo module",
+          "dry_mass": 12000,
+          "fuel_capacity": 0,
+          "length_m": 6,
+          "collision_radius_m": 2,
+          "color_rgb": [
+            0.5,
+            0.58,
+            0.68
+          ],
+          "visual_type": "cargo"
+        },
+        {
+          "id": "avionics_control_module",
+          "label": "Avionics and guidance module",
+          "dry_mass": 250,
+          "fuel_capacity": 0,
+          "length_m": 1.4,
+          "collision_radius_m": 0.55,
+          "color_rgb": [
+            0.38,
+            0.62,
+            0.68
+          ],
+          "visual_type": "avionics"
+        }
       ]
     }
   },
