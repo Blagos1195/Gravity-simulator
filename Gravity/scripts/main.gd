@@ -2558,7 +2558,7 @@ func _decommission_vehicle(vehicle: SimulationView) -> bool:
 
 func _is_docked_child(vehicle_name: String) -> bool:
 	for link in docking_links:
-		if str(link.get("child_name", "")) == vehicle_name:
+		if bool(link.get("structural", true)) and str(link.get("child_name", "")) == vehicle_name:
 			return true
 	return false
 
@@ -2569,59 +2569,98 @@ func _is_vehicle_docked(vehicle_name: String) -> bool:
 	return false
 
 func _are_docked(first_name: String, second_name: String) -> bool:
-	for link in docking_links:
-		var parent_name := str(link.get("parent_name", ""))
-		var child_name := str(link.get("child_name", ""))
-		if (parent_name == first_name and child_name == second_name) or (parent_name == second_name and child_name == first_name):
-			return true
-	return false
+	if first_name == second_name:
+		return false
+	var graph := _current_module_graph()
+	return ModuleGraph.connected_to(graph, first_name).has(second_name)
 
 func _update_docked_masses() -> void:
 	for vehicle in fleet_sims:
 		vehicle.docked_mass = 0.0
-	for link in docking_links:
-		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
-		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
-		if parent != null and child != null:
-			parent.docked_mass += child._current_vehicle_mass()
+	for mass_pass in range(maxi(1, fleet_sims.size())):
+		for vehicle in fleet_sims:
+			vehicle.docked_mass = 0.0
+		for index in range(docking_links.size() - 1, -1, -1):
+			var link: Dictionary = docking_links[index]
+			if not bool(link.get("structural", true)):
+				continue
+			var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
+			var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+			if parent != null and child != null:
+				parent.docked_mass += child._current_vehicle_mass()
 
 func _sync_docked_vehicles() -> void:
 	for vehicle in fleet_sims:
 		vehicle.docked_visuals.clear()
+	for sync_pass in range(maxi(1, fleet_sims.size())):
+		for link in docking_links:
+			if not bool(link.get("structural", true)):
+				continue
+			var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
+			var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+			if parent == null or child == null:
+				continue
+			var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
+			var world_offset := local_offset.rotated(parent.rotation_angle)
+			child.rocket_position = parent.rocket_position + world_offset
+			child.velocity = parent.velocity
+			child.rotation_angle = parent.rotation_angle + float(link.get("rotation_offset", 0.0))
+			child.angular_velocity = parent.angular_velocity
+			child.sim_time = parent.sim_time
+			var inventory_owner := _resource_inventory_owner(parent)
+			if inventory_owner != null:
+				child._sync_legacy_fuel_from_external_tanks(inventory_owner.resource_tanks)
+				child.rcs_propellant_remaining = float(inventory_owner.docked_rcs_propellant.get(child.vehicle_name, child.rcs_propellant_remaining))
+			child.landed = parent.landed
+			child.crashed = parent.crashed
+			child.landed_body_name = parent.landed_body_name
+			child.landed_surface_normal = parent.landed_surface_normal
+			child.autopilot_enabled = false
+			child.guidance_enabled = false
+			child.thrust_key_down = false
+			child.docked_mass = 0.0
+	var visited: Dictionary = {}
+	for vehicle in fleet_sims:
+		if not _is_docked_child(vehicle.vehicle_name):
+			_build_docked_visuals_recursive(vehicle, visited)
+
+func _build_docked_visuals_recursive(parent: SimulationView, visited: Dictionary) -> void:
+	if parent == null or visited.has(parent.vehicle_name):
+		return
+	visited[parent.vehicle_name] = true
 	for link in docking_links:
-		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
-		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
-		if parent == null or child == null:
+		if not bool(link.get("structural", true)) or str(link.get("parent_name", "")) != parent.vehicle_name:
 			continue
+		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		if child == null:
+			continue
+		_build_docked_visuals_recursive(child, visited)
 		var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
 		var world_offset := local_offset.rotated(parent.rotation_angle)
 		var child_mass_properties := child._vehicle_mass_properties()
+		var relative_rotation := float(link.get("rotation_offset", 0.0))
 		parent.docked_visuals.append({
 			"name": child.vehicle_name,
 			"direction": world_offset.normalized(),
 			"offset": local_offset,
 			"mass": float(child_mass_properties.get("mass", child._current_vehicle_mass())),
-			"center_of_mass": child_mass_properties.get("center_of_mass", Vector2.ZERO),
+			"center_of_mass": Vector2(child_mass_properties.get("center_of_mass", Vector2.ZERO)).rotated(relative_rotation),
 			"moment_of_inertia": float(child_mass_properties.get("moment_of_inertia", 0.0)),
-			"rotation": parent.rotation_angle,
+			"rotation": parent.rotation_angle + relative_rotation,
 			"design": {"name": child.vehicle_name, "payload_mass": child.payload_mass, "payload_type": child.payload_type, "payload_visual": child.payload_visual.duplicate(true), "stages": child.rocket_stages},
 			"stage_index": child.stage_index
 		})
-		child.rocket_position = parent.rocket_position + world_offset
-		child.velocity = parent.velocity
-		child.rotation_angle = parent.rotation_angle
-		child.angular_velocity = parent.angular_velocity
-		child.sim_time = parent.sim_time
-		child._sync_legacy_fuel_from_external_tanks(parent.resource_tanks)
-		child.rcs_propellant_remaining = float(parent.docked_rcs_propellant.get(child.vehicle_name, child.rcs_propellant_remaining))
-		child.landed = parent.landed
-		child.crashed = parent.crashed
-		child.landed_body_name = parent.landed_body_name
-		child.landed_surface_normal = parent.landed_surface_normal
-		child.autopilot_enabled = false
-		child.guidance_enabled = false
-		child.thrust_key_down = false
-		child.docked_mass = 0.0
+
+func _current_module_graph() -> Dictionary:
+	var module_ids: Array = []
+	for vehicle in fleet_sims:
+		module_ids.append(vehicle.vehicle_name)
+	var graph := ModuleGraph.create(module_ids)
+	for link in docking_links:
+		var result := ModuleGraph.connect_modules(graph, str(link.get("parent_name", "")), str(link.get("child_name", "")), str(link.get("port_a", "")), str(link.get("port_b", "")))
+		if bool(result.get("valid", false)):
+			graph = result.graph
+	return graph
 
 func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 	var target := _find_vehicle_by_name(target_name)
@@ -2629,9 +2668,14 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 		return false
 	if sim.landed or sim.crashed or target.landed or target.crashed:
 		return false
-	if _is_docked_child(sim.vehicle_name) or _is_vehicle_docked(target.vehicle_name):
+	var graph := _current_module_graph()
+	var graph_members := ModuleGraph.connected_to(graph, sim.vehicle_name)
+	var same_assembly := graph_members.has(target.vehicle_name)
+	if not same_assembly and (_is_docked_child(sim.vehicle_name) or _is_docked_child(target.vehicle_name)):
 		return false
 	if not sim.has_rcs_installed() or not target.has_rcs_installed() or not sim.has_docking_port() or not target.has_docking_port():
+		return false
+	if not ModuleGraph.validate(graph).is_empty():
 		return false
 	var own_used_ports: Dictionary = {}
 	var target_used_ports: Dictionary = {}
@@ -2662,40 +2706,46 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 	if separation > DOCKING_CAPTURE_DISTANCE or relative_speed > DOCKING_CAPTURE_SPEED or not ports_aligned:
 		return false
 	var local_offset: Vector2 = (target.rocket_position - sim.rocket_position).rotated(-sim.rotation_angle)
-	var module_ids: Array = []
-	for vehicle in fleet_sims:
-		module_ids.append(vehicle.vehicle_name)
-	var graph := ModuleGraph.create(module_ids)
-	for existing_link in docking_links:
-		var graph_result := ModuleGraph.connect_modules(graph, str(existing_link.get("parent_name", "")), str(existing_link.get("child_name", "")), str(existing_link.get("port_a", "")), str(existing_link.get("port_b", "")))
-		if bool(graph_result.valid):
-			graph = graph_result.graph
 	if not ModuleGraph.can_connect(graph, sim.vehicle_name, target.vehicle_name, str(own_port.get("part_uid", "")), str(target_port.get("part_uid", ""))):
 		return false
-	var child_staging_plan := target.staging_plan.duplicate(true)
-	for tank_index in range(target.resource_tanks.size()):
-		var tank: Dictionary = target.resource_tanks[tank_index]
-		tank["module_id"] = target.vehicle_name
-		target.resource_tanks[tank_index] = tank
-	sim.resource_tanks = ResourceNetwork.merge_tank_states(sim.resource_tanks, target.resource_tanks)
-	sim._sync_legacy_fuel_from_tanks()
-	target.resource_tanks.clear()
-	target.resource_inventory_external = true
-	target.fuel = 0.0
-	sim.docked_rcs_propellant[target.vehicle_name] = target.rcs_propellant_remaining
-	sim.rcs_propellant_remaining += target.rcs_propellant_remaining
-	target.rcs_propellant_remaining = 0.0
+	var child_staging_plan: Array = []
+	if not same_assembly:
+		child_staging_plan = target.staging_plan.duplicate(true)
+		for tank_index in range(sim.resource_tanks.size()):
+			var parent_tank: Dictionary = sim.resource_tanks[tank_index]
+			if str(parent_tank.get("module_id", "")).is_empty():
+				parent_tank["module_id"] = sim.vehicle_name
+				sim.resource_tanks[tank_index] = parent_tank
+		for tank_index in range(target.resource_tanks.size()):
+			var tank: Dictionary = target.resource_tanks[tank_index]
+			if str(tank.get("module_id", "")).is_empty():
+				tank["module_id"] = target.vehicle_name
+			target.resource_tanks[tank_index] = tank
+		sim.resource_tanks = ResourceNetwork.merge_tank_states(sim.resource_tanks, target.resource_tanks)
+		sim._sync_legacy_fuel_from_tanks()
+		target.resource_tanks.clear()
+		target.resource_inventory_external = true
+		target.fuel = 0.0
+		sim.docked_rcs_propellant[target.vehicle_name] = target.rcs_propellant_remaining
+		for nested_module in target.docked_rcs_propellant:
+			sim.docked_rcs_propellant[nested_module] = float(target.docked_rcs_propellant[nested_module])
+		sim.rcs_propellant_remaining += target.rcs_propellant_remaining
+		target.rcs_propellant_remaining = 0.0
+		target.docked_rcs_propellant.clear()
 	docking_links.append({
 		"parent_name": sim.vehicle_name,
 		"child_name": target.vehicle_name,
 		"offset_x": local_offset.x,
 		"offset_y": local_offset.y,
+		"rotation_offset": target.rotation_angle - sim.rotation_angle,
 		"port_a": str(own_port.get("part_uid", "")),
 		"port_b": str(target_port.get("part_uid", "")),
-		"child_staging_plan": child_staging_plan
+		"child_staging_plan": child_staging_plan,
+		"structural": not same_assembly
 	})
-	sim.staging_plan = StagingSystem.merge_plans(sim.staging_plan, child_staging_plan)
-	target.staging_plan = []
+	if not same_assembly:
+		sim.staging_plan = StagingSystem.merge_plans(sim.staging_plan, child_staging_plan)
+		target.staging_plan = []
 	docking_assists.erase(sim.vehicle_name)
 	docking_assists.erase(target.vehicle_name)
 	for assist_vehicle in docking_assists.keys():
@@ -2709,6 +2759,62 @@ func _dock_vehicle(target_name: String, own_port_uid: String = "") -> bool:
 	_sync_docked_vehicles()
 	return true
 
+
+func _rebuild_docking_spanning_tree(root_name: String) -> void:
+	var graph := _current_module_graph()
+	var module_group := ModuleGraph.connected_to(graph, root_name)
+	if module_group.size() <= 1:
+		return
+	var visited: Dictionary = {root_name: true}
+	var tree_connections: Dictionary = {}
+	var queue: Array = [root_name]
+	while not queue.is_empty():
+		var current := str(queue.pop_front())
+		for connection in graph.get("connections", []):
+			if not connection is Dictionary:
+				continue
+			var first := str(connection.get("a", ""))
+			var second := str(connection.get("b", ""))
+			var neighbour := second if first == current else (first if second == current else "")
+			if neighbour.is_empty() or visited.has(neighbour):
+				continue
+			visited[neighbour] = true
+			queue.append(neighbour)
+			var connection_id := str(connection.get("id", ""))
+			tree_connections[connection_id] = true
+			var parent := _find_vehicle_by_name(current)
+			var child := _find_vehicle_by_name(neighbour)
+			if parent == null or child == null:
+				continue
+			for link_index in range(docking_links.size()):
+				var link: Dictionary = docking_links[link_index]
+				var link_id := str(link.get("port_a", "")) + "|" + str(link.get("port_b", ""))
+				var reverse_id := str(link.get("port_b", "")) + "|" + str(link.get("port_a", ""))
+				if link_id != connection_id and reverse_id != connection_id:
+					continue
+				if str(link.get("parent_name", "")) != current:
+					link["parent_name"] = current
+					link["child_name"] = neighbour
+					var old_port_a := str(link.get("port_a", ""))
+					link["port_a"] = str(link.get("port_b", ""))
+					link["port_b"] = old_port_a
+				link["structural"] = true
+				var offset := (child.rocket_position - parent.rocket_position).rotated(-parent.rotation_angle)
+				link["offset_x"] = offset.x
+				link["offset_y"] = offset.y
+				link["rotation_offset"] = child.rotation_angle - parent.rotation_angle
+				docking_links[link_index] = link
+				break
+	for link_index in range(docking_links.size()):
+		var link: Dictionary = docking_links[link_index]
+		if not module_group.has(str(link.get("parent_name", ""))) or not module_group.has(str(link.get("child_name", ""))):
+			continue
+		var link_id := str(link.get("port_a", "")) + "|" + str(link.get("port_b", ""))
+		var reverse_id := str(link.get("port_b", "")) + "|" + str(link.get("port_a", ""))
+		link["structural"] = tree_connections.has(link_id) or tree_connections.has(reverse_id)
+		docking_links[link_index] = link
+
+
 func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 	for index in range(docking_links.size()):
 		var link: Dictionary = docking_links[index]
@@ -2716,26 +2822,68 @@ func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 			continue
 		if not port_uid.is_empty() and port_uid not in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
 			continue
-		var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
-		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
+		var parent_name := str(link.get("parent_name", ""))
+		var child_name := str(link.get("child_name", ""))
 		docking_links.remove_at(index)
-		if parent != null and child != null:
-			child.resource_tanks = ResourceNetwork.tank_states_for_module(parent.resource_tanks, child.vehicle_name)
-			parent.resource_tanks = ResourceNetwork.tank_states_without_module(parent.resource_tanks, child.vehicle_name)
-			child.resource_inventory_external = false
-			child._sync_legacy_fuel_from_tanks()
-			var child_rcs_fuel := float(parent.docked_rcs_propellant.get(child.vehicle_name, 0.0))
-			child.rcs_propellant_remaining = child_rcs_fuel
-			parent.rcs_propellant_remaining = maxf(0.0, parent.rcs_propellant_remaining - child_rcs_fuel)
-			parent.docked_rcs_propellant.erase(child.vehicle_name)
-			parent._sync_legacy_fuel_from_tanks()
-			child.staging_plan = StagingSystem.filter_module_plan(parent.staging_plan, child.vehicle_name)
-			parent.staging_plan = StagingSystem.remove_module_plan(parent.staging_plan, child.vehicle_name)
-			child.action_stage_index = clampi(child.action_stage_index, 0, maxi(0, child.staging_plan.size() - 1))
-			parent.staging_changed.emit()
-		if child != null:
-			child.input_enabled = child == sim
-			child.docked_mass = 0.0
+		var remaining_graph := _current_module_graph()
+		var remaining_group := ModuleGraph.connected_to(remaining_graph, parent_name)
+		if remaining_group.has(child_name):
+			if bool(link.get("structural", true)):
+				var assembly_root := _resource_inventory_owner(_find_vehicle_by_name(parent_name))
+				if assembly_root != null:
+					_rebuild_docking_spanning_tree(assembly_root.vehicle_name)
+			_update_docked_masses()
+			_sync_docked_vehicles()
+			return true
+		var parent := _find_vehicle_by_name(parent_name)
+		var child := _find_vehicle_by_name(child_name)
+		if parent == null or child == null:
+			return false
+		var child_group := ModuleGraph.connected_to(remaining_graph, child_name)
+		var child_modules: Dictionary = {}
+		for module_name in child_group:
+			child_modules[str(module_name)] = true
+		var inventory_owner := _resource_inventory_owner(parent)
+		if inventory_owner == null:
+			return false
+		var retained_tanks: Array = []
+		child.resource_tanks.clear()
+		for tank_variant in inventory_owner.resource_tanks:
+			if not tank_variant is Dictionary:
+				continue
+			var tank: Dictionary = tank_variant
+			if child_modules.has(str(tank.get("module_id", ""))):
+				child.resource_tanks.append(tank.duplicate(true))
+			else:
+				retained_tanks.append(tank.duplicate(true))
+		inventory_owner.resource_tanks = retained_tanks
+		child.resource_inventory_external = false
+		child._sync_legacy_fuel_from_tanks()
+		var retained_rcs: Dictionary = {}
+		child.docked_rcs_propellant.clear()
+		for module_name in inventory_owner.docked_rcs_propellant:
+			if child_modules.has(str(module_name)):
+				if str(module_name) == child_name:
+					child.rcs_propellant_remaining = float(inventory_owner.docked_rcs_propellant[module_name])
+				else:
+					child.docked_rcs_propellant[str(module_name)] = float(inventory_owner.docked_rcs_propellant[module_name])
+			else:
+				retained_rcs[str(module_name)] = float(inventory_owner.docked_rcs_propellant[module_name])
+		inventory_owner.docked_rcs_propellant = retained_rcs
+		inventory_owner.rcs_propellant_remaining = maxf(0.0, inventory_owner.rcs_propellant_remaining - child.rcs_propellant_remaining)
+		inventory_owner._sync_legacy_fuel_from_tanks()
+		child.staging_plan = StagingSystem.filter_module_plan_members(inventory_owner.staging_plan, child_modules)
+		inventory_owner.staging_plan = StagingSystem.remove_module_plan_members(inventory_owner.staging_plan, child_modules)
+		child.action_stage_index = clampi(child.action_stage_index, 0, maxi(0, child.staging_plan.size() - 1))
+		inventory_owner.staging_changed.emit()
+		child.input_enabled = child == sim
+		var separation_axis := Vector2(float(link.get("offset_x", 1.0)), float(link.get("offset_y", 0.0))).rotated(parent.rotation_angle).normalized()
+		if separation_axis.length_squared() > 0.0:
+			var parent_mass := maxf(1.0, inventory_owner._current_vehicle_mass())
+			var child_mass := maxf(1.0, child._current_vehicle_mass())
+			var separation_speed := 0.5
+			inventory_owner.velocity -= separation_axis * separation_speed * child_mass / (parent_mass + child_mass)
+			child.velocity += separation_axis * separation_speed * parent_mass / (parent_mass + child_mass)
 		_update_docked_masses()
 		_sync_docked_vehicles()
 		return true
@@ -2744,10 +2892,22 @@ func _undock_vehicle(target_name: String, port_uid: String = "") -> bool:
 func _resource_inventory_owner(vehicle: SimulationView) -> SimulationView:
 	if vehicle == null:
 		return null
-	for link in docking_links:
-		if str(link.get("child_name", "")) == vehicle.vehicle_name:
-			return _find_vehicle_by_name(str(link.get("parent_name", "")))
-	return vehicle
+	var current := vehicle
+	var visited: Dictionary = {}
+	while not visited.has(current.vehicle_name):
+		visited[current.vehicle_name] = true
+		var parent_name := ""
+		for link in docking_links:
+			if bool(link.get("structural", true)) and str(link.get("child_name", "")) == current.vehicle_name:
+				parent_name = str(link.get("parent_name", ""))
+				break
+		if parent_name.is_empty():
+			return current
+		var parent := _find_vehicle_by_name(parent_name)
+		if parent == null:
+			return current
+		current = parent
+	return current
 
 func _transfer_between_tanks(source_vehicle_name: String, source_part_id: String, destination_vehicle_name: String, destination_part_id: String, resource: String, amount: float) -> float:
 	var source_vehicle := _find_vehicle_by_name(source_vehicle_name)
@@ -3024,78 +3184,68 @@ func _sync_external_module_fuel(module: SimulationView, inventory_owner: Simulat
 			inventory_owner.resource_tanks[index] = tank
 
 func _transfer_fuel(from_name: String, to_name: String) -> float:
-	if not _are_docked(from_name, to_name):
+	if from_name == to_name or not _are_docked(from_name, to_name):
 		return 0.0
 	var donor := _find_vehicle_by_name(from_name)
 	var recipient := _find_vehicle_by_name(to_name)
-	if donor == null or recipient == null:
+	if donor == null or recipient == null or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel:
 		return 0.0
+	var inventory_owner := _resource_inventory_owner(donor)
+	if inventory_owner == null or inventory_owner != _resource_inventory_owner(recipient):
+		return 0.0
+	if not inventory_owner.resource_inventory_external:
+		inventory_owner._reconcile_legacy_fuel_inventory()
+	else:
+		inventory_owner._sync_legacy_fuel_from_tanks()
+	_sync_external_module_fuel(donor, inventory_owner)
+	_sync_external_module_fuel(recipient, inventory_owner)
+	var available := 0.0
+	var recipient_remaining := 0.0
+	for amount in donor.stage_fuel_remaining:
+		available += maxf(0.0, float(amount))
+	for amount in recipient.stage_fuel_remaining:
+		recipient_remaining += maxf(0.0, float(amount))
+	var room := maxf(0.0, recipient.total_propellant_capacity() - recipient_remaining)
+	var remaining := minf(available, room)
 	var transferred := 0.0
-	var donor_owner := _resource_inventory_owner(donor)
-	var recipient_owner := _resource_inventory_owner(recipient)
-	if donor_owner != null and donor_owner == recipient_owner and (donor.resource_inventory_external or recipient.resource_inventory_external):
-		_sync_external_module_fuel(donor, donor_owner)
-		_sync_external_module_fuel(recipient, recipient_owner)
-		if not recipient.resource_inventory_external:
-			recipient._reconcile_legacy_fuel_inventory()
-		var available := 0.0
-		for value in donor.stage_fuel_remaining:
-			available += maxf(0.0, float(value))
-		var recipient_remaining := 0.0
-		for value in recipient.stage_fuel_remaining:
-			recipient_remaining += maxf(0.0, float(value))
-		var room := maxf(0.0, recipient.total_propellant_capacity() - recipient_remaining)
-		var remaining := minf(available, room)
-		for source_index in range(donor_owner.resource_tanks.size()):
-			var source: Dictionary = donor_owner.resource_tanks[source_index]
-			if str(source.get("module_id", "")) != donor.vehicle_name:
+	for source_index in range(inventory_owner.resource_tanks.size()):
+		var source: Dictionary = inventory_owner.resource_tanks[source_index]
+		if str(source.get("module_id", "")) != donor.vehicle_name:
+			continue
+		for destination_index in range(inventory_owner.resource_tanks.size()):
+			var destination: Dictionary = inventory_owner.resource_tanks[destination_index]
+			if str(destination.get("module_id", "")) != recipient.vehicle_name:
 				continue
-			for destination_index in range(donor_owner.resource_tanks.size()):
-				var destination: Dictionary = donor_owner.resource_tanks[destination_index]
-				if str(destination.get("module_id", "")) != recipient.vehicle_name:
-					continue
-				var moved := ResourceNetwork.transfer_between_tanks(source, destination, "liquid_propellant", remaining, true)
-				donor_owner.resource_tanks[source_index] = source
-				donor_owner.resource_tanks[destination_index] = destination
-				transferred += moved
-				remaining -= moved
-				if remaining <= 0.000001:
-					break
+			var moved := ResourceNetwork.transfer_between_tanks(source, destination, "liquid_propellant", remaining, true)
+			inventory_owner.resource_tanks[source_index] = source
+			inventory_owner.resource_tanks[destination_index] = destination
+			transferred += moved
+			remaining -= moved
 			if remaining <= 0.000001:
 				break
-		donor_owner._sync_legacy_fuel_from_tanks()
-		_sync_docked_vehicles()
-	else:
-		if not donor.infinite_weightless_fuel and not recipient.infinite_weightless_fuel:
-			var available_space := maxf(0.0, recipient.total_propellant_capacity() - recipient.total_propellant_remaining())
-			var amount := minf(donor.total_propellant_remaining(), available_space)
-			if amount > 0.0:
-				var removed := donor.remove_propellant(amount)
-				var added := recipient.add_propellant(removed)
-				if added < removed:
-					donor.add_propellant(removed - added)
-				transferred += added
-	
+		if remaining <= 0.000001:
+			break
 	for resource in ["xenon", "electricity"]:
-		for source_index in range(donor.resource_tanks.size()):
-			var source: Dictionary = donor.resource_tanks[source_index]
-			if float(source.get("resources", {}).get(resource, 0.0)) <= 0.0:
+		for source_index in range(inventory_owner.resource_tanks.size()):
+			var source: Dictionary = inventory_owner.resource_tanks[source_index]
+			if str(source.get("module_id", "")) != donor.vehicle_name or float(source.get("resources", {}).get(resource, 0.0)) <= 0.0:
 				continue
-			for destination_index in range(recipient.resource_tanks.size()):
-				var destination: Dictionary = recipient.resource_tanks[destination_index]
+			for destination_index in range(inventory_owner.resource_tanks.size()):
+				var destination: Dictionary = inventory_owner.resource_tanks[destination_index]
+				if str(destination.get("module_id", "")) != recipient.vehicle_name:
+					continue
 				if float(destination.get("resource_capacities", {}).get(resource, 0.0)) <= float(destination.get("resources", {}).get(resource, 0.0)):
 					continue
 				var moved := ResourceNetwork.transfer_between_tanks(source, destination, resource, INF, true)
-				donor.resource_tanks[source_index] = source
-				recipient.resource_tanks[destination_index] = destination
+				inventory_owner.resource_tanks[source_index] = source
+				inventory_owner.resource_tanks[destination_index] = destination
 				transferred += moved
 				break
-	if transferred > 0.0:
-		donor._sync_legacy_fuel_from_tanks()
-		recipient._sync_legacy_fuel_from_tanks()
-		_sync_docked_vehicles()
-		_update_docked_masses()
+	inventory_owner._sync_legacy_fuel_from_tanks()
+	_sync_docked_vehicles()
+	_update_docked_masses()
 	return transferred
+
 
 func _build_flight_hud() -> void:
 	mode = "flight"
@@ -3827,28 +3977,53 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 			transfer_button.disabled = true
 			return
 		var own_port: Dictionary = sim.docking_port_world_state(selected_port_uid)
-		var target_port: Dictionary = target.docking_port_world_state()
+		if selected_port_uid.is_empty():
+			var used_own_ports: Dictionary = {}
+			for link in docking_links:
+				if str(link.get("parent_name", "")) == parent_name:
+					used_own_ports[str(link.get("port_a", ""))] = true
+				elif str(link.get("child_name", "")) == parent_name:
+					used_own_ports[str(link.get("port_b", ""))] = true
+			for candidate_port in sim.docking_port_world_states():
+				if not used_own_ports.has(str(candidate_port.get("part_uid", ""))):
+					own_port = candidate_port
+					break
+		var target_port: Dictionary = {}
+		var used_target_ports: Dictionary = {}
+		for link in docking_links:
+			if str(link.get("parent_name", "")) == target_name:
+				used_target_ports[str(link.get("port_a", ""))] = true
+			elif str(link.get("child_name", "")) == target_name:
+				used_target_ports[str(link.get("port_b", ""))] = true
+		for candidate_port in target.docking_port_world_states():
+			if not used_target_ports.has(str(candidate_port.get("part_uid", ""))):
+				target_port = candidate_port
+				break
 		var separation := INF
 		var ports_aligned := false
 		if not own_port.is_empty() and not target_port.is_empty():
 			separation = Vector2(own_port.position).distance_to(Vector2(target_port.position))
 			ports_aligned = Vector2(own_port.normal).dot(Vector2(target_port.normal)) <= -0.94
 		var relative_speed: float = (sim.velocity - target.velocity).length()
-		var docked := _are_docked(parent_name, target_name)
-		if docked and not selected_port_uid.is_empty():
-			docked = false
-			for link in docking_links:
-				if ((str(link.get("parent_name", "")) == parent_name and str(link.get("child_name", "")) == target_name) or (str(link.get("parent_name", "")) == target_name and str(link.get("child_name", "")) == parent_name)) and selected_port_uid in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
-					docked = true
-					break
+		var connected_assembly: bool = _are_docked(parent_name, target_name)
+		var connector_connected := false
+		for link in docking_links:
+			if not ((str(link.get("parent_name", "")) == parent_name and str(link.get("child_name", "")) == target_name) or (str(link.get("parent_name", "")) == target_name and str(link.get("child_name", "")) == parent_name)):
+				continue
+			if selected_port_uid.is_empty() or selected_port_uid in [str(link.get("port_a", "")), str(link.get("port_b", ""))]:
+				connector_connected = true
+				break
 		var assist_active := str(docking_assists.get(parent_name, "")) == target_name
-		var free_flying: bool = not _is_vehicle_docked(parent_name) and not _is_vehicle_docked(target_name) and not sim.landed and not sim.crashed and not target.landed and not target.crashed
+		var assembly_roots_available: bool = connected_assembly or (not _is_docked_child(parent_name) and not _is_docked_child(target_name))
+		var assembly_operational: bool = assembly_roots_available and not sim.landed and not sim.crashed and not target.landed and not target.crashed
 		var hardware_ready: bool = sim.has_docking_port() and target.has_docking_port() and sim.has_rcs_installed() and target.has_rcs_installed()
 		var rcs_assist_ready: bool = sim.has_rcs() and target.has_rcs()
-		var available_to_dock: bool = not docked and free_flying and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
-		var available_to_assist: bool = not docked and free_flying and hardware_ready and rcs_assist_ready and separation <= DOCKING_ASSIST_MAX_RANGE
-		if docked:
-			status.text = "DOCKED  •  %s\nCombined mass is included in the parent spacecraft's flight dynamics." % target_name
+		var available_to_dock: bool = not connector_connected and assembly_operational and hardware_ready and ports_aligned and separation <= DOCKING_CAPTURE_DISTANCE and relative_speed <= DOCKING_CAPTURE_SPEED
+		var available_to_assist: bool = not connected_assembly and assembly_operational and hardware_ready and rcs_assist_ready and separation <= DOCKING_ASSIST_MAX_RANGE
+		if connector_connected:
+			status.text = "CONNECTED AT THIS PORT  •  %s\nUse UNDOCK to release this connector. Other connectors can keep the assembly joined." % target_name
+		elif connected_assembly:
+			status.text = "SAME CONNECTED ASSEMBLY  •  %s\nUnused docking ports can create another connection between modules." % target_name
 		elif not sim.has_docking_port() or not target.has_docking_port():
 			status.text = "DOCKING PORTS REQUIRED\nBoth spacecraft need a docking port. Only matching ports can connect."
 		elif not sim.has_rcs_installed() or not target.has_rcs_installed():
@@ -3866,10 +4041,10 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 		dock_button.disabled = not available_to_dock
 		assist_button.disabled = not available_to_assist and not assist_active
 		assist_button.text = "STOP RENDEZVOUS ASSIST" if assist_active else "START RENDEZVOUS ASSIST"
-		undock_button.disabled = not docked
-		fuel_direction.disabled = not docked
-		transfer_button.disabled = not docked
-		if docked and fuel_direction.item_count > 0:
+		undock_button.disabled = not connector_connected
+		fuel_direction.disabled = not connected_assembly
+		transfer_button.disabled = not connected_assembly
+		if connected_assembly and fuel_direction.item_count > 0:
 			var direction: Dictionary = fuel_direction.get_item_metadata(fuel_direction.selected)
 			var donor := _find_vehicle_by_name(str(direction.get("from", "")))
 			var recipient := _find_vehicle_by_name(str(direction.get("to", "")))
@@ -3883,7 +4058,7 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 				transfer_button.disabled = amount <= 0.0 or donor.infinite_weightless_fuel or recipient.infinite_weightless_fuel
 				fuel_status.text = "Available: %.0f kg  •  Receiver space: %.0f kg across remaining stages" % [available, room]
 		else:
-			fuel_status.text = "Dock spacecraft to enable transfer. Transfers fill the receiver's active tank first, then its later stages."
+			fuel_status.text = "Connect spacecraft to enable transfer. Transfers fill the receiver's active tank first, then its later stages."
 	var target_changed := func(_index: int) -> void:
 		docking_assists.erase(parent_name)
 		var target_name := str(target_selector.get_item_metadata(target_selector.selected))
@@ -4181,8 +4356,10 @@ func _load_game_from_path(path: String) -> void:
 	docking_links.clear()
 	var saved_docking_links: Variant = parsed.get("docking_links", [])
 	if saved_docking_links is Array:
-		var linked_children: Dictionary = {}
-		var linked_parents: Dictionary = {}
+		var module_ids: Array = []
+		for vehicle in fleet_sims:
+			module_ids.append(vehicle.vehicle_name)
+		var loaded_graph := ModuleGraph.create(module_ids)
 		for saved_link in saved_docking_links:
 			if not saved_link is Dictionary:
 				continue
@@ -4192,22 +4369,57 @@ func _load_game_from_path(path: String) -> void:
 			var offset_y: Variant = saved_link.get("offset_y", null)
 			if parent_name.is_empty() or child_name.is_empty() or parent_name == child_name:
 				continue
-			if _find_vehicle_by_name(parent_name) == null or _find_vehicle_by_name(child_name) == null:
-				continue
-			if linked_children.has(child_name) or linked_children.has(parent_name) or linked_parents.has(child_name):
+			var parent := _find_vehicle_by_name(parent_name)
+			var child := _find_vehicle_by_name(child_name)
+			if parent == null or child == null:
 				continue
 			if not (offset_x is float or offset_x is int) or not (offset_y is float or offset_y is int):
 				continue
 			if not is_finite(float(offset_x)) or not is_finite(float(offset_y)):
 				continue
+			var port_a := str(saved_link.get("port_a", ""))
+			var port_b := str(saved_link.get("port_b", ""))
+			if port_a.is_empty():
+				for port in parent.docking_port_world_states():
+					if ModuleGraph.connection_for_port(loaded_graph, str(port.get("part_uid", ""))).is_empty():
+						port_a = str(port.get("part_uid", ""))
+						break
+			if port_b.is_empty():
+				for port in child.docking_port_world_states():
+					if ModuleGraph.connection_for_port(loaded_graph, str(port.get("part_uid", ""))).is_empty():
+						port_b = str(port.get("part_uid", ""))
+						break
+			var connection_result := ModuleGraph.connect_modules(loaded_graph, parent_name, child_name, port_a, port_b)
+			if not bool(connection_result.get("valid", false)):
+				continue
+			loaded_graph = connection_result.graph
+			var saved_child_plan: Variant = saved_link.get("child_staging_plan", [])
 			docking_links.append({
 				"parent_name": parent_name,
 				"child_name": child_name,
 				"offset_x": float(offset_x),
-				"offset_y": float(offset_y)
+				"offset_y": float(offset_y),
+				"rotation_offset": float(saved_link.get("rotation_offset", 0.0)),
+				"port_a": port_a,
+				"port_b": port_b,
+				"child_staging_plan": saved_child_plan.duplicate(true) if saved_child_plan is Array else [],
+				"structural": bool(saved_link.get("structural", true))
 			})
-			linked_children[child_name] = true
-			linked_parents[parent_name] = true
+
+	var normalized_graph := _current_module_graph()
+	var normalized_modules: Dictionary = {}
+	for vehicle in fleet_sims:
+		if normalized_modules.has(vehicle.vehicle_name):
+			continue
+		var connected_modules: Array = ModuleGraph.connected_to(normalized_graph, vehicle.vehicle_name)
+		var root_name: String = str(vehicle.vehicle_name)
+		for module_name in connected_modules:
+			normalized_modules[str(module_name)] = true
+		for module_name in connected_modules:
+			if not _is_docked_child(str(module_name)):
+				root_name = str(module_name)
+				break
+		_rebuild_docking_spanning_tree(root_name)
 	_update_docked_masses()
 	_sync_docked_vehicles()
 	docking_assists.clear()

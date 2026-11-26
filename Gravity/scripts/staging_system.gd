@@ -24,6 +24,7 @@ static func create_plan(modules: Array) -> Array:
 		var docking_boundaries := RocketAssembly.docking_module_boundaries(module.get("stages", []))
 		for physical_stage_index in range((module.get("stages", []) as Array).size()):
 			var physical_stage: Dictionary = module.stages[physical_stage_index]
+			var component_group_boundaries := RocketAssembly.docking_component_group_boundaries(physical_stage)
 			for component_variant in physical_stage.get("components", []):
 				if not component_variant is Dictionary:
 					continue
@@ -31,7 +32,12 @@ static func create_plan(modules: Array) -> Array:
 				var kind := str(component.get("kind", ""))
 				var part_id := str(component.get("part_uid", component.get("id", "")))
 				var action_name := str(component.get("staging_action", ""))
-				if action_name.is_empty():
+				if kind == "docking_port":
+					if component_group_boundaries.has(part_id):
+						action_name = "undock_component_group"
+					else:
+						action_name = "undock_module" if docking_boundaries.has(physical_stage_index) and str(docking_boundaries[physical_stage_index].get("upper_part_uid", "")) == part_id else ""
+				elif action_name.is_empty():
 					if kind in ["engine", "radial"]:
 						if bool(component.get("solid_motor", false)):
 							action_name = "ignite_solid_motor"
@@ -39,8 +45,6 @@ static func create_plan(modules: Array) -> Array:
 							action_name = "activate_engine"
 					elif kind == "decoupler":
 						action_name = "separate"
-					elif kind == "docking_port" and docking_boundaries.has(physical_stage_index) and str(docking_boundaries[physical_stage_index].get("upper_part_uid", "")) == part_id:
-						action_name = "undock_module"
 					elif kind == "tank":
 						action_name = "enable_fuel_supply"
 					elif kind == "rcs":
@@ -90,6 +94,34 @@ static func remove_module_plan(plan: Array, module_id: String) -> Array:
 		var actions: Array = []
 		for action in stage.get("actions", []):
 			if action is Dictionary and str(action.get("module_id", "")) != module_id:
+				actions.append(action.duplicate(true))
+		stage["actions"] = actions
+		result.append(stage)
+	return result
+
+static func filter_module_plan_members(plan: Array, module_ids: Dictionary) -> Array:
+	var result: Array = []
+	for stage_variant in plan:
+		if not stage_variant is Dictionary:
+			continue
+		var stage: Dictionary = stage_variant.duplicate(true)
+		var actions: Array = []
+		for action in stage.get("actions", []):
+			if action is Dictionary and module_ids.has(str(action.get("module_id", ""))):
+				actions.append(action.duplicate(true))
+		stage["actions"] = actions
+		result.append(stage)
+	return result
+
+static func remove_module_plan_members(plan: Array, module_ids: Dictionary) -> Array:
+	var result: Array = []
+	for stage_variant in plan:
+		if not stage_variant is Dictionary:
+			continue
+		var stage: Dictionary = stage_variant.duplicate(true)
+		var actions: Array = []
+		for action in stage.get("actions", []):
+			if action is Dictionary and not module_ids.has(str(action.get("module_id", ""))):
 				actions.append(action.duplicate(true))
 		stage["actions"] = actions
 		result.append(stage)

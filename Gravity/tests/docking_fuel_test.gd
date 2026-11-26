@@ -4,6 +4,7 @@ const Main = preload("res://scripts/main.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const ModuleGraph = preload("res://scripts/module_graph.gd")
 
 func _initialize() -> void:
 	var main := Main.new()
@@ -80,6 +81,21 @@ func _initialize() -> void:
 	assert(not child.input_enabled)
 	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass()))
 	parent.rocket_stages[0] = RocketAssembly.add_component(parent.rocket_stages[0], "standard_docking_port")
+	child.rocket_stages[0] = RocketAssembly.add_component(child.rocket_stages[0], "standard_docking_port")
+	var parent_parallel_port: Dictionary = parent.docking_port_world_states()[1]
+	var child_parallel_port: Dictionary = child.docking_port_world_states()[1]
+	child.rocket_position = Vector2(parent_parallel_port.position) - (Vector2(child_parallel_port.position) - child.rocket_position)
+	var first_connection_port := str(main.docking_links[0].get("port_a", ""))
+	assert(main._dock_vehicle(child.vehicle_name), "A second independent connector could not join an already docked pair")
+	assert(main.docking_links.size() == 2)
+	assert(is_equal_approx(parent.docked_mass, child._current_vehicle_mass()), "A second connector double-counted the docked mass")
+	assert(main._undock_vehicle(child.vehicle_name, first_connection_port), "The first parallel connector could not be released")
+	assert(main.docking_links.size() == 1 and child.resource_inventory_external, "Releasing one of two connectors incorrectly separated the spacecraft")
+	var remaining_connection_port := str(main.docking_links[0].get("port_a", ""))
+	assert(main._undock_vehicle(child.vehicle_name, remaining_connection_port), "The final parallel connector could not be released")
+	assert(main.docking_links.is_empty() and not child.resource_inventory_external, "The spacecraft remained connected after its final connector was released")
+	assert(main._dock_vehicle(child.vehicle_name, first_connection_port), "The spacecraft could not reconnect after a complete undock")
+	parent.rocket_stages[0] = RocketAssembly.add_component(parent.rocket_stages[0], "standard_docking_port")
 	var second_parent_port: Dictionary = parent.docking_port_world_states()[1]
 	var second_child_port: Dictionary = second_child.docking_port_world_state()
 	second_child.rocket_position = Vector2(second_parent_port.position) - (Vector2(second_child_port.position) - second_child.rocket_position)
@@ -87,6 +103,26 @@ func _initialize() -> void:
 	assert(main._dock_vehicle(second_child.vehicle_name))
 	assert(main.docking_links.size() == 2)
 	assert(not second_child.input_enabled)
+	second_child.rocket_stages[0] = RocketAssembly.add_component(second_child.rocket_stages[0], "standard_docking_port")
+	var child_loop_port: Dictionary = child.docking_port_world_states()[1]
+	var second_loop_stage: Dictionary = second_child.rocket_stages[0].duplicate(true)
+	second_loop_stage.components[second_loop_stage.components.size() - 1]["rotation_deg"] = 180.0
+	second_child.rocket_stages[0] = RocketAssembly.compile_stage(second_loop_stage, second_loop_stage.components)
+	var second_loop_port: Dictionary = second_child.docking_port_world_states()[1]
+	second_child.rocket_position = Vector2(child_loop_port.position) - (Vector2(second_loop_port.position) - second_child.rocket_position)
+	main.sim = child
+	assert(main._dock_vehicle(second_child.vehicle_name, str(child_loop_port.get("part_uid", ""))), "A loop between modules in one connected assembly could not be created")
+	assert(main.docking_links.size() == 3)
+	var child_loop_port_uid := str(child_loop_port.get("part_uid", ""))
+	assert(ModuleGraph.connection_between(main._current_module_graph(), child.vehicle_name, second_child.vehicle_name).size() == 1)
+	assert(main._are_docked(parent.vehicle_name, second_child.vehicle_name))
+	main.sim = parent
+	parent.resource_tanks.append({"part_uid":"child_xenon_test","module_id":child.vehicle_name,"resources":{"xenon":50.0},"resource_capacities":{"xenon":100.0}})
+	parent.resource_tanks.append({"part_uid":"second_child_xenon_test","module_id":second_child.vehicle_name,"resources":{"xenon":0.0},"resource_capacities":{"xenon":100.0}})
+	var transitive_resource_transfer := main._transfer_between_tanks(child.vehicle_name, "child_xenon_test", second_child.vehicle_name, "second_child_xenon_test", "xenon", 30.0)
+	assert(is_equal_approx(transitive_resource_transfer, 30.0), "Connected modules could not transfer resources through the assembly graph")
+	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 2].resources.xenon), 20.0))
+	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 1].resources.xenon), 30.0))
 	var expected_docked_mass := child._current_vehicle_mass() + second_child._current_vehicle_mass()
 	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
@@ -119,7 +155,7 @@ func _initialize() -> void:
 	var save_path := "user://saves/slot_08.json"
 	assert(FileAccess.file_exists(save_path))
 	main._load_game_from_path(save_path)
-	assert(main.docking_links.size() == 2)
+	assert(main.docking_links.size() == 3)
 	assert(main.fleet_sims.size() == 3)
 	var loaded_parent: SimulationView = main.fleet_sims[0]
 	var loaded_child: SimulationView = main.fleet_sims[1]
@@ -130,6 +166,9 @@ func _initialize() -> void:
 	assert(is_zero_approx(loaded_child.stage_fuel_remaining[1]))
 	assert(is_equal_approx(loaded_parent.rcs_propellant_remaining, parent_rcs_capacity))
 	assert(is_equal_approx(loaded_parent.stage_fuel_remaining[0], float(loaded_parent._active_stage_data().get("fuel_capacity", 0.0))))
+	main.sim = loaded_child
+	assert(main._undock_vehicle(loaded_second_child.vehicle_name, child_loop_port_uid), "The saved assembly loop could not be released")
+	main.sim = loaded_parent
 	assert(main._undock_vehicle(loaded_child.vehicle_name))
 	assert(main._undock_vehicle(loaded_second_child.vehicle_name))
 	assert(main.docking_links.is_empty())

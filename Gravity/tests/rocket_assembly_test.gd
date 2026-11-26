@@ -143,6 +143,75 @@ func _initialize() -> void:
 			if str(action.get("action", "")) == "undock_module" and int(action.get("physical_stage_index", -1)) == 1:
 				has_module_release_action = true
 	assert(has_module_release_action, "The upper connector should create a module-release staging action")
+	var grouped_stage := RocketAssembly.add_component(port_stage.duplicate(true), "standard_docking_port")
+	var grouped_components: Array = grouped_stage.components.duplicate(true)
+	for component_index in range(grouped_components.size()):
+		var grouped_component: Dictionary = grouped_components[component_index]
+		if str(grouped_component.get("kind", "")) == "docking_port":
+			grouped_component["subassembly_id"] = "payload_group" if component_index == grouped_components.size() - 1 else "main"
+		grouped_components[component_index] = grouped_component
+	grouped_stage = RocketAssembly.compile_stage(grouped_stage, grouped_components)
+	assert(RocketAssembly.split_stage_by_group(grouped_stage, "payload_group").size() == 2, "A physical stage should split into retained and released component groups")
+	var inline_stage := RocketAssembly.ensure_stage_components({})
+	var inline_parts: Array = []
+	var upper_port := RocketAssembly.component_definition("standard_docking_port")
+	upper_port["part_uid"] = "inline_upper_port"
+	upper_port["attachment"] = "stack"
+	upper_port["length_m"] = 1.0
+	upper_port["subassembly_id"] = "payload_group"
+	upper_port["port_facing"] = 1
+	var lower_port := RocketAssembly.component_definition("standard_docking_port")
+	lower_port["part_uid"] = "inline_lower_port"
+	lower_port["attachment"] = "stack"
+	lower_port["length_m"] = 1.0
+	lower_port["subassembly_id"] = "main"
+	lower_port["port_facing"] = -1
+	inline_parts.append(upper_port)
+	inline_parts.append(lower_port)
+	var upper_rcs := RocketAssembly.component_definition("rcs_thruster_block")
+	upper_rcs["part_uid"] = "inline_upper_rcs"
+	upper_rcs["attachment"] = "side"
+	upper_rcs["mirror"] = false
+	upper_rcs["side"] = 1
+	upper_rcs["subassembly_id"] = "payload_group"
+	var lower_rcs := RocketAssembly.component_definition("rcs_thruster_block")
+	lower_rcs["part_uid"] = "inline_lower_rcs"
+	lower_rcs["attachment"] = "side"
+	lower_rcs["mirror"] = false
+	lower_rcs["side"] = -1
+	lower_rcs["subassembly_id"] = "main"
+	inline_parts.append(upper_rcs)
+	inline_parts.append(lower_rcs)
+	inline_stage = RocketAssembly.compile_stage(inline_stage, inline_parts)
+	var inline_boundaries := RocketAssembly.docking_component_group_boundaries(inline_stage)
+	assert(inline_boundaries.has("inline_upper_port"), "Opposing docking ports between component groups should create an in-stage release boundary")
+	var inline_plan := StagingSystem.create_plan([{"module_id":"inline_vehicle","stages":[inline_stage]}])
+	var has_inline_release := false
+	for plan_stage in inline_plan:
+		for action in plan_stage.get("actions", []):
+			if str(action.get("action", "")) == "undock_component_group":
+				has_inline_release = true
+	assert(has_inline_release, "An in-stage docking boundary should create a staging action")
+	var inline_simulation := SimulationView.new()
+	var inline_design := RocketDesign.create_default()
+	inline_design["payload_mass"] = 100.0
+	inline_design["preserve_part_uids"] = true
+	inline_design["stages"] = [inline_stage]
+	inline_simulation.set_rocket_design(inline_design)
+	var inline_released: Array[Dictionary] = []
+	inline_simulation.stage_separated.connect(func(stage_data: Dictionary): inline_released.append(stage_data))
+	assert(inline_simulation._release_component_group("inline_upper_port"), "An individual component group should release from its physical stage")
+	assert(inline_simulation.rocket_stages[0].components.size() == 1, "The parent should retain only its own component group")
+	assert(inline_released.size() == 1 and inline_released[0].stages[0].components.size() == 1, "The released spacecraft should contain only the selected component group")
+	inline_simulation.free()
+	var unpaired_port_stage := RocketAssembly.add_component(RocketAssembly.ensure_stage_components({}), "standard_docking_port")
+	for component in unpaired_port_stage.components:
+		if str(component.get("kind", "")) == "docking_port":
+			component["staging_action"] = "separate"
+	var unpaired_port_plan := StagingSystem.create_plan([{"module_id":"unpaired_vehicle","stages":[unpaired_port_stage]}])
+	for plan_stage in unpaired_port_plan:
+		for action in plan_stage.get("actions", []):
+			assert(str(action.get("action", "")) != "separate" and str(action.get("action", "")) != "undock_module", "An unpaired docking port must not become a detachable part or module")
 	var release_simulation := SimulationView.new()
 	var release_design := RocketDesign.create_default()
 	release_design["stages"] = paired_stages

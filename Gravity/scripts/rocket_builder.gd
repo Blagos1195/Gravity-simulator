@@ -254,6 +254,7 @@ var _search_input: LineEdit
 var _property_inputs: Dictionary = {}
 var _payload_selector: OptionButton
 var _payload_mass_input: SpinBox
+var _payload_group_input: LineEdit
 var _vehicle_name: LineEdit
 var _mirror_button: CheckButton
 
@@ -277,6 +278,8 @@ func load_design(source_design: Dictionary) -> void:
 		_vehicle_name.text = str(design.get("name", "Custom Vehicle"))
 	if is_instance_valid(_payload_mass_input):
 		_payload_mass_input.set_value_no_signal(float(design.get("payload_mass", 500.0)))
+	if is_instance_valid(_payload_group_input):
+		_payload_group_input.text = str(design.get("payload_subassembly_id", "main"))
 	if is_instance_valid(_payload_selector):
 		for index in range(_payload_selector.item_count):
 			var option: Dictionary = _payload_selector.get_item_metadata(index)
@@ -375,6 +378,25 @@ func _build_interface() -> void:
 	)
 	payload_row.add_child(payload_mass_input)
 	_payload_mass_input = payload_mass_input
+	var payload_group_input := LineEdit.new()
+	payload_group_input.custom_minimum_size.x = 115.0
+	payload_group_input.placeholder_text = "Payload group"
+	payload_group_input.text = str(design.get("payload_subassembly_id", "main"))
+	payload_group_input.tooltip_text = "Assign the payload to a detachable subassembly group"
+	payload_group_input.text_submitted.connect(func(value: String):
+		design["payload_subassembly_id"] = value.strip_edges().to_lower().replace(" ", "_") if not value.strip_edges().is_empty() else "main"
+		_emit_design()
+	)
+	payload_group_input.focus_exited.connect(func():
+		var value := payload_group_input.text.strip_edges().to_lower().replace(" ", "_")
+		if value.is_empty():
+			value = "main"
+		design["payload_subassembly_id"] = value
+		payload_group_input.text = value
+		_emit_design()
+	)
+	payload_row.add_child(payload_group_input)
+	_payload_group_input = payload_group_input
 	var header_actions := GridContainer.new()
 	header_actions.columns = 3
 	header.add_child(header_actions)
@@ -826,6 +848,23 @@ func _refresh_inspector() -> void:
 	title_label.text = str(component.get("label", component.get("id", "PART")))
 	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_inspector.add_child(title_label)
+	var group_label := Label.new()
+	group_label.text = "Detachable subassembly group"
+	_inspector.add_child(group_label)
+	var group_input := LineEdit.new()
+	group_input.placeholder_text = "main"
+	group_input.text = RocketAssembly.component_group_id(component)
+	group_input.text_submitted.connect(func(value: String): _update_component_property("subassembly_id", value.strip_edges().to_lower().replace(" ", "_")))
+	group_input.focus_exited.connect(func():
+		var value := group_input.text.strip_edges().to_lower().replace(" ", "_")
+		if value != RocketAssembly.component_group_id(component):
+			_update_component_property("subassembly_id", value)
+	)
+	_inspector.add_child(group_input)
+	var group_note := Label.new()
+	group_note.text = "Parts with the same group stay together. Put opposing docking ports on different groups to create a release action within this stage. The group is released as its own spacecraft."
+	group_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_inspector.add_child(group_note)
 	var mirror_selected := CheckButton.new()
 	mirror_selected.text = "MIRROR THIS PART"
 	mirror_selected.disabled = not ["radial", "side"].has(str(component.get("attachment", "stack")))
@@ -871,7 +910,7 @@ func _refresh_inspector() -> void:
 		)
 		_inspector.add_child(facing_selector)
 		var connector_note := Label.new()
-		connector_note.text = "To make a detachable module, place a matching docking port on the adjacent stage, facing this port. The upper module can then be released using its assigned staging action."
+		connector_note.text = "A docking port is a reusable spacecraft connection, not a stage separator. To release a built module, place a matching port on the adjoining stage, facing this one. The upper section then gets a module-release staging action."
 		connector_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_inspector.add_child(connector_note)
 	var rotation_label := Label.new()
@@ -919,14 +958,16 @@ func _refresh_inspector() -> void:
 			action_options = [{"id":"enable_fuel_supply","label":"Enable fuel supply"},{"id":"disable_fuel_supply","label":"Disable fuel supply"}]
 		"rcs":
 			action_options = [{"id":"activate_rcs","label":"Activate RCS"},{"id":"deactivate_rcs","label":"Deactivate RCS"}]
-		"decoupler", "docking_port":
-			action_options = [{"id":"separate","label":"Separate connection"},{"id":"attach","label":"Attach connection"}]
+		"decoupler":
+			action_options = [{"id":"separate","label":"Separate stage"},{"id":"attach","label":"Attach stage"}]
+		"docking_port":
+			action_options = [{"id":"undock_module","label":"Release docked module"}]
 		_:
 			if bool(component.get("deployable", false)):
 				action_options = [{"id":"deploy","label":"Deploy"},{"id":"retract","label":"Retract"}]
 			else:
 				action_options = [{"id":"activate","label":"Activate"},{"id":"deactivate","label":"Deactivate"}]
-	var default_action := str(component.get("staging_action", action_options[0].id if not action_options.is_empty() else "activate"))
+	var default_action := "undock_module" if str(component.get("kind", "")) == "docking_port" else str(component.get("staging_action", action_options[0].id if not action_options.is_empty() else "activate"))
 	for option in action_options:
 		action_selector.add_item(str(option.label))
 		action_selector.set_item_metadata(action_selector.item_count - 1, str(option.id))
