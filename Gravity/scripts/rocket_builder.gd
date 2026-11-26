@@ -80,10 +80,6 @@ class AssemblyCanvas extends Control:
 			component_position_changed.emit(from_index, position_m)
 
 	func _canvas_to_metres(position: Vector2) -> Vector2:
-		var stack_length := 0.0
-		for component in stage.get("components", []):
-			if str(component.get("attachment", "stack")) == "stack":
-				stack_length += maxf(0.5, float(component.get("length_m", 1.0)))
 		var scale := maxf(1.0, _drawing_scale)
 		var width_scale := maxf(1.0, _drawing_width_scale)
 		return Vector2((position.x - size.x * 0.5) / width_scale, (_drawing_stage_center_y - position.y) / scale)
@@ -919,7 +915,6 @@ func _on_component_position_changed(index: int, position_m: Vector2) -> void:
 		return
 	_push_undo()
 	var component: Dictionary = components[index]
-	component["position_m"] = [position_m.x, position_m.y]
 	component["attachment"] = "free"
 	component.erase("mirror")
 	component.erase("side")
