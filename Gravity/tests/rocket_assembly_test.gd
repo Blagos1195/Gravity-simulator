@@ -45,12 +45,13 @@ func _initialize() -> void:
 			assert(has_separator == (preset_stage_index < preset_stages.size() - 1), "Each physical stage boundary needs one real decoupler")
 			assert(has_connector == (preset_stage_index == preset_stages.size() - 1), "The payload end needs its own docking connector")
 		var preset_plan := StagingSystem.create_plan([preset_design])
+		assert(preset_plan.size() == preset_stages.size() * 2 - 1, "Preset ignition and separation need distinct action stages")
 		for boundary_index in range(preset_stages.size() - 1):
 			var found_separator_action := false
-			for action in preset_plan[boundary_index + 1].get("actions", []):
+			for action in preset_plan[boundary_index * 2 + 1].get("actions", []):
 				if str(action.get("action", "")) == "separate" and int(action.get("physical_stage_index", -1)) == boundary_index:
 					found_separator_action = true
-			assert(found_separator_action, "The next action stage must release the preceding physical stage")
+			assert(found_separator_action, "Each separator should have its own action stage after its engine burn")
 		var repeated_preset := RocketAssembly.add_preset_hardware(preset_design)
 		var connector_count := 0
 		for repeated_component in repeated_preset.stages[-1].components:
