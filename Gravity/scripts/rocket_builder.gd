@@ -371,13 +371,19 @@ class AssemblyCanvas extends Control:
 			return
 		var length := maxf(16.0, float(component.get("length_m", 2.0)) * _drawing_scale)
 		var width := maxf(14.0, float(component.get("collision_radius_m", 0.5)) * _drawing_width_scale * 2.0)
-		var preview_rect := Rect2(_drag_position - Vector2(width, length) * 0.5, Vector2(width, length))
+		var preview_position := _drag_position
 		var target := _find_attachment_target(_drag_position) if snap_mode == "Attach" else {}
 		if not target.is_empty():
 			var target_position: Vector2 = target.position
+			match str(target.get("attachment", "")):
+				"stack":
+					preview_position.y = target_position.y + (-length * 0.5 if int(target.get("insert_index", 0)) < int(target.get("index", 0)) else length * 0.5)
+				"side":
+					preview_position.x = target_position.x + (width * 0.5 if int(target.get("side", 1)) < 0 else -width * 0.5)
 			draw_circle(target_position, 13.0, Color(0.12, 0.62, 0.9, 0.22))
 			draw_arc(target_position, 12.0, 0.0, TAU, 32, Color(0.35, 0.88, 1.0, 0.95), 2.5)
-			draw_line(_drag_position, target_position, Color(0.35, 0.88, 1.0, 0.7), 1.5)
+			draw_line(preview_position, target_position, Color(0.35, 0.88, 1.0, 0.7), 1.5)
+		var preview_rect := Rect2(preview_position - Vector2(width, length) * 0.5, Vector2(width, length))
 		_draw_part(preview_rect, component, false, 0.62)
 		draw_rect(preview_rect, Color(0.45, 0.86, 1.0, 0.9), false, 1.5)
 		if snap_mode == "Attach" and target.is_empty():
