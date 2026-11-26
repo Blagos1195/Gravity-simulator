@@ -434,7 +434,7 @@ func _apply_docking_assists(delta: float) -> void:
 		var desired_closing_speed := minf(DOCKING_ASSIST_MAX_CLOSING_SPEED, sqrt(2.0 * DOCKING_ASSIST_ACCELERATION * maxf(0.0, separation - DOCKING_CAPTURE_DISTANCE)))
 		var desired_velocity: Vector2 = target.velocity + direction * desired_closing_speed
 		var velocity_correction := (desired_velocity - vehicle.velocity).limit_length(DOCKING_ASSIST_ACCELERATION)
-		var engine_controlled := separation > 1000.0 and vehicle.has_docking_engine() and velocity_correction.length() > 0.05
+		var engine_controlled := separation > 50000.0 and vehicle.has_docking_engine() and velocity_correction.length() > 0.05
 		if engine_controlled:
 			if not vehicle.apply_docking_engine_control(velocity_correction.normalized(), delta):
 				docking_assists.erase(vehicle_name)
