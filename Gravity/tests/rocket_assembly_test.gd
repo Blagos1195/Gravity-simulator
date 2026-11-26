@@ -265,9 +265,9 @@ func _initialize() -> void:
 	var docked_rcs_uid := ""
 	for component in rotated_docked_stage.components:
 		if str(component.get("id", "")) == "vacuum_engine":
-			docked_engine_uid = str(component.get("part_uid", ""))
+			docked_engine_uid = str(component.get("part_uid", component.get("id", "")))
 		elif str(component.get("id", "")) == "rcs_thruster_block":
-			docked_rcs_uid = str(component.get("part_uid", ""))
+			docked_rcs_uid = str(component.get("part_uid", component.get("id", "")))
 	simulation.set_rocket_design(RocketDesign.create_default())
 	simulation.rotation_angle = 0.0
 	simulation.docked_visuals = [{
