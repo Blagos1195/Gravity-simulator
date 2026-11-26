@@ -313,7 +313,7 @@ class AssemblyCanvas extends Control:
 									_group_rotation_indices.append(part_index)
 									_group_rotation_centers.append(part_item.rect.get_center())
 									_group_rotation_degrees.append(float(group_components[part_index].get("rotation_deg", 0.0)))
-								_group_rotation_stage_center_y = float(part_item.get("stage_center_y", _drawing_stage_center_y))
+								_group_rotation_stage_center_y = float(group_items[0].get("stage_center_y", _drawing_stage_center_y))
 								component_group_rotation_started.emit(_group_rotation_indices)
 						else:
 							var selected_component: Dictionary = (stage.get("components", []) as Array)[_rotating_index]
