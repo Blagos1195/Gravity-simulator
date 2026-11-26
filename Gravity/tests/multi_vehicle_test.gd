@@ -38,7 +38,6 @@ func _initialize() -> void:
 	planner.simulation = first
 	planner.nodes = [{"time_offset": 120.0}]
 	planner.selected_node_index = 0
-	planner.manual_guidance_report = Label.new()
 	main.active_route_planner = planner
 	var requested_jump_times: Array[float] = []
 	planner.time_jump_requested.connect(func(target_time: float): requested_jump_times.append(target_time))
