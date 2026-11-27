@@ -28,7 +28,7 @@ jobs:
           include-templates: false
       - name: Import and parse project
         run: |
-          output="$(godot --headless --path Gravity --script res://tests/compile_simulation_view.gd --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+          output="$(godot --headless --path Gravity --script res://tests/compile_simulation_view.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR:|WARNING:'; then
             exit 1
@@ -59,7 +59,7 @@ jobs:
           git fetch origin "$BASE_REF"
           changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
           run_check() {
-            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" 2>&1)" || { echo "$output"; exit 1; }
             echo "$output"
             if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
               exit 1
@@ -118,7 +118,7 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           run_check() {
-            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" 2>&1)" || { echo "$output"; exit 1; }
             echo "$output"
             if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
               exit 1
