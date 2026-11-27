@@ -1,6 +1,7 @@
 extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const GravityTheme = preload("res://scripts/ui_theme.gd")
 const ModuleGraph = preload("res://scripts/module_graph.gd")
 const StagingSystem = preload("res://scripts/staging_system.gd")
 const ResourceNetwork = preload("res://scripts/resource_network.gd")
@@ -86,6 +87,7 @@ var stage_manager_picker: OptionButton
 var stage_manager_status: Label
 
 func _ready() -> void:
+	theme = GravityTheme.create_theme()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
 	_configure_input_actions()
 	_load_general_settings()
