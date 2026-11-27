@@ -102,9 +102,9 @@ class AssemblyCanvas extends Control:
 				var preview := Label.new()
 				preview.text = "%d parts" % dragged_indices.size() if dragged_indices.size() > 1 else str(components[index].get("label", "Part"))
 				if is_inside_tree():
-			set_drag_preview(preview)
-		else:
-			preview.free()
+					set_drag_preview(preview)
+				else:
+					preview.free()
 				return {"source": "placed", "index": index, "indices": dragged_indices, "start_rects": start_rects, "start_position": at_position, "component": components[index].duplicate(true)}
 		return null
 
