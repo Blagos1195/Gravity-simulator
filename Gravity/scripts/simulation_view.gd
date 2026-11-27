@@ -1014,12 +1014,6 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var positive_authority := maxf(0.0, float(positive_profile.get("torque", 0.0)))
 	var negative_authority := maxf(0.0, -float(negative_profile.get("torque", 0.0)))
 	if torque_required:
-		var available_authority := positive_authority if requested_torque > 0.0 else negative_authority
-		if absf(requested_torque) > available_authority * 0.9:
-			rcs_rotation_input = 0.0
-			rcs_rotation_scale = 0.0
-			status_message = "AUTOPILOT  •  INSUFFICIENT RCS TORQUE"
-			return false
 		if requested_torque > 0.0:
 			rcs_rotation_input = 1.0 if positive_authority > 0.0 else 0.0
 			rcs_rotation_scale = clampf(requested_torque / maxf(1.0, positive_authority), 0.0, 1.0)
