@@ -2264,7 +2264,7 @@ func _update_guidance(dt: float) -> void:
 	var guidance_orbit_altitude := autopilot_target_altitude if destination_is_local else parking_altitude
 	var tangent := Vector2(-radial.y, radial.x)
 	var atmosphere_height := PlanetarySystem.planetary_atmosphere_height(guidance_body_name)
-	var pitch_reference_altitude := maxf(maxf(5000.0, float(guidance_body.radius) * 0.01), atmosphere_height * 0.6)
+	var pitch_reference_altitude := maxf(100000.0, guidance_orbit_altitude * 0.75)
 	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / pitch_reference_altitude, 0.0, 1.0))
 	if autopilot_enabled and autopilot_phase == "ASCENT" and not destination_is_local and maximum_stable_altitude <= minimum_safe_altitude:
 		_fail_autopilot("NO SAFE PARKING ORBIT EXISTS AROUND %s" % guidance_body_name.to_upper())
@@ -2305,10 +2305,7 @@ func _update_guidance(dt: float) -> void:
 					var surface_rotation_speed: float = absf(float(guidance_body.get("rotation_rate", 0.0))) * float(guidance_body.radius)
 					var ascent_speed_gain: float = maxf(0.0, ascent_tangential_speed - surface_rotation_speed)
 					var ascent_altitude_fraction: float = clampf(altitude / pitch_reference_altitude, 0.0, 1.0)
-					var ascent_speed_fraction: float = clampf(ascent_speed_gain / maxf(1.0, target_orbit_speed), 0.0, 1.0)
-					var altitude_pitch: float = lerpf(88.0, 4.0, ascent_altitude_fraction)
-					var speed_pitch: float = lerpf(88.0, 4.0, ascent_speed_fraction)
-					pitch_above_horizon = maxf(altitude_pitch, speed_pitch)
+					pitch_above_horizon = lerpf(88.0, 4.0, ascent_altitude_fraction)
 					status_message = "AUTOPILOT  •  ASCENT  •  ALT %.0f KM  •  Vt %.2f KM/S  •  PITCH %.0f°" % [altitude / 1000.0, ascent_tangential_speed / 1000.0, pitch_above_horizon]
 					thrust_key_down = propellant_available
 			"COAST":
