@@ -967,20 +967,18 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 				has_gimballed_engine = true
 				break
 		if has_gimballed_engine:
-			var current_gimbal := gimbal_angle
-			var probe_delta := deg_to_rad(0.5)
-			if current_gimbal >= deg_to_rad(7.5):
-				probe_delta = -probe_delta
-			var probe_gimbal := clampf(current_gimbal + probe_delta, deg_to_rad(-8.0), deg_to_rad(8.0))
-			if not is_equal_approx(probe_gimbal, current_gimbal):
-				gimbal_angle = probe_gimbal
-				var probe_torque := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
-				gimbal_angle = current_gimbal
-				var sensitivity := (probe_torque - potential_engine_torque) / (probe_gimbal - current_gimbal)
-				if absf(sensitivity) > 0.1:
-					var correction := clampf((desired_torque - potential_engine_torque) / sensitivity, deg_to_rad(-2.0), deg_to_rad(2.0))
-					gimbal_angle = clampf(current_gimbal + correction, deg_to_rad(-8.0), deg_to_rad(8.0))
-					potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+			var best_gimbal := gimbal_angle
+			var best_torque_error := INF
+			for gimbal_step in range(-16, 17):
+				var candidate_gimbal := deg_to_rad(float(gimbal_step) * 0.5)
+				gimbal_angle = candidate_gimbal
+				var candidate_torque := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+				var torque_error := absf(candidate_torque - desired_torque)
+				if torque_error < best_torque_error:
+					best_torque_error = torque_error
+					best_gimbal = candidate_gimbal
+			gimbal_angle = best_gimbal
+			potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
 		else:
 			gimbal_angle = 0.0
 			potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
