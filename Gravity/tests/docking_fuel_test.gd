@@ -172,7 +172,10 @@ func _initialize() -> void:
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
 	assert(main._are_docked("Orbital Tug", child.vehicle_name))
 	var parent_capacity := float(parent._active_stage_data().get("fuel_capacity", 0.0))
+	parent.docked_rcs_propellant[child.vehicle_name] = main._module_rcs_propellant_capacity(child)
+	parent.docked_rcs_propellant[second_child.vehicle_name] = main._module_rcs_propellant_capacity(second_child)
 	parent.rcs_propellant_remaining = parent._remaining_rcs_propellant_capacity()
+	main._sync_docked_vehicles()
 	parent.fuel = parent_capacity - 10000.0
 	parent.stage_fuel_remaining[0] = parent.fuel
 	child.fuel = 0.0
