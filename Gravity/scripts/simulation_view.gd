@@ -908,9 +908,21 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	if burn_expected:
 		var atmosphere := _atmosphere_at(rocket_position, velocity, sim_time, rocket_position_precise)
 		pressure_ratio = float(atmosphere.get("density", 0.0)) * float(atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(atmosphere.get("temperature", 250.0)) / 101325.0
+		var total_length := 0.0
+		var active_geometry := RocketAssembly.stage_geometry(rocket_stages[stage_index])
+		for index in range(stage_index, rocket_stages.size()):
+			total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
+		var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
+		var gimballed_engine_available := false
+		for engine in _remaining_engine_elements(pressure_ratio, active_center_y):
+			if bool(engine.get("gimballed", false)):
+				gimballed_engine_available = true
+				break
 		var best_gimbal := 0.0
 		var lowest_torque_error := INF
-		for step in range(-16, 17):
+		var first_gimbal_step := -16 if gimballed_engine_available else 0
+		var last_gimbal_step := 16 if gimballed_engine_available else 0
+		for step in range(first_gimbal_step, last_gimbal_step + 1):
 			var candidate_gimbal := deg_to_rad(float(step) * 0.5)
 			gimbal_angle = candidate_gimbal
 			var candidate_torque := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
