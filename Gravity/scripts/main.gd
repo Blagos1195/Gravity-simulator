@@ -2198,7 +2198,7 @@ func _start_flight() -> void:
 func _add_new_vehicle() -> void:
 	if not is_instance_valid(sim):
 		return
-	var design := sim.launch_design.duplicate(true)
+	var design: Dictionary = sim.launch_design.duplicate(true)
 	_launch_vehicle_design(design)
 
 func _launch_vehicle_design(design: Dictionary) -> void:
@@ -2232,7 +2232,7 @@ func _show_new_vehicle_dialog() -> void:
 	if not is_instance_valid(sim):
 		return
 	var options: Array[Dictionary] = []
-	var current_design := sim.launch_design.duplicate(true)
+	var current_design: Dictionary = sim.launch_design.duplicate(true)
 	options.append({
 		"id": "current",
 		"label": "Current vehicle design",
