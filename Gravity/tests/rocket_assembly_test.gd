@@ -147,7 +147,7 @@ func _initialize() -> void:
 	assert(absf(simulation.gimbal_angle) > 0.001, "Autopilot should trim engine gimbal to compensate for an offset centre of mass")
 	assert(absf(float(trimmed_profile.torque)) < untrimmed_torque, "Autopilot gimbal trim should reduce thrust-induced torque")
 	var rcs_stage := RocketAssembly.add_component(assembled, "rcs_thruster_block")
-	assert(is_equal_approx(RocketDesign.stage_rcs_propellant_capacity(rcs_stage), 250.0))
+	assert(is_equal_approx(RocketDesign.stage_rcs_propellant_capacity(rcs_stage), 500.0))
 	assert(is_equal_approx(float(rcs_stage.rcs_thrust), 1800.0))
 	var rcs_attitude_design := RocketDesign.create_default()
 	rcs_attitude_design["stages"][0] = rcs_stage
