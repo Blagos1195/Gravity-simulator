@@ -472,7 +472,8 @@ func _initialize() -> void:
 	manual_tracking_sim.free()
 	restored_manual_sim.free()
 	var route_sim: Variant = SimulationView.new()
-	route_sim.set_rocket_design(RocketDesign.create_default())
+	route_sim.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
+	route_sim.infinite_weightless_fuel = true
 	route_sim.landed = false
 	route_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
 	route_sim.velocity = Vector2(manoeuvre_speed, 0.0)
@@ -485,6 +486,9 @@ func _initialize() -> void:
 	]
 	route_sim.autopilot_route_nodes = route_nodes
 	route_sim.autopilot_phase = "ROUTE_COAST"
+	for _iteration in range(6):
+		route_sim._autopilot_attitude_control(PI * 0.5, 0.01, true)
+		route_sim.rotation_angle = PI * 0.5 - route_sim.gimbal_angle
 	route_sim._update_guidance(0.01)
 	assert(route_sim.autopilot_phase == "ROUTE_COAST")
 	route_sim.sim_time = 10.0
