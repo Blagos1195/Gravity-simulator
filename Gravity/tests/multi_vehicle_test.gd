@@ -52,6 +52,7 @@ func _initialize() -> void:
 	main.active_route_planner = null
 	planner.free()
 	var original_launch_design := first.launch_design.duplicate(true)
+	var original_runtime_stages := first.rocket_stages.duplicate(true)
 	assert(RocketDesign.validation_errors(original_launch_design).is_empty(), "The original launch design was not retained")
 	first.rocket_stages.clear()
 	main._add_new_vehicle()
@@ -59,7 +60,7 @@ func _initialize() -> void:
 	var second: SimulationView = main.sim
 	assert(second.rocket_stages.size() == original_launch_design.stages.size(), "A repeated launch used modified in-flight stage data")
 	assert(RocketDesign.validation_errors(second.launch_design).is_empty(), "A repeated launch did not preserve a valid original design")
-	first.rocket_stages = original_launch_design.stages.duplicate(true)
+	first.rocket_stages = original_runtime_stages
 	var pause_event := InputEventKey.new()
 	pause_event.keycode = KEY_ESCAPE
 	pause_event.pressed = true
