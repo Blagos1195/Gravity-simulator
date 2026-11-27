@@ -75,6 +75,9 @@ var discarded_stage_mass := 0.0
 var discarded_propellant_mass := 0.0
 var throttle := 0.0
 var gimbal_angle := 0.0
+var gimbal_trim_center_of_mass := Vector2(INF, INF)
+var gimbal_trim_stage_index := -1
+var gimbal_trim_last_time := -INF
 var guidance_enabled := false
 var autopilot_enabled := false
 var autopilot_target_altitude := 200000.0
@@ -954,18 +957,34 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 			if bool(engine.get("gimballed", false)):
 				has_gimballed_engine = true
 				break
-		if has_gimballed_engine and autopilot_phase in ["ASCENT", "CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"]:
-			var best_gimbal := 0.0
+		var stage_changed := stage_index != gimbal_trim_stage_index
+		var trim_due := stage_changed or center_of_mass.distance_to(gimbal_trim_center_of_mass) >= 0.25 or sim_time - gimbal_trim_last_time >= 1.0
+		var trim_needed := absf(potential_engine_torque) > maxf(0.5, inertia * deg_to_rad(0.05))
+		if has_gimballed_engine and autopilot_phase in ["ASCENT", "CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and (stage_changed or (trim_needed and trim_due)):
+			var best_gimbal := gimbal_angle
 			var lowest_torque := absf(potential_engine_torque)
-			for step in range(-16, 17):
-				var candidate_gimbal := deg_to_rad(float(step) * 0.5)
-				gimbal_angle = candidate_gimbal
-				var candidate_torque := absf(float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0)))
-				candidate_torque += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
-				if candidate_torque < lowest_torque:
-					lowest_torque = candidate_torque
-					best_gimbal = candidate_gimbal
+			if stage_changed:
+				for step in range(-16, 17):
+					var candidate_gimbal := deg_to_rad(float(step) * 0.5)
+					gimbal_angle = candidate_gimbal
+					var candidate_torque := absf(float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0)))
+					candidate_torque += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
+					if candidate_torque < lowest_torque:
+						lowest_torque = candidate_torque
+						best_gimbal = candidate_gimbal
+			else:
+				for step in [-4, -2, -1, 1, 2, 4]:
+					var candidate_gimbal := clampf(gimbal_angle + deg_to_rad(float(step) * 0.5), deg_to_rad(-8.0), deg_to_rad(8.0))
+					gimbal_angle = candidate_gimbal
+					var candidate_torque := absf(float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0)))
+					candidate_torque += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
+					if candidate_torque < lowest_torque:
+						lowest_torque = candidate_torque
+						best_gimbal = candidate_gimbal
 			gimbal_angle = best_gimbal
+			gimbal_trim_center_of_mass = center_of_mass
+			gimbal_trim_stage_index = stage_index
+			gimbal_trim_last_time = sim_time
 		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
 	else:
 		gimbal_angle = 0.0
