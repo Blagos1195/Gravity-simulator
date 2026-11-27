@@ -148,13 +148,34 @@ func _initialize() -> void:
 	assert(is_equal_approx(transitive_resource_transfer, 30.0), "Connected modules could not transfer resources through the assembly graph")
 	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 2].resources.xenon), 20.0))
 	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 1].resources.xenon), 30.0))
+	assert(main._module_rcs_propellant_capacity(parent) >= 100.0)
+	assert(main._module_rcs_propellant_capacity(child) >= 100.0)
+	parent.docked_rcs_propellant[child.vehicle_name] = 100.0
+	parent.docked_rcs_propellant[second_child.vehicle_name] = 0.0
+	parent.rcs_propellant_remaining = 100.0
+	main._sync_docked_vehicles()
+	var assembly_mass_before_rcs_exchange := parent._current_vehicle_mass()
+	var rcs_transfer_to_parent := main._transfer_between_tanks(child.vehicle_name, "__rcs_propellant__", parent.vehicle_name, "__rcs_propellant__", "rcs_propellant", 40.0)
+	assert(is_equal_approx(rcs_transfer_to_parent, 40.0), "Docked RCS propellant could not be transferred into the parent spacecraft")
+	assert(is_equal_approx(float(parent.docked_rcs_propellant[child.vehicle_name]), 60.0))
+	assert(is_equal_approx(main._module_rcs_propellant_amount(parent, parent), 40.0))
+	assert(is_equal_approx(parent.rcs_propellant_remaining, 100.0))
+	assert(is_equal_approx(parent._current_vehicle_mass(), assembly_mass_before_rcs_exchange))
+	var rcs_transfer_back := main._transfer_between_tanks(parent.vehicle_name, "__rcs_propellant__", child.vehicle_name, "__rcs_propellant__", "rcs_propellant", 25.0)
+	assert(is_equal_approx(rcs_transfer_back, 25.0), "RCS propellant could not be transferred back into the docked module")
+	assert(is_equal_approx(float(parent.docked_rcs_propellant[child.vehicle_name]), 85.0))
+	assert(is_equal_approx(main._module_rcs_propellant_amount(parent, parent), 15.0))
+	assert(is_equal_approx(parent.rcs_propellant_remaining, 100.0))
 	var expected_docked_mass := child._current_vehicle_mass() + second_child._current_vehicle_mass()
 	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
 	assert(parent.docked_visuals.size() == 2)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
 	assert(main._are_docked("Orbital Tug", child.vehicle_name))
 	var parent_capacity := float(parent._active_stage_data().get("fuel_capacity", 0.0))
+	parent.docked_rcs_propellant[child.vehicle_name] = main._module_rcs_propellant_capacity(child)
+	parent.docked_rcs_propellant[second_child.vehicle_name] = main._module_rcs_propellant_capacity(second_child)
 	parent.rcs_propellant_remaining = parent._remaining_rcs_propellant_capacity()
+	main._sync_docked_vehicles()
 	parent.fuel = parent_capacity - 10000.0
 	parent.stage_fuel_remaining[0] = parent.fuel
 	child.fuel = 0.0
