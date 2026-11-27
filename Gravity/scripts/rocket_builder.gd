@@ -19,7 +19,10 @@ class PartCard extends Button:
 		var preview := Label.new()
 		preview.text = str(component.get("label", component.get("id", "Part")))
 		preview.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
-		set_drag_preview(preview)
+		if is_inside_tree():
+			set_drag_preview(preview)
+		else:
+			preview.free()
 		return {"source": "catalog", "id": str(component.get("id", "")), "kind": str(component.get("kind", "")), "component": component.duplicate(true)}
 
 class AssemblyCanvas extends Control:
@@ -98,7 +101,10 @@ class AssemblyCanvas extends Control:
 							break
 				var preview := Label.new()
 				preview.text = "%d parts" % dragged_indices.size() if dragged_indices.size() > 1 else str(components[index].get("label", "Part"))
-				set_drag_preview(preview)
+				if is_inside_tree():
+			set_drag_preview(preview)
+		else:
+			preview.free()
 				return {"source": "placed", "index": index, "indices": dragged_indices, "start_rects": start_rects, "start_position": at_position, "component": components[index].duplicate(true)}
 		return null
 
