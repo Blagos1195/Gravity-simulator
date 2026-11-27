@@ -74,6 +74,7 @@ var menu_root: VBoxContainer
 var settings_root: VBoxContainer
 var hud_root: Control
 var flight_hud_top: PanelContainer
+var flight_hud_right_panel: PanelContainer
 var flight_hud_right_scroll: ScrollContainer
 var flight_hud_bottom: Label
 var flight_hud_right: VBoxContainer
@@ -3616,16 +3617,18 @@ func _build_flight_hud() -> void:
 	info.add_child(funds_label)
 	_refresh_economy_display()
 
+	var right_panel := PanelContainer.new()
+	flight_hud_right_panel = right_panel
+	hud_root.add_child(right_panel)
 	var right_scroll := ScrollContainer.new()
-	right_scroll.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	right_scroll.anchor_bottom = 1.0
-	right_scroll.offset_left = -270
-	right_scroll.offset_right = -18
-	right_scroll.offset_top = 18
-	right_scroll.offset_bottom = -78
+	right_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	right_scroll.offset_left = 8
+	right_scroll.offset_right = -8
+	right_scroll.offset_top = 8
+	right_scroll.offset_bottom = -8
 	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	flight_hud_right_scroll = right_scroll
-	hud_root.add_child(right_scroll)
+	right_panel.add_child(right_scroll)
 	var right := VBoxContainer.new()
 	right.custom_minimum_size.x = 0
 	flight_hud_right = right
@@ -3755,7 +3758,7 @@ func _build_flight_hud() -> void:
 	_layout_flight_hud()
 
 func _layout_flight_hud() -> void:
-	if not is_instance_valid(hud_root) or not is_instance_valid(flight_hud_top) or not is_instance_valid(flight_hud_right_scroll) or not is_instance_valid(flight_hud_bottom) or not is_instance_valid(flight_hud_right):
+	if not is_instance_valid(hud_root) or not is_instance_valid(flight_hud_top) or not is_instance_valid(flight_hud_right_panel) or not is_instance_valid(flight_hud_right_scroll) or not is_instance_valid(flight_hud_bottom) or not is_instance_valid(flight_hud_right):
 		return
 	var viewport_size := hud_root.size
 	var compact := viewport_size.x < 900.0 or viewport_size.y < 600.0
@@ -3766,23 +3769,23 @@ func _layout_flight_hud() -> void:
 		flight_hud_top.offset_top = 12
 		flight_hud_top.offset_bottom = 104
 		flight_hud_top.custom_minimum_size.x = 0
-		flight_hud_right_scroll.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		flight_hud_right_scroll.offset_left = 12
-		flight_hud_right_scroll.offset_right = -12
-		flight_hud_right_scroll.offset_top = -maxf(180.0, viewport_size.y * 0.48)
-		flight_hud_right_scroll.offset_bottom = -12
+		flight_hud_right_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		flight_hud_right_panel.offset_left = 12
+		flight_hud_right_panel.offset_right = -12
+		flight_hud_right_panel.offset_top = -maxf(180.0, viewport_size.y * 0.48)
+		flight_hud_right_panel.offset_bottom = -12
 		flight_hud_right.custom_minimum_size.x = 0
 		flight_hud_bottom.visible = false
 	else:
 		flight_hud_top.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		flight_hud_top.position = Vector2(18, 18)
 		flight_hud_top.custom_minimum_size = Vector2(330, 0)
-		flight_hud_right_scroll.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		flight_hud_right_scroll.anchor_bottom = 1.0
-		flight_hud_right_scroll.offset_left = -270
-		flight_hud_right_scroll.offset_right = -18
-		flight_hud_right_scroll.offset_top = 18
-		flight_hud_right_scroll.offset_bottom = -78
+		flight_hud_right_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		flight_hud_right_panel.anchor_bottom = 1.0
+		flight_hud_right_panel.offset_left = -286
+		flight_hud_right_panel.offset_right = -18
+		flight_hud_right_panel.offset_top = 18
+		flight_hud_right_panel.offset_bottom = -78
 		flight_hud_right.custom_minimum_size.x = 235
 		flight_hud_bottom.visible = true
 		flight_hud_bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
