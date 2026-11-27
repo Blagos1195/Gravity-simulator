@@ -3533,7 +3533,7 @@ func _show_tank_transfer_panel() -> void:
 		var source_is_rcs := source_part_id == "__rcs_propellant__"
 		var destination_is_rcs := destination_part_id == "__rcs_propellant__"
 		if source_is_rcs or destination_is_rcs:
-			var connected := source_vehicle_value == destination_vehicle_value or _are_docked(source_vehicle_value.vehicle_name, destination_vehicle_value.vehicle_name)
+			var connected := source_vehicle_value != destination_vehicle_value and _are_docked(source_vehicle_value.vehicle_name, destination_vehicle_value.vehicle_name)
 			if source_is_rcs and destination_is_rcs and _module_rcs_propellant_capacity(source_vehicle_value) > 0.0 and _module_rcs_propellant_capacity(destination_vehicle_value) > 0.0:
 				resource_selector.add_item("RCS PROPELLANT")
 				resource_selector.set_item_metadata(resource_selector.item_count - 1, "rcs_propellant")
