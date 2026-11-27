@@ -75,9 +75,6 @@ var discarded_stage_mass := 0.0
 var discarded_propellant_mass := 0.0
 var throttle := 0.0
 var gimbal_angle := 0.0
-var gimbal_trim_center_of_mass := Vector2(INF, INF)
-var gimbal_trim_stage_index := -1
-var gimbal_trim_last_time := -INF
 var guidance_enabled := false
 var autopilot_enabled := false
 var autopilot_target_altitude := 200000.0
@@ -195,9 +192,6 @@ func set_rocket_design(design: Dictionary) -> void:
 	stage_index = 0
 	action_stage_index = 0
 	gimbal_angle = 0.0
-	gimbal_trim_center_of_mass = Vector2(INF, INF)
-	gimbal_trim_stage_index = -1
-	gimbal_trim_last_time = -INF
 	stage_fuel_remaining.clear()
 	for stage in rocket_stages:
 		stage_fuel_remaining.append(RocketDesign.stage_total_fuel_capacity(stage))
@@ -946,6 +940,13 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var pressure_ratio := 0.0
 	var expected_throttle := autopilot_throttle if autopilot_phase == "LANDING_DESCENT" else 1.0
 	var potential_engine_torque := 0.0
+	var initial_target_rotation := target_rotation - gimbal_angle
+	var initial_angle_error := angle_difference(rotation_angle, initial_target_rotation)
+	var maximum_angular_acceleration := deg_to_rad(0.5)
+	var maximum_angular_rate := deg_to_rad(2.0)
+	var desired_rate := signf(initial_angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(initial_angle_error)))
+	var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
+	var desired_torque := inertia * desired_acceleration
 	if burn_expected:
 		var local_body := _nearest_body_state(rocket_position, rocket_position_precise)
 		var altitude := maxf(0.0, float(local_body.get("distance", EARTH_RADIUS)) - float(local_body.get("radius", EARTH_RADIUS)))
@@ -955,48 +956,34 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		var temperature := PlanetarySystem.planetary_atmosphere_temperature(body_name)
 		pressure_ratio = density * gas_constant * temperature / 101325.0
 		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
-		var stage_changed := stage_index != gimbal_trim_stage_index
-		var trim_due := stage_changed or center_of_mass.distance_to(gimbal_trim_center_of_mass) >= 0.25 or sim_time - gimbal_trim_last_time >= 1.0
-		var trim_needed := absf(potential_engine_torque) > maxf(0.5, inertia * deg_to_rad(0.05))
-		if stage_changed or (trim_needed and trim_due):
-			var total_length := 0.0
-			for index in range(stage_index, rocket_stages.size()):
-				total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
-			var active_geometry := RocketAssembly.stage_geometry(rocket_stages[stage_index])
-			var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
-			var has_gimballed_engine := false
-			for engine in _remaining_engine_elements(pressure_ratio, active_center_y):
-				if bool(engine.get("gimballed", false)):
-					has_gimballed_engine = true
-					break
-			if has_gimballed_engine:
-				var best_gimbal := gimbal_angle
-				var lowest_torque := absf(potential_engine_torque)
-				if stage_changed:
-					for step in range(-16, 17):
-						var candidate_gimbal := deg_to_rad(float(step) * 0.5)
-						gimbal_angle = candidate_gimbal
-						var candidate_torque := absf(float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0)))
-						candidate_torque += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
-						if candidate_torque < lowest_torque:
-							lowest_torque = candidate_torque
-							best_gimbal = candidate_gimbal
-				else:
-					for step in [-4, -2, -1, 1, 2, 4]:
-						var candidate_gimbal := clampf(gimbal_angle + deg_to_rad(float(step) * 0.5), deg_to_rad(-8.0), deg_to_rad(8.0))
-						gimbal_angle = candidate_gimbal
-						var candidate_torque := absf(float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0)))
-						candidate_torque += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
-						if candidate_torque < lowest_torque:
-							lowest_torque = candidate_torque
-							best_gimbal = candidate_gimbal
-				gimbal_angle = best_gimbal
-			else:
-				gimbal_angle = 0.0
-			gimbal_trim_center_of_mass = center_of_mass
-			gimbal_trim_stage_index = stage_index
-			gimbal_trim_last_time = sim_time
-		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+		var total_length := 0.0
+		for index in range(stage_index, rocket_stages.size()):
+			total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
+		var active_geometry := RocketAssembly.stage_geometry(rocket_stages[stage_index])
+		var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
+		var has_gimballed_engine := false
+		for engine in _remaining_engine_elements(pressure_ratio, active_center_y):
+			if bool(engine.get("gimballed", false)):
+				has_gimballed_engine = true
+				break
+		if has_gimballed_engine:
+			var current_gimbal := gimbal_angle
+			var probe_delta := deg_to_rad(0.5)
+			if current_gimbal >= deg_to_rad(7.5):
+				probe_delta = -probe_delta
+			var probe_gimbal := clampf(current_gimbal + probe_delta, deg_to_rad(-8.0), deg_to_rad(8.0))
+			if not is_equal_approx(probe_gimbal, current_gimbal):
+				gimbal_angle = probe_gimbal
+				var probe_torque := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+				gimbal_angle = current_gimbal
+				var sensitivity := (probe_torque - potential_engine_torque) / (probe_gimbal - current_gimbal)
+				if absf(sensitivity) > 0.1:
+					var correction := clampf((desired_torque - potential_engine_torque) / sensitivity, deg_to_rad(-2.0), deg_to_rad(2.0))
+					gimbal_angle = clampf(current_gimbal + correction * 0.8, deg_to_rad(-8.0), deg_to_rad(8.0))
+					potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+		else:
+			gimbal_angle = 0.0
+			potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
 	else:
 		gimbal_angle = 0.0
 	var body_target_rotation := target_rotation - gimbal_angle
@@ -1004,28 +991,24 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var aligned := absf(angle_error) <= deg_to_rad(1.0) and absf(angular_velocity) <= deg_to_rad(0.5)
 	var ascent_burn_ready := autopilot_phase == "ASCENT" and absf(angle_error) <= deg_to_rad(5.0) and absf(angular_velocity) <= deg_to_rad(1.0)
 	var burn_ready := aligned or ascent_burn_ready
-	var engine_torque := potential_engine_torque if burn_expected and aligned else 0.0
-	var engine_torque_requires_rcs := burn_expected and absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01))
-	if autopilot_phase == "ASCENT" and not engine_torque_requires_rcs:
-		rcs_rotation_input = 0.0
-		rcs_rotation_scale = 0.0
-		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
-		angular_velocity = 0.0
-		return true
+	desired_rate = signf(angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(angle_error)))
+	desired_acceleration = clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
+	desired_torque = inertia * desired_acceleration
+	var engine_torque := potential_engine_torque if burn_expected and burn_ready else 0.0
+	var requested_torque := desired_torque - engine_torque
+	var torque_required := absf(requested_torque) > maxf(1.0, inertia * deg_to_rad(0.01))
 	if not has_rcs_installed():
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
-		if burn_expected and absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01)):
+		if torque_required:
 			status_message = "AUTOPILOT  •  THRUST TORQUE NEEDS RCS"
 			return false
-		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
-		angular_velocity = 0.0
-		return true
+		return burn_ready
 	var protect_ascent_reserve := autopilot_phase in ["ASCENT", "CIRCULARISE_BURN"] and rcs_propellant_remaining <= _remaining_rcs_propellant_capacity() * 0.5
 	if rcs_propellant_remaining <= 0.001 or protect_ascent_reserve:
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
-		if aligned and absf(engine_torque) <= maxf(1.0, inertia * deg_to_rad(0.01)):
+		if burn_ready and not torque_required:
 			return true
 		status_message = "AUTOPILOT  •  RCS PROPELLANT REQUIRED"
 		return false
@@ -1033,27 +1016,22 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var negative_profile := _rcs_force_profile(Vector2.ZERO, -1.0, center_of_mass)
 	var positive_authority := maxf(0.0, float(positive_profile.get("torque", 0.0)))
 	var negative_authority := maxf(0.0, -float(negative_profile.get("torque", 0.0)))
-	if burn_expected and aligned:
-		var counter_authority := positive_authority if engine_torque < 0.0 else negative_authority
-		if absf(engine_torque) > counter_authority * 0.9:
+	if torque_required:
+		var available_authority := positive_authority if requested_torque > 0.0 else negative_authority
+		if absf(requested_torque) > available_authority * 0.9:
 			rcs_rotation_input = 0.0
 			rcs_rotation_scale = 0.0
 			status_message = "AUTOPILOT  •  INSUFFICIENT RCS TORQUE"
 			return false
-	var maximum_angular_acceleration := deg_to_rad(0.5)
-	var maximum_angular_rate := deg_to_rad(2.0)
-	var desired_rate := signf(angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(angle_error)))
-	var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
-	var requested_torque := inertia * desired_acceleration - engine_torque
-	if absf(requested_torque) <= 1.0:
+		if requested_torque > 0.0:
+			rcs_rotation_input = 1.0 if positive_authority > 0.0 else 0.0
+			rcs_rotation_scale = clampf(requested_torque / maxf(1.0, positive_authority), 0.0, 1.0)
+		else:
+			rcs_rotation_input = -1.0 if negative_authority > 0.0 else 0.0
+			rcs_rotation_scale = clampf(absf(requested_torque) / maxf(1.0, negative_authority), 0.0, 1.0)
+	else:
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
-	elif requested_torque > 0.0:
-		rcs_rotation_input = 1.0 if positive_authority > 0.0 else 0.0
-		rcs_rotation_scale = clampf(requested_torque / maxf(1.0, positive_authority), 0.0, 1.0)
-	else:
-		rcs_rotation_input = -1.0 if negative_authority > 0.0 else 0.0
-		rcs_rotation_scale = clampf(absf(requested_torque) / maxf(1.0, negative_authority), 0.0, 1.0)
 	return burn_ready
 
 func has_rcs_installed() -> bool:
