@@ -39,6 +39,7 @@ var career_enabled := false
 var infinite_weightless_fuel := false
 var simulate_belt_collisions := false
 var paused := false
+var launch_design: Dictionary = {}
 var sim_time := 0.0
 var launch_time := 0.0
 var time_warp := 1.0
@@ -166,6 +167,7 @@ func _set_rocket_position_components(position_x: float, position_y: float) -> vo
 	_rocket_position_display = Vector2(position_x, position_y)
 
 func set_rocket_design(design: Dictionary) -> void:
+	launch_design = design.duplicate(true)
 	rocket_stages = (design.get("stages", []) as Array).duplicate(true)
 	if rocket_stages.is_empty():
 		rocket_stages = RocketDesign.create_default()["stages"].duplicate(true)
@@ -2685,8 +2687,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("stage_next"):
 		staging_stage_requested.emit()
-	elif event.is_action_pressed("pause_game"):
-		paused = not paused
 	elif event.is_action_pressed("stage_separation"):
 		_separate_stage()
 	elif event.is_action_pressed("guidance_toggle"):
@@ -3643,6 +3643,7 @@ func get_save_data() -> Dictionary:
 		"throttle": throttle,
 		"time_warp": time_warp,
 		"paused": paused,
+		"launch_design": launch_design.duplicate(true),
 		"rocket_design": {"payload_mass": payload_mass, "payload_type": payload_type, "payload_visual": payload_visual.duplicate(true), "stages": remaining_stages, "staging_stage_count": staging_plan.size(), "preserve_part_uids": true},
 		"vehicle_name": vehicle_name,
 		"is_debris": is_debris,
@@ -3748,6 +3749,9 @@ func load_save_data(data: Dictionary) -> bool:
 			else:
 				validated_stage_fuel.append(RocketDesign.stage_total_fuel_capacity(saved_stages[i]))
 	set_rocket_design(saved_design)
+	var saved_launch_design: Variant = data.get("launch_design", saved_design)
+	if saved_launch_design is Dictionary and RocketDesign.validation_errors(saved_launch_design).is_empty():
+		launch_design = saved_launch_design.duplicate(true)
 	saved_design["preserve_part_uids"] = true
 	var saved_docked_rcs: Variant = data.get("docked_rcs_propellant", {})
 	docked_rcs_propellant = saved_docked_rcs.duplicate(true) if saved_docked_rcs is Dictionary else {}
