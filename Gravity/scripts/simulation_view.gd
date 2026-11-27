@@ -954,8 +954,8 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 			rcs_rotation_scale = 0.0
 			status_message = "AUTOPILOT  •  INSUFFICIENT RCS TORQUE"
 			return false
-	var maximum_angular_acceleration := deg_to_rad(2.0)
-	var maximum_angular_rate := deg_to_rad(8.0)
+	var maximum_angular_acceleration := deg_to_rad(0.5)
+	var maximum_angular_rate := deg_to_rad(2.0)
 	var desired_rate := signf(angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(angle_error)))
 	var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
 	var requested_torque := inertia * desired_acceleration - engine_torque
