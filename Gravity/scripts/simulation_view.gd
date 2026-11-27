@@ -980,8 +980,8 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var body_target_rotation := target_rotation - gimbal_angle
 	var angle_error := angle_difference(rotation_angle, body_target_rotation)
 	var aligned := absf(angle_error) <= deg_to_rad(1.0) and absf(angular_velocity) <= deg_to_rad(0.5)
-	var ascent_burn_ready := autopilot_phase == "ASCENT" and absf(angle_error) <= deg_to_rad(5.0) and absf(angular_velocity) <= deg_to_rad(1.0)
-	var burn_ready := aligned or ascent_burn_ready
+	var powered_burn_ready := burn_expected and absf(angle_error) <= deg_to_rad(8.5) and absf(angular_velocity) <= deg_to_rad(2.0)
+	var burn_ready := aligned or powered_burn_ready
 	var engine_torque := potential_engine_torque if burn_expected and burn_ready else 0.0
 	var desired_rate := signf(angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(angle_error)))
 	var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
