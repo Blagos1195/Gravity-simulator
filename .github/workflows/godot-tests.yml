@@ -80,10 +80,14 @@ jobs:
             run_check rocket_builder_ui_test
           run_check ui_theme_test
           run_check flight_hud_ui_test
+          run_check main_runtime_smoke_test
           fi
           if echo "$changed_files" | grep -Eq 'main.gd|ui_theme'; then
             run_check ui_theme_test
             run_check flight_hud_ui_test
+          fi
+          if echo "$changed_files" | grep -Eq 'main.gd|simulation_view.gd|ui_theme'; then
+            run_check main_runtime_smoke_test
           fi
           if echo "$changed_files" | grep -Eq 'main.gd|simulation_view|space_object_physics|rocket_design'; then
             run_check multi_vehicle_test
