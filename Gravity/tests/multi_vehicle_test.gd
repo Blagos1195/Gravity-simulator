@@ -11,6 +11,7 @@ const RoutePlanner = preload("res://scripts/route_planner.gd")
 func _initialize() -> void:
 	var main := Main.new()
 	root.add_child(main)
+	main._configure_input_actions()
 	main.rocket_design = RocketDesign.create_default()
 	main._start_flight()
 	assert(main.fleet_sims.size() == 1)
