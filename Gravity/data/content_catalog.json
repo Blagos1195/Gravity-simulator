@@ -2295,7 +2295,7 @@
           "id": "rcs_thruster_block",
           "label": "RCS thruster block",
           "dry_mass": 180,
-          "rcs_propellant_capacity": 250,
+          "rcs_propellant_capacity": 500,
           "rcs_thrust": 1800,
           "rcs_flow": 0.83,
           "rcs_torque": 1800,

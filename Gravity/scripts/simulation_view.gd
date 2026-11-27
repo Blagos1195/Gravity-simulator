@@ -442,7 +442,10 @@ func _part_at_screen_position(screen_position: Vector2) -> String:
 	var object_scale := RocketVisual.camera_scale(camera_zoom, _visual_scale())
 	if object_scale < 0.025:
 		return ""
-	var local_click := (screen_position - get_viewport_rect().size * 0.5).rotated(-rotation_angle) / object_scale
+	var control_position := get_global_transform_with_canvas().affine_inverse() * screen_position
+	var local_click := (control_position - size * 0.5).rotated(-rotation_angle) / object_scale
+	var best_uid := ""
+	var best_score := INF
 	var total_length := 0.0
 	var geometries: Array[Dictionary] = []
 	for index in range(stage_index, rocket_stages.size()):
@@ -450,46 +453,28 @@ func _part_at_screen_position(screen_position: Vector2) -> String:
 		geometries.append(geometry)
 		total_length += float(geometry.get("length", 1.0))
 	var cursor := -total_length * 0.5
-	for offset in range(geometries.size()):
-		var geometry: Dictionary = geometries[offset]
+	for geometry in geometries:
 		var stage_center_y := cursor + float(geometry.get("length", 1.0)) * 0.5
 		var stage: Dictionary = geometry.get("stage", {})
 		var components: Array = stage.get("components", [])
 		var positions: Dictionary = geometry.get("component_positions", {})
 		for component_index in range(components.size()):
 			var component: Dictionary = components[component_index]
+			var radius := maxf(0.5, float(component.get("collision_radius_m", 0.5)))
+			var half_width := maxf(radius * 1.15, 5.0 / object_scale)
+			var half_length := maxf(float(component.get("length_m", 1.0)) * 0.58, 5.0 / object_scale)
+			var angle := deg_to_rad(float(component.get("rotation_deg", 0.0)))
 			for position in positions.get(component_index, []):
 				var center: Vector2 = Vector2(position) + Vector2(0.0, stage_center_y)
-				var hit_radius := maxf(6.0 / object_scale, maxf(float(component.get("collision_radius_m", 0.5)), float(component.get("length_m", 1.0)) * 0.55))
-				if local_click.distance_to(center) <= hit_radius:
-					return str(component.get("part_uid", ""))
+				var local_offset := (local_click - center).rotated(-angle)
+				if absf(local_offset.x) > half_width or absf(local_offset.y) > half_length:
+					continue
+				var score := local_offset.x * local_offset.x / (half_width * half_width) + local_offset.y * local_offset.y / (half_length * half_length)
+				if score < best_score:
+					best_score = score
+					best_uid = str(component.get("part_uid", ""))
 		cursor += float(geometry.get("length", 1.0))
-	for docked_visual in docked_visuals:
-		var design: Dictionary = docked_visual.get("design", {})
-		var stages: Array = design.get("stages", [])
-		var attached_stage_index := int(docked_visual.get("stage_index", 0))
-		var attached_length := 0.0
-		var attached_geometries: Array[Dictionary] = []
-		for index in range(attached_stage_index, stages.size()):
-			var geometry := RocketAssembly.stage_geometry(stages[index])
-			attached_geometries.append(geometry)
-			attached_length += float(geometry.get("length", 1.0))
-		var attached_cursor := -attached_length * 0.5
-		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
-		for geometry in attached_geometries:
-			var stage: Dictionary = geometry.get("stage", {})
-			var stage_center_y := attached_cursor + float(geometry.get("length", 1.0)) * 0.5
-			var components: Array = stage.get("components", [])
-			var positions: Dictionary = geometry.get("component_positions", {})
-			for component_index in range(components.size()):
-				var component: Dictionary = components[component_index]
-				for position in positions.get(component_index, []):
-					var center: Vector2 = Vector2(position) + Vector2(0.0, stage_center_y) + attached_offset
-					var hit_radius := maxf(6.0 / object_scale, maxf(float(component.get("collision_radius_m", 0.5)), float(component.get("length_m", 1.0)) * 0.55))
-					if local_click.distance_to(center) <= hit_radius:
-						return str(component.get("part_uid", ""))
-			attached_cursor += float(geometry.get("length", 1.0))
-	return ""
+	return best_uid
 
 func execute_staging_actions(actions: Array) -> bool:
 	if actions.is_empty():
@@ -939,7 +924,16 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var body_target_rotation := target_rotation - gimbal_angle
 	var angle_error := angle_difference(rotation_angle, body_target_rotation)
 	var aligned := absf(angle_error) <= deg_to_rad(1.0) and absf(angular_velocity) <= deg_to_rad(0.5)
+	var ascent_burn_ready := autopilot_phase == "ASCENT" and absf(angle_error) <= deg_to_rad(5.0) and absf(angular_velocity) <= deg_to_rad(1.0)
+	var burn_ready := aligned or ascent_burn_ready
 	var engine_torque := potential_engine_torque if burn_expected and aligned else 0.0
+	var engine_torque_requires_rcs := burn_expected and absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01))
+	if autopilot_phase == "ASCENT" and not engine_torque_requires_rcs:
+		rcs_rotation_input = 0.0
+		rcs_rotation_scale = 0.0
+		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
+		angular_velocity = 0.0
+		return true
 	if not has_rcs_installed():
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
@@ -967,8 +961,8 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 			rcs_rotation_scale = 0.0
 			status_message = "AUTOPILOT  •  INSUFFICIENT RCS TORQUE"
 			return false
-	var maximum_angular_acceleration := deg_to_rad(2.0)
-	var maximum_angular_rate := deg_to_rad(8.0)
+	var maximum_angular_acceleration := deg_to_rad(0.5)
+	var maximum_angular_rate := deg_to_rad(2.0)
 	var desired_rate := signf(angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(angle_error)))
 	var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
 	var requested_torque := inertia * desired_acceleration - engine_torque
@@ -981,7 +975,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	else:
 		rcs_rotation_input = -1.0 if negative_authority > 0.0 else 0.0
 		rcs_rotation_scale = clampf(absf(requested_torque) / maxf(1.0, negative_authority), 0.0, 1.0)
-	return aligned
+	return burn_ready
 
 func has_rcs_installed() -> bool:
 	var system := _remaining_rcs_system()
@@ -1216,11 +1210,13 @@ func _physics_step(dt: float) -> void:
 	var flight_controls_blocked := _flight_input_blocked_by_gui()
 	if has_rcs() and input_enabled and not flight_controls_blocked:
 		rcs_translation_input = Vector2(
-			float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT)),
-			float(Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_UP))
+			float(Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_LEFT)),
+			float(Input.is_physical_key_pressed(KEY_DOWN)) - float(Input.is_physical_key_pressed(KEY_UP))
 		).limit_length(1.0)
 		if not autopilot_enabled:
-			rcs_rotation_input = float(Input.is_action_pressed("rotate_right")) - float(Input.is_action_pressed("rotate_left"))
+			var rotate_right := Input.is_action_pressed("rotate_right") or Input.is_physical_key_pressed(KEY_D)
+			var rotate_left := Input.is_action_pressed("rotate_left") or Input.is_physical_key_pressed(KEY_A)
+			rcs_rotation_input = float(rotate_right) - float(rotate_left)
 			rcs_rotation_scale = 1.0 if absf(rcs_rotation_input) > 0.001 else 0.0
 	elif not autopilot_enabled:
 		rcs_rotation_input = 0.0
@@ -1229,7 +1225,7 @@ func _physics_step(dt: float) -> void:
 	var rcs_profile := _rcs_force_profile(rcs_translation_input, rcs_rotation_input, Vector2(initial_rcs_mass_properties.center_of_mass))
 	var rcs_control_scale := clampf(rcs_rotation_scale, 0.0, 1.0) if absf(rcs_rotation_input) > 0.001 else 1.0
 	var rcs_flow_rate := float(rcs_profile.flow) * rcs_control_scale
-	var rcs_fuel_used := minf(resource_amount("rcs_propellant"), rcs_flow_rate * dt) if not crashed else 0.0
+	var rcs_fuel_used := minf(rcs_propellant_remaining, rcs_flow_rate * dt) if not crashed else 0.0
 	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0 or resource_amount("xenon") > 0.0 or resource_amount("solid_propellant") > 0.0)
 	var solid_motor_burning := _has_ignited_solid_motor() and resource_amount("solid_propellant") > 0.0
 	throttle = 1.0 if solid_motor_burning else (autopilot_throttle if not crashed and autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if not crashed and thrust_key_down and propellant_available else 0.0))
@@ -2268,7 +2264,7 @@ func _update_guidance(dt: float) -> void:
 	var guidance_orbit_altitude := autopilot_target_altitude if destination_is_local else parking_altitude
 	var tangent := Vector2(-radial.y, radial.x)
 	var atmosphere_height := PlanetarySystem.planetary_atmosphere_height(guidance_body_name)
-	var pitch_reference_altitude := maxf(maxf(5000.0, float(guidance_body.radius) * 0.01), atmosphere_height * 0.6)
+	var pitch_reference_altitude := maxf(100000.0, guidance_orbit_altitude * 0.75)
 	var pitch_above_horizon := lerpf(90.0, 5.0, clampf(altitude / pitch_reference_altitude, 0.0, 1.0))
 	if autopilot_enabled and autopilot_phase == "ASCENT" and not destination_is_local and maximum_stable_altitude <= minimum_safe_altitude:
 		_fail_autopilot("NO SAFE PARKING ORBIT EXISTS AROUND %s" % guidance_body_name.to_upper())
@@ -2309,10 +2305,7 @@ func _update_guidance(dt: float) -> void:
 					var surface_rotation_speed: float = absf(float(guidance_body.get("rotation_rate", 0.0))) * float(guidance_body.radius)
 					var ascent_speed_gain: float = maxf(0.0, ascent_tangential_speed - surface_rotation_speed)
 					var ascent_altitude_fraction: float = clampf(altitude / pitch_reference_altitude, 0.0, 1.0)
-					var ascent_speed_fraction: float = clampf(ascent_speed_gain / maxf(1.0, target_orbit_speed), 0.0, 1.0)
-					var altitude_pitch: float = lerpf(88.0, 4.0, ascent_altitude_fraction)
-					var speed_pitch: float = lerpf(88.0, 4.0, ascent_speed_fraction)
-					pitch_above_horizon = minf(altitude_pitch, speed_pitch)
+					pitch_above_horizon = lerpf(88.0, 4.0, ascent_altitude_fraction)
 					status_message = "AUTOPILOT  •  ASCENT  •  ALT %.0f KM  •  Vt %.2f KM/S  •  PITCH %.0f°" % [altitude / 1000.0, ascent_tangential_speed / 1000.0, pitch_above_horizon]
 					thrust_key_down = propellant_available
 			"COAST":
@@ -2673,6 +2666,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var selected_part := _part_at_screen_position(event.position)
 			if not selected_part.is_empty():
 				part_selected.emit(selected_part)
+				get_viewport().set_input_as_handled()
 			return
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			if show_solar_system:

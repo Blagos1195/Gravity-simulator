@@ -3289,6 +3289,15 @@ func _show_part_actions(part_uid: String) -> void:
 	var detail := Label.new()
 	detail.text = "%s  •  %.0f kg" % [kind.replace("_", " ").to_upper(), float(selected_component.get("dry_mass", 0.0))]
 	layout.add_child(detail)
+	if bool(selected_component.get("solid_motor", false)):
+		var ignition_button := Button.new()
+		ignition_button.text = "IGNITE SOLID MOTOR" if not bool(selected_component.get("ignited", false)) else "SOLID MOTOR IGNITED"
+		ignition_button.disabled = bool(selected_component.get("ignited", false))
+		ignition_button.pressed.connect(func():
+			_set_vehicle_component_state(part_owner, part_uid, "ignited", true)
+			window.queue_free()
+		)
+		layout.add_child(ignition_button)
 	if bool(selected_component.get("deployable", false)):
 		var deploy_button := Button.new()
 		deploy_button.text = "RETRACT" if bool(selected_component.get("deployed", false)) else "DEPLOY"
