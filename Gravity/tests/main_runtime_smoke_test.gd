@@ -14,6 +14,20 @@ func _run() -> void:
 	await process_frame
 	assert(main.mode == "menu")
 	assert(main.menu_root != null)
+	main._show_settings()
+	await process_frame
+	assert(main.mode == "settings")
+	assert(main.settings_root != null)
+	main._show_game_load()
+	await process_frame
+	assert(main.mode == "load_menu")
+	main._begin_new_game()
+	await process_frame
+	assert(main.mode == "new_game_setup")
+	main._show_vehicle_editor()
+	await process_frame
+	assert(main.mode == "editor")
+	assert(main.active_builder != null)
 	main.rocket_design = RocketAssembly.add_preset_hardware(RocketDesign.create_default())
 	main._start_flight()
 	await process_frame
