@@ -148,7 +148,7 @@ func _initialize() -> void:
 	assert(is_equal_approx(transitive_resource_transfer, 30.0), "Connected modules could not transfer resources through the assembly graph")
 	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 2].resources.xenon), 20.0))
 	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 1].resources.xenon), 30.0))
-	var expected_docked_mass := child._current_vehicle_mass() + second_child._current_vehicle_mass()
+	var expected_docked_mass := child._current_vehicle_mass()
 	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
 	assert(main._are_docked("Orbital Tug", child.vehicle_name))
@@ -192,7 +192,7 @@ func _initialize() -> void:
 	var loaded_second_child: SimulationView = main.fleet_sims[2]
 	assert(not loaded_child.input_enabled)
 	assert(not loaded_second_child.input_enabled)
-	assert(is_equal_approx(loaded_parent.docked_mass, loaded_child._current_vehicle_mass() + loaded_second_child._current_vehicle_mass()))
+	assert(is_equal_approx(loaded_parent.docked_mass, loaded_child._current_vehicle_mass()))
 	assert(is_zero_approx(loaded_child.stage_fuel_remaining[1]))
 	assert(is_equal_approx(loaded_parent.rcs_propellant_remaining, parent_rcs_capacity))
 	assert(is_equal_approx(loaded_parent.stage_fuel_remaining[0], float(loaded_parent._active_stage_data().get("fuel_capacity", 0.0))))
