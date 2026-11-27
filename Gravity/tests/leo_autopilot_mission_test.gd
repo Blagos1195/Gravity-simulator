@@ -121,21 +121,21 @@ func _validate_leo_autopilot_mission(infinite_propellant: bool) -> bool:
 	var end_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var end_orbit: Dictionary = FlightComputer.orbital_state(end_body.relative_position, simulation.velocity - end_body.velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
 	if simulation.crashed or not simulation.autopilot_complete:
-		var mass_properties := simulation._vehicle_mass_properties()
+		var mass_properties: Dictionary = simulation._vehicle_mass_properties()
 		var center_of_mass: Vector2 = Vector2(mass_properties.center_of_mass)
-		var trace_altitude := maxf(0.0, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS)
-		var density := PlanetarySystem.planetary_atmosphere_density("Earth", trace_altitude)
-		var pressure_ratio := density * PlanetarySystem.planetary_atmosphere_gas_constant("Earth") * PlanetarySystem.planetary_atmosphere_temperature("Earth") / 101325.0
-		var engine_torque := float(simulation._engine_force_profile(center_of_mass, pressure_ratio, 1.0).get("torque", 0.0))
-		var target_direction := simulation.autopilot_burn_direction.normalized()
+		var trace_altitude: float = maxf(0.0, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS)
+		var density: float = PlanetarySystem.planetary_atmosphere_density("Earth", trace_altitude)
+		var pressure_ratio: float = density * PlanetarySystem.planetary_atmosphere_gas_constant("Earth") * PlanetarySystem.planetary_atmosphere_temperature("Earth") / 101325.0
+		var engine_torque: float = float(simulation._engine_force_profile(center_of_mass, pressure_ratio, 1.0).get("torque", 0.0))
+		var target_direction: Vector2 = simulation.autopilot_burn_direction.normalized()
 		if target_direction.length_squared() < 0.5:
 			target_direction = Vector2(-end_body.relative_position.y, end_body.relative_position.x).normalized()
-		var target_rotation := target_direction.angle() - Vector2.UP.angle()
-		var attitude_error := angle_difference(simulation.rotation_angle, target_rotation - simulation.gimbal_angle)
-		var inertia := maxf(1.0, float(mass_properties.moment_of_inertia))
-		var desired_rate := signf(attitude_error) * minf(deg_to_rad(2.0), sqrt(2.0 * deg_to_rad(0.5) * absf(attitude_error)))
-		var desired_acceleration := clampf((desired_rate - simulation.angular_velocity) / 0.05, -deg_to_rad(0.5), deg_to_rad(0.5))
-		var desired_torque := inertia * desired_acceleration
+		var target_rotation: float = target_direction.angle() - Vector2.UP.angle()
+		var attitude_error: float = angle_difference(simulation.rotation_angle, target_rotation - simulation.gimbal_angle)
+		var inertia: float = maxf(1.0, float(mass_properties.moment_of_inertia))
+		var desired_rate: float = signf(attitude_error) * minf(deg_to_rad(2.0), sqrt(2.0 * deg_to_rad(0.5) * absf(attitude_error)))
+		var desired_acceleration: float = clampf((desired_rate - simulation.angular_velocity) / 0.05, -deg_to_rad(0.5), deg_to_rad(0.5))
+		var desired_torque: float = inertia * desired_acceleration
 		push_error("LEO %s mission failed: phase=%s status=%s elapsed=%.1f iterations=%d altitude=%.1f speed=%.1f radial_speed=%.1f periapsis_altitude=%.1f apoapsis_altitude=%.1f fuel=%.1f RCS=%.1f/%.1f gimbal=%.2f engine_torque=%.2f desired_torque=%.2f attitude_error=%.3f angular_velocity=%.4f landed=%s crashed=%s transitions=%s" % ["infinite-fuel" if infinite_propellant else "finite-fuel", simulation.autopilot_phase, simulation.status_message, elapsed, iterations, trace_altitude, simulation.velocity.length(), float(end_orbit.get("radial_speed", INF)), float(end_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(end_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, simulation.rcs_propellant_remaining, simulation._remaining_rcs_propellant_capacity(), rad_to_deg(simulation.gimbal_angle), engine_torque, desired_torque, attitude_error, simulation.angular_velocity, simulation.landed, simulation.crashed, "; ".join(PackedStringArray(phase_transitions))])
 		simulation.free()
 		return false
