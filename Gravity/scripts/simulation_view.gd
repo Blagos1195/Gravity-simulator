@@ -958,7 +958,8 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 			if has_gimballed_engine and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"]:
 				var best_gimbal := 0.0
 				var lowest_torque_error := INF
-				for step in range(-4, 5):
+				var propellant_available := rcs_propellant_remaining > 0.001
+				for step in range(-16, 17):
 					var candidate_gimbal := deg_to_rad(float(step) * 0.5)
 					gimbal_angle = candidate_gimbal
 					var candidate_torque := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
@@ -966,7 +967,8 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 					var candidate_error := angle_difference(rotation_angle, candidate_target)
 					var desired_rate := signf(candidate_error) * minf(deg_to_rad(2.0), sqrt(2.0 * deg_to_rad(0.5) * absf(candidate_error)))
 					var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -deg_to_rad(0.5), deg_to_rad(0.5))
-					var torque_error := absf(inertia * desired_acceleration - candidate_torque) + absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
+					var torque_error := absf(candidate_torque) if not propellant_available else absf(inertia * desired_acceleration - candidate_torque)
+					torque_error += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
 					if torque_error < lowest_torque_error:
 						lowest_torque_error = torque_error
 						best_gimbal = candidate_gimbal
