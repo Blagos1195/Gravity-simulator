@@ -49,6 +49,7 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 	var target_orbit_period := TAU * sqrt(pow(target_orbit_radius, 3.0) / (PlanetarySystem.G * PlanetarySystem.EARTH_MASS))
 	var elapsed := 0.0
 	var iterations := 0
+	var next_trace_time := 10.0
 	while elapsed < target_orbit_period * 2.0 and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
 		var step: float = simulation._adaptive_step_size()
 		if step <= 0.000001:
@@ -56,6 +57,10 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 		simulation._physics_step(step)
 		elapsed += step
 		iterations += 1
+		if elapsed >= next_trace_time:
+			var trace_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
+			print("PATHFINDER TRACE t=%.1f alt=%.0f speed=%.0f radial=%.0f tangential=%.0f pitch=%.1f rot=%.2f angular=%.3f rcs=%.0f fuel=%.0f stage=%d thrust=%s" % [elapsed, float(trace_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), (simulation.velocity - trace_body.velocity).dot(trace_body.relative_position.normalized()), (simulation.velocity - trace_body.velocity).dot(Vector2(-trace_body.relative_position.y, trace_body.relative_position.x).normalized()), simulation.rotation_angle, simulation.rotation_angle, simulation.angular_velocity, simulation.rcs_propellant_remaining, simulation.fuel, simulation.stage_index, simulation.thrust_key_down])
+			next_trace_time += 10.0
 		if iterations >= 300000:
 			break
 	var body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
