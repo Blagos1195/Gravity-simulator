@@ -2980,7 +2980,7 @@ func _build_docked_visuals_recursive(parent: SimulationView, visited: Dictionary
 		if not bool(link.get("structural", true)) or str(link.get("parent_name", "")) != parent.vehicle_name:
 			continue
 		var child := _find_vehicle_by_name(str(link.get("child_name", "")))
-		if child == null:
+		if child == null or visited.has(child.vehicle_name):
 			continue
 		_build_docked_visuals_recursive(child, visited)
 		var local_offset := Vector2(float(link.get("offset_x", 0.0)), float(link.get("offset_y", 0.0)))
