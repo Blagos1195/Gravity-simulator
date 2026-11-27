@@ -924,6 +924,8 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var body_target_rotation := target_rotation - gimbal_angle
 	var angle_error := angle_difference(rotation_angle, body_target_rotation)
 	var aligned := absf(angle_error) <= deg_to_rad(1.0) and absf(angular_velocity) <= deg_to_rad(0.5)
+	var ascent_burn_ready := autopilot_phase == "ASCENT" and absf(angle_error) <= deg_to_rad(5.0) and absf(angular_velocity) <= deg_to_rad(1.0)
+	var burn_ready := aligned or ascent_burn_ready
 	var engine_torque := potential_engine_torque if burn_expected and aligned else 0.0
 	if not has_rcs_installed():
 		rcs_rotation_input = 0.0
@@ -937,7 +939,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	if rcs_propellant_remaining <= 0.001:
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
-		if aligned and absf(engine_torque) <= maxf(1.0, inertia * deg_to_rad(0.01)):
+		if burn_ready and absf(engine_torque) <= maxf(1.0, inertia * deg_to_rad(0.01)):
 			return true
 		status_message = "AUTOPILOT  •  RCS PROPELLANT REQUIRED"
 		return false
@@ -966,7 +968,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	else:
 		rcs_rotation_input = -1.0 if negative_authority > 0.0 else 0.0
 		rcs_rotation_scale = clampf(absf(requested_torque) / maxf(1.0, negative_authority), 0.0, 1.0)
-	return aligned
+	return burn_ready
 
 func has_rcs_installed() -> bool:
 	var system := _remaining_rcs_system()
