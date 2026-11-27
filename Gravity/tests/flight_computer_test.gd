@@ -415,7 +415,7 @@ func _initialize() -> void:
 	assert(not bool(invalid_transfer_plan.get("valid", true)))
 
 	var manoeuvre_sim: Variant = SimulationView.new()
-	manoeuvre_sim.set_rocket_design(RocketDesign.create_default())
+	manoeuvre_sim.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
 	var manoeuvre_radius: float = FlightComputer.EARTH_RADIUS + 200000.0
 	var manoeuvre_speed: float = FlightComputer.circular_orbit_speed(manoeuvre_radius)
 	manoeuvre_sim.landed = false
