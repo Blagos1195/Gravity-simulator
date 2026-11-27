@@ -979,7 +979,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 				var sensitivity := (probe_torque - potential_engine_torque) / (probe_gimbal - current_gimbal)
 				if absf(sensitivity) > 0.1:
 					var correction := clampf((desired_torque - potential_engine_torque) / sensitivity, deg_to_rad(-2.0), deg_to_rad(2.0))
-					gimbal_angle = clampf(current_gimbal + correction * 0.8, deg_to_rad(-8.0), deg_to_rad(8.0))
+					gimbal_angle = clampf(current_gimbal + correction, deg_to_rad(-8.0), deg_to_rad(8.0))
 					potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
 		else:
 			gimbal_angle = 0.0
