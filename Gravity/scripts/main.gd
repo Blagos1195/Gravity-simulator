@@ -3265,8 +3265,8 @@ func _transfer_between_tanks(source_vehicle_name: String, source_part_id: String
 			inventory_owner.resource_tanks[destination_index] = destination
 			inventory_owner._sync_legacy_fuel_from_tanks()
 			if transferred > 0.0:
-				_update_docked_masses()
 				_sync_docked_vehicles()
+				_update_docked_masses()
 			return transferred
 	return 0.0
 
