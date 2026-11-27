@@ -3761,6 +3761,7 @@ func _build_flight_hud() -> void:
 	bottom.text = "W ENGINE ON/OFF     S CUTOFF     SPACE NEXT STAGE     X SEPARATE MODULE     ARROWS RCS TRANSLATION     A / D RCS ROTATION\nESC PAUSE     Q / E GIMBAL     H GUIDANCE     T TELESCOPE     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     +/- WARP     J FAST FORWARD     F5 SAVE     F9 LOAD"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
+	flight_hud_bottom = bottom
 	hud_root.add_child(bottom)
 	hud_root.resized.connect(_layout_flight_hud)
 	_layout_flight_hud()
