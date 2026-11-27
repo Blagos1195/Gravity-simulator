@@ -77,7 +77,7 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 
 func _validate_leo_autopilot_mission(infinite_propellant: bool) -> bool:
 	var simulation: Variant = SimulationView.new()
-	simulation.set_rocket_design(RocketDesign.create_default())
+	simulation.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
 	simulation.realism = "Realistic"
 	simulation.infinite_weightless_fuel = infinite_propellant
 	simulation.landed = true
@@ -161,6 +161,11 @@ func _validate_leo_autopilot_mission(infinite_propellant: bool) -> bool:
 	var coast_orbit: Dictionary = FlightComputer.orbital_state(coast_position, coast_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
 	if not bool(coast_orbit.get("bound", false)) or float(coast_orbit.get("periapsis", 0.0)) <= PlanetarySystem.EARTH_RADIUS + 70000.0:
 		push_error("LEO %s orbit became unbound or unsafe after one revolution." % ("infinite-fuel" if infinite_propellant else "finite-fuel"))
+		simulation.free()
+		return false
+	var rcs_reserve_capacity: float = simulation._remaining_rcs_propellant_capacity()
+	if rcs_reserve_capacity <= 0.0 or simulation.rcs_propellant_remaining + 0.1 < rcs_reserve_capacity * 0.5:
+		push_error("LEO %s mission did not preserve half its attached RCS propellant: %.1f/%.1f" % ["infinite-fuel" if infinite_propellant else "finite-fuel", simulation.rcs_propellant_remaining, rcs_reserve_capacity])
 		simulation.free()
 		return false
 	simulation.free()
