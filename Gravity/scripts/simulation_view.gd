@@ -194,6 +194,10 @@ func set_rocket_design(design: Dictionary) -> void:
 	payload_subassembly_id = str(design.get("payload_subassembly_id", "main"))
 	stage_index = 0
 	action_stage_index = 0
+	gimbal_angle = 0.0
+	gimbal_trim_center_of_mass = Vector2(INF, INF)
+	gimbal_trim_stage_index = -1
+	gimbal_trim_last_time = -INF
 	stage_fuel_remaining.clear()
 	for stage in rocket_stages:
 		stage_fuel_remaining.append(RocketDesign.stage_total_fuel_capacity(stage))
