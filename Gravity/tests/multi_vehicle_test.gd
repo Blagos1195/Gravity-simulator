@@ -53,7 +53,7 @@ func _initialize() -> void:
 	planner.free()
 	var original_launch_design := first.launch_design.duplicate(true)
 	assert(RocketDesign.validation_errors(original_launch_design).is_empty(), "The original launch design was not retained")
-	first.rocket_stages[0]["dry_mass"] = 0.0
+	first.rocket_stages.clear()
 	main._add_new_vehicle()
 	assert(main.fleet_sims.size() == 2)
 	var second: SimulationView = main.sim
