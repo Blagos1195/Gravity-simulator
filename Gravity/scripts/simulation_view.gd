@@ -955,10 +955,11 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 				if bool(engine.get("gimballed", false)):
 					has_gimballed_engine = true
 					break
-			if has_gimballed_engine and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"]:
+			if has_gimballed_engine and autopilot_phase in ["ASCENT", "CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"]:
 				var best_gimbal := 0.0
 				var lowest_torque_error := INF
-				var propellant_available := rcs_propellant_remaining > 0.001
+				var ascent_reserve := autopilot_phase in ["ASCENT", "CIRCULARISE_BURN"] and rcs_propellant_remaining <= _remaining_rcs_propellant_capacity() * 0.5
+				var propellant_available := rcs_propellant_remaining > 0.001 and not ascent_reserve
 				for step in range(-16, 17):
 					var candidate_gimbal := deg_to_rad(float(step) * 0.5)
 					gimbal_angle = candidate_gimbal
@@ -998,7 +999,8 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
 		angular_velocity = 0.0
 		return true
-	if rcs_propellant_remaining <= 0.001:
+	var protect_ascent_reserve := autopilot_phase in ["ASCENT", "CIRCULARISE_BURN"] and rcs_propellant_remaining <= _remaining_rcs_propellant_capacity() * 0.5
+	if rcs_propellant_remaining <= 0.001 or protect_ascent_reserve:
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
 		if aligned and absf(engine_torque) <= maxf(1.0, inertia * deg_to_rad(0.01)):
