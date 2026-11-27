@@ -4786,8 +4786,8 @@ func _load_game_from_path(path: String) -> void:
 				root_name = str(module_name)
 				break
 		_rebuild_docking_spanning_tree(root_name)
-	_update_docked_masses()
 	_sync_docked_vehicles()
+	_update_docked_masses()
 	docking_assists.clear()
 	docking_assist_modes.clear()
 	var saved_modes: Variant = parsed.get("docking_assist_modes", {})
