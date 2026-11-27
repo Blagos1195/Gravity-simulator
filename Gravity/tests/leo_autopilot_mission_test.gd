@@ -33,6 +33,7 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 	design["stages"] = stages
 	var simulation: Variant = SimulationView.new()
 	simulation.set_rocket_design(design)
+	print("PATHFINDER INITIAL RCS remaining=%.1f capacity=%.1f installed=%s gimbal=%s" % [simulation.rcs_propellant_remaining, simulation._remaining_rcs_propellant_capacity(), simulation.has_rcs_installed(), simulation._remaining_engine_elements(0.0, 0.0).any(func(engine: Dictionary) -> bool: return bool(engine.get("gimballed", false)))])
 	simulation.realism = "Realistic"
 	simulation.landed = true
 	simulation.landed_body_name = "Earth"
@@ -60,6 +61,7 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 		if elapsed >= next_trace_time:
 			var trace_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 			print("PATHFINDER TRACE t=%.1f alt=%.0f speed=%.0f radial=%.0f tangential=%.0f pitch=%.1f rot=%.2f angular=%.3f rcs=%.0f fuel=%.0f stage=%d thrust=%s" % [elapsed, float(trace_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), (simulation.velocity - trace_body.velocity).dot(trace_body.relative_position.normalized()), (simulation.velocity - trace_body.velocity).dot(Vector2(-trace_body.relative_position.y, trace_body.relative_position.x).normalized()), simulation.rotation_angle, simulation.rotation_angle, simulation.angular_velocity, simulation.rcs_propellant_remaining, simulation.fuel, simulation.stage_index, simulation.thrust_key_down])
+			print("PATHFINDER CONTROL status=%s rcs_capacity=%.0f installed=%s gimbal=%.2f throttle=%.2f" % [simulation.status_message, simulation._remaining_rcs_propellant_capacity(), simulation.has_rcs_installed(), rad_to_deg(simulation.gimbal_angle), simulation.throttle])
 			next_trace_time += 10.0
 		if iterations >= 300000:
 			break
