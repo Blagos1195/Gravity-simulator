@@ -2301,7 +2301,7 @@ func _update_guidance(dt: float) -> void:
 					var ascent_speed_fraction: float = clampf(ascent_speed_gain / maxf(1.0, target_orbit_speed), 0.0, 1.0)
 					var altitude_pitch: float = lerpf(88.0, 4.0, ascent_altitude_fraction)
 					var speed_pitch: float = lerpf(88.0, 4.0, ascent_speed_fraction)
-					pitch_above_horizon = minf(altitude_pitch, speed_pitch)
+					pitch_above_horizon = maxf(altitude_pitch, speed_pitch)
 					status_message = "AUTOPILOT  •  ASCENT  •  ALT %.0f KM  •  Vt %.2f KM/S  •  PITCH %.0f°" % [altitude / 1000.0, ascent_tangential_speed / 1000.0, pitch_above_horizon]
 					thrust_key_down = propellant_available
 			"COAST":
