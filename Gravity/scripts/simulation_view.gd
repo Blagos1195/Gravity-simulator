@@ -967,12 +967,21 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 				has_gimballed_engine = true
 				break
 		if has_gimballed_engine:
-			var best_gimbal := gimbal_angle
+			var previous_gimbal := gimbal_angle
+			gimbal_angle = 0.0
+			var torque_zero := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+			gimbal_angle = PI * 0.5
+			var torque_quarter_turn := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+			gimbal_angle = PI
+			var torque_half_turn := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+			var fixed_engine_torque := (torque_zero + torque_half_turn) * 0.5
+			var cosine_torque := (torque_zero - torque_half_turn) * 0.5
+			var sine_torque := torque_quarter_turn - fixed_engine_torque
+			var best_gimbal := previous_gimbal
 			var best_torque_error := INF
 			for gimbal_step in range(-16, 17):
 				var candidate_gimbal := deg_to_rad(float(gimbal_step) * 0.5)
-				gimbal_angle = candidate_gimbal
-				var candidate_torque := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+				var candidate_torque := fixed_engine_torque + cosine_torque * cos(candidate_gimbal) + sine_torque * sin(candidate_gimbal)
 				var torque_error := absf(candidate_torque - desired_torque)
 				if torque_error < best_torque_error:
 					best_torque_error = torque_error
