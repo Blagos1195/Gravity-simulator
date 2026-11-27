@@ -3613,6 +3613,9 @@ func _saved_resource_tanks() -> Array:
 func get_save_data() -> Dictionary:
 	var remaining_stages: Array = rocket_stages.slice(stage_index)
 	var remaining_stage_fuel: Array[float] = stage_fuel_remaining.slice(stage_index)
+	var saved_active_fuel := fuel
+	if not remaining_stage_fuel.is_empty():
+		saved_active_fuel = remaining_stage_fuel[0]
 	return {
 		"sim_time": sim_time,
 		"launch_time": launch_time,
@@ -3621,7 +3624,7 @@ func get_save_data() -> Dictionary:
 		"velocity": [velocity.x, velocity.y],
 		"rotation_angle": rotation_angle,
 		"angular_velocity": angular_velocity,
-		"fuel": fuel,
+		"fuel": saved_active_fuel,
 		"rcs_propellant_remaining": rcs_propellant_remaining,
 		"docked_rcs_propellant": docked_rcs_propellant.duplicate(true),
 		"resource_tanks": _saved_resource_tanks(),
