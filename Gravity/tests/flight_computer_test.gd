@@ -421,7 +421,7 @@ func _initialize() -> void:
 	manoeuvre_sim.landed = false
 	manoeuvre_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
 	manoeuvre_sim.velocity = Vector2(manoeuvre_speed, 0.0)
-	manoeuvre_sim.rotation_angle = PI * 0.5
+	manoeuvre_sim.rotation_angle = 0.0
 	manoeuvre_sim.autopilot_enabled = true
 	manoeuvre_sim.guidance_enabled = true
 	manoeuvre_sim.autopilot_phase = "MANEUVER_BURN"
