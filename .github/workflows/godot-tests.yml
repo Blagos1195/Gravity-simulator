@@ -86,7 +86,7 @@ jobs:
             run_check ui_theme_test
             run_check flight_hud_ui_test
           fi
-          if echo "$changed_files" | grep -Eq 'main.gd|simulation_view.gd|ui_theme'; then
+          if echo "$changed_files" | grep -Eq 'main.gd|simulation_view.gd|ui_theme|main_runtime_smoke_test.gd'; then
             run_check main_runtime_smoke_test
           fi
           if echo "$changed_files" | grep -Eq 'main.gd|simulation_view|space_object_physics|rocket_design'; then
