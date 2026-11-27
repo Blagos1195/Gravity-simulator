@@ -634,7 +634,7 @@ func _initialize() -> void:
 	surface_planner_window.free()
 	surface_sim.free()
 	var escape_sim: Variant = SimulationView.new()
-	escape_sim.set_rocket_design(RocketDesign.create_default())
+	escape_sim.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
 	escape_sim.landed = false
 	escape_sim._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 500000.0)
 	escape_sim.velocity = Vector2(0.0, -12000.0)
@@ -653,7 +653,7 @@ func _initialize() -> void:
 	assert(escape_sim.autopilot_phase == "FAILED", "Ascent did not fail cleanly after exhausting propellant before parking orbit")
 	escape_sim.free()
 	var unstable_sim: Variant = SimulationView.new()
-	unstable_sim.set_rocket_design(RocketDesign.create_default())
+	unstable_sim.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
 	unstable_sim.landed = false
 	var unstable_radius := PlanetarySystem.EARTH_RADIUS + 200000.0
 	var unstable_speed := FlightComputer.circular_orbit_speed(unstable_radius) * 1.4141
