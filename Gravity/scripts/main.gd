@@ -1,6 +1,7 @@
 extends Control
 
 const SimulationView = preload("res://scripts/simulation_view.gd")
+const GravityTheme = preload("res://scripts/ui_theme.gd")
 const ModuleGraph = preload("res://scripts/module_graph.gd")
 const StagingSystem = preload("res://scripts/staging_system.gd")
 const ResourceNetwork = preload("res://scripts/resource_network.gd")
@@ -73,6 +74,7 @@ var menu_root: VBoxContainer
 var settings_root: VBoxContainer
 var hud_root: Control
 var flight_hud_top: PanelContainer
+var flight_hud_right_panel: PanelContainer
 var flight_hud_right_scroll: ScrollContainer
 var flight_hud_bottom: Label
 var flight_hud_right: VBoxContainer
@@ -86,6 +88,7 @@ var stage_manager_picker: OptionButton
 var stage_manager_status: Label
 
 func _ready() -> void:
+	theme = GravityTheme.create_theme()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
 	_configure_input_actions()
 	_load_general_settings()
@@ -1175,15 +1178,23 @@ func _build_menu() -> void:
 	var screen_size := DisplayServer.screen_get_size()
 	var menu_width := minf(480.0, maxf(280.0, screen_size.x - 48.0))
 	var menu_height := minf(640.0, maxf(240.0, screen_size.y - 48.0))
+	var menu_panel := PanelContainer.new()
+	menu_panel.custom_minimum_size = Vector2(menu_width, menu_height)
+	menu_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	menu_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	center.add_child(menu_panel)
 	var menu_scroll := ScrollContainer.new()
-	menu_scroll.custom_minimum_size = Vector2(menu_width, menu_height)
-	menu_scroll.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	menu_scroll.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	menu_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_scroll.offset_left = 14
+	menu_scroll.offset_right = -14
+	menu_scroll.offset_top = 14
+	menu_scroll.offset_bottom = -14
+	menu_scroll.custom_minimum_size = Vector2(menu_width - 28.0, menu_height - 28.0)
 	menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	menu_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	center.add_child(menu_scroll)
+	menu_panel.add_child(menu_scroll)
 	menu_root = VBoxContainer.new()
-	menu_root.custom_minimum_size = Vector2(menu_width, 0)
+	menu_root.custom_minimum_size = Vector2(menu_width - 28.0, 0)
 	menu_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	menu_root.add_theme_constant_override("separation", 18)
 	menu_scroll.add_child(menu_root)
@@ -3624,16 +3635,18 @@ func _build_flight_hud() -> void:
 	info.add_child(funds_label)
 	_refresh_economy_display()
 
+	var right_panel := PanelContainer.new()
+	flight_hud_right_panel = right_panel
+	hud_root.add_child(right_panel)
 	var right_scroll := ScrollContainer.new()
-	right_scroll.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	right_scroll.anchor_bottom = 1.0
-	right_scroll.offset_left = -270
-	right_scroll.offset_right = -18
-	right_scroll.offset_top = 18
-	right_scroll.offset_bottom = -78
+	right_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	right_scroll.offset_left = 8
+	right_scroll.offset_right = -8
+	right_scroll.offset_top = 8
+	right_scroll.offset_bottom = -8
 	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	flight_hud_right_scroll = right_scroll
-	hud_root.add_child(right_scroll)
+	right_panel.add_child(right_scroll)
 	var right := VBoxContainer.new()
 	right.custom_minimum_size.x = 0
 	flight_hud_right = right
@@ -3758,12 +3771,13 @@ func _build_flight_hud() -> void:
 	bottom.text = "W ENGINE ON/OFF     S CUTOFF     SPACE NEXT STAGE     X SEPARATE MODULE     ARROWS RCS TRANSLATION     A / D RCS ROTATION\nESC PAUSE     Q / E GIMBAL     H GUIDANCE     T TELESCOPE     V VELOCITY VECTOR     M SOLAR SYSTEM     P PREDICTED PATH     +/- WARP     J FAST FORWARD     F5 SAVE     F9 LOAD"
 	bottom.add_theme_font_size_override("font_size", 12)
 	bottom.add_theme_color_override("font_color", Color(0.65, 0.77, 0.9))
+	flight_hud_bottom = bottom
 	hud_root.add_child(bottom)
 	hud_root.resized.connect(_layout_flight_hud)
 	_layout_flight_hud()
 
 func _layout_flight_hud() -> void:
-	if not is_instance_valid(hud_root) or not is_instance_valid(flight_hud_top) or not is_instance_valid(flight_hud_right_scroll) or not is_instance_valid(flight_hud_bottom) or not is_instance_valid(flight_hud_right):
+	if not is_instance_valid(hud_root) or not is_instance_valid(flight_hud_top) or not is_instance_valid(flight_hud_right_panel) or not is_instance_valid(flight_hud_right_scroll) or not is_instance_valid(flight_hud_bottom) or not is_instance_valid(flight_hud_right):
 		return
 	var viewport_size := hud_root.size
 	var compact := viewport_size.x < 900.0 or viewport_size.y < 600.0
@@ -3774,23 +3788,23 @@ func _layout_flight_hud() -> void:
 		flight_hud_top.offset_top = 12
 		flight_hud_top.offset_bottom = 104
 		flight_hud_top.custom_minimum_size.x = 0
-		flight_hud_right_scroll.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		flight_hud_right_scroll.offset_left = 12
-		flight_hud_right_scroll.offset_right = -12
-		flight_hud_right_scroll.offset_top = -maxf(180.0, viewport_size.y * 0.48)
-		flight_hud_right_scroll.offset_bottom = -12
+		flight_hud_right_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		flight_hud_right_panel.offset_left = 12
+		flight_hud_right_panel.offset_right = -12
+		flight_hud_right_panel.offset_top = -maxf(180.0, viewport_size.y * 0.48)
+		flight_hud_right_panel.offset_bottom = -12
 		flight_hud_right.custom_minimum_size.x = 0
 		flight_hud_bottom.visible = false
 	else:
 		flight_hud_top.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		flight_hud_top.position = Vector2(18, 18)
 		flight_hud_top.custom_minimum_size = Vector2(330, 0)
-		flight_hud_right_scroll.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		flight_hud_right_scroll.anchor_bottom = 1.0
-		flight_hud_right_scroll.offset_left = -270
-		flight_hud_right_scroll.offset_right = -18
-		flight_hud_right_scroll.offset_top = 18
-		flight_hud_right_scroll.offset_bottom = -78
+		flight_hud_right_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		flight_hud_right_panel.anchor_bottom = 1.0
+		flight_hud_right_panel.offset_left = -286
+		flight_hud_right_panel.offset_right = -18
+		flight_hud_right_panel.offset_top = 18
+		flight_hud_right_panel.offset_bottom = -78
 		flight_hud_right.custom_minimum_size.x = 235
 		flight_hud_bottom.visible = true
 		flight_hud_bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
