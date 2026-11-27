@@ -189,11 +189,11 @@ func _initialize() -> void:
 	assert(is_equal_approx(parent._current_vehicle_mass(), combined_mass_before))
 	var parent_rcs_capacity := parent._remaining_rcs_propellant_capacity()
 	assert(is_equal_approx(parent.rcs_propellant_remaining, parent_rcs_capacity))
-	var assembly_mass_before_rcs_exchange := parent._current_vehicle_mass()
+	var combined_mass_before_rcs_transfer := parent._current_vehicle_mass()
 	var rcs_transferred := main._transfer_fuel(child.vehicle_name, parent.vehicle_name)
 	assert(is_zero_approx(rcs_transferred))
 	assert(is_equal_approx(parent.rcs_propellant_remaining, parent_rcs_capacity))
-	assert(is_equal_approx(parent._current_vehicle_mass(), assembly_mass_before_rcs_exchange))
+	assert(is_equal_approx(parent._current_vehicle_mass(), combined_mass_before_rcs_transfer))
 	for vehicle in main.fleet_sims:
 		var save_state: Dictionary = vehicle.get_save_data()
 		var saved_stage_fuel: Array = save_state.get("stage_fuel_remaining", [])
