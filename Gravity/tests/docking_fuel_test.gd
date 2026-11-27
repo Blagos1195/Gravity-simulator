@@ -177,7 +177,9 @@ func _initialize() -> void:
 	assert(is_equal_approx(parent._current_vehicle_mass(), combined_mass_before_rcs_transfer))
 	for vehicle in main.fleet_sims:
 		var save_state: Dictionary = vehicle.get_save_data()
-		print("DOCKED SAVE CHECK name=%s fuel=%.1f stage_fuel=%s stage=%d external=%s" % [vehicle.vehicle_name, float(save_state.get("fuel", -1.0)), str(save_state.get("stage_fuel_remaining", [])), vehicle.stage_index, vehicle.resource_inventory_external])
+		var saved_stage_fuel: Array = save_state.get("stage_fuel_remaining", [])
+		assert(not saved_stage_fuel.is_empty())
+		assert(is_equal_approx(float(save_state.get("fuel", -1.0)), float(saved_stage_fuel[0])))
 	main.save_slot = 8
 	main._save_game(false)
 	var save_path := "user://saves/slot_08.json"
