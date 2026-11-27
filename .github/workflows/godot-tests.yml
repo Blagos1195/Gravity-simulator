@@ -28,14 +28,27 @@ jobs:
           include-templates: false
       - name: Import and parse project
         run: |
-          output="$(godot --headless --path Gravity --script res://tests/compile_simulation_view.gd --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+          output="$(godot --headless --path Gravity --script res://tests/compile_simulation_view.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
-          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
+          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR:|WARNING:'; then
             exit 1
           fi
           output="$(godot --headless --path Gravity --editor --quit 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
-          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
+          warning_count="$(printf '%s\\n' "$output" | grep -c 'WARNING:' || true)"
+          error_count="$(printf '%s\\n' "$output" | grep -c 'ERROR:' || true)"
+          echo "Editor import diagnostics: warnings=$warning_count errors=$error_count"
+          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR:|WARNING:'; then
+            exit 1
+          fi
+      - name: Run main scene diagnostic smoke test
+        run: |
+          output="$(godot --headless --path Gravity --quit-after 300 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          warning_count="$(printf '%s\\n' "$output" | grep -c 'WARNING:' || true)"
+          error_count="$(printf '%s\\n' "$output" | grep -c 'ERROR:' || true)"
+          echo "Main scene diagnostics: warnings=$warning_count errors=$error_count"
+          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR:|WARNING:'; then
             exit 1
           fi
       - name: Run focused pull request checks
@@ -46,9 +59,9 @@ jobs:
           git fetch origin "$BASE_REF"
           changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
           run_check() {
-            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 120 2>&1)" || { echo "$output"; exit 1; }
             echo "$output"
-            if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
+            if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR:|WARNING:'; then
               exit 1
             fi
           }
@@ -92,7 +105,7 @@ jobs:
           if echo "$changed_files" | grep -Eq 'mission_system|content_catalog|main.gd'; then
             run_check mission_system_test
           fi
-          if echo "$changed_files" | grep -Eq 'flight_computer|route_planner|simulation_view'; then
+          if echo "$changed_files" | grep -Eq 'flight_computer|route_planner|leo_autopilot_mission_test' || git diff -U0 "origin/$BASE_REF...HEAD" -- Gravity/scripts/simulation_view.gd | grep -Eq '^[+].*(autopilot|gimbal|guidance|thrust_key_down)'; then
             run_check flight_computer_test
             run_check leo_autopilot_mission_test
             run_check body_agnostic_orbit_test
@@ -105,7 +118,7 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           run_check() {
-            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
+            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" 2>&1)" || { echo "$output"; exit 1; }
             echo "$output"
             if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
               exit 1

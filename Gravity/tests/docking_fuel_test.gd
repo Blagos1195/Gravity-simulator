@@ -150,6 +150,7 @@ func _initialize() -> void:
 	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 1].resources.xenon), 30.0))
 	var expected_docked_mass := child._current_vehicle_mass() + second_child._current_vehicle_mass()
 	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
+	assert(parent.docked_visuals.size() == 2)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
 	assert(main._are_docked("Orbital Tug", child.vehicle_name))
 	var parent_capacity := float(parent._active_stage_data().get("fuel_capacity", 0.0))
@@ -175,6 +176,11 @@ func _initialize() -> void:
 	assert(is_zero_approx(rcs_transferred))
 	assert(is_equal_approx(parent.rcs_propellant_remaining, parent_rcs_capacity))
 	assert(is_equal_approx(parent._current_vehicle_mass(), combined_mass_before_rcs_transfer))
+	for vehicle in main.fleet_sims:
+		var save_state: Dictionary = vehicle.get_save_data()
+		var saved_stage_fuel: Array = save_state.get("stage_fuel_remaining", [])
+		assert(not saved_stage_fuel.is_empty())
+		assert(is_equal_approx(float(save_state.get("fuel", -1.0)), float(saved_stage_fuel[0])))
 	main.save_slot = 8
 	main._save_game(false)
 	var save_path := "user://saves/slot_08.json"
@@ -188,6 +194,7 @@ func _initialize() -> void:
 	assert(not loaded_child.input_enabled)
 	assert(not loaded_second_child.input_enabled)
 	assert(is_equal_approx(loaded_parent.docked_mass, loaded_child._current_vehicle_mass() + loaded_second_child._current_vehicle_mass()))
+	assert(loaded_parent.docked_visuals.size() == 2)
 	assert(is_zero_approx(loaded_child.stage_fuel_remaining[1]))
 	assert(is_equal_approx(loaded_parent.rcs_propellant_remaining, parent_rcs_capacity))
 	assert(is_equal_approx(loaded_parent.stage_fuel_remaining[0], float(loaded_parent._active_stage_data().get("fuel_capacity", 0.0))))
