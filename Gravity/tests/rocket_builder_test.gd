@@ -27,6 +27,10 @@ func _initialize() -> void:
 	assert(blank_builder.design.stages[0].components.size() == 2)
 	blank_builder._add_component("vacuum_engine", "free", false, 1, -1, Vector2(0.0, -2.0))
 	assert(blank_builder.design.stages[0].components.size() == 3)
+	blank_builder._add_component("battery_pack", "free", false, 1, -1, Vector2.ZERO, "", "", true)
+	var spawned_position: Array = blank_builder.design.stages[0].components[3].position_m
+	assert(float(spawned_position[0]) > 2.0)
+	assert(is_zero_approx(float(spawned_position[1])))
 	blank_builder.free()
 	var design := RocketDesign.create_default()
 	var builder := RocketBuilder.new()
