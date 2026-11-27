@@ -56,7 +56,7 @@ jobs:
           git fetch origin "$BASE_REF"
           changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
           run_check() {
-            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" 2>&1)" || { echo "$output"; exit 1; }
+            output="$(godot --headless --path Gravity --script "res://tests/$1.gd" --quit-after 120 2>&1)" || { echo "$output"; exit 1; }
             echo "$output"
             if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
               exit 1
