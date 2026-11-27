@@ -30,12 +30,22 @@ jobs:
         run: |
           output="$(godot --headless --path Gravity --script res://tests/compile_simulation_view.gd --quit-after 1 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
-          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
+          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR:|WARNING:'; then
             exit 1
           fi
           output="$(godot --headless --path Gravity --editor --quit 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR: [0-9]+ resources still in use'; then
+            exit 1
+          fi
+      - name: Run main scene diagnostic smoke test
+        run: |
+          output="$(godot --headless --path Gravity --quit-after 300 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          warning_count="$(printf '%s\\n' "$output" | grep -c 'WARNING:' || true)"
+          error_count="$(printf '%s\\n' "$output" | grep -c 'ERROR:' || true)"
+          echo "Main scene diagnostics: warnings=$warning_count errors=$error_count"
+          if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR:|WARNING:'; then
             exit 1
           fi
       - name: Run focused pull request checks
