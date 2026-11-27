@@ -986,11 +986,12 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var desired_rate := signf(angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(angle_error)))
 	var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
 	var requested_torque := inertia * desired_acceleration - engine_torque
-	if autopilot_phase == "ASCENT" and not gimballed_engine_available and not has_rcs_installed():
+	if autopilot_phase == "ASCENT" and not has_rcs_installed():
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
-		rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 1.5, 0.0, 1.0))
-		angular_velocity = 0.0
+		if not gimballed_engine_available:
+			rotation_angle = lerp_angle(rotation_angle, target_rotation, clampf(dt * 1.5, 0.0, 1.0))
+			angular_velocity = 0.0
 		return true
 	if absf(requested_torque) <= maxf(0.0001, inertia * deg_to_rad(0.00001)):
 		rcs_rotation_input = 0.0
