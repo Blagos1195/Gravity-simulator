@@ -903,24 +903,27 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var pressure_ratio := 0.0
 	var expected_throttle := autopilot_throttle if autopilot_phase == "LANDING_DESCENT" else 1.0
 	var potential_engine_torque := 0.0
+	var maximum_angular_acceleration := deg_to_rad(0.5)
+	var maximum_angular_rate := deg_to_rad(2.0)
 	if burn_expected:
 		var atmosphere := _atmosphere_at(rocket_position, velocity, sim_time, rocket_position_precise)
 		pressure_ratio = float(atmosphere.get("density", 0.0)) * float(atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(atmosphere.get("temperature", 250.0)) / 101325.0
-		gimbal_angle = 0.0
+		var best_gimbal := 0.0
+		var lowest_torque_error := INF
+		for step in range(-16, 17):
+			var candidate_gimbal := deg_to_rad(float(step) * 0.5)
+			gimbal_angle = candidate_gimbal
+			var candidate_torque := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+			var candidate_target := target_rotation - candidate_gimbal
+			var candidate_error := angle_difference(rotation_angle, candidate_target)
+			var desired_rate := signf(candidate_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(candidate_error)))
+			var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
+			var torque_error := absf(inertia * desired_acceleration - candidate_torque)
+			if torque_error < lowest_torque_error:
+				lowest_torque_error = torque_error
+				best_gimbal = candidate_gimbal
+		gimbal_angle = best_gimbal
 		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
-		if absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01)):
-			var best_gimbal := 0.0
-			var lowest_torque := absf(potential_engine_torque)
-			for step in range(-16, 17):
-				var candidate_gimbal := deg_to_rad(float(step) * 0.5)
-				gimbal_angle = candidate_gimbal
-				var candidate_profile := _engine_force_profile(center_of_mass, pressure_ratio, expected_throttle)
-				var candidate_torque := absf(float(candidate_profile.get("torque", 0.0)))
-				if candidate_torque < lowest_torque:
-					lowest_torque = candidate_torque
-					best_gimbal = candidate_gimbal
-			gimbal_angle = best_gimbal
-			potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
 	else:
 		gimbal_angle = 0.0
 	var body_target_rotation := target_rotation - gimbal_angle
@@ -928,50 +931,29 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var aligned := absf(angle_error) <= deg_to_rad(1.0) and absf(angular_velocity) <= deg_to_rad(0.5)
 	var ascent_burn_ready := autopilot_phase == "ASCENT" and absf(angle_error) <= deg_to_rad(5.0) and absf(angular_velocity) <= deg_to_rad(1.0)
 	var burn_ready := aligned or ascent_burn_ready
-	var engine_torque := potential_engine_torque if burn_expected and aligned else 0.0
-	var engine_torque_requires_rcs := burn_expected and absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01))
-	if autopilot_phase == "ASCENT" and not engine_torque_requires_rcs:
+	var engine_torque := potential_engine_torque if burn_expected and burn_ready else 0.0
+	var desired_rate := signf(angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(angle_error)))
+	var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
+	var requested_torque := inertia * desired_acceleration - engine_torque
+	if absf(requested_torque) <= maxf(1.0, inertia * deg_to_rad(0.01)):
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
-		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
-		angular_velocity = 0.0
-		return true
+		return burn_ready
 	if not has_rcs_installed():
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
-		if burn_expected and absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01)):
-			status_message = "AUTOPILOT  •  THRUST TORQUE NEEDS RCS"
-			return false
-		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
-		angular_velocity = 0.0
-		return true
+		status_message = "AUTOPILOT  •  GIMBAL AUTHORITY EXCEEDED"
+		return false
 	if rcs_propellant_remaining <= 0.001:
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
-		if aligned and absf(engine_torque) <= maxf(1.0, inertia * deg_to_rad(0.01)):
-			return true
 		status_message = "AUTOPILOT  •  RCS PROPELLANT REQUIRED"
 		return false
 	var positive_profile := _rcs_force_profile(Vector2.ZERO, 1.0, center_of_mass)
 	var negative_profile := _rcs_force_profile(Vector2.ZERO, -1.0, center_of_mass)
 	var positive_authority := maxf(0.0, float(positive_profile.get("torque", 0.0)))
 	var negative_authority := maxf(0.0, -float(negative_profile.get("torque", 0.0)))
-	if burn_expected and aligned:
-		var counter_authority := positive_authority if engine_torque < 0.0 else negative_authority
-		if absf(engine_torque) > counter_authority * 0.9:
-			rcs_rotation_input = 0.0
-			rcs_rotation_scale = 0.0
-			status_message = "AUTOPILOT  •  INSUFFICIENT RCS TORQUE"
-			return false
-	var maximum_angular_acceleration := deg_to_rad(0.5)
-	var maximum_angular_rate := deg_to_rad(2.0)
-	var desired_rate := signf(angle_error) * minf(maximum_angular_rate, sqrt(2.0 * maximum_angular_acceleration * absf(angle_error)))
-	var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -maximum_angular_acceleration, maximum_angular_acceleration)
-	var requested_torque := inertia * desired_acceleration - engine_torque
-	if absf(requested_torque) <= 1.0:
-		rcs_rotation_input = 0.0
-		rcs_rotation_scale = 0.0
-	elif requested_torque > 0.0:
+	if requested_torque > 0.0:
 		rcs_rotation_input = 1.0 if positive_authority > 0.0 else 0.0
 		rcs_rotation_scale = clampf(requested_torque / maxf(1.0, positive_authority), 0.0, 1.0)
 	else:
