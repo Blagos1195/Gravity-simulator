@@ -943,45 +943,49 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var expected_throttle := autopilot_throttle if autopilot_phase == "LANDING_DESCENT" else 1.0
 	var potential_engine_torque := 0.0
 	if burn_expected:
-		var atmosphere := _atmosphere_at(rocket_position, velocity, sim_time, rocket_position_precise)
+		var local_body := _nearest_body_state(rocket_position, rocket_position_precise)
+		var altitude := maxf(0.0, float(local_body.get("distance", EARTH_RADIUS)) - float(local_body.get("radius", EARTH_RADIUS)))
+		var atmosphere := PlanetarySystem.atmosphere_state(str(local_body.get("name", "Earth")), altitude)
 		pressure_ratio = float(atmosphere.get("density", 0.0)) * float(atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(atmosphere.get("temperature", 250.0)) / 101325.0
-		gimbal_angle = 0.0
 		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
-		var total_length := 0.0
-		for index in range(stage_index, rocket_stages.size()):
-			total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
-		var active_geometry := RocketAssembly.stage_geometry(rocket_stages[stage_index])
-		var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
-		var has_gimballed_engine := false
-		for engine in _remaining_engine_elements(pressure_ratio, active_center_y):
-			if bool(engine.get("gimballed", false)):
-				has_gimballed_engine = true
-				break
 		var stage_changed := stage_index != gimbal_trim_stage_index
 		var trim_due := stage_changed or center_of_mass.distance_to(gimbal_trim_center_of_mass) >= 0.25 or sim_time - gimbal_trim_last_time >= 1.0
 		var trim_needed := absf(potential_engine_torque) > maxf(0.5, inertia * deg_to_rad(0.05))
-		if has_gimballed_engine and autopilot_phase in ["ASCENT", "CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and (stage_changed or (trim_needed and trim_due)):
-			var best_gimbal := gimbal_angle
-			var lowest_torque := absf(potential_engine_torque)
-			if stage_changed:
-				for step in range(-16, 17):
-					var candidate_gimbal := deg_to_rad(float(step) * 0.5)
-					gimbal_angle = candidate_gimbal
-					var candidate_torque := absf(float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0)))
-					candidate_torque += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
-					if candidate_torque < lowest_torque:
-						lowest_torque = candidate_torque
-						best_gimbal = candidate_gimbal
+		if autopilot_phase in ["ASCENT", "CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and (stage_changed or (trim_needed and trim_due)):
+			var total_length := 0.0
+			for index in range(stage_index, rocket_stages.size()):
+				total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
+			var active_geometry := RocketAssembly.stage_geometry(rocket_stages[stage_index])
+			var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
+			var has_gimballed_engine := false
+			for engine in _remaining_engine_elements(pressure_ratio, active_center_y):
+				if bool(engine.get("gimballed", false)):
+					has_gimballed_engine = true
+					break
+			if has_gimballed_engine:
+				var best_gimbal := gimbal_angle
+				var lowest_torque := absf(potential_engine_torque)
+				if stage_changed:
+					for step in range(-16, 17):
+						var candidate_gimbal := deg_to_rad(float(step) * 0.5)
+						gimbal_angle = candidate_gimbal
+						var candidate_torque := absf(float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0)))
+						candidate_torque += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
+						if candidate_torque < lowest_torque:
+							lowest_torque = candidate_torque
+							best_gimbal = candidate_gimbal
+				else:
+					for step in [-4, -2, -1, 1, 2, 4]:
+						var candidate_gimbal := clampf(gimbal_angle + deg_to_rad(float(step) * 0.5), deg_to_rad(-8.0), deg_to_rad(8.0))
+						gimbal_angle = candidate_gimbal
+						var candidate_torque := absf(float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0)))
+						candidate_torque += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
+						if candidate_torque < lowest_torque:
+							lowest_torque = candidate_torque
+							best_gimbal = candidate_gimbal
+				gimbal_angle = best_gimbal
 			else:
-				for step in [-4, -2, -1, 1, 2, 4]:
-					var candidate_gimbal := clampf(gimbal_angle + deg_to_rad(float(step) * 0.5), deg_to_rad(-8.0), deg_to_rad(8.0))
-					gimbal_angle = candidate_gimbal
-					var candidate_torque := absf(float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0)))
-					candidate_torque += absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
-					if candidate_torque < lowest_torque:
-						lowest_torque = candidate_torque
-						best_gimbal = candidate_gimbal
-			gimbal_angle = best_gimbal
+				gimbal_angle = 0.0
 			gimbal_trim_center_of_mass = center_of_mass
 			gimbal_trim_stage_index = stage_index
 			gimbal_trim_last_time = sim_time
