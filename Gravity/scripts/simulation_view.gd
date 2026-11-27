@@ -939,6 +939,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var pressure_ratio := 0.0
 	var expected_throttle := autopilot_throttle if autopilot_phase == "LANDING_DESCENT" else 1.0
 	var potential_engine_torque := 0.0
+	var gimballed_engine_available := false
 	var maximum_angular_acceleration := deg_to_rad(0.5)
 	var maximum_angular_rate := deg_to_rad(2.0)
 	if burn_expected:
@@ -949,7 +950,6 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		for index in range(stage_index, rocket_stages.size()):
 			total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
 		var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
-		var gimballed_engine_available := false
 		for engine in _remaining_engine_elements(pressure_ratio, active_center_y):
 			if bool(engine.get("gimballed", false)):
 				gimballed_engine_available = true
@@ -993,11 +993,15 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	if not has_rcs_installed():
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
+		if burn_expected and gimballed_engine_available and burn_ready:
+			return true
 		status_message = "AUTOPILOT  •  GIMBAL AUTHORITY EXCEEDED"
 		return false
 	if rcs_propellant_remaining <= 0.001:
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
+		if burn_expected and gimballed_engine_available and burn_ready:
+			return true
 		status_message = "AUTOPILOT  •  RCS PROPELLANT REQUIRED"
 		return false
 	var positive_profile := _rcs_force_profile(Vector2.ZERO, 1.0, center_of_mass)
