@@ -61,7 +61,7 @@ jobs:
           run_check() {
             output="$(godot --headless --path Gravity --script "res://tests/$1.gd" 2>&1)" || { echo "$output"; exit 1; }
             echo "$output"
-            if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script'; then
+            if echo "$output" | grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script|ERROR:|WARNING:'; then
               exit 1
             fi
           }
