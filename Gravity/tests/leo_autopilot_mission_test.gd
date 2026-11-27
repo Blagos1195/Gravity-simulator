@@ -56,10 +56,7 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 		simulation._physics_step(step)
 		elapsed += step
 		iterations += 1
-		if iterations % 100 == 0:
-			var trace_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
-			print("Pathfinder ascent trace: t=%.1f alt=%.0f speed=%.1f rotation=%.2f stage=%d fuel=%.0f liquid=%.0f rcs=%.1f throttle=%.2f thrust=%s rcs_input=%.1f status=%s" % [elapsed, float(trace_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), simulation.rotation_angle, simulation.stage_index, simulation.fuel, simulation.resource_amount("liquid_propellant"), simulation.rcs_propellant_remaining, simulation.throttle, simulation.thrust_key_down, simulation.rcs_rotation_input, simulation.status_message])
-		if iterations >= 5000:
+		if iterations >= 300000:
 			break
 	var body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var orbit := FlightComputer.orbital_state(body.relative_position, simulation.velocity - body.velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
