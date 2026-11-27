@@ -4,6 +4,7 @@ const SimulationView = preload("res://scripts/simulation_view.gd")
 const RocketDesign = preload("res://scripts/rocket_design.gd")
 const PlanetarySystem = preload("res://scripts/planetary_system.gd")
 const FlightComputer = preload("res://scripts/flight_computer.gd")
+const RocketAssembly = preload("res://scripts/rocket_assembly.gd")
 
 func _initialize() -> void:
 	if not _validate_leo_autopilot_mission(false):
@@ -12,8 +13,54 @@ func _initialize() -> void:
 	if not _validate_leo_autopilot_mission(true):
 		quit(1)
 		return
-	print("LEO autopilot missions and one-revolution stability checks passed with finite and infinite propellant.")
+	if not _validate_pathfinder_leo_autopilot():
+		quit(1)
+		return
+	print("LEO autopilot missions and one-revolution stability checks passed with finite and infinite propellant, including Pathfinder.")
 	quit(0)
+
+
+func _validate_pathfinder_leo_autopilot() -> bool:
+	var design := RocketAssembly.add_preset_hardware(RocketDesign.create_preset("LUNAR_CARGO"))
+	var stages: Array = design.get("stages", []).duplicate(true)
+	var upper_stage: Dictionary = stages.back()
+	upper_stage = RocketAssembly.add_component(upper_stage, "compact_tank", "stack", false, 1, 0)
+	stages[stages.size() - 1] = upper_stage
+	design["stages"] = stages
+	var simulation: Variant = SimulationView.new()
+	simulation.set_rocket_design(design)
+	simulation.realism = "Realistic"
+	simulation.landed = true
+	simulation.landed_body_name = "Earth"
+	simulation.landed_surface_normal = Vector2.UP
+	simulation._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 0.5)
+	simulation.autopilot_enabled = true
+	simulation.guidance_enabled = true
+	simulation.autopilot_target_altitude = 200000.0
+	simulation.autopilot_target_mode = "ORBIT"
+	simulation.autopilot_planet_index = -2
+	simulation.autopilot_phase = "ASCENT"
+	simulation.thrust_key_down = true
+	var target_orbit_radius := PlanetarySystem.EARTH_RADIUS + simulation.autopilot_target_altitude
+	var target_orbit_period := TAU * sqrt(pow(target_orbit_radius, 3.0) / (PlanetarySystem.G * PlanetarySystem.EARTH_MASS))
+	var elapsed := 0.0
+	var iterations := 0
+	while elapsed < target_orbit_period * 2.0 and not simulation.autopilot_complete and simulation.autopilot_phase != "FAILED" and not simulation.crashed:
+		var step: float = simulation._adaptive_step_size()
+		if step <= 0.000001:
+			break
+		simulation._physics_step(step)
+		elapsed += step
+		iterations += 1
+		if iterations >= 300000:
+			break
+	var body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
+	var orbit := FlightComputer.orbital_state(body.relative_position, simulation.velocity - body.velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
+	var valid := simulation.autopilot_complete and not simulation.crashed and bool(orbit.get("bound", false)) and absf(float(orbit.get("periapsis", 0.0)) - target_orbit_radius) < 5000.0 and absf(float(orbit.get("apoapsis", 0.0)) - target_orbit_radius) < 5000.0
+	if not valid:
+		push_error("Pathfinder LEO autopilot failed: phase=%s status=%s altitude=%.1f periapsis=%.1f apoapsis=%.1f fuel=%.1f iterations=%d" % [simulation.autopilot_phase, simulation.status_message, float(body.distance) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, iterations])
+	simulation.free()
+	return valid
 
 func _validate_leo_autopilot_mission(infinite_propellant: bool) -> bool:
 	var simulation: Variant = SimulationView.new()
