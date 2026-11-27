@@ -416,6 +416,7 @@ func _initialize() -> void:
 
 	var manoeuvre_sim: Variant = SimulationView.new()
 	manoeuvre_sim.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
+	manoeuvre_sim.infinite_weightless_fuel = true
 	var manoeuvre_radius: float = FlightComputer.EARTH_RADIUS + 200000.0
 	var manoeuvre_speed: float = FlightComputer.circular_orbit_speed(manoeuvre_radius)
 	manoeuvre_sim.landed = false
@@ -431,7 +432,6 @@ func _initialize() -> void:
 		manoeuvre_sim._autopilot_attitude_control(0.0, 0.01, true)
 		manoeuvre_sim.rotation_angle = -manoeuvre_sim.gimbal_angle
 	manoeuvre_sim._update_guidance(0.01)
-	print("MANOEUVRE DEBUG phase=%s status=%s rotation=%.3f gimbal=%.3f error=%.3f angular=%.4f rcs=%.1f installed=%s thrust=%s" % [manoeuvre_sim.autopilot_phase, manoeuvre_sim.status_message, manoeuvre_sim.rotation_angle, manoeuvre_sim.gimbal_angle, angle_difference(manoeuvre_sim.rotation_angle, -manoeuvre_sim.gimbal_angle), manoeuvre_sim.angular_velocity, manoeuvre_sim.rcs_propellant_remaining, manoeuvre_sim.has_rcs_installed(), manoeuvre_sim.thrust_key_down])
 	assert(manoeuvre_sim.thrust_key_down)
 	manoeuvre_sim._physics_step(1.0)
 	assert(manoeuvre_sim.autopilot_phase == "COMPLETE")
