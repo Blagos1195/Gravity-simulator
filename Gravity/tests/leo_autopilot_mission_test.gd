@@ -25,6 +25,10 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 	var stages: Array = design.get("stages", []).duplicate(true)
 	var upper_stage: Dictionary = stages.back()
 	upper_stage = RocketAssembly.add_component(upper_stage, "compact_tank", "stack", false, 1, 0)
+	var upper_components: Array = upper_stage.get("components", []).duplicate(true)
+	var compact_tank: Dictionary = upper_components.pop_back()
+	upper_components.insert(0, compact_tank)
+	upper_stage = RocketAssembly.compile_stage(upper_stage, upper_components)
 	stages[stages.size() - 1] = upper_stage
 	design["stages"] = stages
 	var simulation: Variant = SimulationView.new()
