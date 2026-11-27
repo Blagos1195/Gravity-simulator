@@ -1431,13 +1431,13 @@ func _refresh_parts() -> void:
 		card.custom_minimum_size.y = 58.0
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		card.pressed.connect(func(): _add_component(str(option.get("id", "")), "free", false, 1, -1, Vector2.ZERO))
+		card.pressed.connect(func(): _add_component(str(option.get("id", "")), "free", false, 1, -1, Vector2.ZERO, "", "", true))
 		_parts_list.add_child(card)
 
 func _on_component_dropped(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2, parent_uid: String = "", parent_node_id: String = "") -> void:
 	_add_component(component_id, attachment, mirrored, side, insert_index, position_m, parent_uid, parent_node_id)
 
-func _add_component(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2 = Vector2.ZERO, parent_uid: String = "", parent_node_id: String = "") -> void:
+func _add_component(component_id: String, attachment: String, mirrored: bool, side: int, insert_index: int, position_m: Vector2 = Vector2.ZERO, parent_uid: String = "", parent_node_id: String = "", auto_place: bool = false) -> void:
 	var stage := _current_stage()
 	if stage.is_empty():
 		return
@@ -1454,6 +1454,8 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 		updated = RocketAssembly.compile_stage(updated, components)
 	if attachment == "free" and not components.is_empty():
 		var free_component: Dictionary = components.back()
+		if auto_place:
+			position_m = _next_free_component_position(components, free_component)
 		free_component["position_m"] = [position_m.x, position_m.y]
 		components[components.size() - 1] = free_component
 		updated = RocketAssembly.compile_stage(updated, components)
@@ -1493,6 +1495,28 @@ func _add_component(component_id: String, attachment: String, mirrored: bool, si
 	design["stages"][selected_stage_index] = updated
 	selected_component_index = components.size() - 1 if attachment == "stack" else components.size() - 1
 	_changed()
+
+
+func _next_free_component_position(components: Array, added_component: Dictionary) -> Vector2:
+	var core_radius := 0.5
+	var side_extent := 0.0
+	var rightmost := 0.0
+	for component in components:
+		var radius := maxf(0.5, float(component.get("collision_radius_m", 0.5)))
+		match str(component.get("attachment", "stack")):
+			"stack":
+				core_radius = maxf(core_radius, radius)
+			"side":
+				side_extent += radius * 2.5
+			"radial":
+				rightmost = maxf(rightmost, core_radius + radius * 2.5)
+			"free":
+				var position_data: Variant = component.get("position_m", [0.0, 0.0])
+				if position_data is Array and position_data.size() >= 2:
+					rightmost = maxf(rightmost, float(position_data[0]) + radius)
+	rightmost = maxf(rightmost, core_radius + side_extent)
+	var added_radius := maxf(0.5, float(added_component.get("collision_radius_m", 0.5)))
+	return Vector2(rightmost + added_radius + 1.0, 0.0)
 
 func _on_component_position_changed(index: int, position_m: Vector2) -> void:
 	var components: Array = _current_stage().get("components", []).duplicate(true)
