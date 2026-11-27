@@ -51,9 +51,19 @@ func _initialize() -> void:
 	assert(requested_jump_times.size() == 1, "Flight Computer allowed a repeated jump past the same manoeuvre node")
 	main.active_route_planner = null
 	planner.free()
+	var original_launch_design := first.launch_design.duplicate(true)
+	assert(RocketDesign.validation_errors(original_launch_design).is_empty(), "The original launch design was not retained")
+	first.rocket_stages[0]["dry_mass"] = 0.0
 	main._add_new_vehicle()
 	assert(main.fleet_sims.size() == 2)
 	var second: SimulationView = main.sim
+	assert(second.rocket_stages.size() == original_launch_design.stages.size(), "A repeated launch used modified in-flight stage data")
+	assert(RocketDesign.validation_errors(second.launch_design).is_empty(), "A repeated launch did not preserve a valid original design")
+	first.rocket_stages = original_launch_design.stages.duplicate(true)
+	main._pause_simulation()
+	assert(main.sim.paused and first.paused and second.paused, "Pause did not stop every fleet vehicle")
+	main._pause_simulation()
+	assert(not main.sim.paused and not first.paused and not second.paused, "Resume did not restart every fleet vehicle")
 	assert(first != second)
 	assert(first.visible == false)
 	assert(second.visible)
