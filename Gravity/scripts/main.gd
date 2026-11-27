@@ -3252,11 +3252,58 @@ func _resource_inventory_owner(vehicle: SimulationView) -> SimulationView:
 		current = parent
 	return current
 
+func _module_rcs_propellant_capacity(vehicle: SimulationView) -> float:
+	if vehicle == null:
+		return 0.0
+	var capacity := 0.0
+	for index in range(vehicle.stage_index, vehicle.rocket_stages.size()):
+		capacity += RocketDesign.stage_rcs_propellant_capacity(vehicle.rocket_stages[index])
+	return capacity
+
+
+func _module_rcs_propellant_amount(inventory_owner: SimulationView, vehicle: SimulationView) -> float:
+	if inventory_owner == null or vehicle == null:
+		return 0.0
+	if vehicle == inventory_owner:
+		var attached_amount := 0.0
+		for module_name in inventory_owner.docked_rcs_propellant:
+			attached_amount += maxf(0.0, float(inventory_owner.docked_rcs_propellant[module_name]))
+		return maxf(0.0, inventory_owner.rcs_propellant_remaining - attached_amount)
+	return maxf(0.0, float(inventory_owner.docked_rcs_propellant.get(vehicle.vehicle_name, vehicle.rcs_propellant_remaining)))
+
+
+func _transfer_rcs_propellant_between_modules(source_vehicle: SimulationView, destination_vehicle: SimulationView, amount: float) -> float:
+	if source_vehicle == null or destination_vehicle == null or source_vehicle == destination_vehicle:
+		return 0.0
+	if not _are_docked(source_vehicle.vehicle_name, destination_vehicle.vehicle_name):
+		return 0.0
+	var inventory_owner := _resource_inventory_owner(source_vehicle)
+	if inventory_owner == null or inventory_owner != _resource_inventory_owner(destination_vehicle):
+		return 0.0
+	var source_amount := _module_rcs_propellant_amount(inventory_owner, source_vehicle)
+	var destination_amount := _module_rcs_propellant_amount(inventory_owner, destination_vehicle)
+	var destination_room := maxf(0.0, _module_rcs_propellant_capacity(destination_vehicle) - destination_amount)
+	var transferred := minf(maxf(0.0, amount), minf(source_amount, destination_room))
+	if transferred <= 0.000001:
+		return 0.0
+	if source_vehicle != inventory_owner:
+		inventory_owner.docked_rcs_propellant[source_vehicle.vehicle_name] = source_amount - transferred
+	if destination_vehicle != inventory_owner:
+		inventory_owner.docked_rcs_propellant[destination_vehicle.vehicle_name] = destination_amount + transferred
+	_sync_docked_vehicles()
+	_update_docked_masses()
+	return transferred
+
+
 func _transfer_between_tanks(source_vehicle_name: String, source_part_id: String, destination_vehicle_name: String, destination_part_id: String, resource: String, amount: float) -> float:
 	var source_vehicle := _find_vehicle_by_name(source_vehicle_name)
 	var destination_vehicle := _find_vehicle_by_name(destination_vehicle_name)
 	if source_vehicle == null or destination_vehicle == null:
 		return 0.0
+	if resource == "rcs_propellant":
+		if source_part_id != "__rcs_propellant__" or destination_part_id != "__rcs_propellant__":
+			return 0.0
+		return _transfer_rcs_propellant_between_modules(source_vehicle, destination_vehicle, amount)
 	var connected := source_vehicle == destination_vehicle or _are_docked(source_vehicle_name, destination_vehicle_name)
 	if not connected:
 		return 0.0
@@ -3466,6 +3513,9 @@ func _show_tank_transfer_panel() -> void:
 				continue
 			tank_picker.add_item("%s  [%s]" % [str(tank.get("part_uid", "Tank")), ", ".join(resource_names)])
 			tank_picker.set_item_metadata(tank_picker.item_count - 1, str(tank.get("part_uid", "")))
+		if _module_rcs_propellant_capacity(vehicle) > 0.0:
+			tank_picker.add_item("RCS PROPELLANT SYSTEM")
+			tank_picker.set_item_metadata(tank_picker.item_count - 1, "__rcs_propellant__")
 	var refresh_resources := func() -> void:
 		resource_selector.clear()
 		if source_tank.item_count == 0 or destination_tank.item_count == 0:
@@ -3477,6 +3527,18 @@ func _show_tank_transfer_panel() -> void:
 		var source_owner := _resource_inventory_owner(source_vehicle_value)
 		var destination_owner := _resource_inventory_owner(destination_vehicle_value)
 		if source_owner == null or destination_owner != source_owner:
+			return
+		var source_part_id := str(source_tank.get_item_metadata(source_tank.selected))
+		var destination_part_id := str(destination_tank.get_item_metadata(destination_tank.selected))
+		var source_is_rcs := source_part_id == "__rcs_propellant__"
+		var destination_is_rcs := destination_part_id == "__rcs_propellant__"
+		if source_is_rcs or destination_is_rcs:
+			var connected := source_vehicle_value == destination_vehicle_value or _are_docked(source_vehicle_value.vehicle_name, destination_vehicle_value.vehicle_name)
+			if source_is_rcs and destination_is_rcs and _module_rcs_propellant_capacity(source_vehicle_value) > 0.0 and _module_rcs_propellant_capacity(destination_vehicle_value) > 0.0:
+				resource_selector.add_item("RCS PROPELLANT")
+				resource_selector.set_item_metadata(resource_selector.item_count - 1, "rcs_propellant")
+			transfer_button.disabled = not connected or resource_selector.item_count == 0
+			status.text = "Select a spacecraft with RCS capacity and a connected destination." if connected else "Spacecraft must be docked before propellant can be transferred."
 			return
 		var source_state: Dictionary = {}
 		var destination_state: Dictionary = {}
