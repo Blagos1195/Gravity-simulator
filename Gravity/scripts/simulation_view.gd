@@ -945,8 +945,11 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	if burn_expected:
 		var local_body := _nearest_body_state(rocket_position, rocket_position_precise)
 		var altitude := maxf(0.0, float(local_body.get("distance", EARTH_RADIUS)) - float(local_body.get("radius", EARTH_RADIUS)))
-		var atmosphere := PlanetarySystem.atmosphere_state(str(local_body.get("name", "Earth")), altitude)
-		pressure_ratio = float(atmosphere.get("density", 0.0)) * float(atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(atmosphere.get("temperature", 250.0)) / 101325.0
+		var body_name := str(local_body.get("name", "Earth"))
+		var density := PlanetarySystem.planetary_atmosphere_density(body_name, altitude)
+		var gas_constant := PlanetarySystem.planetary_atmosphere_gas_constant(body_name)
+		var temperature := PlanetarySystem.planetary_atmosphere_temperature(body_name)
+		pressure_ratio = density * gas_constant * temperature / 101325.0
 		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
 		var stage_changed := stage_index != gimbal_trim_stage_index
 		var trim_due := stage_changed or center_of_mass.distance_to(gimbal_trim_center_of_mass) >= 0.25 or sim_time - gimbal_trim_last_time >= 1.0
