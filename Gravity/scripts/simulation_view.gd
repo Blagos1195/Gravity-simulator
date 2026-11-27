@@ -1218,7 +1218,7 @@ func _physics_step(dt: float) -> void:
 	var rcs_profile := _rcs_force_profile(rcs_translation_input, rcs_rotation_input, Vector2(initial_rcs_mass_properties.center_of_mass))
 	var rcs_control_scale := clampf(rcs_rotation_scale, 0.0, 1.0) if absf(rcs_rotation_input) > 0.001 else 1.0
 	var rcs_flow_rate := float(rcs_profile.flow) * rcs_control_scale
-	var rcs_fuel_used := minf(resource_amount("rcs_propellant"), rcs_flow_rate * dt) if not crashed else 0.0
+	var rcs_fuel_used := minf(rcs_propellant_remaining, rcs_flow_rate * dt) if not crashed else 0.0
 	var propellant_available := not crashed and (infinite_weightless_fuel or fuel > 0.0 or resource_amount("xenon") > 0.0 or resource_amount("solid_propellant") > 0.0)
 	var solid_motor_burning := _has_ignited_solid_motor() and resource_amount("solid_propellant") > 0.0
 	throttle = 1.0 if solid_motor_burning else (autopilot_throttle if not crashed and autopilot_enabled and autopilot_phase == "LANDING_DESCENT" and propellant_available else (1.0 if not crashed and thrust_key_down and propellant_available else 0.0))
