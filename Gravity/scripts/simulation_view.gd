@@ -442,7 +442,10 @@ func _part_at_screen_position(screen_position: Vector2) -> String:
 	var object_scale := RocketVisual.camera_scale(camera_zoom, _visual_scale())
 	if object_scale < 0.025:
 		return ""
-	var local_click := (screen_position - get_viewport_rect().size * 0.5).rotated(-rotation_angle) / object_scale
+	var control_position := get_global_transform_with_canvas().affine_inverse() * screen_position
+	var local_click := (control_position - size * 0.5).rotated(-rotation_angle) / object_scale
+	var best_uid := ""
+	var best_score := INF
 	var total_length := 0.0
 	var geometries: Array[Dictionary] = []
 	for index in range(stage_index, rocket_stages.size()):
@@ -450,46 +453,28 @@ func _part_at_screen_position(screen_position: Vector2) -> String:
 		geometries.append(geometry)
 		total_length += float(geometry.get("length", 1.0))
 	var cursor := -total_length * 0.5
-	for offset in range(geometries.size()):
-		var geometry: Dictionary = geometries[offset]
+	for geometry in geometries:
 		var stage_center_y := cursor + float(geometry.get("length", 1.0)) * 0.5
 		var stage: Dictionary = geometry.get("stage", {})
 		var components: Array = stage.get("components", [])
 		var positions: Dictionary = geometry.get("component_positions", {})
 		for component_index in range(components.size()):
 			var component: Dictionary = components[component_index]
+			var radius := maxf(0.5, float(component.get("collision_radius_m", 0.5)))
+			var half_width := maxf(radius * 1.15, 5.0 / object_scale)
+			var half_length := maxf(float(component.get("length_m", 1.0)) * 0.58, 5.0 / object_scale)
+			var angle := deg_to_rad(float(component.get("rotation_deg", 0.0)))
 			for position in positions.get(component_index, []):
 				var center: Vector2 = Vector2(position) + Vector2(0.0, stage_center_y)
-				var hit_radius := maxf(6.0 / object_scale, maxf(float(component.get("collision_radius_m", 0.5)), float(component.get("length_m", 1.0)) * 0.55))
-				if local_click.distance_to(center) <= hit_radius:
-					return str(component.get("part_uid", ""))
+				var local_offset := (local_click - center).rotated(-angle)
+				if absf(local_offset.x) > half_width or absf(local_offset.y) > half_length:
+					continue
+				var score := local_offset.x * local_offset.x / (half_width * half_width) + local_offset.y * local_offset.y / (half_length * half_length)
+				if score < best_score:
+					best_score = score
+					best_uid = str(component.get("part_uid", ""))
 		cursor += float(geometry.get("length", 1.0))
-	for docked_visual in docked_visuals:
-		var design: Dictionary = docked_visual.get("design", {})
-		var stages: Array = design.get("stages", [])
-		var attached_stage_index := int(docked_visual.get("stage_index", 0))
-		var attached_length := 0.0
-		var attached_geometries: Array[Dictionary] = []
-		for index in range(attached_stage_index, stages.size()):
-			var geometry := RocketAssembly.stage_geometry(stages[index])
-			attached_geometries.append(geometry)
-			attached_length += float(geometry.get("length", 1.0))
-		var attached_cursor := -attached_length * 0.5
-		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
-		for geometry in attached_geometries:
-			var stage: Dictionary = geometry.get("stage", {})
-			var stage_center_y := attached_cursor + float(geometry.get("length", 1.0)) * 0.5
-			var components: Array = stage.get("components", [])
-			var positions: Dictionary = geometry.get("component_positions", {})
-			for component_index in range(components.size()):
-				var component: Dictionary = components[component_index]
-				for position in positions.get(component_index, []):
-					var center: Vector2 = Vector2(position) + Vector2(0.0, stage_center_y) + attached_offset
-					var hit_radius := maxf(6.0 / object_scale, maxf(float(component.get("collision_radius_m", 0.5)), float(component.get("length_m", 1.0)) * 0.55))
-					if local_click.distance_to(center) <= hit_radius:
-						return str(component.get("part_uid", ""))
-			attached_cursor += float(geometry.get("length", 1.0))
-	return ""
+	return best_uid
 
 func execute_staging_actions(actions: Array) -> bool:
 	if actions.is_empty():
@@ -1216,11 +1201,13 @@ func _physics_step(dt: float) -> void:
 	var flight_controls_blocked := _flight_input_blocked_by_gui()
 	if has_rcs() and input_enabled and not flight_controls_blocked:
 		rcs_translation_input = Vector2(
-			float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT)),
-			float(Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_UP))
+			float(Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_LEFT)),
+			float(Input.is_physical_key_pressed(KEY_DOWN)) - float(Input.is_physical_key_pressed(KEY_UP))
 		).limit_length(1.0)
 		if not autopilot_enabled:
-			rcs_rotation_input = float(Input.is_action_pressed("rotate_right")) - float(Input.is_action_pressed("rotate_left"))
+			var rotate_right := Input.is_action_pressed("rotate_right") or Input.is_physical_key_pressed(KEY_D)
+			var rotate_left := Input.is_action_pressed("rotate_left") or Input.is_physical_key_pressed(KEY_A)
+			rcs_rotation_input = float(rotate_right) - float(rotate_left)
 			rcs_rotation_scale = 1.0 if absf(rcs_rotation_input) > 0.001 else 0.0
 	elif not autopilot_enabled:
 		rcs_rotation_input = 0.0
@@ -2673,6 +2660,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var selected_part := _part_at_screen_position(event.position)
 			if not selected_part.is_empty():
 				part_selected.emit(selected_part)
+				get_viewport().set_input_as_handled()
 			return
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			if show_solar_system:
