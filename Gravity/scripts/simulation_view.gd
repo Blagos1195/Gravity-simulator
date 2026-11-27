@@ -928,7 +928,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var burn_ready := aligned or ascent_burn_ready
 	var engine_torque := potential_engine_torque if burn_expected and aligned else 0.0
 	var engine_torque_requires_rcs := burn_expected and absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01))
-	if not engine_torque_requires_rcs:
+	if autopilot_phase == "ASCENT" and not engine_torque_requires_rcs:
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
 		rotation_angle = lerp_angle(rotation_angle, body_target_rotation, clampf(dt * 1.5, 0.0, 1.0))
