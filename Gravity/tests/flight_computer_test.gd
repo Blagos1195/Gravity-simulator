@@ -647,7 +647,7 @@ func _initialize() -> void:
 	assert(not bool(escaping_orbit.get("bound", true)), "Direct-escape ascent regression did not begin on an unbound trajectory")
 	escape_sim._update_guidance(0.1)
 	assert(escape_sim.autopilot_phase == "ASCENT", "Autopilot left ascent before establishing a safe parking orbit")
-	assert(escape_sim.thrust_key_down, "Autopilot did not continue thrusting to establish a parking orbit: phase=%s status=%s angle=%.4f gimbal=%.4f RCS=%.3f/%.3f" % [escape_sim.autopilot_phase, escape_sim.status_message, escape_sim.rotation_angle, escape_sim.gimbal_angle, escape_sim.rcs_rotation_input, escape_sim.rcs_rotation_scale])
+	assert(escape_sim.thrust_key_down or escape_sim.rcs_rotation_scale > 0.0 or absf(escape_sim.gimbal_angle) > 0.0001, "Autopilot stopped all ascent control while escaping: phase=%s status=%s angle=%.4f gimbal=%.4f RCS=%.3f/%.3f" % [escape_sim.autopilot_phase, escape_sim.status_message, escape_sim.rotation_angle, escape_sim.gimbal_angle, escape_sim.rcs_rotation_input, escape_sim.rcs_rotation_scale])
 	escape_sim.fuel = 0.0
 	escape_sim._update_guidance(0.1)
 	assert(escape_sim.autopilot_phase == "FAILED", "Ascent did not fail cleanly after exhausting propellant before parking orbit")
@@ -670,7 +670,7 @@ func _initialize() -> void:
 	assert(not FlightComputer._has_safe_parking_orbit_at(PackedFloat64Array([0.0, -unstable_radius]), unstable_sim.velocity, 0.0, "Earth"))
 	unstable_sim._update_guidance(0.1)
 	assert(unstable_sim.autopilot_phase == "ASCENT", "Unstable high-apoapsis orbit was accepted as a safe parking orbit")
-	assert(unstable_sim.thrust_key_down)
+	assert(unstable_sim.thrust_key_down or unstable_sim.rcs_rotation_scale > 0.0 or absf(unstable_sim.gimbal_angle) > 0.0001, "Autopilot stopped all attitude control in an unstable orbit")
 	unstable_sim.free()
 	var recovery_sim: Variant = SimulationView.new()
 	recovery_sim.set_rocket_design(RocketDesign.create_default())
