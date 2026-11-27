@@ -954,7 +954,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		var stage_changed := stage_index != gimbal_trim_stage_index
 		var trim_due := stage_changed or center_of_mass.distance_to(gimbal_trim_center_of_mass) >= 0.25 or sim_time - gimbal_trim_last_time >= 1.0
 		var trim_needed := absf(potential_engine_torque) > maxf(0.5, inertia * deg_to_rad(0.05))
-		if autopilot_phase in ["ASCENT", "CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"] and (stage_changed or (trim_needed and trim_due)):
+		if stage_changed or (trim_needed and trim_due):
 			var total_length := 0.0
 			for index in range(stage_index, rocket_stages.size()):
 				total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
