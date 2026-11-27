@@ -993,7 +993,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 	var burn_ready := aligned or ascent_burn_ready
 	var engine_torque := potential_engine_torque if burn_expected and burn_ready else 0.0
 	var requested_torque := desired_torque - engine_torque
-	var torque_required := absf(requested_torque) > maxf(1.0, inertia * deg_to_rad(0.01))
+	var torque_required := absf(requested_torque) > 1.0
 	if not has_rcs_installed():
 		rcs_rotation_input = 0.0
 		rcs_rotation_scale = 0.0
