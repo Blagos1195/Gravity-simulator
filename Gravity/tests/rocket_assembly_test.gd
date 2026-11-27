@@ -357,6 +357,14 @@ func _initialize() -> void:
 	assert(RocketAssembly.move_component(with_engine, 0, -1).is_empty())
 	assert(RocketAssembly.move_component(with_engine, with_engine.components.size() - 1, 1).is_empty())
 	assert(RocketAssembly.component_options().size() >= 16)
+	var preset_with_hardware := RocketAssembly.add_preset_hardware(RocketDesign.create_default())
+	var preset_final_stage: Dictionary = preset_with_hardware.stages.back()
+	var preset_rcs_tank_count := 0
+	for component in preset_final_stage.get("components", []):
+		if str(component.get("id", "")) == "rcs_propellant_tank":
+			preset_rcs_tank_count += 2 if str(component.get("attachment", "")) == "side" and bool(component.get("mirror", false)) else 1
+	assert(preset_rcs_tank_count == 2, "Preset hardware must retain balanced RCS tanks on the final stage")
+	assert(RocketDesign.stage_rcs_propellant_capacity(preset_final_stage) >= 3000.0, "Final preset stage has insufficient RCS propellant capacity")
 	var rcs_tank_definition := RocketAssembly.component_definition("rcs_propellant_tank")
 	assert(not rcs_tank_definition.is_empty() and str(rcs_tank_definition.get("kind", "")) == "tank", "Standalone RCS propellant tank is missing from the builder")
 	var rcs_tank_stage := RocketAssembly.add_component(assembled, "rcs_propellant_tank")
