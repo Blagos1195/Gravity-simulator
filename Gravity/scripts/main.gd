@@ -1984,6 +1984,9 @@ func _show_game_load() -> void:
 			if file:
 				parsed = JSON.parse_string(file.get_as_text())
 				file.close()
+			var slot_row := HBoxContainer.new()
+			slot_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			root.add_child(slot_row)
 			if parsed is Dictionary:
 				var vehicle_count: int = 1
 				var saved_vehicles: Variant = parsed.get("vehicles", [])
@@ -1993,11 +1996,17 @@ func _show_game_load() -> void:
 				var saved_text := Time.get_datetime_string_from_unix_time(saved_at, true)
 				var save_name := str(parsed.get("save_name", "Unnamed campaign"))
 				var label := "SLOT %02d  •  %s  •  %d VEHICLES  •  %s" % [slot, save_name, vehicle_count, saved_text]
-				_add_button(root, label, _load_menu_slot.bind(slot))
+				var load_button := Button.new()
+				load_button.text = label
+				load_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				load_button.pressed.connect(_load_menu_slot.bind(slot))
+				slot_row.add_child(load_button)
 			else:
 				var corrupt_label := Label.new()
 				corrupt_label.text = "SLOT %02d  •  INVALID SAVE" % slot
-				root.add_child(corrupt_label)
+				corrupt_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				slot_row.add_child(corrupt_label)
+			_add_button(slot_row, "DELETE", _confirm_delete_save.bind(slot, path, "SLOT %02d" % slot))
 		else:
 			var empty_label := Label.new()
 			empty_label.text = "SLOT %02d  •  EMPTY" % slot
@@ -2006,9 +2015,35 @@ func _show_game_load() -> void:
 		for history_path in history_paths:
 			var history_time: int = FileAccess.get_modified_time(history_path)
 			var history_kind := "MANUAL BACKUP" if history_path.get_file().begins_with("manual_") else "AUTOSAVE"
-			var history_label := "     ↳ %s  •  %s" % [history_kind, Time.get_datetime_string_from_unix_time(history_time, true)]
-			_add_button(root, history_label, _load_menu_path.bind(slot, history_path))
+			var history_label := "↳ %s  •  %s" % [history_kind, Time.get_datetime_string_from_unix_time(history_time, true)]
+			var history_row := HBoxContainer.new()
+			history_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			root.add_child(history_row)
+			var restore_button := Button.new()
+			restore_button.text = history_label
+			restore_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			restore_button.pressed.connect(_load_menu_path.bind(slot, history_path))
+			history_row.add_child(restore_button)
+			_add_button(history_row, "DELETE", _confirm_delete_save.bind(slot, history_path, history_kind))
 	_add_button(layout, "BACK", _build_menu)
+
+func _confirm_delete_save(slot: int, path: String, description: String) -> void:
+	var confirmation := ConfirmationDialog.new()
+	confirmation.title = "DELETE SAVE?"
+	confirmation.dialog_text = "Permanently delete %s? This cannot be undone." % description
+	confirmation.ok_button_text = "DELETE"
+	add_child(confirmation)
+	confirmation.confirmed.connect(func():
+		var absolute_path := ProjectSettings.globalize_path(path)
+		if FileAccess.file_exists(path):
+			var error := DirAccess.remove_absolute(absolute_path)
+			if error != OK:
+				push_error("Could not delete save file: %s" % path)
+			confirmation.queue_free()
+			_show_game_load()
+	)
+	confirmation.canceled.connect(confirmation.queue_free)
+	confirmation.popup_centered()
 
 func _show_settings() -> void:
 	for child in get_children():
