@@ -944,18 +944,33 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 		pressure_ratio = float(atmosphere.get("density", 0.0)) * float(atmosphere.get("gas_constant", PlanetarySystem.earth_atmosphere_gas_constant())) * float(atmosphere.get("temperature", 250.0)) / 101325.0
 		gimbal_angle = 0.0
 		potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
-		if absf(potential_engine_torque) > maxf(1.0, inertia * deg_to_rad(0.01)):
-			var best_gimbal := 0.0
-			var lowest_torque := absf(potential_engine_torque)
-			for step in range(-16, 17):
-				var candidate_gimbal := deg_to_rad(float(step) * 0.5)
-				gimbal_angle = candidate_gimbal
-				var candidate_profile := _engine_force_profile(center_of_mass, pressure_ratio, expected_throttle)
-				var candidate_torque := absf(float(candidate_profile.get("torque", 0.0)))
-				if candidate_torque < lowest_torque:
-					lowest_torque = candidate_torque
-					best_gimbal = candidate_gimbal
-			gimbal_angle = best_gimbal
+		if burn_expected:
+			var total_length := 0.0
+			for index in range(stage_index, rocket_stages.size()):
+				total_length += float(RocketAssembly.stage_geometry(rocket_stages[index]).get("length", 1.0))
+			var active_geometry := RocketAssembly.stage_geometry(rocket_stages[stage_index])
+			var active_center_y := -total_length * 0.5 + float(active_geometry.get("length", 1.0)) * 0.5
+			var has_gimballed_engine := false
+			for engine in _remaining_engine_elements(pressure_ratio, active_center_y):
+				if bool(engine.get("gimballed", false)):
+					has_gimballed_engine = true
+					break
+			if has_gimballed_engine:
+				var best_gimbal := 0.0
+				var lowest_torque_error := INF
+				for step in range(-4, 5):
+					var candidate_gimbal := deg_to_rad(float(step) * 0.5)
+					gimbal_angle = candidate_gimbal
+					var candidate_torque := float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
+					var candidate_target := target_rotation - candidate_gimbal
+					var candidate_error := angle_difference(rotation_angle, candidate_target)
+					var desired_rate := signf(candidate_error) * minf(deg_to_rad(2.0), sqrt(2.0 * deg_to_rad(0.5) * absf(candidate_error)))
+					var desired_acceleration := clampf((desired_rate - angular_velocity) / maxf(dt, 0.05), -deg_to_rad(0.5), deg_to_rad(0.5))
+					var torque_error := absf(inertia * desired_acceleration - candidate_torque) + absf(candidate_gimbal) * inertia * deg_to_rad(0.02)
+					if torque_error < lowest_torque_error:
+						lowest_torque_error = torque_error
+						best_gimbal = candidate_gimbal
+				gimbal_angle = best_gimbal
 			potential_engine_torque = float(_engine_force_profile(center_of_mass, pressure_ratio, expected_throttle).get("torque", 0.0))
 	else:
 		gimbal_angle = 0.0
