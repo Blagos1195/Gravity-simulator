@@ -149,6 +149,7 @@ func _initialize() -> void:
 	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 2].resources.xenon), 20.0))
 	assert(is_equal_approx(float(parent.resource_tanks[parent.resource_tanks.size() - 1].resources.xenon), 30.0))
 	var expected_docked_mass := child._current_vehicle_mass()
+	print("DOCKED MASS parent=%.3f child=%.3f child_docked=%.3f second=%.3f second_docked=%.3f expected=%.3f visuals=%d/%d" % [parent.docked_mass, child._current_vehicle_mass(), child.docked_mass, second_child._current_vehicle_mass(), second_child.docked_mass, expected_docked_mass, parent.docked_visuals.size(), child.docked_visuals.size()])
 	assert(absf(parent.docked_mass - expected_docked_mass) < 0.01)
 	assert(main._rename_vehicle(parent.vehicle_name, "Orbital Tug"))
 	assert(main._are_docked("Orbital Tug", child.vehicle_name))
