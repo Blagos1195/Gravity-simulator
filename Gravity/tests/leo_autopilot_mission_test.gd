@@ -33,6 +33,7 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 	design["stages"] = stages
 	var simulation: Variant = SimulationView.new()
 	simulation.set_rocket_design(design)
+	print("PATHFINDER INITIAL RCS remaining=%.1f capacity=%.1f installed=%s gimbal=%s" % [simulation.rcs_propellant_remaining, simulation._remaining_rcs_propellant_capacity(), simulation.has_rcs_installed(), simulation._remaining_engine_elements(0.0, 0.0).any(func(engine: Dictionary) -> bool: return bool(engine.get("gimballed", false)))])
 	simulation.realism = "Realistic"
 	simulation.landed = true
 	simulation.landed_body_name = "Earth"
@@ -60,20 +61,23 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 		if elapsed >= next_trace_time:
 			var trace_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 			print("PATHFINDER TRACE t=%.1f alt=%.0f speed=%.0f radial=%.0f tangential=%.0f pitch=%.1f rot=%.2f angular=%.3f rcs=%.0f fuel=%.0f stage=%d thrust=%s" % [elapsed, float(trace_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), (simulation.velocity - trace_body.velocity).dot(trace_body.relative_position.normalized()), (simulation.velocity - trace_body.velocity).dot(Vector2(-trace_body.relative_position.y, trace_body.relative_position.x).normalized()), simulation.rotation_angle, simulation.rotation_angle, simulation.angular_velocity, simulation.rcs_propellant_remaining, simulation.fuel, simulation.stage_index, simulation.thrust_key_down])
+			print("PATHFINDER CONTROL status=%s rcs_capacity=%.0f installed=%s gimbal=%.2f throttle=%.2f" % [simulation.status_message, simulation._remaining_rcs_propellant_capacity(), simulation.has_rcs_installed(), rad_to_deg(simulation.gimbal_angle), simulation.throttle])
 			next_trace_time += 10.0
 		if iterations >= 300000:
 			break
 	var body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var orbit := FlightComputer.orbital_state(body.relative_position, simulation.velocity - body.velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
-	var valid: bool = simulation.autopilot_complete and not simulation.crashed and bool(orbit.get("bound", false)) and absf(float(orbit.get("periapsis", 0.0)) - target_orbit_radius) < 5000.0 and absf(float(orbit.get("apoapsis", 0.0)) - target_orbit_radius) < 5000.0
+	var rcs_reserve_capacity: float = simulation._remaining_rcs_propellant_capacity()
+	var rcs_reserve_valid: bool = rcs_reserve_capacity > 0.0 and simulation.rcs_propellant_remaining + 0.1 >= rcs_reserve_capacity * 0.5
+	var valid: bool = simulation.autopilot_complete and not simulation.crashed and bool(orbit.get("bound", false)) and absf(float(orbit.get("periapsis", 0.0)) - target_orbit_radius) < 5000.0 and absf(float(orbit.get("apoapsis", 0.0)) - target_orbit_radius) < 5000.0 and rcs_reserve_valid
 	if not valid:
-		push_error("Pathfinder LEO autopilot failed: phase=%s status=%s altitude=%.1f periapsis=%.1f apoapsis=%.1f fuel=%.1f iterations=%d" % [simulation.autopilot_phase, simulation.status_message, float(body.distance) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, iterations])
+		push_error("Pathfinder LEO autopilot failed: phase=%s status=%s altitude=%.1f periapsis=%.1f apoapsis=%.1f fuel=%.1f rcs=%.1f/%.1f iterations=%d" % [simulation.autopilot_phase, simulation.status_message, float(body.distance) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, simulation.rcs_propellant_remaining, rcs_reserve_capacity, iterations])
 	simulation.free()
 	return valid
 
 func _validate_leo_autopilot_mission(infinite_propellant: bool) -> bool:
 	var simulation: Variant = SimulationView.new()
-	simulation.set_rocket_design(RocketDesign.create_default())
+	simulation.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
 	simulation.realism = "Realistic"
 	simulation.infinite_weightless_fuel = infinite_propellant
 	simulation.landed = true
@@ -117,7 +121,22 @@ func _validate_leo_autopilot_mission(infinite_propellant: bool) -> bool:
 	var end_body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var end_orbit: Dictionary = FlightComputer.orbital_state(end_body.relative_position, simulation.velocity - end_body.velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
 	if simulation.crashed or not simulation.autopilot_complete:
-		push_error("LEO %s mission failed: phase=%s status=%s elapsed=%.1f iterations=%d altitude=%.1f speed=%.1f radial_speed=%.1f periapsis_altitude=%.1f apoapsis_altitude=%.1f fuel=%.1f landed=%s crashed=%s transitions=%s" % ["infinite-fuel" if infinite_propellant else "finite-fuel", simulation.autopilot_phase, simulation.status_message, elapsed, iterations, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS, simulation.velocity.length(), float(end_orbit.get("radial_speed", INF)), float(end_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(end_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, simulation.landed, simulation.crashed, "; ".join(PackedStringArray(phase_transitions))])
+		var mass_properties: Dictionary = simulation._vehicle_mass_properties()
+		var center_of_mass: Vector2 = Vector2(mass_properties.center_of_mass)
+		var trace_altitude: float = maxf(0.0, float(end_body.distance) - PlanetarySystem.EARTH_RADIUS)
+		var density: float = PlanetarySystem.planetary_atmosphere_density("Earth", trace_altitude)
+		var pressure_ratio: float = density * PlanetarySystem.planetary_atmosphere_gas_constant("Earth") * PlanetarySystem.planetary_atmosphere_temperature("Earth") / 101325.0
+		var engine_torque: float = float(simulation._engine_force_profile(center_of_mass, pressure_ratio, 1.0).get("torque", 0.0))
+		var target_direction: Vector2 = simulation.autopilot_burn_direction.normalized()
+		if target_direction.length_squared() < 0.5:
+			target_direction = Vector2(-end_body.relative_position.y, end_body.relative_position.x).normalized()
+		var target_rotation: float = target_direction.angle() - Vector2.UP.angle()
+		var attitude_error: float = angle_difference(simulation.rotation_angle, target_rotation - simulation.gimbal_angle)
+		var inertia: float = maxf(1.0, float(mass_properties.moment_of_inertia))
+		var desired_rate: float = signf(attitude_error) * minf(deg_to_rad(2.0), sqrt(2.0 * deg_to_rad(0.5) * absf(attitude_error)))
+		var desired_acceleration: float = clampf((desired_rate - simulation.angular_velocity) / 0.05, -deg_to_rad(0.5), deg_to_rad(0.5))
+		var desired_torque: float = inertia * desired_acceleration
+		push_error("LEO %s mission failed: phase=%s status=%s elapsed=%.1f iterations=%d altitude=%.1f speed=%.1f radial_speed=%.1f periapsis_altitude=%.1f apoapsis_altitude=%.1f fuel=%.1f RCS=%.1f/%.1f gimbal=%.2f engine_torque=%.2f desired_torque=%.2f attitude_error=%.3f angular_velocity=%.4f landed=%s crashed=%s transitions=%s" % ["infinite-fuel" if infinite_propellant else "finite-fuel", simulation.autopilot_phase, simulation.status_message, elapsed, iterations, trace_altitude, simulation.velocity.length(), float(end_orbit.get("radial_speed", INF)), float(end_orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(end_orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, simulation.rcs_propellant_remaining, simulation._remaining_rcs_propellant_capacity(), rad_to_deg(simulation.gimbal_angle), engine_torque, desired_torque, attitude_error, simulation.angular_velocity, simulation.landed, simulation.crashed, "; ".join(PackedStringArray(phase_transitions))])
 		simulation.free()
 		return false
 	var earth_state: Dictionary = simulation._surface_body_state("Earth")
@@ -157,6 +176,11 @@ func _validate_leo_autopilot_mission(infinite_propellant: bool) -> bool:
 	var coast_orbit: Dictionary = FlightComputer.orbital_state(coast_position, coast_velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
 	if not bool(coast_orbit.get("bound", false)) or float(coast_orbit.get("periapsis", 0.0)) <= PlanetarySystem.EARTH_RADIUS + 70000.0:
 		push_error("LEO %s orbit became unbound or unsafe after one revolution." % ("infinite-fuel" if infinite_propellant else "finite-fuel"))
+		simulation.free()
+		return false
+	var rcs_reserve_capacity: float = simulation._remaining_rcs_propellant_capacity()
+	if rcs_reserve_capacity <= 0.0 or simulation.rcs_propellant_remaining + 0.1 < rcs_reserve_capacity * 0.5:
+		push_error("LEO %s mission did not preserve half its attached RCS propellant: %.1f/%.1f" % ["infinite-fuel" if infinite_propellant else "finite-fuel", simulation.rcs_propellant_remaining, rcs_reserve_capacity])
 		simulation.free()
 		return false
 	simulation.free()

@@ -146,6 +146,18 @@ func _initialize() -> void:
 	var trimmed_profile := simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, attitude_pressure_ratio, 1.0)
 	assert(absf(simulation.gimbal_angle) > 0.001, "Autopilot should trim engine gimbal to compensate for an offset centre of mass")
 	assert(absf(float(trimmed_profile.torque)) < untrimmed_torque, "Autopilot gimbal trim should reduce thrust-induced torque")
+	simulation.rotation_angle = deg_to_rad(5.0)
+	simulation.angular_velocity = 0.0
+	simulation.gimbal_angle = 0.0
+	var steering_error := angle_difference(simulation.rotation_angle, 0.0)
+	var steering_rate := signf(steering_error) * minf(deg_to_rad(2.0), sqrt(2.0 * deg_to_rad(0.5) * absf(steering_error)))
+	var steering_acceleration := clampf(steering_rate / 10.0, -deg_to_rad(0.5), deg_to_rad(0.5))
+	var steering_inertia := float(simulation._vehicle_mass_properties().moment_of_inertia)
+	var steering_torque := steering_inertia * steering_acceleration
+	var unassisted_steering_torque := float(simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, attitude_pressure_ratio, 1.0).torque)
+	simulation._autopilot_attitude_control(0.0, 10.0, true)
+	var assisted_steering_torque := float(simulation._engine_force_profile(simulation._vehicle_mass_properties().center_of_mass, attitude_pressure_ratio, 1.0).torque)
+	assert(absf(assisted_steering_torque - steering_torque) < absf(unassisted_steering_torque - steering_torque), "Autopilot gimbal should provide attitude-control torque")
 	var rcs_stage := RocketAssembly.add_component(assembled, "rcs_thruster_block")
 	assert(is_equal_approx(RocketDesign.stage_rcs_propellant_capacity(rcs_stage), 500.0))
 	assert(is_equal_approx(float(rcs_stage.rcs_thrust), 1800.0))
@@ -357,6 +369,14 @@ func _initialize() -> void:
 	assert(RocketAssembly.move_component(with_engine, 0, -1).is_empty())
 	assert(RocketAssembly.move_component(with_engine, with_engine.components.size() - 1, 1).is_empty())
 	assert(RocketAssembly.component_options().size() >= 16)
+	var preset_with_hardware := RocketAssembly.add_preset_hardware(RocketDesign.create_default())
+	var preset_final_stage: Dictionary = preset_with_hardware.stages.back()
+	var preset_rcs_tank_count := 0
+	for component in preset_final_stage.get("components", []):
+		if str(component.get("id", "")) == "rcs_propellant_tank":
+			preset_rcs_tank_count += 2 if str(component.get("attachment", "")) == "side" and bool(component.get("mirror", false)) else 1
+	assert(preset_rcs_tank_count == 2, "Preset hardware must retain balanced RCS tanks on the final stage")
+	assert(RocketDesign.stage_rcs_propellant_capacity(preset_final_stage) >= 3000.0, "Final preset stage has insufficient RCS propellant capacity")
 	var rcs_tank_definition := RocketAssembly.component_definition("rcs_propellant_tank")
 	assert(not rcs_tank_definition.is_empty() and str(rcs_tank_definition.get("kind", "")) == "tank", "Standalone RCS propellant tank is missing from the builder")
 	var rcs_tank_stage := RocketAssembly.add_component(assembled, "rcs_propellant_tank")

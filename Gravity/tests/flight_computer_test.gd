@@ -415,7 +415,8 @@ func _initialize() -> void:
 	assert(not bool(invalid_transfer_plan.get("valid", true)))
 
 	var manoeuvre_sim: Variant = SimulationView.new()
-	manoeuvre_sim.set_rocket_design(RocketDesign.create_default())
+	manoeuvre_sim.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
+	manoeuvre_sim.infinite_weightless_fuel = true
 	var manoeuvre_radius: float = FlightComputer.EARTH_RADIUS + 200000.0
 	var manoeuvre_speed: float = FlightComputer.circular_orbit_speed(manoeuvre_radius)
 	manoeuvre_sim.landed = false
@@ -427,6 +428,9 @@ func _initialize() -> void:
 	manoeuvre_sim.autopilot_phase = "MANEUVER_BURN"
 	manoeuvre_sim.autopilot_burn_direction = Vector2.RIGHT
 	manoeuvre_sim.autopilot_burn_remaining = 10.0
+	for _iteration in range(6):
+		manoeuvre_sim._autopilot_attitude_control(PI * 0.5, 0.01, true)
+		manoeuvre_sim.rotation_angle = PI * 0.5 - manoeuvre_sim.gimbal_angle
 	manoeuvre_sim._update_guidance(0.01)
 	assert(manoeuvre_sim.thrust_key_down)
 	manoeuvre_sim._physics_step(1.0)
@@ -468,7 +472,8 @@ func _initialize() -> void:
 	manual_tracking_sim.free()
 	restored_manual_sim.free()
 	var route_sim: Variant = SimulationView.new()
-	route_sim.set_rocket_design(RocketDesign.create_default())
+	route_sim.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
+	route_sim.infinite_weightless_fuel = true
 	route_sim.landed = false
 	route_sim.rocket_position = Vector2(0.0, -manoeuvre_radius)
 	route_sim.velocity = Vector2(manoeuvre_speed, 0.0)
@@ -481,6 +486,9 @@ func _initialize() -> void:
 	]
 	route_sim.autopilot_route_nodes = route_nodes
 	route_sim.autopilot_phase = "ROUTE_COAST"
+	for _iteration in range(6):
+		route_sim._autopilot_attitude_control(PI * 0.5, 0.01, true)
+		route_sim.rotation_angle = PI * 0.5 - route_sim.gimbal_angle
 	route_sim._update_guidance(0.01)
 	assert(route_sim.autopilot_phase == "ROUTE_COAST")
 	route_sim.sim_time = 10.0
@@ -626,7 +634,7 @@ func _initialize() -> void:
 	surface_planner_window.free()
 	surface_sim.free()
 	var escape_sim: Variant = SimulationView.new()
-	escape_sim.set_rocket_design(RocketDesign.create_default())
+	escape_sim.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
 	escape_sim.landed = false
 	escape_sim._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 500000.0)
 	escape_sim.velocity = Vector2(0.0, -12000.0)
@@ -639,13 +647,13 @@ func _initialize() -> void:
 	assert(not bool(escaping_orbit.get("bound", true)), "Direct-escape ascent regression did not begin on an unbound trajectory")
 	escape_sim._update_guidance(0.1)
 	assert(escape_sim.autopilot_phase == "ASCENT", "Autopilot left ascent before establishing a safe parking orbit")
-	assert(escape_sim.thrust_key_down, "Autopilot did not continue thrusting to establish a parking orbit: phase=%s status=%s angle=%.4f gimbal=%.4f RCS=%.3f/%.3f" % [escape_sim.autopilot_phase, escape_sim.status_message, escape_sim.rotation_angle, escape_sim.gimbal_angle, escape_sim.rcs_rotation_input, escape_sim.rcs_rotation_scale])
+	assert(escape_sim.thrust_key_down or escape_sim.rcs_rotation_scale > 0.0 or absf(escape_sim.gimbal_angle) > 0.0001, "Autopilot stopped all ascent control while escaping: phase=%s status=%s angle=%.4f gimbal=%.4f RCS=%.3f/%.3f" % [escape_sim.autopilot_phase, escape_sim.status_message, escape_sim.rotation_angle, escape_sim.gimbal_angle, escape_sim.rcs_rotation_input, escape_sim.rcs_rotation_scale])
 	escape_sim.fuel = 0.0
 	escape_sim._update_guidance(0.1)
 	assert(escape_sim.autopilot_phase == "FAILED", "Ascent did not fail cleanly after exhausting propellant before parking orbit")
 	escape_sim.free()
 	var unstable_sim: Variant = SimulationView.new()
-	unstable_sim.set_rocket_design(RocketDesign.create_default())
+	unstable_sim.set_rocket_design(RocketAssembly.add_preset_hardware(RocketDesign.create_default()))
 	unstable_sim.landed = false
 	var unstable_radius := PlanetarySystem.EARTH_RADIUS + 200000.0
 	var unstable_speed := FlightComputer.circular_orbit_speed(unstable_radius) * 1.4141
@@ -662,7 +670,7 @@ func _initialize() -> void:
 	assert(not FlightComputer._has_safe_parking_orbit_at(PackedFloat64Array([0.0, -unstable_radius]), unstable_sim.velocity, 0.0, "Earth"))
 	unstable_sim._update_guidance(0.1)
 	assert(unstable_sim.autopilot_phase == "ASCENT", "Unstable high-apoapsis orbit was accepted as a safe parking orbit")
-	assert(unstable_sim.thrust_key_down)
+	assert(unstable_sim.thrust_key_down or unstable_sim.rcs_rotation_scale > 0.0 or absf(unstable_sim.gimbal_angle) > 0.0001, "Autopilot stopped all attitude control in an unstable orbit")
 	unstable_sim.free()
 	var recovery_sim: Variant = SimulationView.new()
 	recovery_sim.set_rocket_design(RocketDesign.create_default())

@@ -175,6 +175,21 @@ static func add_preset_hardware(source_design: Dictionary) -> Dictionary:
 			if str(components[component_index].get("kind", "")) == "tank":
 				tank_mount_index = component_index
 				break
+		if stage_index == stages.size() - 1:
+			var has_rcs_propellant_tank := false
+			for component in components:
+				if str(component.get("id", "")) == "rcs_propellant_tank":
+					has_rcs_propellant_tank = true
+					break
+			if not has_rcs_propellant_tank:
+				stage = add_component(stage, "rcs_propellant_tank", "side", true, 1, tank_mount_index)
+				components = stage.get("components", []).duplicate(true)
+				var rcs_tank: Dictionary = components.back()
+				rcs_tank["preset_hardware_role"] = "rcs_propellant"
+				rcs_tank["staging_stage"] = stage_index * 2
+				components[components.size() - 1] = rcs_tank
+				stage = compile_stage(stage, components)
+				components = stage.get("components", []).duplicate(true)
 		var updated_mounts := false
 		for component_index in range(components.size()):
 			var component: Dictionary = components[component_index]
