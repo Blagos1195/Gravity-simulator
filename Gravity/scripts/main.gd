@@ -3331,7 +3331,7 @@ func _show_part_actions(part_uid: String) -> void:
 		layout.add_child(deploy_button)
 	if kind in ["engine", "radial"]:
 		var engine_button := Button.new()
-		engine_button.text = "REMOVE FROM ACTIVE PARTS" if bool(selected_component.get("engine_enabled", true)) else "ADD TO ACTIVE PARTS"
+		engine_button.text = "SHUT DOWN ENGINE" if bool(selected_component.get("engine_enabled", true)) else "ACTIVATE ENGINE"
 		engine_button.pressed.connect(func():
 			_set_vehicle_component_state(part_owner, part_uid, "engine_enabled", not bool(selected_component.get("engine_enabled", true)))
 			window.queue_free()
@@ -3346,13 +3346,18 @@ func _show_part_actions(part_uid: String) -> void:
 		)
 		layout.add_child(rcs_button)
 	elif kind == "tank":
-		var fuel_button := Button.new()
-		fuel_button.text = "DISABLE FUEL SUPPLY" if bool(selected_component.get("fuel_supply_enabled", true)) else "ENABLE FUEL SUPPLY"
-		fuel_button.pressed.connect(func():
-			_set_vehicle_component_state(part_owner, part_uid, "fuel_supply_enabled", not bool(selected_component.get("fuel_supply_enabled", true)))
-			window.queue_free()
-		)
-		layout.add_child(fuel_button)
+		if float(selected_component.get("rcs_propellant_capacity", 0.0)) > 0.0:
+			var rcs_capacity := Label.new()
+			rcs_capacity.text = "RCS PROPELLANT CAPACITY  •  %.0f kg" % float(selected_component.get("rcs_propellant_capacity", 0.0))
+			layout.add_child(rcs_capacity)
+		else:
+			var fuel_button := Button.new()
+			fuel_button.text = "DISABLE FUEL SUPPLY" if bool(selected_component.get("fuel_supply_enabled", true)) else "ENABLE FUEL SUPPLY"
+			fuel_button.pressed.connect(func():
+				_set_vehicle_component_state(part_owner, part_uid, "fuel_supply_enabled", not bool(selected_component.get("fuel_supply_enabled", true)))
+				window.queue_free()
+			)
+			layout.add_child(fuel_button)
 	if kind == "docking_port":
 		var docking_button := Button.new()
 		docking_button.text = "DOCK / UNDOCK AT THIS CONNECTOR"
@@ -4282,7 +4287,7 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 	assist_button.custom_minimum_size.y = 44
 	layout.add_child(assist_button)
 	var undock_button := Button.new()
-	undock_button.text = "UNDOCK"
+	undock_button.text = "UNDOCK THIS CONNECTOR" if not selected_port_uid.is_empty() else "UNDOCK"
 	undock_button.custom_minimum_size.y = 44
 	layout.add_child(undock_button)
 	var fuel_heading := Label.new()

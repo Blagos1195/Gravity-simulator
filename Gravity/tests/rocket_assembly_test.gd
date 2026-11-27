@@ -357,6 +357,11 @@ func _initialize() -> void:
 	assert(RocketAssembly.move_component(with_engine, 0, -1).is_empty())
 	assert(RocketAssembly.move_component(with_engine, with_engine.components.size() - 1, 1).is_empty())
 	assert(RocketAssembly.component_options().size() >= 16)
+	var rcs_tank_definition := RocketAssembly.component_definition("rcs_propellant_tank")
+	assert(not rcs_tank_definition.is_empty() and str(rcs_tank_definition.get("kind", "")) == "tank", "Standalone RCS propellant tank is missing from the builder")
+	var rcs_tank_stage := RocketAssembly.add_component(assembled, "rcs_propellant_tank")
+	assert(is_equal_approx(RocketDesign.stage_rcs_propellant_capacity(rcs_tank_stage), RocketDesign.stage_rcs_propellant_capacity(assembled) + 1000.0), "Standalone RCS tank capacity was not included in the stage")
+
 	var mirrored_booster_stage := RocketAssembly.add_component(assembled, "solid_booster_pair", "radial", true, -1)
 	assert(not mirrored_booster_stage.is_empty())
 	assert(is_equal_approx(float(RocketDesign.stage_booster_stats(mirrored_booster_stage).dry_mass), 16000.0))

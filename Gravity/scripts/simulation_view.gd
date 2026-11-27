@@ -442,7 +442,7 @@ func _part_at_screen_position(screen_position: Vector2) -> String:
 	if show_solar_system or camera_zoom <= 0.0000000002:
 		return ""
 	var object_scale := RocketVisual.camera_scale(camera_zoom, _visual_scale())
-	if object_scale < 0.025:
+	if object_scale <= 0.0000001:
 		return ""
 	var control_position := get_global_transform_with_canvas().affine_inverse() * screen_position
 	var local_click := (control_position - size * 0.5).rotated(-rotation_angle) / object_scale
@@ -476,6 +476,42 @@ func _part_at_screen_position(screen_position: Vector2) -> String:
 					best_score = score
 					best_uid = str(component.get("part_uid", ""))
 		cursor += float(geometry.get("length", 1.0))
+	for docked_visual in docked_visuals:
+		var design: Dictionary = docked_visual.get("design", {})
+		var stages: Array = design.get("stages", [])
+		var attached_stage_index := int(docked_visual.get("stage_index", 0))
+		if attached_stage_index < 0 or attached_stage_index >= stages.size():
+			continue
+		var attached_rotation := float(docked_visual.get("rotation", rotation_angle)) - rotation_angle
+		var attached_offset: Vector2 = Vector2(docked_visual.get("offset", Vector2.ZERO))
+		var attached_geometries: Array[Dictionary] = []
+		var attached_length := 0.0
+		for index in range(attached_stage_index, stages.size()):
+			var attached_geometry := RocketAssembly.stage_geometry(stages[index])
+			attached_geometries.append(attached_geometry)
+			attached_length += float(attached_geometry.get("length", 1.0))
+		var attached_cursor := -attached_length * 0.5
+		for attached_geometry in attached_geometries:
+			var attached_stage_center := attached_cursor + float(attached_geometry.get("length", 1.0)) * 0.5
+			var attached_stage: Dictionary = attached_geometry.get("stage", {})
+			var attached_components: Array = attached_stage.get("components", [])
+			var attached_positions: Dictionary = attached_geometry.get("component_positions", {})
+			for component_index in range(attached_components.size()):
+				var component: Dictionary = attached_components[component_index]
+				var radius := maxf(0.5, float(component.get("collision_radius_m", 0.5)))
+				var half_width := maxf(radius * 1.15, 5.0 / object_scale)
+				var half_length := maxf(float(component.get("length_m", 1.0)) * 0.58, 5.0 / object_scale)
+				var component_angle := deg_to_rad(float(component.get("rotation_deg", 0.0))) + attached_rotation
+				for position in attached_positions.get(component_index, []):
+					var center: Vector2 = (Vector2(position) + Vector2(0.0, attached_stage_center)).rotated(attached_rotation) + attached_offset
+					var local_offset := (local_click - center).rotated(-component_angle)
+					if absf(local_offset.x) > half_width or absf(local_offset.y) > half_length:
+						continue
+					var score := local_offset.x * local_offset.x / (half_width * half_width) + local_offset.y * local_offset.y / (half_length * half_length)
+					if score < best_score:
+						best_score = score
+						best_uid = str(component.get("part_uid", ""))
+			attached_cursor += float(attached_geometry.get("length", 1.0))
 	return best_uid
 
 func execute_staging_actions(actions: Array) -> bool:
