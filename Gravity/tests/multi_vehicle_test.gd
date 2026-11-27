@@ -60,10 +60,13 @@ func _initialize() -> void:
 	assert(second.rocket_stages.size() == original_launch_design.stages.size(), "A repeated launch used modified in-flight stage data")
 	assert(RocketDesign.validation_errors(second.launch_design).is_empty(), "A repeated launch did not preserve a valid original design")
 	first.rocket_stages = original_launch_design.stages.duplicate(true)
+	var pause_event := InputEventKey.new()
+	pause_event.keycode = KEY_ESCAPE
+	pause_event.pressed = true
+	main._unhandled_key_input(pause_event)
+	assert(main.sim.paused and first.paused and second.paused, "Keyboard pause did not stop every fleet vehicle")
 	main._pause_simulation()
-	assert(main.sim.paused and first.paused and second.paused, "Pause did not stop every fleet vehicle")
-	main._pause_simulation()
-	assert(not main.sim.paused and not first.paused and not second.paused, "Resume did not restart every fleet vehicle")
+	assert(not main.sim.paused and not first.paused and not second.paused, "HUD resume did not restart every fleet vehicle")
 	assert(first != second)
 	assert(first.visible == false)
 	assert(second.visible)
