@@ -1143,7 +1143,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_save_game(false)
 	elif event.keycode == KEY_F9:
 		_load_game()
-	elif event.keycode == KEY_ESCAPE:
+	elif event.is_action_pressed("pause_game"):
 		_pause_simulation()
 	elif event.keycode == KEY_J:
 		_show_time_skip_dialog()
@@ -2198,13 +2198,7 @@ func _start_flight() -> void:
 func _add_new_vehicle() -> void:
 	if not is_instance_valid(sim):
 		return
-	var design := {
-		"name": sim.vehicle_name,
-		"payload_mass": sim.payload_mass,
-		"payload_type": sim.payload_type,
-		"payload_visual": sim.payload_visual.duplicate(true),
-		"stages": sim.rocket_stages.duplicate(true)
-	}
+	var design: Dictionary = sim.launch_design.duplicate(true)
 	_launch_vehicle_design(design)
 
 func _launch_vehicle_design(design: Dictionary) -> void:
@@ -2238,13 +2232,7 @@ func _show_new_vehicle_dialog() -> void:
 	if not is_instance_valid(sim):
 		return
 	var options: Array[Dictionary] = []
-	var current_design := {
-		"name": sim.vehicle_name,
-		"payload_mass": sim.payload_mass,
-		"payload_type": sim.payload_type,
-		"payload_visual": sim.payload_visual.duplicate(true),
-		"stages": sim.rocket_stages.duplicate(true)
-	}
+	var current_design: Dictionary = sim.launch_design.duplicate(true)
 	options.append({
 		"id": "current",
 		"label": "Current vehicle design",
@@ -4442,12 +4430,15 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 	window.popup_centered()
 
 func _pause_simulation() -> void:
-	if sim:
-		var pause_state: bool = not bool(sim.paused)
-		for vehicle in fleet_sims:
-			vehicle.paused = pause_state
-		if status_label:
-			status_label.text = "PAUSED" if pause_state else "FLIGHT ACTIVE"
+	if not is_instance_valid(sim):
+		return
+	var pause_state: bool = not sim.paused
+	sim.paused = pause_state
+	for vehicle in fleet_sims:
+		vehicle.paused = pause_state
+		vehicle.simulation_time_backlog = 0.0
+	if status_label:
+		status_label.text = "PAUSED" if pause_state else "FLIGHT ACTIVE"
 
 func _confirm_menu() -> void:
 	_save_game(true)
