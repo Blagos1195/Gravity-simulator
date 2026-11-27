@@ -3753,7 +3753,20 @@ func load_save_data(data: Dictionary) -> bool:
 	for saved_stage in saved_stages:
 		rcs_capacity += RocketDesign.stage_rcs_propellant_capacity(saved_stage)
 	var saved_rcs_propellant: float = float(data.get("rcs_propellant_remaining", rcs_capacity))
-	if saved_rcs_propellant < 0.0 or saved_rcs_propellant > rcs_capacity:
+	var saved_docked_rcs: Variant = data.get("docked_rcs_propellant", {})
+	var external_rcs_propellant := 0.0
+	if saved_docked_rcs is Dictionary:
+		for module_id in saved_docked_rcs:
+			var amount: Variant = saved_docked_rcs[module_id]
+			if str(module_id).is_empty() or not (amount is int or amount is float) or not is_finite(float(amount)) or float(amount) < 0.0:
+				push_error("Save contains invalid docked RCS propellant.")
+				return false
+			external_rcs_propellant += float(amount)
+	elif saved_docked_rcs != null:
+		push_error("Save contains invalid docked RCS propellant data.")
+		return false
+	var own_rcs_propellant := saved_rcs_propellant - external_rcs_propellant
+	if own_rcs_propellant < -0.001 or own_rcs_propellant > rcs_capacity + 0.001:
 		push_error("Save RCS propellant is outside the vehicle capacity.")
 		return false
 	var active_fuel_capacity: float = RocketDesign.stage_total_fuel_capacity(saved_stages[stage_index])
@@ -3789,7 +3802,6 @@ func load_save_data(data: Dictionary) -> bool:
 	if saved_launch_design is Dictionary and RocketDesign.validation_errors(saved_launch_design).is_empty():
 		launch_design = saved_launch_design.duplicate(true)
 	saved_design["preserve_part_uids"] = true
-	var saved_docked_rcs: Variant = data.get("docked_rcs_propellant", {})
 	docked_rcs_propellant = saved_docked_rcs.duplicate(true) if saved_docked_rcs is Dictionary else {}
 	var saved_resource_tanks: Variant = data.get("resource_tanks", null)
 	if saved_resource_tanks is Array:
@@ -3823,7 +3835,7 @@ func load_save_data(data: Dictionary) -> bool:
 	rotation_angle = float(data.get("rotation_angle", 0.0))
 	angular_velocity = float(data.get("angular_velocity", 0.0))
 	fuel = float(data.get("fuel", _active_stage_data().get("fuel_capacity", 0.0)))
-	rcs_propellant_remaining = clampf(float(data.get("rcs_propellant_remaining", _remaining_rcs_propellant_capacity())), 0.0, _remaining_rcs_propellant_capacity())
+	rcs_propellant_remaining = saved_rcs_propellant
 	stage_fuel_remaining = validated_stage_fuel
 	infinite_fuel_stage_remaining = clampf(float(data.get("infinite_fuel_stage_remaining", fuel)), 0.0, float(_active_stage_data().get("fuel_capacity", 0.0)))
 	discarded_stage_mass = float(data.get("discarded_stage_mass", 0.0))
