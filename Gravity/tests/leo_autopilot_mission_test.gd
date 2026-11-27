@@ -34,9 +34,10 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 	var simulation: Variant = SimulationView.new()
 	simulation.set_rocket_design(design)
 	simulation.realism = "Realistic"
-	simulation.landed = false
-	simulation._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 100.0)
-	simulation.velocity = Vector2(PlanetarySystem.EARTH_RADIUS * PlanetarySystem.EARTH_ROTATION_RATE, 0.0)
+	simulation.landed = true
+	simulation.landed_body_name = "Earth"
+	simulation.landed_surface_normal = Vector2.UP
+	simulation._set_rocket_position_components(0.0, -PlanetarySystem.EARTH_RADIUS - 0.5)
 	simulation.autopilot_enabled = true
 	simulation.guidance_enabled = true
 	simulation.autopilot_target_altitude = 200000.0
