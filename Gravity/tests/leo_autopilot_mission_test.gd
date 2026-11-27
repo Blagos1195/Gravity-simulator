@@ -68,7 +68,7 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 	var body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var orbit := FlightComputer.orbital_state(body.relative_position, simulation.velocity - body.velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
 	var rcs_reserve_capacity: float = simulation._remaining_rcs_propellant_capacity()
-	var rcs_reserve_valid: bool = simulation.rcs_propellant_remaining + 0.1 >= rcs_reserve_capacity * 0.5
+	var rcs_reserve_valid: bool = rcs_reserve_capacity > 0.0 and simulation.rcs_propellant_remaining + 0.1 >= rcs_reserve_capacity * 0.5
 	var valid: bool = simulation.autopilot_complete and not simulation.crashed and bool(orbit.get("bound", false)) and absf(float(orbit.get("periapsis", 0.0)) - target_orbit_radius) < 5000.0 and absf(float(orbit.get("apoapsis", 0.0)) - target_orbit_radius) < 5000.0 and rcs_reserve_valid
 	if not valid:
 		push_error("Pathfinder LEO autopilot failed: phase=%s status=%s altitude=%.1f periapsis=%.1f apoapsis=%.1f fuel=%.1f rcs=%.1f/%.1f iterations=%d" % [simulation.autopilot_phase, simulation.status_message, float(body.distance) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, simulation.rcs_propellant_remaining, rcs_reserve_capacity, iterations])
