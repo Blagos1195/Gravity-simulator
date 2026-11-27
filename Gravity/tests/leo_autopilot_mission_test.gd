@@ -45,7 +45,7 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 	simulation.autopilot_planet_index = -2
 	simulation.autopilot_phase = "ASCENT"
 	simulation.thrust_key_down = true
-	var target_orbit_radius := PlanetarySystem.EARTH_RADIUS + simulation.autopilot_target_altitude
+	var target_orbit_radius: float = PlanetarySystem.EARTH_RADIUS + simulation.autopilot_target_altitude
 	var target_orbit_period := TAU * sqrt(pow(target_orbit_radius, 3.0) / (PlanetarySystem.G * PlanetarySystem.EARTH_MASS))
 	var elapsed := 0.0
 	var iterations := 0
@@ -60,7 +60,7 @@ func _validate_pathfinder_leo_autopilot() -> bool:
 			break
 	var body: Dictionary = simulation._nearest_body_state(simulation.rocket_position, simulation.rocket_position_precise)
 	var orbit := FlightComputer.orbital_state(body.relative_position, simulation.velocity - body.velocity, PlanetarySystem.G * PlanetarySystem.EARTH_MASS)
-	var valid := simulation.autopilot_complete and not simulation.crashed and bool(orbit.get("bound", false)) and absf(float(orbit.get("periapsis", 0.0)) - target_orbit_radius) < 5000.0 and absf(float(orbit.get("apoapsis", 0.0)) - target_orbit_radius) < 5000.0
+	var valid: bool = simulation.autopilot_complete and not simulation.crashed and bool(orbit.get("bound", false)) and absf(float(orbit.get("periapsis", 0.0)) - target_orbit_radius) < 5000.0 and absf(float(orbit.get("apoapsis", 0.0)) - target_orbit_radius) < 5000.0
 	if not valid:
 		push_error("Pathfinder LEO autopilot failed: phase=%s status=%s altitude=%.1f periapsis=%.1f apoapsis=%.1f fuel=%.1f iterations=%d" % [simulation.autopilot_phase, simulation.status_message, float(body.distance) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("periapsis", 0.0)) - PlanetarySystem.EARTH_RADIUS, float(orbit.get("apoapsis", INF)) - PlanetarySystem.EARTH_RADIUS, simulation.fuel, iterations])
 	simulation.free()
