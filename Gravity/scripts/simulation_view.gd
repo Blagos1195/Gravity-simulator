@@ -955,7 +955,7 @@ func _autopilot_attitude_control(target_rotation: float, dt: float, burn_expecte
 				if bool(engine.get("gimballed", false)):
 					has_gimballed_engine = true
 					break
-			if has_gimballed_engine:
+			if has_gimballed_engine and autopilot_phase in ["CIRCULARISE_BURN", "TRANSFER_BURN", "ARRIVAL_CAPTURE_BURN", "MANEUVER_BURN", "ROUTE_BURN"]:
 				var best_gimbal := 0.0
 				var lowest_torque_error := INF
 				for step in range(-4, 5):
