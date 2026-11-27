@@ -105,7 +105,7 @@ jobs:
           if echo "$changed_files" | grep -Eq 'mission_system|content_catalog|main.gd'; then
             run_check mission_system_test
           fi
-          if echo "$changed_files" | grep -Eq 'flight_computer|route_planner|leo_autopilot_mission_test' || git diff -U0 "origin/$BASE_REF...HEAD" -- Gravity/scripts/simulation_view.gd | grep -Eq '^\\+.*(autopilot|gimbal|guidance|thrust_key_down)'; then
+          if echo "$changed_files" | grep -Eq 'flight_computer|route_planner|leo_autopilot_mission_test' || git diff -U0 "origin/$BASE_REF...HEAD" -- Gravity/scripts/simulation_view.gd | grep -Eq '^[+].*(autopilot|gimbal|guidance|thrust_key_down)'; then
             run_check flight_computer_test
             run_check leo_autopilot_mission_test
             run_check body_agnostic_orbit_test
