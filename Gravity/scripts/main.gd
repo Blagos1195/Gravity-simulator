@@ -2915,17 +2915,27 @@ func _are_docked(first_name: String, second_name: String) -> bool:
 func _update_docked_masses() -> void:
 	for vehicle in fleet_sims:
 		vehicle.docked_mass = 0.0
-	for mass_pass in range(maxi(1, fleet_sims.size())):
-		for vehicle in fleet_sims:
-			vehicle.docked_mass = 0.0
-		for index in range(docking_links.size() - 1, -1, -1):
-			var link: Dictionary = docking_links[index]
-			if not bool(link.get("structural", true)):
-				continue
-			var parent := _find_vehicle_by_name(str(link.get("parent_name", "")))
-			var child := _find_vehicle_by_name(str(link.get("child_name", "")))
-			if parent != null and child != null:
-				parent.docked_mass += child._current_vehicle_mass()
+	for vehicle in fleet_sims:
+		vehicle.docked_mass = _calculate_docked_descendant_mass(vehicle.vehicle_name, {})
+
+
+func _calculate_docked_descendant_mass(parent_name: String, visited: Dictionary) -> float:
+	if visited.has(parent_name):
+		return 0.0
+	visited[parent_name] = true
+	var total_mass := 0.0
+	for link in docking_links:
+		if not bool(link.get("structural", true)) or str(link.get("parent_name", "")) != parent_name:
+			continue
+		var child_name := str(link.get("child_name", ""))
+		if visited.has(child_name):
+			continue
+		var child := _find_vehicle_by_name(child_name)
+		if child == null:
+			continue
+		total_mass += maxf(0.0, child._current_vehicle_mass() - child.docked_mass)
+		total_mass += _calculate_docked_descendant_mass(child_name, visited)
+	return total_mass
 
 func _sync_docked_vehicles() -> void:
 	for vehicle in fleet_sims:
