@@ -4287,7 +4287,7 @@ func _show_docking_panel(selected_port_uid: String = "") -> void:
 	assist_button.custom_minimum_size.y = 44
 	layout.add_child(assist_button)
 	var undock_button := Button.new()
-	undock_button.text = "UNDOCK"
+	undock_button.text = "UNDOCK THIS CONNECTOR" if not selected_port_uid.is_empty() else "UNDOCK"
 	undock_button.custom_minimum_size.y = 44
 	layout.add_child(undock_button)
 	var fuel_heading := Label.new()
