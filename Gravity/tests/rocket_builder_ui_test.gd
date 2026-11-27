@@ -25,6 +25,7 @@ func _initialize() -> void:
 	print("Replacement vehicle builder integration tests passed.")
 	main.active_builder.free()
 	main.queue_free()
+	await process_frame
 	quit()
 
 
