@@ -20,7 +20,7 @@ func _initialize() -> void:
 	if not is_equal_approx(float(main.rocket_design.payload_mass), 1200.0):
 		payload_input.value_changed.emit(payload_input.value)
 	assert(is_equal_approx(float(main.rocket_design.payload_mass), 1200.0))
-	for button_text in ["NEW", "EDIT PAYLOAD", "SAVE DESIGN", "LOAD DESIGN", "LAUNCH", "BACK"]:
+	for button_text in ["PRESETS", "EDIT PAYLOAD DETAILS", "SAVE", "LOAD", "LAUNCH", "BACK"]:
 		assert(is_instance_valid(_find_button(main.active_builder, button_text)))
 	print("Replacement vehicle builder integration tests passed.")
 	main.active_builder.free()
